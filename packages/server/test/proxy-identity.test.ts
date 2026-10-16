@@ -6,16 +6,21 @@ import path from "node:path";
 import { WebSocket } from "ws";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  ACTOR_KINDS_ROUTE,
   BADGE_ENDED,
   CANVAS_GROUPS_FEATURE,
   CLIENT_FEATURES_HEADER,
   ENDED,
   NOT_ADMITTED,
+  ownsAgent,
+  parseSessionHeader,
   REFUSED,
+  SESSION_HEADER,
   WS_BAD_ORIGIN,
   WS_NO_BADGE,
   WS_NOT_ADMITTED,
   type ActorBindingRecord,
+  type ActorKinds,
   type ServerMessage,
 } from "@isocan/core";
 import { DaemonClient, harnessVars, HOME_CLAIM_KEY, resolveIdentity } from "@isocan/api";
@@ -502,5 +507,124 @@ describe("stateless proxy principal at the door", () => {
       await proxy.close();
       await fs.rm(clientHome, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
+  });
+});
+
+describe("parseSessionHeader", () => {
+  it("accepts valid <harness>:<sessionId> keys and rejects person/replica harnesses or malformed values", () => {
+    expect(parseSessionHeader("claude-code:conv-1")).toBe("claude-code:conv-1");
+    expect(parseSessionHeader("  antigravity:630e3ee9  ")).toBe("antigravity:630e3ee9");
+    expect(parseSessionHeader(["codex:thr-12", "ignored"])).toBe("codex:thr-12");
+
+    // Person harnesses and replica transport keys are never accepted as agent sessions.
+    expect(parseSessionHeader("web:tab-1")).toBeNull();
+    expect(parseSessionHeader("home:person")).toBeNull();
+    expect(parseSessionHeader("cli:term-1")).toBeNull();
+    expect(parseSessionHeader("person:one")).toBeNull();
+    expect(parseSessionHeader("replica:sync-1")).toBeNull();
+
+    // Missing parts, internal whitespace, control characters, non-ASCII, and > 256 length are rejected.
+    expect(parseSessionHeader(undefined)).toBeNull();
+    expect(parseSessionHeader(null)).toBeNull();
+    expect(parseSessionHeader("")).toBeNull();
+    expect(parseSessionHeader("claude-code")).toBeNull();
+    expect(parseSessionHeader("claude-code:")).toBeNull();
+    expect(parseSessionHeader(":conv-1")).toBeNull();
+    expect(parseSessionHeader("claude-code:conv 1")).toBeNull();
+    expect(parseSessionHeader("claude-code:conv\r\n1")).toBeNull();
+    expect(parseSessionHeader("claude-code:conv\x001")).toBeNull();
+    expect(parseSessionHeader("claude-code:café")).toBeNull();
+    expect(parseSessionHeader(`claude-code:${"x".repeat(250)}`)).toBeNull();
+  });
+});
+
+describe("stateless per-session agent attribution on proxy-authenticated homes", () => {
+  const C_NAMES = ["Charlie", "Cass", "Cleo", "Cyrus", "Coral", "Caleb", "Cato", "Ciri"];
+
+  it("auto-claims distinct session agent actors on Priya's proxy badge on first sight, while requests without X-Isocan-Session speak as Priya", async () => {
+    await boot();
+    const expectedBadgeId = proxyBadgeId(`email:${PRIYA}`);
+
+    // First session (claude-code:conv-1) arrives with two concurrent requests: serializes and mints one C-name agent.
+    const [s1First, s1Second] = await Promise.all([
+      fetch(`${base}/api/actors?keys=${encodeURIComponent("claude-code:conv-1")}`, {
+        headers: proxyHeaders(PRIYA, { [SESSION_HEADER]: "claude-code:conv-1" }),
+      }),
+      fetch(`${base}/api/actors?keys=${encodeURIComponent("claude-code:conv-1")}`, {
+        headers: proxyHeaders(PRIYA, { [SESSION_HEADER]: "claude-code:conv-1" }),
+      }),
+    ]);
+    expect(s1First.status).toBe(200);
+    expect(s1Second.status).toBe(200);
+
+    const b1First = (await s1First.json()) as ActorBindingRecord[];
+    const b1Second = (await s1Second.json()) as ActorBindingRecord[];
+    expect(b1First).toHaveLength(1);
+    expect(b1Second[0]!.actor).toEqual(b1First[0]!.actor);
+    const agent1 = b1First[0]!.actor;
+    expect(C_NAMES).toContain(agent1.name);
+
+    // Second session (claude-code:conv-2) arrives and receives a distinct C-name agent.
+    const s2Res = await fetch(
+      `${base}/api/actors?keys=${encodeURIComponent("claude-code:conv-2")}`,
+      {
+        headers: proxyHeaders(PRIYA, { [SESSION_HEADER]: "claude-code:conv-2" }),
+      },
+    );
+    expect(s2Res.status).toBe(200);
+    const b2 = (await s2Res.json()) as ActorBindingRecord[];
+    expect(b2).toHaveLength(1);
+    const agent2 = b2[0]!.actor;
+    expect(C_NAMES).toContain(agent2.name);
+    expect(agent2.id).not.toBe(agent1.id);
+    expect(agent2.name).not.toBe(agent1.name);
+
+    // Request with no X-Isocan-Session resolves Priya's human actor (home:person).
+    const humanRes = await fetch(
+      `${base}/api/actors?keys=${encodeURIComponent(HOME_CLAIM_KEY)}`,
+      {
+        headers: proxyHeaders(PRIYA),
+      },
+    );
+    expect(humanRes.status).toBe(200);
+    const priyaActor = ((await humanRes.json()) as ActorBindingRecord[])[0]!.actor;
+    expect(priyaActor.name).toBe("priya");
+    expect(priyaActor.id).not.toBe(agent1.id);
+    expect(priyaActor.id).not.toBe(agent2.id);
+
+    // Both session actors are classified as agents in actorKinds, while Priya is a person.
+    const kindsRes = await fetch(`${base}${ACTOR_KINDS_ROUTE}`, {
+      headers: proxyHeaders(PRIYA),
+    });
+    expect(kindsRes.status).toBe(200);
+    const kinds = (await kindsRes.json()) as ActorKinds;
+    expect(kinds[agent1.id]).toBe("agent");
+    expect(kinds[agent2.id]).toBe("agent");
+    expect(kinds[priyaActor.id]).toBeUndefined();
+
+    // Both session agents sit on Priya's proxy badge alongside home:person, so ownsAgent is true.
+    const proxyBadge = await daemon!.desk.badge(expectedBadgeId);
+    expect(proxyBadge).not.toBeNull();
+    expect(ownsAgent([proxyBadge!.claims], priyaActor.id, kinds[agent1.id] === "agent")).toBe(true);
+    expect(ownsAgent([proxyBadge!.claims], priyaActor.id, kinds[agent2.id] === "agent")).toBe(true);
+  });
+
+  it("ignores X-Isocan-Session when proxyAuth is not configured on the daemon", async () => {
+    await boot({ proxy: null });
+    const badge = await mintTestBadge(base);
+
+    const res = await fetch(
+      `${base}/api/actors?keys=${encodeURIComponent("claude-code:conv-local")}`,
+      {
+        headers: {
+          ...badge.headers,
+          [CLIENT_FEATURES_HEADER]: CANVAS_GROUPS_FEATURE,
+          [SESSION_HEADER]: "claude-code:conv-local",
+        },
+      },
+    );
+    expect(res.status).toBe(200);
+    const bindings = (await res.json()) as ActorBindingRecord[];
+    expect(bindings).toEqual([]);
   });
 });

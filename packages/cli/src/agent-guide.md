@@ -140,7 +140,7 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 
 **Items** (`items`)
 - `add <thing> [--as file|site|doc|canvas]` — one door for a file, a site, a Google Doc or a canvas
-- `text`, `inline`, `get`, `show`, `ls [--kind|--filter|--summaries]`, `set`, `edit`, `tree`, `save` — make, read, change, write out; `summary [--refresh|--stats]` — the ≈ summary
+- `text`, `inline`, `get`, `show`, `ls [--kind|--filter|--summaries]`, `set`, `edit`, `face`, `tree`, `save` — make, read, change, switch face, write out; `summary [--refresh|--stats]` — the ≈ summary
 - `version ls|promote|prune` — the version stack (prune ⚠)
 - `mv`, `align`, `distribute`, `fit`, `tidy`, `merge`, `react`, `copy` — arrange, mark, duplicate
 - `rm`, `restore`, `trash ls|restore|empty` (empty ⚠), `undo`, `redo` — take back
@@ -183,7 +183,7 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 
 **What a canvas carries** (`extend`, and a topic per module)
 - `module add|rm|ls`, `tool ls|add`, `panel ls|add` — modules, rail tools, dock panels
-- `map`, `docs`, `sticker`, `sandbox`, `wire`, `competition`, `anatomy`, `voice`, `judge`, `critic`, `critique` — module families; `--agent-help <verb>` finds each
+- `map`, `docs`, `sticker`, `sandbox`, `wire`, `competition`, `anatomy`, `voice`, `judge`, `critic`, `critique`, `lottie` — module families; `--agent-help <verb>` finds each
 
 <!-- topic: protocol | the lap in full — naming yourself, the session, who is at your terminal, parking, several of you, your inbox, asking a person, pointing at words -->
 
@@ -272,7 +272,11 @@ Pick like this, once, before you appear:
    earlier in this same session: keep it, a stable name beats a fresh one.
    A bare name is the HUMAN's — never yours to keep. (A `badge bdg_…` line
    under it is this machine's credential with the daemon, handed out
-   automatically; there is nothing for you to do with it.) On a machine where
+   automatically; there is nothing for you to do with it.) On a
+   proxy-authenticated home, the human and each harness session are named
+   automatically on the first command (`isocan whoami` already shows your
+   assigned session name; `isocan identity --name "<name>" --session` still
+   renames it if desired). On a machine where
    nobody has been named yet it errors with "no identity configured" — that
    is the answer "nobody, yet", not a broken install; same for a `canvas
    list` that is empty before you have named yourself (the handshake is what
@@ -4128,7 +4132,7 @@ is there is kept or deleted.
 
 ## Explain this item, and the critique you are asked for
 
-`isocan explain <item> [--depth plain|designer|deep] [--json]` prints how an
+`isocan explain <item> [--json]` prints how an
 item got here — the same story the Explain panel draws, derived from the
 canvas and never generated: the versions that mattered (a run of edits by one
 hand is one move; a `choose`, a kept proposal and an adopted decision stand
@@ -4140,8 +4144,8 @@ relatives); and *speak design*, phrases typed about it beside a designer's
 term. Read it before you change an item somebody else shaped.
 
 When a person presses **Critique**, you (the canvas's lead) get a Chat message
-"Critique, please: …" naming the item. Read `isocan explain <item> --depth
-deep`, then answer in one command — what is working, one risk, one thing to
+"Critique, please: …" naming the item. Read `isocan explain <item>`, then
+answer in one command — what is working, one risk, one thing to
 try — and make the thing to try a proposal beneath it:
 
 ```sh

@@ -164,8 +164,21 @@
      5.45:1 on `--card` — comfortably past the 3:1 a border needs, and past
      4.5:1 too, so it can carry text later without being re-picked. */
   --running: #10794a;
-  /* Frosted surfaces that float over the canvas: toolbar, minimap, popovers. */
+  /* Frosted surfaces that float over the canvas: context menus, sticky headers. */
   --panel: rgba(255, 255, 255, 0.92);
+  /* **Liquid glass** — the translucent, edge-lit slab worn by chrome that
+     floats directly over the canvas (`.floats`, `.tool-rail`, `.zoom-controls`,
+     `.minimap`, `.scrubber`, `.ink-well`, `.marks`). Distinct from `--panel`
+     (held near-opaque by `menuground.test.ts` so context menus and sticky
+     headers never muddle text over dark work): glass lets enough of the blurred
+     canvas through (~68–78%) to diffuse dark items into a soft liquid cloud
+     while a crisp top specular rim (`--shadow-glass`) keeps its edge continuous
+     across light and dark grounds alike. */
+  --glass: linear-gradient(180deg, rgba(255, 255, 255, 0.78) 0%, rgba(250, 250, 248, 0.64) 100%);
+  --glass-border: rgba(30, 34, 40, 0.11);
+  --glass-chip: rgba(30, 34, 40, 0.055);
+  --glass-chip-hover: rgba(30, 34, 40, 0.095);
+  --shadow-glass: inset 0 1px 0 0 rgba(255, 255, 255, 0.85), inset 0 0 0 1px rgba(255, 255, 255, 0.42), 0 1px 2px rgba(30, 34, 40, 0.06), 0 12px 28px -8px rgba(30, 34, 40, 0.22);
   /* Dimmer behind a modal. */
   --overlay: rgba(35, 38, 43, 0.35);
   --shadow-card: 0 1px 2px rgba(30, 34, 40, 0.08), 0 10px 24px -14px rgba(30, 34, 40, 0.28);
@@ -390,6 +403,11 @@
   --running: #3fca8b;
   --guide-spacing: #a672f0;
   --panel: rgba(23, 26, 31, 0.9);
+  --glass: linear-gradient(180deg, rgba(36, 40, 48, 0.76) 0%, rgba(23, 26, 31, 0.64) 100%);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-chip: rgba(255, 255, 255, 0.07);
+  --glass-chip-hover: rgba(255, 255, 255, 0.12);
+  --shadow-glass: inset 0 1px 0 0 rgba(255, 255, 255, 0.15), inset 0 0 0 1px rgba(255, 255, 255, 0.06), 0 2px 4px rgba(0, 0, 0, 0.38), 0 14px 30px -10px rgba(0, 0, 0, 0.68);
   --overlay: rgba(0, 0, 0, 0.55);
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 24px -14px rgba(0, 0, 0, 0.7);
   /* On graphite a dark halo vanishes: a faint light rim draws the edge, and
@@ -954,8 +972,10 @@ img { height: auto; }
 .sketch-bar {
   position: absolute; left: 50%; bottom: var(--edge); transform: translateX(-50%); z-index: var(--z-float);
   display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 12px;
-  background: var(--panel); backdrop-filter: blur(6px);
-  border: 1px solid var(--line); border-radius: 999px; box-shadow: var(--shadow-pop);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(22px) saturate(1.45);
+  backdrop-filter: blur(22px) saturate(1.45);
+  border: 1px solid var(--glass-border); border-radius: 999px; box-shadow: var(--shadow-glass);
 }
 .sketch-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
 /* Live: the ink is open and taking strokes. A slow pulse, because the state it
@@ -1176,15 +1196,22 @@ img { height: auto; }
    was asking for — "more spacing on the left, and maybe less on the right".
    Optical, not arithmetic: the numbers now disagree so that the spaces look
    the same. */
-.presence-cluster { padding-left: 10px; padding-right: calc(var(--pill-inset) + 2px); gap: 5px; }
+/* When healthy, both ends of the pill are round faces; when a connection issue
+   (`reconnecting` / `offline`) pops up on the left, `.conn` adds the extra 4px
+   leading room its status dot wants (`6px + 4px = 10px`). */
+.presence-cluster {
+  padding-left: calc(var(--pill-inset) + 2px);
+  padding-right: calc(var(--pill-inset) + 2px);
+  gap: 5px;
+}
 /* The word ends where the word ends: its dot already carries a 4px margin on
    the leading side, and a trailing space here would double the gap the faces
    are meant to sit against. */
-.presence-cluster .conn { margin-right: 0; }
+.presence-cluster .conn { margin-left: 4px; margin-right: 0; }
 /* Hover is the same story: a flat button gets a chip behind it, and one that
    already carries a fill keeps its own — otherwise `--accent-ink` ends up on
    `--chip`, which is white on pale grey. */
-.bar-cluster .btn:not(.primary):not(.active):hover { background: var(--chip); }
+.bar-cluster .btn:not(.primary):not(.active):hover { background: var(--glass-chip-hover); }
 /* `.bar-cluster .btn.active` used to sit here, re-adding the fill the rule
    above had just taken away. That was the same tie fixed one variant at a
    time; excluding the variants upstream makes it dead, and `.btn.active`
@@ -1205,7 +1232,7 @@ img { height: auto; }
   padding: 4px 6px; border: 1px solid transparent; border-radius: 6px;
   background: transparent; color: inherit; text-align: left;
 }
-.canvas-name .title:hover:enabled { background: var(--chip); border-color: var(--chip-line); }
+.canvas-name .title:hover:enabled { background: var(--glass-chip-hover); border-color: var(--glass-border); }
 .canvas-name .title:disabled { cursor: default; }
 /* The rename popover hangs under the name it renames. */
 .canvas-popover {
@@ -1215,10 +1242,9 @@ img { height: auto; }
   box-shadow: var(--shadow-pop);
 }
 .toolbar .home { color: var(--ink-muted); text-decoration: none; font-size: 16px; padding: 4px 6px; border-radius: 6px; }
-.toolbar .home:hover { background: var(--chip); }
+.toolbar .home:hover { background: var(--glass-chip-hover); }
 .toolbar .spacer { flex: 1; }
 .conn { font-size: 11px; color: var(--ink-muted); }
-.conn.live::before { content: "●"; color: var(--good); margin-right: 4px; }
 /* Reconnecting and offline are one treatment, not two that agree: the same
    element, two states of it, wearing the same dot for the same reason.
    Offline gets a dot like the others rather than reading as an error, because
@@ -1742,6 +1768,16 @@ img { height: auto; }
   background: var(--chip); border: 1px solid var(--line-soft);
   color: var(--ink-muted); font-size: 10.5px; line-height: 1.6; white-space: nowrap;
 }
+.item-face-toggle {
+  display: inline-flex; align-items: center; gap: 2px; pointer-events: auto;
+  padding: 2px; border-radius: 999px; background: var(--chip); border: 1px solid var(--line-soft);
+}
+.item-face-btn {
+  border: none; border-radius: 999px; padding: 1px 8px;
+  background: transparent; color: var(--ink-muted); font-size: 10px; font-weight: 500; line-height: 1.5; cursor: pointer;
+}
+.item-face-btn:hover { color: var(--ink); }
+.item-face-btn.active { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
 .file-view { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--ink-muted); font-size: 12px; padding: 12px; text-align: center; }
 
 /* Agent at work (presence activity): the titlebar names the worker and a
@@ -1893,8 +1929,10 @@ img { height: auto; }
   position: fixed; z-index: var(--z-popover);
   width: 268px; padding: 8px;
   display: flex; flex-direction: column; gap: 8px;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
-  box-shadow: var(--shadow-pop); backdrop-filter: blur(8px);
+  background: var(--glass); border: 1px solid var(--glass-border); border-radius: 12px;
+  box-shadow: var(--shadow-glass);
+  -webkit-backdrop-filter: blur(22px) saturate(1.45);
+  backdrop-filter: blur(22px) saturate(1.45);
 }
 .react-search {
   font: inherit; font-size: 12.5px; width: 100%; padding: 6px 9px;
@@ -2242,10 +2280,14 @@ html[data-flip="prev"]::view-transition-new(slide) { animation-name: deck-enter-
 
 /* ---------- facepile (who's on canvas) ---------- */
 .facepile {
-  display: flex; align-items: center; margin-left: 6px; padding-left: 10px;
-  border-left: 1px solid var(--line);
+  display: flex; align-items: center;
   /* The peek card hangs from here, so the pile is what it is measured against. */
   position: relative;
+}
+/* Only separated by a rule when a connection status precedes it. */
+.conn + .identity-anchor .facepile {
+  margin-left: 6px; padding-left: 10px;
+  border-left: 1px solid var(--line);
 }
 
 /* Who somebody is, what they are doing, and what they have done — under their
@@ -2323,8 +2365,10 @@ html[data-flip="prev"]::view-transition-new(slide) { animation-name: deck-enter-
    covers an initial. The pile has no gap of its own; the hairline between
    people and agents carries its own room. */
 .face + .face { margin-left: -6px; }
-/* Faces overlap, so a badge would slide under the next face — lift it. */
-.face.badged { z-index: 2; }
+/* Faces overlap, so a badge would slide under the next face — lift it. Your
+   own face lifts too so your pets always tuck under you (`(dog(me)`), even
+   when a pet carries an unread badge. */
+.face.badged, .face.self { z-index: 2; }
 .face:hover { z-index: 3; transform: translateY(-1px); }
 .face-mark {
   display: flex; align-items: center; justify-content: center;
@@ -2516,9 +2560,11 @@ html[data-flip="prev"]::view-transition-new(slide) { animation-name: deck-enter-
    discipline to remember. Anything new that floats over the canvas wears
    `floats` and inherits every future change to what floating means. */
 .floats {
-  background: var(--panel); backdrop-filter: blur(12px) saturate(1.2);
-  border: 1px solid var(--line); border-radius: var(--r-float);
-  box-shadow: var(--shadow-pop);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(22px) saturate(1.45);
+  backdrop-filter: blur(22px) saturate(1.45);
+  border: 1px solid var(--glass-border); border-radius: var(--r-float);
+  box-shadow: var(--shadow-glass);
 }
 
 .dock-panel {
@@ -2964,15 +3010,15 @@ button.mt-card:hover { border-color: var(--accent); }
   position: relative;
   width: 34px; height: 34px; flex: none;
   display: grid; place-items: center;
-  border: 1px solid var(--line); border-radius: var(--radius);
-  background: var(--chip);
+  border: 1px solid var(--glass-border); border-radius: var(--radius);
+  background: var(--glass-chip);
   /* `--accent-text`, not `--accent`: the fill accent is 2.5:1 on graphite, so
      a glyph painted in it is unreadable in dark. The older ✳ in the panel
      header is on that guard's grandfathered list; a new one has no excuse to
      join it. */
   color: var(--accent-text);
 }
-.strip-chat:hover { border-color: var(--accent); }
+.strip-chat:hover { background: var(--glass-chip-hover); border-color: var(--accent); }
 .strip-glyph { font-size: 15px; line-height: 1; }
 /* The count sits ON the button rather than beside it: the strip is 48px wide
    and a number in its own column would have nowhere to go. */
@@ -2988,7 +3034,7 @@ button.mt-card:hover { border-color: var(--accent); }
      something else entirely. */
   border-radius: 999px;
 }
-.strip-sep { width: 20px; height: 1px; background: var(--line-soft); flex: none; }
+.strip-sep { width: 20px; height: 1px; background: var(--glass-border); flex: none; }
 .strip-face {
   width: 28px; height: 28px; flex: none;
   display: grid; place-items: center;
@@ -3121,7 +3167,11 @@ button.mt-card:hover { border-color: var(--accent); }
 }
 .minimap {
   display: block;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(22px) saturate(1.45);
+  backdrop-filter: blur(22px) saturate(1.45);
+  border: 1px solid var(--glass-border); border-radius: 6px;
+  box-shadow: var(--shadow-glass);
   cursor: pointer;
 }
 /* The fold control: quiet until you are looking at the map. */
@@ -3140,8 +3190,9 @@ button.mt-card:hover { border-color: var(--accent); }
   position: absolute; right: 6px; top: 6px; z-index: 1;
   width: 20px; height: 20px; padding: 0; line-height: 1;
   display: flex; align-items: center; justify-content: center;
-  background: var(--panel); border: 1px solid var(--line-soft); border-radius: 7px;
-  backdrop-filter: blur(6px);
+  background: var(--glass); border: 1px solid var(--glass-border); border-radius: 7px;
+  -webkit-backdrop-filter: blur(12px) saturate(1.3);
+  backdrop-filter: blur(12px) saturate(1.3);
   color: var(--ink-muted); font-size: 12px;
   opacity: 0; transition: opacity 0.14s ease;
 }
@@ -3152,8 +3203,11 @@ button.mt-card:hover { border-color: var(--accent); }
   position: absolute; left: 0; bottom: 0;
   display: flex; align-items: center; justify-content: center;
   width: 32px; height: 32px; padding: 0;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 9px;
-  box-shadow: var(--shadow-card); color: var(--ink-muted);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(22px) saturate(1.45);
+  backdrop-filter: blur(22px) saturate(1.45);
+  border: 1px solid var(--glass-border); border-radius: 9px;
+  box-shadow: var(--shadow-glass); color: var(--ink-muted);
   opacity: 0; transform: translateY(8px) scale(0.9); pointer-events: none;
   transition: opacity 0.18s ease 0.06s, transform 0.24s cubic-bezier(0.2, 0.8, 0.3, 1) 0.06s;
 }
@@ -3192,27 +3246,60 @@ button.mt-card:hover { border-color: var(--accent); }
 
 /* What a message is about, over the composer: the selection, as chips. */
 /* Its own row above the field: the chips say what the message is about, and a
-   column of them beside the input says nothing. */
+   column of them beside the input says nothing. Each pill carries a circular
+   miniature of the item (or its kind glyph when versionless), a truncated
+   title, and a circular remove button, resting proud of the frosted bar. */
 .attached {
-  flex: 0 0 100%; display: flex; flex-wrap: wrap; gap: 5px; padding: 0 2px 2px;
+  flex: 0 0 100%; display: flex; flex-wrap: wrap; align-items: center;
+  gap: 6px; padding: 0 2px 4px;
 }
 .attached-chip {
-  display: inline-flex; align-items: center; gap: 6px; max-width: 100%;
-  padding: 3px 4px 3px 3px; border-radius: 999px;
-  background: var(--chip); border: 1px solid var(--chip-line);
+  display: inline-flex; align-items: center; gap: 7px; max-width: 100%;
+  padding: 4px 7px 4px 4px; border-radius: 999px;
+  background: var(--card); border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-card);
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+  animation: attached-in 0.14s cubic-bezier(0.2, 0.8, 0.3, 1);
 }
-.attached-chip .item-thumb { border-radius: 4px; }
+.attached-chip:hover { border-color: var(--chip-line); }
+@keyframes attached-in {
+  from { opacity: 0; transform: translateY(3px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .attached-chip { animation: none; transition: none; }
+}
+.attached-chip .item-thumb {
+  width: 22px; height: 22px; border-radius: 999px;
+  border: 1px solid var(--glass-border);
+}
+.attached-kind {
+  width: 22px; height: 22px; border-radius: 999px; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--glass-chip); border: 1px solid var(--glass-border);
+  color: var(--ink-muted);
+}
+.attached-kind svg { width: 13px; height: 13px; display: block; }
 .attached-chip b {
-  font-size: 11px; font-weight: 500; white-space: nowrap; overflow: hidden;
-  text-overflow: ellipsis; max-width: 140px;
+  font-size: 12.5px; font-weight: 500; color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 140px; line-height: 1.2;
 }
 .attached-chip button {
-  border: none; background: none; padding: 0 3px; line-height: 1;
-  color: var(--ink-soft); font-size: 10px;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; border-radius: 999px; flex: none;
+  border: none; background: none; padding: 0; line-height: 1;
+  color: var(--ink-muted);
 }
-.attached-chip button:hover { color: var(--ink); }
+.attached-chip button:hover {
+  color: var(--ink); background: var(--glass-chip-hover);
+}
 .attached-more {
-  align-self: center; color: var(--ink-soft); font-size: 10.5px;
+  display: inline-flex; align-items: center;
+  padding: 4px 10px; border-radius: 999px;
+  background: var(--glass-chip); border: 1px solid var(--glass-border);
+  color: var(--ink-muted); font-size: 11.5px; font-weight: 500;
+  font-variant-numeric: tabular-nums;
 }
 /* A pill is 18 pixels of a screen; hovering one shows the screen. It opens
    UPWARD from the chip, because the chips sit at the bottom of the panel. */
@@ -3251,9 +3338,11 @@ button.mt-card:hover { border-color: var(--accent); }
   position: absolute; top: calc(var(--topbar) + var(--edge)); right: 76px;
   bottom: calc(var(--edge) + 53px); width: 232px; z-index: calc(var(--z-dock) - 1);
   display: flex; flex-direction: column; gap: 2px;
-  background: var(--panel); backdrop-filter: blur(8px);
-  border: 1px solid var(--line); border-radius: 14px;
-  box-shadow: var(--shadow-pop); font-size: 12px; overflow: hidden;
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(22px) saturate(1.45);
+  backdrop-filter: blur(22px) saturate(1.45);
+  border: 1px solid var(--glass-border); border-radius: 14px;
+  box-shadow: var(--shadow-glass); font-size: 12px; overflow: hidden;
 }
 .marks header {
   display: flex; align-items: center; gap: 7px; flex: none;
@@ -3369,8 +3458,7 @@ button.mt-card:hover { border-color: var(--accent); }
   position: absolute; right: var(--edge); top: var(--edge); bottom: var(--edge);
   margin: auto 0; height: fit-content; z-index: var(--z-float);
   display: flex; flex-direction: column; gap: 4px; padding: 6px;
-  background: var(--card); border: 1px solid var(--line); border-radius: 16px;
-  box-shadow: var(--shadow-pop);
+  border-radius: 16px;
 }
 .tool-btn {
   position: relative; /* the tip hangs off the button, not the rail */
@@ -3378,7 +3466,7 @@ button.mt-card:hover { border-color: var(--accent); }
   width: 38px; height: 38px; border-radius: 11px;
   background: none; border: 1px solid transparent; color: var(--ink-muted);
 }
-.tool-btn:hover { background: var(--chip); color: var(--ink); }
+.tool-btn:hover { background: var(--glass-chip-hover); color: var(--ink); }
 .tool-btn.active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 /* The rail's tooltips, drawn rather than left to `title` — the same reason
    `.fullscreen-btn::after` gives: the native tip waits about a second,
@@ -3439,7 +3527,7 @@ button.mt-card:hover { border-color: var(--accent); }
    `data-tip` at all while it is open; that is decided where it renders.) */
 .tool-btn[data-tip]:active::after,
 .tool-btn[data-tip]:active::before { opacity: 0; transition: none; }
-.tool-sep { height: 1px; margin: 2px 6px; background: var(--line); }
+.tool-sep { height: 1px; margin: 2px 6px; background: var(--glass-border); }
 /* A canvas's own tool (extensions stage 1). It keeps the rail's geometry —
    same 38px square, same radius, same focus ring — because the app draws it
    and a tool cannot be off-brand. What differs is that it says its own name
@@ -3485,22 +3573,27 @@ button.mt-card:hover { border-color: var(--accent); }
 .zoom-controls {
   position: absolute; right: var(--edge); bottom: var(--edge); z-index: var(--z-float);
   display: flex; align-items: center; gap: 5px; padding: 5px 7px;
-  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
-  box-shadow: var(--shadow-pop);
+  border-radius: 12px;
   /* Its own height, declared, so the minimap can clear it on a narrow window
      without a second opinion about how tall this is (`--zoom-row`). */
   box-sizing: border-box; min-height: var(--zoom-row);
+}
+.zoom-controls .btn:not(.primary):not(.active) {
+  background: var(--glass-chip); border-color: var(--glass-border);
+}
+.zoom-controls .btn:not(.primary):not(.active):hover {
+  background: var(--glass-chip-hover);
 }
 .zoom-group { position: relative; display: flex; align-items: center; gap: 1px; }
 .zoom-step {
   background: none; border: none; color: var(--ink-muted);
   font-size: 15px; padding: 3px 8px; border-radius: 6px; line-height: 1;
 }
-.zoom-step:hover { background: var(--chip); color: var(--ink); }
+.zoom-step:hover { background: var(--glass-chip-hover); color: var(--ink); }
 .zoom-pct {
   min-width: 50px; text-align: center; font-variant-numeric: tabular-nums;
-  font-size: 12px; color: var(--ink); background: var(--chip);
-  border: 1px solid var(--chip-line); border-radius: 999px; padding: 4px 10px;
+  font-size: 12px; color: var(--ink); background: var(--glass-chip);
+  border: 1px solid var(--glass-border); border-radius: 999px; padding: 4px 10px;
 }
 .zoom-pct:hover, .zoom-pct.active { border-color: var(--accent); }
 .zoom-menu {
@@ -4817,10 +4910,12 @@ button.mt-card:hover { border-color: var(--accent); }
   /* The extra bottom padding is the axis's room: it hangs below the rail at
      `top: 100%`, and without this it fell outside the panel. */
   padding: 10px 12px 28px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--glass-border);
   border-radius: 12px;
-  background: var(--card);
-  box-shadow: var(--shadow-pop);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(22px) saturate(1.45);
+  backdrop-filter: blur(22px) saturate(1.45);
+  box-shadow: var(--shadow-glass);
 }
 .scrubber.quiet {
   color: var(--ink-soft);
@@ -5336,5 +5431,5 @@ button.mt-card:hover { border-color: var(--accent); }
 /* A module's control in the Chat composer (proposed: `composer`). The shell
    owns the row; this says where the control sits in it and how much room it
    gets when a module has asked for the whole thing. */
-.module-composer-control { display: flex; align-items: center; flex: none; }
+.module-composer-control:not([hidden]) { display: flex; align-items: center; flex: none; }
 .module-composer-wide { flex: 1 1 100%; min-width: 0; }

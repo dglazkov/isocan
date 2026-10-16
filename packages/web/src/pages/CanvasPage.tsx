@@ -114,7 +114,7 @@ import { FilesPanel } from "../components/LazyFilesPanel.tsx";
 import { AgentTray } from "../components/LazyAgentTray.tsx";
 import { ContextPanel } from "../components/LazyContextPanel.tsx";
 import { PersonasPanel } from "../components/LazyPersonasPanel.tsx";
-import { ExtensionPanel } from "../components/ExtensionPanel.tsx";
+import { ExtensionPanel } from "../components/LazyExtensionPanel.tsx";
 import { ReactionBar, restoreReactionBar } from "../components/ReactionBar.tsx";
 import { CommentToasts } from "../components/CommentToasts.tsx";
 import { OfflineBar } from "../components/OfflineBar.tsx";

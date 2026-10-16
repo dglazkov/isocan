@@ -32,6 +32,7 @@ import { sandboxWeb } from "@isocan/sandbox/web";
 import { judgeWeb } from "@isocan/judge/web";
 import { competitionActivation } from "@isocan/design-competition/activation";
 import { wireframeActivation } from "@isocan/wireframe/activation";
+import { lottieActivation } from "@isocan/lottie/activation";
 import { useUiStore } from "./stores/uiStore.ts";
 
 /**
@@ -201,6 +202,8 @@ function deferredModule(
 LIST.push(deferredModule(competitionActivation, () => import("@isocan/design-competition/web") as Promise<{ default: ShellModule }>));
 // Wireframes: `/wire` opens a dialog and two kept screens draw arrows — both fetch the half (phase 5).
 LIST.push(deferredModule(wireframeActivation, () => import("@isocan/wireframe/web") as Promise<{ default: ShellModule }>));
+// Lottie: player and View/Edit focus studio arrive only when a canvas holds a Lottie animation.
+LIST.push(deferredModule(lottieActivation, () => import("@isocan/lottie/web") as Promise<{ default: ShellModule }>));
 
 const fetched = new Set<string>();
 

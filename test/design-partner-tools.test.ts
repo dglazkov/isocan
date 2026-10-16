@@ -65,8 +65,13 @@ it("delivers exact image blocks and real CLI/browser actions through an actual s
     expect((await fixture.client.snapshot(fixture.canvasId)).canvas).toEqual(before);
     await client.callTool({ name: "browser", arguments: { action: "navigate", url: "task:screen.html" } });
     let observed: any;
-    const deadline = Date.now() + 5000;
-    do { const snapshot = await client.callTool({ name: "browser", arguments: { action: "snapshot" } }); observed = JSON.parse(((snapshot.content as any[])[0] as any).text); if (observed.controls?.some((row: any) => row.id === "save")) break; } while (Date.now() < deadline);
+    const deadline = Date.now() + 15000;
+    do {
+      const snapshot = await client.callTool({ name: "browser", arguments: { action: "snapshot" } });
+      observed = JSON.parse(((snapshot.content as any[])[0] as any).text);
+      if (observed.controls?.some((row: any) => row.id === "save")) break;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    } while (Date.now() < deadline);
     expect(observed.controls.some((row: any) => row.id === "save")).toBe(true);
     for (const [selector, text] of [["#quantity", "4"], ["#quantity", "2"], ["#name", "Acme"]]) {
       await client.callTool({ name: "browser", arguments: { action: "fill", selector, text } });

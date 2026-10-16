@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ComponentType } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import {
   newGroupId,
   newVersionId,
@@ -352,11 +352,13 @@ export function WireframeFocusView(facts: FocusFacts) {
   const [html, setHtml] = useState<string | null>(null);
   const [whyOpen, setWhyOpen] = useState(false);
   const [busyLayer, setBusyLayer] = useState(false);
+  const readTextRef = useRef(facts.readText);
+  readTextRef.current = facts.readText;
 
   useEffect(() => {
     let active = true;
-    void facts
-      .readText()
+    void readTextRef
+      .current()
       .then((text) => {
         if (active) setHtml(text);
       })
@@ -366,7 +368,7 @@ export function WireframeFocusView(facts: FocusFacts) {
     return () => {
       active = false;
     };
-  }, [facts.version.blobHash]);
+  }, [facts, facts.version.blobHash]);
 
   const spec = useMemo(() => (html ? readWire(html) : null), [html]);
   const resolved = useMemo(
@@ -567,10 +569,13 @@ export function WireframeFocusEdit(facts: FocusFacts) {
   const [saving, setSaving] = useState(false);
   const [statusNote, setStatusNote] = useState<string | null>(null);
 
+  const readTextRef = useRef(facts.readText);
+  readTextRef.current = facts.readText;
+
   useEffect(() => {
     let active = true;
-    void facts
-      .readText()
+    void readTextRef
+      .current()
       .then((text) => {
         if (!active) return;
         setSourceHtml(text);
@@ -590,7 +595,7 @@ export function WireframeFocusEdit(facts: FocusFacts) {
     return () => {
       active = false;
     };
-  }, [facts.version.blobHash]);
+  }, [facts, facts.version.blobHash]);
 
   const savedSpec = useMemo(
     () => (sourceHtml ? readWire(sourceHtml) : null),

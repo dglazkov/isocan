@@ -37,7 +37,15 @@ export { FileWorkstation } from "./file-workstation.ts";
  */
 export { admissionIn, liveAdmission, rungOfAdmission, keepsAdmission } from "./grants.ts";
 export { Refusals, TakenDownError, RefusedError } from "./takedowns.ts";
-export { gatewayBaseFor, readConfigFile, resolveHomeUrl, updateConfigFile } from "./config.ts";
+/** Configuration readers, birth-home resolution, and per-home proxy auth lookup (`homeAuth`). */
+export {
+  configuredHomeAuthUrl,
+  gatewayBaseFor,
+  homeAuthFor,
+  readConfigFile,
+  resolveHomeUrl,
+  updateConfigFile,
+} from "./config.ts";
 export {
   DocRefusal,
   clearGoogleToken,
@@ -50,7 +58,8 @@ export {
   type FetchedDoc,
   type GoogleToken,
 } from "./google.ts";
-export type { HomeConfig } from "./config.ts";
+/** Machine configuration schema (`~/.isocan/config.json`) and per-home proxy auth types. */
+export type { HomeAuthConfig, HomeAuthEntry, HomeConfig } from "./config.ts";
 export { adoptIdentity, askTheDoor, bearerHeader, fileBadgeStore, knockOnDoor, readBadge, writeBadge, writeIdentityName } from "./badge-store.ts";
 export type { BadgeStore, DoorAnswer, StoredBadge } from "./badge-store.ts";
 export { MINT_PER_MINUTE, TOO_MANY_BADGES } from "./meter.ts";

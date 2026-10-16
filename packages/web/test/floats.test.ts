@@ -24,6 +24,8 @@ const FLOATING = [
   ["components/FilesPanel.tsx", "files-panel dock-panel floats"],
   ["components/RailStrip.tsx", "rail-strip floats"],
   ["components/Toolbar.tsx", "bar-cluster floats"],
+  ["components/CanvasTools.tsx", "tool-rail floats"],
+  ["components/ZoomControls.tsx", "zoom-controls floats"],
 ] as const;
 
 describe("everything that floats wears the same slab", () => {
@@ -36,6 +38,14 @@ describe("everything that floats wears the same slab", () => {
     expect(css.match(/\.floats\s*\{/g)?.length, "one canonical block").toBe(1);
   });
 
+  it("gives the slab a translucent liquid-glass ground and a top specular rim", () => {
+    const rule = /\.floats\s*\{[^}]*\}/.exec(css)?.[0] ?? "";
+    expect(rule).toMatch(/background:\s*var\(--glass\)/);
+    expect(rule).toMatch(/border:\s*1px solid var\(--glass-border\)/);
+    expect(rule).toMatch(/box-shadow:\s*var\(--shadow-glass\)/);
+    expect(css, "specular top edge in --shadow-glass").toMatch(/--shadow-glass:\s*inset 0 1px 0/);
+  });
+
   it("is worn by every floating surface", () => {
     for (const [file, className] of FLOATING) {
       expect(read(file), `${file} must wear the shared slab`).toContain(className);
@@ -46,7 +56,7 @@ describe("everything that floats wears the same slab", () => {
     // The point of the class is that a surface's own rule says where it is
     // and how big, and nothing about what floating LOOKS like. A background
     // creeping back into one of these is the drift this prevents.
-    for (const selector of [".dock-panel", ".rail-strip", ".bar-cluster"]) {
+    for (const selector of [".dock-panel", ".rail-strip", ".bar-cluster", ".tool-rail", ".zoom-controls"]) {
       const rule = new RegExp(`\\${selector}\\s*\\{[^}]*\\}`).exec(css)?.[0] ?? "";
       expect(rule, `${selector} must have a rule`).not.toBe("");
       expect(rule, `${selector} must not restate the slab`).not.toMatch(/backdrop-filter:|box-shadow:/);

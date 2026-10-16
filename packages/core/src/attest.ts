@@ -20,6 +20,7 @@
 
 import type { Actor } from "./model.ts";
 import type { Attestation } from "./badge.ts";
+import { isAgentHarness } from "./claims.ts";
 import type { AttestedKind, GrantSubject } from "./grants.ts";
 
 /**
@@ -195,4 +196,35 @@ export function attestedEmailLocalPart(attestations: readonly Attestation[]): st
   const address = attestedEmail(attestations);
   if (!address) return null;
   return address.slice(0, address.indexOf("@")).trim() || null;
+}
+
+/**
+ * Lowercased HTTP header carrying an agent harness session key
+ * (`<harness>:<sessionId>`) for stateless per-session agent attribution behind
+ * an authenticating reverse proxy.
+ */
+export const SESSION_HEADER = "x-isocan-session";
+
+/**
+ * Validate and normalize an `X-Isocan-Session` header value into a canonical
+ * `<harness>:<sessionId>` session key, or return null when absent or malformed.
+ *
+ * Only non-person, non-replica harnesses (`isAgentHarness(harness) === true`)
+ * with a non-empty printable ASCII `<sessionId>` (`<= 256` total characters, no
+ * whitespace or control characters) are accepted.
+ */
+export function parseSessionHeader(
+  raw: string | readonly string[] | undefined | null,
+): string | null {
+  const first = Array.isArray(raw) ? raw[0] : raw;
+  if (typeof first !== "string") return null;
+  if (/[\r\n\0]/.test(first)) return null;
+  const trimmed = first.trim();
+  if (!trimmed || trimmed.length > 256 || !/^[\x21-\x7e]+$/.test(trimmed)) return null;
+  const colon = trimmed.indexOf(":");
+  if (colon <= 0 || colon === trimmed.length - 1) return null;
+  const harness = trimmed.slice(0, colon);
+  const sessionId = trimmed.slice(colon + 1);
+  if (!isAgentHarness(harness) || !sessionId) return null;
+  return trimmed;
 }

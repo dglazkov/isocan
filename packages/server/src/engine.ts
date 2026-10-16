@@ -3029,7 +3029,7 @@ export class Engine {
       if (op.type === "group.change" && op.action.kind === "copy" && normalizedOp.type === "group.change" && normalizedOp.action.kind === "apply") {
         // A paste is all-or-nothing, including distinct visual bytes. This is
         // checked at the home after shape validation and before any append.
-        const hashes = new Set(normalizedOp.action.change.writes.flatMap((write) => write.kind === "create" ? write.item.versions.flatMap((version) => [version.blobHash, ...(version.visual ? [version.visual.blobHash] : [])]) : []));
+        const hashes = new Set(normalizedOp.action.change.writes.flatMap((write) => write.kind === "create" ? write.item.versions.flatMap((version) => [version.blobHash, ...(version.visual ? [version.visual.blobHash] : []), ...Object.values(version.faces ?? {}).flatMap((f) => f ? [f.blobHash] : [])]) : []));
         for (const hash of hashes) if (!(await contextBlobAvailable(this.store, canvasId, hash))) throw new OpValidationError("bad-op", `copy content is unavailable: ${hash}; prepare every source and visual blob before pasting`);
       }
     }

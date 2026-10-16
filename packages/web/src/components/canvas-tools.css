@@ -17,7 +17,10 @@
 .ink-well {
   position: absolute; right: calc(100% + 10px); top: 50%; transform: translateY(-50%);
   display: flex; align-items: center; gap: 5px; padding: 6px 8px;
-  background: var(--card); border: 1px solid var(--line); border-radius: 999px;
-  box-shadow: var(--shadow-pop);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(22px) saturate(1.45);
+  backdrop-filter: blur(22px) saturate(1.45);
+  border: 1px solid var(--glass-border); border-radius: 999px;
+  box-shadow: var(--shadow-glass);
 }
-.ink-sep { width: 1px; align-self: stretch; margin: 1px 1px; background: var(--line); }
+.ink-sep { width: 1px; align-self: stretch; margin: 1px 1px; background: var(--glass-border); }

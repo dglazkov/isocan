@@ -3,11 +3,13 @@ import { spawn } from "node:child_process";
 import { existsSync, openSync } from "node:fs";
 import path from "node:path";
 import { packageBin, packageRoot } from "@isocan/core/packageroot";
-import { Agent, EnvHttpProxyAgent, fetch as undiciFetch, setGlobalDispatcher } from "undici";
+import { Agent, Dispatcher, EnvHttpProxyAgent, Pool, fetch as undiciFetch, setGlobalDispatcher } from "undici";
 import { isLoopbackBase } from "@isocan/core";
 import type { BadgeStore, SourceRequestContext } from "@isocan/core";
-import { fileBadgeStore, gatewayBaseFor, paths, plausibleSha, upgradeVerdict } from "@isocan/server";
+import { fileBadgeStore, gatewayBaseFor, homeAuthFor, paths, plausibleSha, upgradeVerdict } from "@isocan/server";
+import { authHeaderFetch } from "./auth-helper.ts";
 import { isBadgeUpstream } from "./identity.ts";
+import { harnessSessions } from "./harness.ts";
 import { DaemonRoutes, platformFetch, type Health } from "./routes.ts";
 
 if (
@@ -26,6 +28,13 @@ const upstreamBadgeStore: BadgeStore = {
   },
   async keep() {},
 };
+
+async function defaultSessionKey(home: string): Promise<string | null> {
+  const present = await harnessSessions(home);
+  const primary = present.find((s) => s.deliberate) ?? present[0];
+  if (!primary || primary.harness.toLowerCase() === "agent") return null;
+  return primary.key;
+}
 
 /**
  * The proxy URL configured in `env` for `base`, or `null` when none is set or
@@ -64,13 +73,45 @@ function proxyForBase(base: string, env: NodeJS.ProcessEnv = process.env): strin
   return proxy;
 }
 
-function proxyFetch(base: string, proxyUrl: string): typeof fetch {
-  const dispatcher = new EnvHttpProxyAgent({
-    httpProxy: proxyUrl,
-    httpsProxy: proxyUrl,
-    noProxy: "",
-    proxyTunnel: false,
+/**
+ * Plain HTTP/1.1 forward-proxy dispatcher for local sidecar proxies (`127.0.0.1` / `localhost`)
+ * that originate the upstream TLS / client-certificate connection themselves (`proxyTunnel: false`).
+ *
+ * `undici`'s `EnvHttpProxyAgent({ proxyTunnel: false })` only skips `CONNECT` for `http:` targets
+ * and still issues `CONNECT` for `https:` URLs (`shouldProxyTunnel` in `proxy-agent.js`). When a
+ * loopback proxy terminates/originates TLS on the client's behalf, sending `CONNECT` + a second TLS
+ * handshake fails with `ERR_SSL_WRONG_VERSION_NUMBER`; forwarding origin-form HTTP/1.1 with
+ * `Host: <target-host>` over loopback lets the local proxy attach its client certificate and speak
+ * TLS upstream.
+ */
+function originatingProxyDispatcher(proxyUrl: string): Dispatcher {
+  return new Pool(proxyUrl).compose((dispatch) => (opts, handler) => {
+    const { host } = new URL(String(opts.origin));
+    const headers =
+      opts.headers && typeof opts.headers === "object" && !Array.isArray(opts.headers)
+        ? { ...(opts.headers as Record<string, string | string[] | undefined>), host }
+        : { host };
+    return dispatch({ ...opts, headers }, handler);
   });
+}
+
+function proxyFetch(base: string, proxyUrl: string, proxyTunnel?: boolean): typeof fetch {
+  if (proxyTunnel === false && (!isLoopbackBase(proxyUrl) || !proxyUrl.toLowerCase().startsWith("http://"))) {
+    return async () => {
+      throw new Error(
+        `refusing proxyTunnel: false for non-loopback httpProxy ${proxyUrl} (for ${base})`,
+      );
+    };
+  }
+  const dispatcher =
+    proxyTunnel === false
+      ? originatingProxyDispatcher(proxyUrl)
+      : new EnvHttpProxyAgent({
+          httpProxy: proxyUrl,
+          httpsProxy: proxyUrl,
+          noProxy: "",
+          proxyTunnel: false,
+        });
   return async (input, init) => {
     try {
       return (await undiciFetch(input as Parameters<typeof undiciFetch>[0], {
@@ -243,27 +284,35 @@ export class DaemonClient extends DaemonRoutes {
   direct = false;
 
   constructor(base: string, home: string, lifetime?: AbortSignal, sourceContext?: SourceRequestContext) {
+    const homeAuth = homeAuthFor(base, home);
     super(
       base,
-      isBadgeUpstream() ? upstreamBadgeStore : fileBadgeStore(home, base),
+      isBadgeUpstream() || homeAuth !== null ? upstreamBadgeStore : fileBadgeStore(home, base),
       lifetime,
       sourceContext,
     );
     this.home = home;
+    if (!isBadgeUpstream()) {
+      this.useSessionKey(() => defaultSessionKey(this.home));
+    }
     const gateway = gatewayBaseFor(this.base, this.home);
     if (gateway) {
       const via = gatewayFetch(this.base, gateway);
       this.fetcher = via;
       this.probeFetcher = via;
     } else {
-      const proxy = proxyForBase(this.base);
+      const proxy = homeAuth?.httpProxy ?? proxyForBase(this.base);
       if (proxy) {
-        const via = proxyFetch(this.base, proxy);
+        const via = proxyFetch(this.base, proxy, homeAuth?.httpProxy ? homeAuth.proxyTunnel : undefined);
         this.fetcher = via;
         this.probeFetcher = via;
       } else if (isLoopbackBase(this.base)) {
         this.fetcher = boundedFetch(this.base);
       }
+    }
+    if (homeAuth?.authHeaderCommand) {
+      this.fetcher = authHeaderFetch(this.base, this.home, homeAuth, this.fetcher);
+      this.probeFetcher = authHeaderFetch(this.base, this.home, homeAuth, this.probeFetcher);
     }
   }
 

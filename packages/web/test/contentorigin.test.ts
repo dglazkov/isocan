@@ -78,8 +78,8 @@ describe("invariant 2: the sandbox upgrade is keyed to the split, never to a fla
       "utf8",
     );
     // Through `useFrameSrc`, which is `itemFrame` plus "a loaded frame keeps
-    // the src it loaded with" — still one builder deciding the pair.
-    expect(source).toContain("useFrameSrc(origin, canvasId, blobHash)");
+    // the src it loaded with while live" — still one builder deciding the pair.
+    expect(source).toContain("useFrameSrc(origin, canvasId, blobHash, wantLive)");
     // The old hand-paired frame must not come back: an html-view src with a
     // literal sandbox is a second place deciding the pair.
     expect(source).not.toMatch(/className="html-view"\s+src=\{url\}\s+sandbox="/);
@@ -193,13 +193,22 @@ describe("stage 4b: the tickets", () => {
     // again until the person clicked an item and remounted it.
     //
     // A ticket the home would still accept must still be handed over. Being
-    // inside the margin means "worth replacing", never "unusable".
+    // inside the margin means "worth replacing", never "unusable" — while
+    // `origin.fresh` lets a newly mounting frame wait for the replacement.
     adoptContentBase("https://isocan.store", true);
-    home({ a: "/api/projects/prj_1/blobs/a?exp=1&sig=sa" }, Math.floor(Date.now() / 1000) + 5, 5);
+    home({ a: "/api/projects/prj_1/blobs/a?exp=1&sig=sa" }, Math.floor(Date.now() / 1000) + 300, 300);
     await ensureTickets("prj_1", ["a"]);
-    expect(itemFrame(contentOrigin(), "prj_1", "a")?.src).toBe(
-      "https://isocan.store/api/projects/prj_1/blobs/a?exp=1&sig=sa",
-    );
+    expect(contentOrigin()?.fresh?.("prj_1", "a")).toBe(true);
+    vi.useFakeTimers();
+    try {
+      vi.advanceTimersByTime(280_000);
+      expect(contentOrigin()?.fresh?.("prj_1", "a")).toBe(false);
+      expect(itemFrame(contentOrigin(), "prj_1", "a")?.src).toBe(
+        "https://isocan.store/api/projects/prj_1/blobs/a?exp=1&sig=sa",
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("a ticket that has actually expired is gone, and nothing is rendered", async () => {

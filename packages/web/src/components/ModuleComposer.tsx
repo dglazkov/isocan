@@ -38,12 +38,16 @@ export function ModuleComposerControls({
   actor,
   takenOverBy,
   onTakeOver,
+  hidden = false,
 }: {
   canvasId: string;
   actor: Actor;
   /** Which module holds the row, if any — the shell's answer. */
   takenOverBy: string | null;
   onTakeOver: (moduleName: string, active: boolean) => void;
+  /** True while the viewer is typing: the idle control yields its spot to Send
+   *  while staying mounted so a clear flips back without remounting. */
+  hidden?: boolean;
 }) {
   const canvas = useCanvasStore((s) => s.canvas);
   const project = useCanvasStore((s) => s.record);
@@ -75,6 +79,7 @@ export function ModuleComposerControls({
             key={`${module}:${control.label}`}
             className={`module-composer-control${active ? " module-composer-wide" : ""}`}
             aria-label={control.label}
+            hidden={hidden && !active}
           >
             <Body
               canvasId={canvasId}

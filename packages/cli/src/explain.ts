@@ -1,5 +1,4 @@
 import {
-  EXPLAIN_DEPTHS,
   TEXT_FILENAME,
   TEXT_MIME,
   critiqueAsk,
@@ -18,7 +17,6 @@ import {
   rationaleText,
   textLookProperties,
   type CanvasSnapshotResponse,
-  type ExplainDepth,
   type NewComment,
   type NightSeen,
 } from "@isocan/core";
@@ -28,7 +26,7 @@ import { propose, type ProposeDeps } from "./propose.ts";
 /**
  * **`isocan explain <item>`** (proactive-agent phase 4, design §6) — how an
  * item got here, from a terminal: the same derived story the Explain panel
- * draws (`explainSections` in core), at a depth, and the three acts beside
+ * draws (`explainSections` in core), and the three acts beside
  * it, each only when asked:
  *
  * - `--rationale`: Copy as rationale — the explanation as a note beside the item;
@@ -46,7 +44,6 @@ export interface ExplainDeps extends ProposeDeps {
 
 /** What `explain` takes. */
 export interface ExplainOpts {
-  depth?: string;
   rationale?: boolean;
   ask?: boolean;
   critique?: boolean;
@@ -71,10 +68,8 @@ export async function sayInChat(ctx: Ctx, deps: ExplainDeps, canvasId: string, s
   return { threadId, commentId: comment.id };
 }
 
-/** `isocan explain <item> [--depth plain|designer|deep] [--rationale | --ask | --critique …]`. */
+/** `isocan explain <item> [--rationale | --ask | --critique …]`. */
 export async function explain(ctx: Ctx, deps: ExplainDeps, ref: string, opts: ExplainOpts): Promise<void> {
-  const depth = (opts.depth ?? "plain") as ExplainDepth;
-  if (!EXPLAIN_DEPTHS.includes(depth)) throw new Error(`--depth is ${EXPLAIN_DEPTHS.join(", ")} — not "${opts.depth}"`);
   const { canvas: p, snapshot } = await deps.canvasAndSnapshot(ctx);
   const item = deps.resolveItem(snapshot, ref);
   const story = explainStory(snapshot.canvas, item.id);
@@ -111,7 +106,7 @@ export async function explain(ctx: Ctx, deps: ExplainDeps, ref: string, opts: Ex
   }
 
   if (opts.rationale) {
-    const body = rationaleText(story, depth, Date.now());
+    const body = rationaleText(story, Date.now());
     const spot = rationaleSpot(snapshot.canvas, item, body);
     const upload = await ctx.client.uploadBlob(p.id, Buffer.from(body, "utf8"), TEXT_MIME, TEXT_FILENAME);
     const itemId = newItemId();
@@ -130,6 +125,6 @@ export async function explain(ctx: Ctx, deps: ExplainDeps, ref: string, opts: Ex
     return;
   }
 
-  if (ctx.json) return deps.printJson({ depth, story, sections: explainSections(story, depth) });
-  console.log(explainText(story, depth));
+  if (ctx.json) return deps.printJson({ story, sections: explainSections(story) });
+  console.log(explainText(story));
 }

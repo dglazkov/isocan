@@ -316,6 +316,22 @@ export function underSlotFor(state: {
  * CSS form to its JS twin, number for number, across widths and zooms.
  */
 export type ZoomHeld = { r?: boolean; t?: boolean; s?: boolean; g?: boolean };
+/**
+ * Minimum viewport scale at which canvas-wide directional edges stay visible.
+ *
+ * Unlike item chrome and content — which follow screen size (`width * scale`,
+ * `height * scale`) via `hasRoomForChrome` and `textIsLegible` so a large
+ * `1600 × 900` slide never blanks out while still hundreds of pixels wide on
+ * screen — directional edges are world-space 2-unit lines between items and
+ * fade past `EDGE_ZOOM_MIN`.
+ */
+export const EDGE_ZOOM_MIN = 0.08;
+
+/** Whether directional edges are shown at `scale`, with hysteresis. */
+export function edgesShownAtZoom(scale: number, was?: boolean): boolean {
+  return holdsAtZoom(scale, EDGE_ZOOM_MIN, was);
+}
+
 /** Bit: `hasRoomForChrome` — the title bar and the row under it are drawn. */
 export const Z_ROOMY = 1;
 /** Bit: `titleRow(...).icon` — the kind icon keeps its place in the title row. */
@@ -330,7 +346,7 @@ export const Z_SPELL = 16;
 export const Z_MARK = 32;
 /** Bit: a group's or an area's members are too small to read (`textIsLegible` of their median type size, `memberPx`), so its Semantic Zoom summary card shows. */
 export const Z_GIST = 64;
-/** The seven decisions above for one item at one zoom, each rule handed its last answer in `held`. `memberPx` is only ever handed over by Semantic Zoom's chunk, for a group or an area it has a summary for. */
+/** The decisions above for one item at one zoom, each rule handed its last answer in `held`. `memberPx` is only ever handed over by Semantic Zoom's chunk, for a group or an area it has a summary for. */
 export function zoomDecisions(item: Item, width: number, height: number, scale: number, held: ZoomHeld, memberPx?: number): number {
   const row = titleRow(width, scale);
   const legible = !isTextItem(item) || textIsLegible(textDrawSize(item), scale, held.t);

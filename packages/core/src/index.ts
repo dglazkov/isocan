@@ -145,6 +145,7 @@ export * from "./export.ts";
 
 export * from "./text-attention.ts";
 export * from "./live-drag.ts";
+export * from "./edges.ts";
 
 export * from "./text-anchor.ts";
 export { markdownResource, markdownTargetOffCanvas, SOURCE_PATH_PROP } from "./markdown-resources.ts";

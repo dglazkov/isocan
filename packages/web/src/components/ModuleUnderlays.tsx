@@ -1,9 +1,10 @@
-import type { Actor, WebHost } from "@isocan/core";
+import type { Actor, CanvasContents, WebHost } from "@isocan/core";
 import { itemPath } from "@isocan/core";
 import { usePresentation } from "../lib/canvasPresentation.ts";
 import { presentedCanvas, previewedCanvas } from "../lib/presentation.ts";
+import { EDGE_ZOOM_MIN, edgesShownAtZoom } from "../lib/chrome.ts";
 import { modules } from "../modules.ts";
-import { useCallback, useContext, useMemo } from "react";
+import { Suspense, lazy, useCallback, useContext, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { CanvasActivation } from "../lib/canvasActivation.ts";
 import { useCanEdit } from "../lib/capability.ts";
@@ -11,6 +12,21 @@ import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { currentCommands } from "../lib/commands.ts";
 import { fetchBlobText } from "../lib/blobtext.ts";
+
+export { EDGE_ZOOM_MIN, edgesShownAtZoom };
+
+const LazyNodeEdgesUnderlay = lazy(() => import("./NodeEdgesUnderlay.tsx"));
+
+function hasAnyDeclaredEdge(canvas: CanvasContents): boolean {
+  for (const item of Object.values(canvas.items)) {
+    const props = item.properties;
+    if (props.edges) return true;
+    for (const k in props) {
+      if (k.startsWith("edge:")) return true;
+    }
+  }
+  return false;
+}
 
 /**
  * **The first module slot: under the items, in world units.**
@@ -27,6 +43,11 @@ import { fetchBlobText } from "../lib/blobtext.ts";
  * overlays get, with `canEdit` beside it — and open an item full screen at an
  * anchor: an arrow between kept screens is something you click, retarget and
  * play from (`core/modules.ts`, `WebHost`, "Who gets it").
+ *
+ * Directional edges and module underlays stay shown down to `EDGE_ZOOM_MIN`
+ * (`edgesShownAtZoom`) and hide when zoomed past that floor (`scale < 0.08`).
+ * Node content itself is governed per item by screen size (`hasRoomForChrome`,
+ * `textIsLegible`), never by a raw scale cutoff.
  */
 export function ModuleUnderlays({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   const presentation = usePresentation();
@@ -43,9 +64,12 @@ export function ModuleUnderlays({ canvasId, actor }: { canvasId: string; actor: 
   const openItem = useCallback((itemId: string, anchor?: string) => navigate(`${itemPath(canvasId, itemId)}${anchor ? `?at=${encodeURIComponent(anchor.replace(/^#/, ""))}` : ""}`), [canvasId, navigate]);
   // A runtime module that arrived after first paint is a new underlay.
   useUiStore((s) => s.modulesGeneration);
-  if (!canvas) return null;
+  const held = useRef<{ e?: boolean }>({}).current;
+  const edgesVisible = useUiStore((s) => (held.e = edgesShownAtZoom(s.viewport.scale, held.e)));
+  if (!canvas || !edgesVisible) return null;
+  const previewed = previewedCanvas(presentedCanvas(canvas, presentation), gesture);
   const facts = {
-    canvas: previewedCanvas(presentedCanvas(canvas, presentation), gesture),
+    canvas: previewed,
     presentation: presentation?.items,
     activateItem,
     selection,
@@ -57,6 +81,11 @@ export function ModuleUnderlays({ canvasId, actor }: { canvasId: string; actor: 
   };
   return (
     <>
+      {hasAnyDeclaredEdge(previewed) && (
+        <Suspense fallback={null}>
+          <LazyNodeEdgesUnderlay canvas={previewed} />
+        </Suspense>
+      )}
       {modules().flatMap((m) =>
         (m.underlays ?? []).map((Underlay, i) => <Underlay key={`${m.core.name}:${i}`} {...facts} />),
       )}

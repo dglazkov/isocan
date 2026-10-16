@@ -160,6 +160,7 @@ export async function findSessionIdentity(
   const newest = [...bindings].sort((a, b) => b.boundAt.localeCompare(a.boundAt))[0];
   if (!newest) return null;
   const harness = present.find((s) => s.key === newest.key)?.harness ?? "unknown";
+  client.useSessionKey(!isBadgeUpstream() && harness.toLowerCase() !== "agent" ? newest.key : null);
   return { actor: newest.actor, harness, key: newest.key };
 }
 
@@ -208,6 +209,7 @@ export async function claimSessionIdentity(
     );
   }
   await client.ensureDaemon();
+  client.useSessionKey(null);
   const bindings = await legacyTolerant(client.actorBindings(present.map((s) => s.key)));
   if (!bindings) {
     throw new Error(
@@ -227,6 +229,9 @@ export async function claimSessionIdentity(
     ...(options.canvasId !== undefined ? { canvasId: options.canvasId } : {}),
   };
   const { envelope } = await client.claimActor(op);
+  if (!isBadgeUpstream() && options.as === undefined && session.harness.toLowerCase() !== "agent") {
+    client.useSessionKey(session.key);
+  }
   return { actor: envelope.actor, harness: session.harness };
 }
 
@@ -362,6 +367,7 @@ export async function resolveIdentity(
 ): Promise<ResolvedIdentity | null> {
   const upstream = resolveUpstreamIdentity();
   if (upstream) {
+    client.useSessionKey(null);
     client.reclaimWith(() => reclaimIdentity(client, upstream));
     return upstream;
   }
@@ -384,6 +390,7 @@ export async function resolveIdentity(
             } as const)
           : null,
       );
+  if (!session) client.useSessionKey(null);
   if (!resolved && (await harnessSessions(home)).length === 0) {
     const bindings = await legacyTolerant(client.actorBindings([HOME_CLAIM_KEY])).catch((err) => {
       if (err instanceof ApiError && err.code === BADGE_ENDED && err.reason === "operator") {
@@ -436,6 +443,7 @@ export async function resolveExplicitIdentity(
 ): Promise<ResolvedIdentity | null> {
   const harness = identity.harness ?? "isocan";
   const key = `${harness}:${identity.session}`;
+  client.useSessionKey(!isBadgeUpstream() && harness.toLowerCase() !== "agent" ? key : null);
   await client.ensureDaemon();
   const bindings = await legacyTolerant(client.actorBindings([key]));
   const bound = bindings?.[0];

@@ -17,13 +17,14 @@ daemon.
 **Phase citations name their project**: `proxy-identity phase 0`, never a bare
 "phase 0".
 
-**Where we are:** Phase 0 is closed (15 Oct 2026): badge-less HTTP requests and
-`/ws` upgrades carrying a verified `ISOCAN_PROXY_EMAIL_HEADER` resolve a
-deterministic `bdg_prx_...` badge and bind `home:person`, `GET /api/attest`
-exposes `bound` for zero-round-trip `SsoGate` entry, and `@isocan/api`
-`resolveIdentity` discovers the human actor without `~/.isocan/identity.json`.
-**proxy-identity phase 1 is next** — stateless per-session agent attribution
-(`X-Isocan-Session`).
+**Where we are:** Every phase (0–2) is closed (15 Oct 2026): badge-less HTTP
+requests and `/ws` upgrades carrying a verified `ISOCAN_PROXY_EMAIL_HEADER`
+resolve a deterministic `bdg_prx_...` badge and bind `home:person`,
+`X-Isocan-Session` auto-claims a distinct agent actor per harness conversation
+on that same proxy badge (`ownsAgent` = true), and `homeAuth` in `@isocan/api`
+obtains proxy headers from an external credential helper (`authHeaderCommand`,
+cached with TTL and refreshed on `401`/`302`) and routes through an optional
+per-home `httpProxy` without a background gateway daemon.
 
 ---
 
@@ -70,7 +71,7 @@ refusing badge-less requests with `401 no-badge`.
 
 ## Phase 1 — Stateless per-session agent attribution (`X-Isocan-Session`)
 
-**Status: NOT STARTED.**
+**Status: CLOSED.** 15 Oct 2026 — `SESSION_HEADER`, `parseSessionHeader`, server `ensureProxySessionClaim`, and client `DaemonRoutes.useSessionKey` verified in `packages/server/test/proxy-identity.test.ts` and `packages/api/test/proxy-session.test.ts`.
 
 When a coding harness session is present in the environment, `@isocan/api` sends
 `X-Isocan-Session: <harness>:<sessionId>` and a proxy-authenticated home claims
@@ -88,7 +89,7 @@ a distinct agent actor on the person's proxy badge on first sight (`design.md`
 - `@isocan/api`: wire `DaemonRoutes` / `DaemonClient` to attach
   `X-Isocan-Session` when an ambient harness session is active and not
   overridden by an explicit `--as` or enrolled `agent:` identity.
-- Update `packages/cli/src/agent-guide.md` (`identity` topic) to note automatic
+- Update `packages/cli/src/agent-guide.md` (`protocol` topic) to note automatic
   per-session naming on proxy-authenticated homes.
 
 **Proof:** in `packages/server/test/proxy-identity.test.ts` and
@@ -101,11 +102,15 @@ Priya (`ownsAgent` = true), while a third request with no session header lands
 as Priya (`usr_...`). Sending `X-Isocan-Session` to a non-proxy home does not
 auto-claim an actor.
 
+**Trajectory:**
+- **2026-10-15** — `DaemonRoutes.request` omits `X-Isocan-Session` on `actor.claim` POSTs and `claimSessionIdentity` temporarily suppresses `useSessionKey` during its `actorBindings` pre-read so explicit `isocan identity --session --name/--new/--as` calls do not auto-mint an unnamed harness-initial actor before the explicit claim lands (`routes.ts`, `identity.ts`).
+- **2026-10-15** — Placed the `X-Isocan-Session` wire note in `packages/cli/src/agent-guide.md`'s `protocol` topic (keeping `identity` within its `agent-guide.test.ts` token budget).
+
 ---
 
 ## Phase 2 — External credential helper and forward-proxy transport (`homeAuth`)
 
-**Status: NOT STARTED.**
+**Status: CLOSED.** 15 Oct 2026 — `homeAuth` (`authHeaderCommand` + `httpProxy`), `0600` disk cache (`~/.isocan/auth-cache/`), single-flight memory cache, and automatic refresh on `401`/`302` verified end-to-end in `packages/api/test/auth-helper.test.ts`.
 
 Allow `@isocan/api` and the CLI to obtain proxy auth headers from an external
 command (`authHeaderCommand`) with short-lived caching, automatic refresh on
@@ -133,3 +138,7 @@ produced by a synthetic helper script (`node -e ...`), and injects
 `identity.json`, zero `/api/door` calls, helper invocation cached across two
 commands, and automatic helper re-invocation when the token expires (`401` or
 `302`).
+
+**Trajectory:**
+- **2026-10-15** — `resolveBase` in `packages/api/src/ctx.ts` checks `homeAuthFor(candidate, home)` when `declared?.mode !== "daemon"`, so configuring `homeAuth` for the bound home URL routes CLI commands directly to it without requiring `ISOCAN_DIRECT=1` or spawning a local daemon (`ctx.ts`).
+- **2026-10-15** — `authHeaderFetch` wraps both `fetcher` and `probeFetcher` inside `DaemonClient` (`packages/api/src/client.ts`) rather than inside `routes.ts`, preserving `routes.ts`'s strict zero-Node/zero-lifecycle boundary (`packages/api/test/boundary.test.ts`).

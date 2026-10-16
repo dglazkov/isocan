@@ -1664,7 +1664,9 @@ export class HomeLink implements HomeConnection {
     if (this.rc) {
       const local = this.rc.answeringLocal(link.canvasId);
       const agents =
-        (await this.engine.getSnapshot(link.canvasId).catch(() => null))?.canvas.agents ?? {};
+        local.actorIds.length > 0
+          ? ((await this.engine.getSnapshot(link.canvasId).catch(() => null))?.canvas.agents ?? {})
+          : {};
       const answerable: string[] = [];
       for (const actorId of local.actorIds) {
         const record = agents[actorId];

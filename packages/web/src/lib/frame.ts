@@ -19,6 +19,9 @@ export interface ContentOrigin {
   /** The signed path for these bytes, `null` while it is still being minted,
    * or the whole field null on an origin that asks for no signature. */
   ticket: ((canvasId: string, blobHash: string) => string | null) | null;
+  /** Whether the ticket for these bytes has enough life left to freeze on a
+   * newly mounting frame, or omitted on an origin that asks for no signature. */
+  fresh?: ((canvasId: string, blobHash: string) => boolean) | null | undefined;
 }
 
 /**
@@ -98,23 +101,31 @@ export function panelFrame(
  * frame on the canvas reloaded at once. A flash storm at the exact moment the
  * person returned, caused by the fix for the blanking.
  *
- * So the rule is: the first src that works is the src, until the item's
- * VERSION changes. A new `blobHash` is a different document and rebuilds; a
- * new signature for the same bytes does not.
+ * So the rule is: the first src that works is the src, for as long as `live`
+ * stays true and the item's VERSION (`blobHash`) stays the same. When `live`
+ * drops (for instance when a zoomed-out HTML card shows only its static
+ * snapshot and unmounts its `<iframe>`), the held URL is dropped too — a new
+ * `<iframe>` mounting minutes later must build from a fresh ticket rather than
+ * inherit an expired one.
  *
- * Null still means "nothing to render yet" — the beat before the first mint
- * lands. It cannot mean "expired", because an expired ticket never replaces a
- * working one here.
+ * A newly mounting frame also waits for `origin.fresh` (>30s left) before
+ * locking in its URL, so it never freezes a ticket about to expire while its
+ * replacement is already in flight.
  */
 export function useFrameSrc(
   origin: ContentOrigin | null,
   canvasId: string,
   blobHash: string,
+  live = true,
 ): { src: string; sandbox: string } | null {
   const held = useRef<{ hash: string; frame: { src: string; sandbox: string } } | null>(null);
+  if (!live || (held.current && held.current.hash !== blobHash)) {
+    held.current = null;
+  }
+  if (!live) return null;
+  if (held.current) return held.current.frame;
+  if (origin?.fresh && !origin.fresh(canvasId, blobHash)) return null;
   const built = itemFrame(origin, canvasId, blobHash);
-  // A different version: drop what we were holding and take the new one.
-  if (held.current && held.current.hash !== blobHash) held.current = null;
-  if (built && !held.current) held.current = { hash: blobHash, frame: built };
-  return held.current?.frame ?? built;
+  if (built) held.current = { hash: blobHash, frame: built };
+  return built;
 }

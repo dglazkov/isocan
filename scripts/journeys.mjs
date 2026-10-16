@@ -4788,7 +4788,7 @@ export default async function act({ prompt, cli, cwd }) {
   const itemId = /Critique, please: “[^”]*” \\((itm_[\\w-]+)\\)/.exec(prompt)?.[1];
   if (!canvasId || !itemId) return;
   const run = (...args) => execFileSync(process.execPath, [cli, "--canvas", canvasId, ...args], { encoding: "utf8" });
-  const deep = JSON.parse(execFileSync(process.execPath, [cli, "--json", "--canvas", canvasId, "explain", itemId, "--depth", "deep"], { encoding: "utf8" }));
+  const deep = JSON.parse(execFileSync(process.execPath, [cli, "--json", "--canvas", canvasId, "explain", itemId], { encoding: "utf8" }));
   if (deep.story.critique) return;
   const file = path.join(cwd, "try.html");
   writeFileSync(file, "<!doctype html><title>Checkout</title><body style='font:16px system-ui;padding:24px'><h1>Checkout</h1><p>Pickup: Saturday 9:00</p><p>Sourdough loaf × 1</p><p><b>Total $8</b> <button>Pay</button></p></body>");
@@ -4880,27 +4880,19 @@ export default async function act({ prompt, cli, cwd }) {
         const beside = await b.ev(`(() => { const p = ${panel}.getBoundingClientRect(); return { left: p.left, right: p.right, w: innerWidth, world: !!document.querySelector(".world"), modal: !!document.querySelector("[aria-modal=true]") }; })()`);
         if (!beside.world || beside.modal || beside.left < beside.w / 2 || beside.right > beside.w) throw new Error(`the panel is not beside the canvas: ${JSON.stringify(beside)}`);
         const plain = await panelText();
-        for (const want of ["Maya chose “Checkout B” over 1 other take — “B: shorter form, pickup slot first", "“Checkout A”, a variation by Maya, in the trash", "the design system “DESIGN.md” changed since", "“make it more obvious” — a designer would say “visual hierarchy”"]) {
+        for (const want of ["v3 · Maya chose “Checkout B” over 1 other take — “B: shorter form, pickup slot first", "“Checkout A”, a variation by Maya, in the trash", "the design system “DESIGN.md”: 1 newer version", "“make it more obvious” → visual hierarchy"]) {
           if (!plain.includes(want)) throw new Error(`the panel does not say ${JSON.stringify(want)}: ${plain.slice(0, 900)}`);
         }
         if (!(await b.ev(`!!${panel}.querySelector('[data-explain-trash]')`))) throw new Error("the road not taken has no way to be seen again");
 
-        // 2. Each depth, light and dark.
+        // 2. Light and dark.
         const shots = {};
-        for (const depth of ["plain", "designer", "deep"]) {
-          await rig.click(`[data-explain-depth="${depth}"]`, `the ${depth} depth`);
-          await until(b, `${panel}.querySelector('[data-explain-depth="${depth}"]').getAttribute("aria-pressed") === "true"`, `${depth} pressed`);
-          const text = await panelText();
-          if (depth === "designer" && !/v3 · Maya converged on the variation “Checkout B”/.test(text)) throw new Error(`Designer does not name the move: ${text.slice(0, 600)}`);
-          if (depth === "deep" && !/comment cmt_/.test(text)) throw new Error(`Deep dive does not cite its comments: ${text.slice(0, 600)}`);
-          for (const theme of ["light", "dark"]) {
-            await b.ev(`(() => { document.documentElement.dataset.theme = ${JSON.stringify(theme)}; return true; })()`);
-            await sleep(250);
-            shots[`${depth}-${theme}`] = await shot(`${depth}-${theme}`);
-          }
-          await b.ev(`(() => { document.documentElement.dataset.theme = "light"; return true; })()`);
+        for (const theme of ["light", "dark"]) {
+          await b.ev(`(() => { document.documentElement.dataset.theme = ${JSON.stringify(theme)}; return true; })()`);
+          await sleep(250);
+          shots[theme] = await shot(theme);
         }
-        await rig.click(`[data-explain-depth="plain"]`, "back to Plain");
+        await b.ev(`(() => { document.documentElement.dataset.theme = "light"; return true; })()`);
 
         // 3. Escape closes it; her place and her selection are where they were, and nothing was written.
         await rig.press("Escape");
@@ -4908,7 +4900,7 @@ export default async function act({ prompt, cli, cwd }) {
         if (!(await b.ev(`!!document.querySelector('[data-item-id="${checkout}"].selected')`))) throw new Error("closing Explain lost the selection");
         const worldAfter = await b.ev(`document.querySelector(".world")?.getAttribute("style") ?? ""`);
         if (worldAfter !== world) throw new Error(`Explain moved the canvas: ${world} → ${worldAfter}`);
-        if ((await served(id)) !== before) throw new Error("opening Explain, switching depths and closing it wrote to the canvas");
+        if ((await served(id)) !== before) throw new Error("opening Explain and closing it wrote to the canvas");
 
         // 4. ⌘K → Explain this item; Critique summons Kit, whose critique and proposal arrive in the panel.
         await rig.press("k", { meta: true });
@@ -4922,7 +4914,7 @@ export default async function act({ prompt, cli, cwd }) {
         await until(b, `(${panel}?.textContent ?? "").includes("Kit's critique") && (${panel}.textContent).includes("a proposal beneath it")`, "Kit's critique and its proposal in the panel", 60_000);
         const critique = await panelText();
         if (!/Working: The pickup slot leads/.test(critique) || !/A risk: The total sits below the fold/.test(critique)) throw new Error(`the critique is not in the panel: ${critique.slice(-800)}`);
-        if (!critique.includes("“make it more obvious” — a designer would say “raise the total in the visual hierarchy”")) throw new Error(`Kit's speak-design pair is not in the panel: ${critique.slice(0, 900)}`);
+        if (!critique.includes("“make it more obvious” → raise the total in the visual hierarchy")) throw new Error(`Kit's speak-design pair is not in the panel: ${critique.slice(0, 900)}`);
         const story = runCli("--canvas", id, "explain", checkout).story;
         const proposal = runCli("--canvas", id, "show", story.critique.proposal.itemId);
         const cites = JSON.parse(proposal.properties.proposalCites);
@@ -4949,7 +4941,7 @@ export default async function act({ prompt, cli, cwd }) {
         const cannot = await b.ev(`${panel}.querySelector("[data-explain-cannot]").textContent`);
         if (!/No critique: .*Kit/.test(cannot)) throw new Error(`the panel does not say why: ${cannot}`);
         if (!(await b.ev(`${panel}.querySelector("[data-explain-critique]").disabled`))) throw new Error("Critique is offered with nobody to answer");
-        if (!(await panelText()).includes("Maya made it")) throw new Error("the history does not stand without a critique");
+        if (!(await panelText()).includes("v1 · Maya drafted it")) throw new Error("the history does not stand without a critique");
         await rig.press("Escape");
         const errors = b.takeErrors();
         if (errors.length > 0) throw new Error(`the page threw: ${errors[0]}`);

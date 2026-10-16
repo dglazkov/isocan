@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import type { Actor, ExplainDepth, ExplainLine } from "@isocan/core";
-import { EXPLAIN_DEPTHS, TEXT_FILENAME, TEXT_MIME, critiqueAsk, explainSections, explainStory, newItemId, newVersionId, rationaleSpot, rationaleText, textLookProperties } from "@isocan/core";
+import type { Actor, ExplainLine } from "@isocan/core";
+import { TEXT_FILENAME, TEXT_MIME, critiqueAsk, explainSections, explainStory, newItemId, newVersionId, rationaleSpot, rationaleText, textLookProperties } from "@isocan/core";
 import { canEditNow } from "../lib/capability.ts";
 import { postToMain } from "../lib/mainthread.ts";
 import { uploadOrStageTextBlob } from "../lib/upload.ts";
@@ -19,9 +19,7 @@ import "./explain.css";
  *
  * Everything it says is core's (`explainStory`, `explainSections`) — the same
  * words `isocan explain` prints — drawn live from the canvas store, so a
- * critique that arrives while it is open appears in it. The depth switch
- * (Plain, Designer, Deep dive) only changes the register; it is remembered
- * per viewer.
+ * critique that arrives while it is open appears in it.
  *
  * **It writes nothing** unless the person presses one of its two buttons:
  * **Critique**, an ordinary summons to the canvas's lead agent in the Chat
@@ -56,25 +54,12 @@ function closeExplain(): void {
   host = null;
 }
 
-const DEPTH_KEY = "isocan.explain.depth";
-const DEPTH_LABEL: Record<ExplainDepth, string> = { plain: "Plain", designer: "Designer", deep: "Deep dive" };
-
-function storedDepth(): ExplainDepth {
-  try {
-    const d = localStorage.getItem(DEPTH_KEY) as ExplainDepth | null;
-    return d && EXPLAIN_DEPTHS.includes(d) ? d : "plain";
-  } catch {
-    return "plain";
-  }
-}
-
 function ExplainPanel({ canvasId, actor, itemId, onClose }: ExplainRequest & { onClose: () => void }) {
   const canvas = useCanvasStore((s) => s.canvas);
-  const [depth, setDepth] = useState<ExplainDepth>(storedDepth);
   const [lead, setLead] = useState<{ lead: Actor | null; cannot: string | null } | null>(null);
   const [busy, setBusy] = useState(false);
   const story = useMemo(() => (canvas ? explainStory(canvas, itemId) : null), [canvas, itemId]);
-  const sections = story && !("refused" in story) ? explainSections(story, depth) : [];
+  const sections = story && !("refused" in story) ? explainSections(story) : [];
   const canEdit = canEditNow();
 
   useEffect(() => {
@@ -98,11 +83,6 @@ function ExplainPanel({ canvasId, actor, itemId, onClose }: ExplainRequest & { o
     return () => { live = false; };
   }, [canvasId, actor.id]);
 
-  const pick = (d: ExplainDepth) => {
-    setDepth(d);
-    try { localStorage.setItem(DEPTH_KEY, d); } catch { /* a per-viewer convenience */ }
-  };
-
   if (!story || "refused" in story) {
     return <aside className="explain-panel" data-explain-panel aria-label="Explain">
       <button className="explain-close" aria-label="Close" onClick={onClose}>✕</button>
@@ -124,7 +104,7 @@ function ExplainPanel({ canvasId, actor, itemId, onClose }: ExplainRequest & { o
     if (!item) return;
     setBusy(true);
     try {
-      const text = rationaleText(story, depth, Date.now());
+      const text = rationaleText(story, Date.now());
       const spot = rationaleSpot(useCanvasStore.getState().canvas!, item, text);
       const { upload, stagedBlob } = await uploadOrStageTextBlob(canvasId, text, TEXT_MIME, TEXT_FILENAME);
       await sendEchoed(
@@ -164,9 +144,6 @@ function ExplainPanel({ canvasId, actor, itemId, onClose }: ExplainRequest & { o
   return <aside className="explain-panel" data-explain-panel={story.itemId} aria-label={`Explain “${story.title}”`}>
     <button className="explain-close" aria-label="Close" onClick={onClose}>✕</button>
     <h3>Explain “{story.title}”</h3>
-    <div className="explain-depth" role="group" aria-label="Depth">
-      {EXPLAIN_DEPTHS.map((d) => <button key={d} className={`btn secondary${d === depth ? " active" : ""}`} aria-pressed={d === depth} data-explain-depth={d} onClick={() => pick(d)}>{DEPTH_LABEL[d]}</button>)}
-    </div>
     {sections.map((s) => <section key={s.key} data-explain-section={s.key}>
       <h4>{s.heading}</h4>
       <ul className="explain-list">

@@ -1,8 +1,8 @@
 ---
-status: partial
+status: built
 since: 2026-10-15
 see: multiuser, first-minute, multi-identity, embed, antigravity, iso-api
-note: phase 0 closed 15 Oct 2026 — a home with ISOCAN_PROXY_EMAIL_HEADER resolves badge-less HTTP requests and /ws upgrades to a deterministic bdg_prx_... badge and canonical home:person actor at the door, SsoGate adopts AttestOffer.bound in one step, and @isocan/api resolveIdentity discovers the human actor without ~/.isocan/identity.json. Phases 1 (X-Isocan-Session agent attribution) and 2 (homeAuth credential helper) remain.
+note: all three phases (0–2) closed 15 Oct 2026 — a home with ISOCAN_PROXY_EMAIL_HEADER resolves badge-less HTTP requests and /ws upgrades to a deterministic bdg_prx_... badge and canonical home:person actor at the door, X-Isocan-Session auto-claims a distinct agent actor per harness conversation on that same proxy badge (ownsAgent = true), and homeAuth in @isocan/api obtains proxy headers via authHeaderCommand (0600 disk cache + refresh on 401/302) and routes through optional per-home httpProxy with zero stored badges, zero identity.json, and zero background gateway daemons.
 ---
 
 # The proxy already knows who you are

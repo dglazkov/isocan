@@ -83,6 +83,7 @@ COPY packages/modules/talk/package.json packages/modules/talk/package.json
 COPY packages/modules/wireframe/package.json packages/modules/wireframe/package.json
 COPY packages/modules/judge/package.json packages/modules/judge/package.json
 COPY packages/modules/critique/package.json packages/modules/critique/package.json
+COPY packages/modules/lottie/package.json packages/modules/lottie/package.json
 
 # --ignore-scripts: the root `prepare` (scripts/prepare.mjs) exists to build the
 # web bundle for people installing from git, and it does it by shelling out to

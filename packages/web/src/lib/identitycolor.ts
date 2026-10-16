@@ -1,4 +1,4 @@
-import type { Actor } from "@isocan/core";
+import { actorAliases, type Actor } from "@isocan/core";
 import { sendOp } from "./api.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { rememberMark } from "./marks.ts";
@@ -14,8 +14,10 @@ import { rememberMark } from "./marks.ts";
 export async function setActorColor(actor: Actor, color: string | null): Promise<void> {
   await sendOp(null, actor, { type: "actor.setColor", actorId: actor.id, color });
   const colors = { ...useCanvasStore.getState().actorColors };
-  if (color === null) delete colors[actor.id];
-  else colors[actor.id] = color;
+  for (const id of actorAliases(useCanvasStore.getState().actorJoins, actor.id)) {
+    if (color === null) delete colors[id];
+    else colors[id] = color;
+  }
   useCanvasStore.setState({ actorColors: colors });
 }
 
@@ -37,5 +39,7 @@ export async function setActorMark(
   of: { id: string } = actor,
 ): Promise<void> {
   await sendOp(null, actor, { type: "actor.setMark", actorId: of.id, mark });
-  rememberMark(of.id, mark);
+  for (const id of actorAliases(useCanvasStore.getState().actorJoins, of.id)) {
+    rememberMark(id, mark);
+  }
 }

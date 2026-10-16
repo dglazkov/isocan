@@ -49,7 +49,7 @@
   background: none; border: 1px solid transparent; border-radius: 6px;
   color: var(--ink-soft); font-size: 15px; line-height: 1;
 }
-.chat-bar-btn:hover { color: var(--ink); background: var(--chip-hover); }
+.chat-bar-btn:hover { color: var(--ink); background: var(--glass-chip-hover); }
 
 /* What came in while it was down: a count and one line of the newest. */
 .chat-bar-news {

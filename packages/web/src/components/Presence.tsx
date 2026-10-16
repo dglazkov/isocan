@@ -7,7 +7,7 @@ import { unreadThreads, useUnreadStore } from "../stores/unreadStore.ts";
 import { useActorColors } from "../lib/colors.ts";
 import { faceMarkClass, faceMarkStyle } from "../lib/face.ts";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
-import { facesFor, pileOrder, unreadByAuthor, type Face } from "../lib/facepile.ts";
+import { facesFor, pileOrder, pileSeparatorBefore, unreadByAuthor, type Face } from "../lib/facepile.ts";
 import { centerOn, threadWorldPos } from "../lib/viewport.ts";
 import { useActorMarks } from "../lib/marks.ts";
 import { isAgentActor, useActorKinds } from "../lib/actorkinds.ts";
@@ -111,11 +111,12 @@ export function Presence({ actor }: { actor: Actor }) {
    * folded identity enrolled is still yours. Ranked before the cut, and the
    * cut takes from the LEFT: you and your pets are never the ones hidden.
    *
-   * A rule is drawn wherever the pile changes between person and agent — one
-   * mark for a group, not a badge on every face — so other people | agents
-   * and pets | you each get one.
+   * Your pets facepile directly under your own face (`(dog(me)`) rather than
+   * sitting behind a divider of their own; a rule still separates other people,
+   * other agents, and your `(pets + you)` cluster.
    */
-  const ordered = pileOrder(faces, (id) => sameActor(joined, id, actor.id));
+  const isMe = (id: string) => sameActor(joined, id, actor.id);
+  const ordered = pileOrder(faces, isMe);
   const hidden = ordered.length > MAX_FACES ? ordered.splice(0, ordered.length - MAX_FACES + 1) : [];
   const overflow = hidden.length;
 
@@ -188,11 +189,12 @@ export function Presence({ actor }: { actor: Actor }) {
       )}
       {ordered.map((face, i) => (
         <Fragment key={face.actor.id}>
-          {/* Drawn before the first agent, and only when somebody stands on
-              each side of it. `aria-hidden` because the rule is a restatement
-              for the eye: every face already SAYS which it is, in the label
-              a reader is handed. */}
-          {i > 0 && (face.owner === null) !== (ordered[i - 1]!.owner === null) && (
+          {/* Separates other people, other agents, and your `(pets + you)`
+              cluster, and only when somebody stands on each side of it.
+              `aria-hidden` because the rule is a restatement for the eye:
+              every face already SAYS which it is, in the label a reader is
+              handed. */}
+          {i > 0 && pileSeparatorBefore(ordered[i - 1]!, face, isMe) && (
             <span className="face-sep" aria-hidden="true" />
           )}
           <button

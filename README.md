@@ -1456,6 +1456,28 @@ this repo does.
 `isocan serve` on a rented VM is a complete home: the same daemon, the same
 code, reachable by anyone you point at it.
 
+When a home sits behind an authenticating reverse proxy (OAuth2 Proxy, Envoy,
+Caddy `forward_auth`, Tailscale, Cloudflare Access) that strips untrusted
+client headers and injects the verified user's email,
+`ISOCAN_PROXY_EMAIL_HEADER` (for example `x-forwarded-email`) lets the home
+derive each person's badge and identity directly from that header without a
+separate `/api/door` knock. On a CLI machine that needs a credential helper or
+forward proxy to reach that home, configure `homeAuth` in
+`~/.isocan/config.json` (or `ISOCAN_HOME_AUTH` / `ISOCAN_AUTH_HEADER_COMMAND`):
+
+```json
+{
+  "home": "https://canvas.acme.test",
+  "homeAuth": {
+    "https://canvas.acme.test": {
+      "authHeaderCommand": ["acme-auth-helper", "--header", "https://canvas.acme.test"],
+      "httpProxy": "http://127.0.0.1:3128",
+      "ttlSeconds": 300
+    }
+  }
+}
+```
+
 ## Updating
 
 ```sh
@@ -1610,25 +1632,14 @@ a plugin's hooks once, when the plugin loads.
   ready. Once the parent answers, it tells that one origin what is selected,
   and that is how the pane sees your selection.
 - **The pane** (`sidecars/canvas/`) opens the canvas that the workspace's
-  `.isocan/project.json` names. An unbound folder can be bound to an existing
-  canvas (by id, link or title) or to a new one. Selected items show as chips,
-  and **Ask** hands your question, with the item ids, to the Antigravity
-  conversation. **Open ↗** opens the same canvas in a tab, with its Chat.
-- **Skills on both sides**: type `/` in the pane's box and the canvas's own
-  skills drop down (`isocan command ls`, built in and added with `/skill
-  add`). Run one in this conversation, which gets `/name args` and is told
-  `isocan command show <name>` holds its instructions, or hand it to a
-  standing agent as a comment (`/design-audit @Orla …`). Starters under the
-  box change with the selection and show what you can do: *Build this in the
-  repo*, *Put what we did here on the canvas*, the design skills, and *Answer
-  N open questions*.
+  `.isocan/project.json` (or `~/.isocan/bindings.json`) names. An unbound
+  folder can be bound to an existing canvas (by id, link or title) or to a new
+  one. Clicking the header title opens the same canvas in a browser tab, with
+  its Chat.
 - **The canvas can reach the conversation**: while the pane runs, a mention
   of an Antigravity conversation on the canvas (or a reply in its thread) is
   relayed into that conversation, which answers on the canvas.
-  `ISOCAN_ANTIGRAVITY_RELAY=off` turns this off. **Asks N** in the header lists
-  the questions agents left for you. **Fan out** asks Antigravity's `flash`,
-  `pro` or `flash_lite` tiers the same thing in new conversations that join
-  the canvas under their own names. 💬 beside a face opens that conversation.
+  `ISOCAN_ANTIGRAVITY_RELAY=off` turns this off.
 - **Arriving**: a SessionStart hook runs when a conversation starts in a
   bound workspace. It names the conversation (`isocan identity --session`,
   keyed to that conversation) and starts its session, so what it writes is
@@ -1641,10 +1652,8 @@ a plugin's hooks once, when the plugin loads.
   `ANTHROPIC_MODEL` for Claude Code, `model` in Codex's `CODEX_CONFIG`, or
   `{model}` in an `acpAdapters` declaration. `isocan harness` shows
   `model: pins` or `model: own` for each harness, so you know which agents
-  are really pinned before you compare them. The pane's **Agents** bar enrols
-  the presets in `sidecars/canvas/presets.json`, with buttons like
-  *+ Orla · Opus 5.5*. Each agent has a name of its own, never its model's.
-  They answer @mentions while your `isocan rc` runs.
+  are really pinned before you compare them. Each agent has a name of its
+  own, never its model's. They answer @mentions while your `isocan rc` runs.
 
 A canvas on this machine's own daemon (`http://127.0.0.1:…`) can only be
 framed by a browser on this machine. To use Antigravity Web from anywhere else,

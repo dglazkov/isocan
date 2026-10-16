@@ -256,6 +256,7 @@ export function StageEditor({
         filename: source.filename,
         size: upload.size,
         ...(current.visual ? { visual: current.visual } : {}),
+        ...(current.faces ? { faces: current.faces } : {}),
       };
       const op = { type: "item.addVersion", itemId: item.id, version } as const;
       mine.current.add(version.id);

@@ -45,6 +45,7 @@ const BY_EXT: Record<string, string> = {
   // octet-stream, "other", while a browser's own mime made it a "document".
   pdf: "application/pdf",
   csv: "text/csv",
+  json: "application/json",
 };
 
 /**
@@ -110,10 +111,22 @@ export function healedBlobType(recorded: string | undefined, offered: string): s
  * still has whatever `file.type` said.
  */
 export function mimeFromName(filename: string): string | undefined {
+  const lower = filename.toLowerCase();
+  for (const kind of moduleKinds()) {
+    const exts = kind.extensions ?? [];
+    for (let i = 0; i < exts.length; i++) {
+      const ext = exts[i]!;
+      if (ext.includes(".") && lower.endsWith(`.${ext}`) && lower.length > ext.length + 1) {
+        return kind.mimes[i] ?? kind.mimes[0]!;
+      }
+    }
+  }
   const ext = extensionOf(filename).slice(1).toLowerCase();
   if (!ext) return undefined;
-  const added = moduleKinds().find((k) => k.extensions?.includes(ext));
-  if (added) return added.mimes[0]!;
+  for (const kind of moduleKinds()) {
+    const idx = kind.extensions?.indexOf(ext) ?? -1;
+    if (idx >= 0) return kind.mimes[idx] ?? kind.mimes[0]!;
+  }
   return BY_EXT[ext];
 }
 

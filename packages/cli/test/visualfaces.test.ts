@@ -13,7 +13,7 @@ let daemon: Daemon;
 let base: string;
 
 beforeEach(async () => {
-  home = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-cli-dualface-"));
+  home = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-cli-visualfaces-"));
   await fs.writeFile(
     path.join(home, "identity.json"),
     JSON.stringify({ ...user, createdAt: new Date().toISOString() }),
@@ -148,5 +148,34 @@ describe("CLI dual-face artifacts", () => {
 
     const item = await json("show", added.itemId);
     expect(item.properties.visualFile).toBe("preview.html");
+  });
+
+  it("supports wireframe and hi-fi faces with in-place set --hi-fi and face switching", async () => {
+    await fs.writeFile(path.join(home, "home-wf.html"), "<!DOCTYPE html><html><body><h1>Wireframe</h1></body></html>");
+    await fs.writeFile(path.join(home, "home-hifi.html"), "<!DOCTYPE html><html><body><h1>Hi-Fi</h1></body></html>");
+
+    const added = await json("add", "home-wf.html", "--wireframe", "home-wf.html", "--face", "wireframe");
+    expect(added.itemId).toBeDefined();
+
+    // Attach hi-fi face in-place on v1 via `isocan set <item> --hi-fi <file>`
+    const setHifi = await isocan("set", added.itemId, "--hi-fi", "home-hifi.html");
+    expect(setHifi.code).toBe(0);
+
+    const itemAfterSet = await json("show", added.itemId);
+    expect(itemAfterSet.versions.length).toBe(1);
+    expect(itemAfterSet.properties.face).toBe("wireframe");
+    expect(itemAfterSet.versions[0].faces.wireframe).toBeDefined();
+    expect(itemAfterSet.versions[0].faces["hi-fi"]).toBeDefined();
+
+    // Read both faces with `isocan get --face`
+    expect((await isocan("get", added.itemId, "--face", "wireframe")).stdout).toContain("<h1>Wireframe</h1>");
+    expect((await isocan("get", added.itemId, "--face", "hi-fi")).stdout).toContain("<h1>Hi-Fi</h1>");
+
+    // Switch active face to hi-fi using `isocan face hi-fi <item>`
+    const flipped = await json("face", "hi-fi", added.itemId);
+    expect(flipped.face).toBe("hi-fi");
+
+    const itemAfterFlip = await json("show", added.itemId);
+    expect(itemAfterFlip.properties.face).toBe("hi-fi");
   });
 });

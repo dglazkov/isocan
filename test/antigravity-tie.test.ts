@@ -3,7 +3,6 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { DEFAULT_COMMAND_CATALOGUE } from "../packages/core/src/command-catalogue.ts";
 // @ts-expect-error — the plugin is plain .mjs with no types, on purpose (see antigravity-plugin.test.ts).
 import * as antigravity from "../plugins/antigravity/lib/antigravity.mjs";
 // @ts-expect-error — as above.
@@ -15,10 +14,10 @@ import { createPane } from "../plugins/antigravity/sidecars/canvas/main.mjs";
 
 /**
  * **The tie between Antigravity and the canvas** (`docs/projects/antigravity/design.md`
- * §9–§12): the conversations record, the sentences the pane hands a
- * conversation, the routes that send them, and the relay that carries the
- * canvas's mentions back. Every door — the CLI, `agentapi`, the wait — is
- * injected, so nothing here spawns a process or reaches a host.
+ * §9–§10): the conversations record, the relay that carries the canvas's
+ * mentions back to conversations, and the pane's workspace state. Every door —
+ * the CLI, `agentapi`, the wait — is injected, so nothing here spawns a process
+ * or reaches a host.
  */
 
 const repo = fileURLToPath(new URL("..", import.meta.url));
@@ -63,36 +62,19 @@ function fakeRun(answers: Record<string, unknown> = {}) {
   return { run, calls };
 }
 
-/** A stand-in for `runAgentapi`. */
-function fakeAgentapi(answers: Record<string, unknown> = {}) {
-  const calls: Call[] = [];
-  const agentapi = async (args: string[], opts: { projectId?: string | null } = {}) => {
-    calls.push({ args, projectId: opts.projectId ?? null });
-    const answer = answers[args[0] ?? ""];
-    if (answer instanceof Error) throw answer;
-    return typeof answer === "function" ? answer(args) : (answer ?? {});
-  };
-  return { agentapi, calls };
-}
-
 const CANVAS = { canvasId: "prj_acme", title: "Acme" };
-const ITEMS = [
-  { id: "itm_signin", title: "Acme sign-in" },
-  { id: "itm_verify", title: "Acme verify code" },
-];
 
 describe("the conversations record", () => {
   it("keeps which conversation became which actor, merges rows, and sweeps the stale ones", () => {
     const home = dir("home");
     const t0 = 1_000_000;
     antigravity.recordConversation(home, "conv-a", { canvasId: "prj_acme", root: "/acme", actorId: "usr_a", name: "Acme Bot" }, t0);
-    antigravity.recordConversation(home, "conv-b", { canvasId: "prj_acme", root: "/acme", tier: "pro" }, t0 + 10);
-    // The hook's write lands on the fan-out's and keeps its tier.
+    antigravity.recordConversation(home, "conv-b", { canvasId: "prj_acme", root: "/acme" }, t0 + 10);
     antigravity.recordConversation(home, "conv-b", { canvasId: "prj_acme", root: "/acme", actorId: "usr_b", name: "Test Otter" }, t0 + 20);
     antigravity.recordConversation(home, "conv-c", { canvasId: "prj_other", root: "/other" }, t0 + 30);
 
     expect(antigravity.conversationsOn(home, "prj_acme", t0 + 40).map((c: { conversationId: string }) => c.conversationId)).toEqual(["conv-b", "conv-a"]);
-    expect(antigravity.readConversations(home)["conv-b"]).toMatchObject({ actorId: "usr_b", tier: "pro", name: "Test Otter" });
+    expect(antigravity.readConversations(home)["conv-b"]).toMatchObject({ actorId: "usr_b", name: "Test Otter" });
 
     // A day later, a write sweeps everything past the TTL.
     const later = t0 + antigravity.CONVERSATION_TTL_MS + 25;
@@ -112,53 +94,7 @@ describe("the conversations record", () => {
   });
 });
 
-describe("what the pane hands a conversation", () => {
-  it("asks about the selection, or about the canvas when nothing is selected", () => {
-    const about = antigravity.askMessage({ question: "which is closer to the brief?", items: ITEMS, canvas: CANVAS });
-    expect(about).toContain("which is closer to the brief?");
-    expect(about).toContain('`itm_signin` "Acme sign-in", `itm_verify` "Acme verify code"');
-    expect(about).toContain('"Acme" (prj_acme)');
-    const bare = antigravity.askMessage({ question: "", items: [], canvas: CANVAS });
-    expect(bare).toContain("What is on the canvas right now?");
-    expect(bare).toContain("nothing selected");
-  });
-
-  it("runs a canvas skill the way a comment would ask for it, and says where its instructions are", () => {
-    const said = antigravity.skillMessage({ skill: "/variation", args: "n=2 one dark", items: ITEMS, canvas: CANVAS });
-    // `/name args` first: on the canvas, a message that starts with it IS the request.
-    expect(said.split("\n")[0]).toBe("/variation n=2 one dark");
-    expect(said).toContain("isocan command show variation");
-    expect(said).toContain("outranks its defaults");
-    expect(said).toContain("itm_verify");
-    expect(() => antigravity.skillMessage({ skill: " ", items: [], canvas: CANVAS })).toThrow("which skill?");
-  });
-
-  it("hands a skill or a question to a standing agent as a comment that starts with the command", () => {
-    expect(antigravity.handoffComment({ skill: "design-audit", args: "spacing only", agent: "Orla" })).toBe("/design-audit @Orla spacing only");
-    expect(antigravity.handoffComment({ question: "is this legible?", agent: "Orla" })).toBe("@Orla is this legible?");
-    expect(() => antigravity.handoffComment({ skill: "tidy" })).toThrow("hand it to whom?");
-  });
-
-  it("hands over an agent's open question with the thread and the reply command", () => {
-    const said = antigravity.threadMessage({ thread: { threadId: "thr_1", askerName: "Test Otter", body: "Above or below?\nEither is fine." }, canvas: CANVAS });
-    expect(said).toContain("Test Otter is waiting on an answer");
-    expect(said).toContain("> Above or below?\n> Either is fine.");
-    expect(said).toContain('isocan comment reply thr_1 "…"');
-    expect(() => antigravity.threadMessage({ thread: {}, canvas: CANVAS })).toThrow("which thread?");
-  });
-
-  it("tells each fan-out conversation it is one of several, and which tier to own up to", () => {
-    const said = antigravity.fanoutMessage({ skill: "variation", args: "n=1", items: ITEMS, canvas: CANVAS, tier: "pro", of: 2 });
-    expect(said).toContain("one of 2 Antigravity conversations");
-    expect(said).toContain("you are on **pro**");
-    expect(said).toContain("the pro take");
-    expect(said).toContain("/variation n=1");
-    expect(antigravity.newConversationArgs({ message: "m", tier: "flash_lite", title: "t · flash_lite" })).toEqual([
-      "new-conversation", "--model=flash_lite", "--title=t · flash_lite", "m",
-    ]);
-    expect(() => antigravity.newConversationArgs({ message: "m", tier: "ultra" })).toThrow("not a tier");
-  });
-
+describe("agentapi and relay messages", () => {
   it("relays a wake verbatim, and says to answer it on the canvas", () => {
     const woke = "Test Person · on \"Acme sign-in\": @Acme Bot tighten the header\n  reply: isocan comment reply thr_2 \"…\"";
     const said = antigravity.relayMessage({ woke, canvas: CANVAS, name: "Acme Bot" });
@@ -166,17 +102,6 @@ describe("what the pane hands a conversation", () => {
     expect(said).toContain("(Acme Bot)");
     expect(said).toContain("ON THE CANVAS");
     expect(said).toContain("You do not need to run `isocan wait`");
-  });
-
-  it("says who is asking and that it wants an answer, so a busy conversation does not fold it away", () => {
-    for (const said of [
-      antigravity.askMessage({ question: "How many screens are there?", items: [], canvas: CANVAS }),
-      antigravity.threadMessage({ thread: { threadId: "thr_1", body: "?" }, canvas: CANVAS }),
-    ]) expect(said.startsWith(antigravity.ASKED)).toBe(true);
-    // A skill keeps `/name` first — that is the canvas's grammar — and says it next.
-    const skill = antigravity.skillMessage({ skill: "tidy", items: [], canvas: CANVAS }).split("\n");
-    expect(skill[0]).toBe("/tidy");
-    expect(skill[2]).toBe(antigravity.ASKED);
   });
 
   it("treats an agentapi answer that says error as a failure, though it exits 0", async () => {
@@ -206,16 +131,15 @@ describe("what the pane hands a conversation", () => {
 });
 
 describe("the hook writes the record it arrives with", () => {
-  it("records the conversation's actor on its canvas, and tells it about skills and the relay", async () => {
+  it("records the conversation's actor on its canvas, and tells it about the relay", async () => {
     const home = dir("hook-home");
     const acme = mark(dir("acme-app"), { projectId: "prj_acme", title: "Acme" });
     const { run } = fakeRun({ "identity --session": "identity saved: Acme Bot (usr_acme1) → /acme/.isocan/actors.json (antigravity session)\n" });
     const out = await sessionStart({ conversationId: "conv-acme", workspacePaths: [acme] }, { env: { PATH: process.env["PATH"], ISOCAN_HOME: home }, run, now: () => 5 });
     expect(antigravity.readConversations(home)["conv-acme"]).toEqual({
-      canvasId: "prj_acme", title: "Acme", root: acme, actorId: "usr_acme1", name: "Acme Bot", tier: null, at: 5,
+      canvasId: "prj_acme", title: "Acme", root: acme, actorId: "usr_acme1", name: "Acme Bot", at: 5,
     });
     const said: string = out.injectSteps[0].ephemeralMessage;
-    expect(said).toContain("isocan command show <name>");
     expect(said).toContain("has something for you");
   });
 
@@ -230,7 +154,7 @@ describe("the hook writes the record it arrives with", () => {
   });
 });
 
-describe("the pane's routes for the tie", () => {
+describe("the pane's workspace route for the tie", () => {
   let home = "";
   let acme = "";
   const bindings = () => ({ workspaceUris: [pathToFileURL(acme).href] });
@@ -240,105 +164,17 @@ describe("the pane's routes for the tie", () => {
   });
   const env = () => ({ PATH: process.env["PATH"], ISOCAN_HOME: home, ISOCAN_CLI: "/acme/fake.mjs" });
 
-  it("offers the canvas's skills without the ones the web app answers itself, and believes the list for a minute", async () => {
-    const list = [
-      { name: "help", description: "keys", usage: "", source: "built-in", local: true },
-      { name: "variation", description: "Make N variations", usage: "[n=3]", source: "built-in" },
-      { name: "acme-brand", description: "Hold it to the brand", usage: "", source: "acme/skills" },
-    ];
-    const { run, calls } = fakeRun({ "command ls": list });
-    let clock = 0;
-    const { routes } = createPane({ env: env(), run, now: () => clock });
-    const first = await routes["/api/skills"](bindings());
-    expect(first.skills.map((s: { name: string }) => s.name)).toEqual(["variation", "acme-brand"]);
-    expect(calls[0]).toMatchObject({ args: ["--json", "command", "ls"], cwd: acme });
-    clock = 30_000;
-    await routes["/api/skills"](bindings());
-    expect(calls).toHaveLength(1);
-    clock = 61_000;
-    await routes["/api/skills"](bindings());
-    expect(calls).toHaveLength(2);
-  });
-
-  it("lists what agents are waiting on a person for, by name where this machine knows it", async () => {
-    fs.writeFileSync(path.join(home, "actors.json"), JSON.stringify({ names: { usr_otter: { name: "Test Otter" } } }));
-    const { run, calls } = fakeRun({
-      "comment ls": [
-        { threadId: "thr_1", commentId: "c1", askerId: "usr_otter", body: "Above or below?" },
-        { threadId: "thr_2", commentId: "c2", askerId: "usr_stranger", body: "Which font?" },
-      ],
-    });
-    const { routes } = createPane({ env: env(), run });
-    expect((await routes["/api/asks"](bindings())).asks).toEqual([
-      { threadId: "thr_1", askerId: "usr_otter", askerName: "Test Otter", body: "Above or below?" },
-      { threadId: "thr_2", askerId: "usr_stranger", askerName: "usr_stranger", body: "Which font?" },
-    ]);
-    expect(calls[0]!.args).toEqual(["--json", "comment", "ls", "--open"]);
-  });
-
-  it("sends a question, a skill or a thread to the conversation, in its own project", async () => {
-    const { agentapi, calls } = fakeAgentapi({
-      "get-conversation-metadata": { response: { conversationMetadata: { metadata: { projectId: "proj_acme" } } } },
-    });
-    const { routes } = createPane({ env: env(), run: fakeRun().run, agentapi });
-    const skill = await routes["/api/send"]({ ...bindings(), conversationId: "conv-acme", kind: "skill", skill: "variation", args: "n=2", items: ITEMS });
-    expect(skill.message.startsWith("/variation n=2")).toBe(true);
-    expect(calls.map((c) => [c.args[0], c.projectId])).toEqual([
-      ["get-conversation-metadata", null],
-      ["send-message", "proj_acme"],
-    ]);
-    expect(calls[1]!.args.slice(0, 2)).toEqual(["send-message", "conv-acme"]);
-
-    // A project the page already knows is not asked for again.
-    await routes["/api/send"]({ ...bindings(), conversationId: "conv-acme", projectId: "proj_page", question: "hi" });
-    expect(calls.at(-1)).toMatchObject({ args: ["send-message", "conv-acme", expect.stringContaining("hi")], projectId: "proj_page" });
-
-    await routes["/api/send"]({ ...bindings(), conversationId: "conv-acme", projectId: "p", kind: "thread", thread: { threadId: "thr_1", body: "?" } });
-    expect(calls.at(-1)!.args[2]).toContain("isocan comment reply thr_1");
-    await expect(routes["/api/send"]({ ...bindings(), question: "hi" })).rejects.toThrow("not attached to a conversation");
-  });
-
-  it("hands a skill to a standing agent as the person's comment on the first selected item", async () => {
-    const { run, calls } = fakeRun({ "comment add": { threadId: "thr_new", commentId: "c1" } });
-    const { routes } = createPane({ env: env(), run });
-    const out = await routes["/api/handoff"]({ ...bindings(), agent: "Orla", skill: "design-audit", args: "spacing", items: ITEMS });
-    expect(out).toEqual({ threadId: "thr_new", body: "/design-audit @Orla spacing\n\n(also: `itm_verify`)" });
-    expect(calls[0]).toMatchObject({ args: ["--json", "comment", "add", "--item", "itm_signin", out.body], cwd: acme });
-    // As the person: no conversation's session rides along.
-    expect(calls[0]!.env!["ANTIGRAVITY_CONVERSATION_ID"]).toBeUndefined();
-    await expect(routes["/api/handoff"]({ ...bindings(), agent: "Orla", skill: "tidy", items: [] })).rejects.toThrow("select an item");
-  });
-
-  it("fans out one conversation per tier, records each against the canvas, and refuses what it cannot run", async () => {
-    const fanHome = dir("fan-home");
-    const { agentapi, calls } = fakeAgentapi({ "new-conversation": (args: string[]) => ({ conversationId: `conv-${args[1]!.split("=")[1]}` }) });
-    const { routes } = createPane({ env: { ...env(), ISOCAN_HOME: fanHome }, run: fakeRun().run, agentapi });
-    const out = await routes["/api/fanout"]({ ...bindings(), projectId: "proj_acme", tiers: ["flash", "pro", "flash"], question: "which is closer?", items: ITEMS });
-    expect(out.started).toEqual([{ tier: "flash", conversationId: "conv-flash" }, { tier: "pro", conversationId: "conv-pro" }]);
-    expect(calls.map((c) => c.args.slice(0, 3))).toEqual([
-      ["new-conversation", "--model=flash", "--title=which is closer? · flash"],
-      ["new-conversation", "--model=pro", "--title=which is closer? · pro"],
-    ]);
-    expect(calls.every((c) => c.projectId === "proj_acme")).toBe(true);
-    expect(calls[1]!.args[3]).toContain("one of 2 Antigravity conversations");
-    expect(antigravity.readConversations(fanHome)["conv-pro"]).toMatchObject({ canvasId: "prj_acme", tier: "pro", root: acme });
-
-    await expect(routes["/api/fanout"]({ ...bindings(), tiers: [] })).rejects.toThrow("pick at least one tier");
-    await expect(routes["/api/fanout"]({ ...bindings(), tiers: ["ultra"] })).rejects.toThrow("pick at least one tier");
-  });
-
-  it("says which faces are Antigravity conversations, and which tier a fan-out one runs", async () => {
+  it("says which faces are Antigravity conversations, and remembers the workspace across reloads", async () => {
     const faceHome = dir("face-home");
     fs.mkdirSync(path.join(faceHome, "sessions"));
     fs.writeFileSync(path.join(faceHome, "actors.json"), JSON.stringify({ names: {}, harnesses: { usr_a: "antigravity", usr_b: "antigravity" } }));
     for (const id of ["usr_a", "usr_b"]) fs.writeFileSync(path.join(faceHome, "sessions", `${id}.json`), JSON.stringify({ canvasId: "prj_acme", sessionId: `ses_${id}`, label: `${id} 🤖` }));
-    antigravity.recordConversation(faceHome, "conv-b", { canvasId: "prj_acme", root: acme, actorId: "usr_b", tier: "pro" });
-    const { routes } = createPane({ env: { ...env(), ISOCAN_HOME: faceHome }, run: fakeRun({ harness: { harnesses: [], default: null } }).run });
+    antigravity.recordConversation(faceHome, "conv-b", { canvasId: "prj_acme", root: acme, actorId: "usr_b" });
+    const { routes } = createPane({ env: { ...env(), ISOCAN_HOME: faceHome }, run: fakeRun().run });
     const state = await routes["/api/workspace"](bindings());
     const faces = Object.fromEntries(state.sessions.map((s: { actorId: string }) => [s.actorId, s]));
     expect(faces["usr_a"].conversationId).toBeUndefined();
-    expect(faces["usr_b"]).toMatchObject({ conversationId: "conv-b", tier: "pro" });
-    expect(state.tiers).toEqual(["flash_lite", "flash", "pro"]);
+    expect(faces["usr_b"]).toMatchObject({ conversationId: "conv-b" });
 
     // After an in-frame reload where the host does not re-push `workspace-change`,
     // `/api/workspace` still knows the folder from `conversationId`.
@@ -442,57 +278,24 @@ describe("the page and its server agree", () => {
   it("calls only routes the pane serves", () => {
     const { routes } = createPane({ env: { PATH: "" }, run: fakeRun().run });
     const called = [...page.matchAll(/api\("(\/api\/[a-z-]+)"/g)].map((m) => m[1]);
-    expect(called.length).toBeGreaterThan(5);
+    expect(called.length).toBeGreaterThanOrEqual(3);
     for (const route of called) expect(Object.keys(routes)).toContain(route);
   });
 
-  it("offers only the tiers agentapi takes", () => {
-    for (const [, tiers] of page.matchAll(/value="?fan:([a-z_,]+)/g)) {
-      for (const tier of tiers!.split(",")) expect(antigravity.TIERS).toContain(tier);
-    }
-    for (const m of page.matchAll(/add\("fan:([a-z_,]+)"/g)) {
-      for (const tier of m[1]!.split(",")) expect(antigravity.TIERS).toContain(tier);
-    }
-  });
-
-  it("suggests only skills the canvas ships with", () => {
-    const shipped = new Set(DEFAULT_COMMAND_CATALOGUE.map((c) => c.name));
-    const preferred = /PREFERRED_SKILLS = \[([^\]]+)\]/.exec(page)![1]!.match(/"([a-z-]+)"/g)!.map((s) => s.slice(1, -1));
-    for (const name of preferred) expect(shipped).toContain(name);
-  });
-
-  it("translates send, handoff and fanout failures into actionable guidance with retry and dismiss controls", () => {
-    expect(antigravity.friendlyAskError("This pane is not attached to a conversation", "here")).toContain("send a message in the chat column on the left to attach it");
-    expect(antigravity.friendlyAskError(new Error("select an item on the canvas first"), "agent:Orla")).toContain("Select an item on the canvas first");
-    expect(antigravity.friendlyAskError(new Error("agentapi send-message: trajectory not found: nope"), "here")).toContain("Antigravity couldn't find this chat's session");
-    expect(antigravity.friendlyAskError(new Error("agentapi send-message: timed out"), "here")).toContain("Timed out waiting for Antigravity");
-    expect(antigravity.friendlyAskError(new Error("/api/send answered 401"), "here")).toContain("session token expired");
-    expect(antigravity.friendlyAskError(new Error("Failed to fetch"), "here")).toContain("Couldn't reach the pane server");
-    expect(antigravity.friendlyAskError(new Error("daemon offline"), "agent:Orla")).toContain("Couldn't post handoff comment on the canvas (daemon offline)");
-    expect(antigravity.friendlyAskError(new Error("quota exceeded"), "fan:flash,pro")).toContain("Couldn't start fan-out conversations (quota exceeded)");
-    expect(antigravity.friendlyAskError(new Error("unexpected"), "here")).toContain("Couldn't send to this chat (unexpected)");
-
-    expect(page).toContain('id="ask-notice"');
-    expect(page).toContain('id="ask-retry"');
-    expect(page).toContain('id="ask-dismiss"');
-    expect(page).toContain("friendlyAskError(err, target)");
-    expect(page).toContain("Watch the chat column on the left for the reply.");
-  });
-
-  it("turns the header title (#where) into the open link with an 'Open in browser' popover when framed, drops the Reload and Open buttons, and shows instant CSS [data-tip] popovers (never a native title) on Agents, Asks, and the Agents: label", () => {
+  it("turns the header title (#where) into the open link with an 'Open in browser' popover when framed, drops the Agents and composer bars, and never puts a native title on [data-tip] elements", () => {
     expect(page).not.toContain('id="reload"');
+    expect(page).not.toContain('id="open"');
+    expect(page).not.toContain('id="agents"');
+    expect(page).not.toContain('id="agents-toggle"');
+    expect(page).not.toContain('id="inbox"');
+    expect(page).not.toContain('id="inbox-toggle"');
+    expect(page).not.toContain('id="selection"');
+    expect(page).not.toContain('id="ask"');
     expect(page).toMatch(/<a class="where" id="where" target="_blank" rel="noopener"><span class="where-text" id="where-text">/);
     expect(page).toContain("header .where[data-tip]::after");
     expect(page).toContain('setWhere(`${leaf(state.workspace)} · ${state.title || state.canvasId}`, tab)');
-    expect(page).not.toContain('id="open"');
     expect(page).toContain('const tip = url ? "Open in browser ↗" : fallbackTip;');
     expect(page).toContain('$("where").removeAttribute("title")');
-    expect(page).not.toMatch(/id="(agents-toggle|inbox-toggle)"[^>]*\stitle="/);
-    expect(page).toMatch(/id="agents-toggle"[^>]*data-tip="Hide the Agents bar/);
-    expect(page).toMatch(/id="inbox-toggle"[^>]*data-tip="Questions agents left on the canvas/);
-    expect(page).toMatch(/id="agents-note"[^>]*data-tip="They answer @mentions on the canvas while isocan rc runs on this machine\."/);
-    expect(page).toContain('$("agents-toggle").setAttribute("data-tip", tip)');
     expect(page).toContain("header [data-tip]::after");
   });
 });
-

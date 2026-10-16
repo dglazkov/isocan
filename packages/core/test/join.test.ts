@@ -5,7 +5,9 @@ import {
   actorColors,
   actorMarks,
   actorNames,
+  applyActorColor,
   applyActorJoin,
+  applyActorMark,
   applyClaim,
   emptyActorRegistry,
   mergeJoins,
@@ -166,6 +168,25 @@ describe("the wire shapes answer for the old id", () => {
   it("marks: the folded actor wears the person's mark, or none", () => {
     expect(actorMarks(registry)[second.id]).toBe("🦊");
     expect(actorMarks({ ...registry, marks: { [second.id]: "🐙" } })[second.id]).toBeUndefined();
+  });
+
+  it("changing mark or colour from a folded surface updates the person and sticks on reload", () => {
+    const folded = {
+      ...join(registryWith(dimitri, second), second.id, dimitri.id),
+      colors: { [dimitri.id]: "#c93a55" },
+      marks: { [dimitri.id]: "❤️" },
+    };
+    const marked = applyActorMark(folded, { type: "actor.setMark", actorId: second.id, mark: "🏏" });
+    expect(actorMarks(marked)[second.id]).toBe("🏏");
+    expect(actorMarks(marked)[dimitri.id]).toBe("🏏");
+
+    const cleared = applyActorMark(marked, { type: "actor.setMark", actorId: second.id, mark: null });
+    expect(actorMarks(cleared)[second.id]).toBeUndefined();
+    expect(actorMarks(cleared)[dimitri.id]).toBeUndefined();
+
+    const colored = applyActorColor(folded, { type: "actor.setColor", actorId: second.id, color: "#0f8a80" });
+    expect(actorColors(colored)[second.id]).toBe("#0f8a80");
+    expect(actorColors(colored)[dimitri.id]).toBe("#0f8a80");
   });
 });
 
