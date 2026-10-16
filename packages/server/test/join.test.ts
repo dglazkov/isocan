@@ -5,6 +5,9 @@ import path from "node:path";
 import type { CanvasSnapshotResponse, LogEntry, PresenceSession } from "@isocan/core";
 import { inboxOn, namesFor } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
+import { Engine } from "../src/engine.ts";
+import { FileDesk } from "../src/file-desk.ts";
+import { FileStore } from "../src/file-store.ts";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
 
 /**
@@ -276,5 +279,66 @@ describe("after the join", () => {
       joined?: Record<string, string>;
     };
     expect(saved.joined).toEqual({ [second.id]: dimitri.id });
+  });
+
+  it("a badge holding only the folded id can still set the person's mark, and /api/actors resolves it", async () => {
+    const oldSurface = await mintTestBadge(base);
+    await daemon.desk.setClaims(oldSurface.badgeId, [
+      { actorId: second.id, boundAt: "2026-09-01T00:00:00.000Z", sessionKey: "web:old-browser" },
+    ]);
+
+    const setFromOld = await post(oldSurface, "/api/ops", {
+      canvasId: null,
+      actor: dimitri,
+      op: { type: "actor.setMark", actorId: dimitri.id, mark: "🏏" },
+    });
+    expect(setFromOld.status).toBe(200);
+    expect(await get(oldSurface, "/api/marks")).toMatchObject({
+      [dimitri.id]: "🏏",
+      [second.id]: "🏏",
+    });
+
+    const bindings = await get<{ key: string; actor: { id: string; name: string } }[]>(
+      oldSurface,
+      "/api/actors?keys=web:old-browser",
+    );
+    expect(bindings).toEqual([{ key: "web:old-browser", actor: dimitri, boundAt: expect.any(String) }]);
+  });
+
+  it("two engine instances sharing a tipActorsSeq store see each other's actor.setMark without fencing", async () => {
+    const store = new FileStore(home);
+    await store.init();
+    const sharedStore = Object.assign(Object.create(Object.getPrototypeOf(store)), store, {
+      async tipActorsSeq() {
+        return (await store.loadActors()).lastSeq;
+      },
+    });
+    const desk = new FileDesk(home);
+    await desk.init();
+    const instanceA = new Engine(sharedStore, desk);
+    const instanceB = new Engine(sharedStore, desk);
+
+    // Warm both instances' actorsRuntime caches.
+    expect((await instanceA.actorMarks())[dimitri.id]).toBe("🦊");
+    expect((await instanceB.actorMarks())[dimitri.id]).toBe("🦊");
+
+    // Instance A sets the mark to 🏏.
+    await instanceA.setActorMark({
+      badgeId: mine.badgeId,
+      actor: dimitri,
+      op: { type: "actor.setMark", actorId: dimitri.id, mark: "🏏" },
+    });
+
+    // Instance B reads /api/marks and sees 🏏 immediately (not its cached 🦊).
+    expect((await instanceB.actorMarks())[dimitri.id]).toBe("🏏");
+
+    // Instance B now sets a mark itself; even if its cache lagged, it reloads
+    // instead of throwing an OplogFencedError 409.
+    await instanceB.setActorMark({
+      badgeId: mine.badgeId,
+      actor: dimitri,
+      op: { type: "actor.setMark", actorId: second.id, mark: "🎯" },
+    });
+    expect((await instanceA.actorMarks())[dimitri.id]).toBe("🎯");
   });
 });

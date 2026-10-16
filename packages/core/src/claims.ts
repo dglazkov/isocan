@@ -677,8 +677,13 @@ export function bindHandoff(
  * the author", actor-scoped undo — become authorization the moment an actor
  * means something, with the isomorphism contract untouched.
  */
-export function claimsActor(claims: readonly ActorClaim[], actorId: string): boolean {
-  return claims.some((row) => row.actorId === actorId);
+export function claimsActor(
+  claims: readonly ActorClaim[],
+  actorId: string,
+  joined?: ActorJoins,
+): boolean {
+  const target = resolveActor(joined, actorId);
+  return claims.some((row) => resolveActor(joined, row.actorId) === target);
 }
 
 /** The refusal, in one voice wherever the check runs. The honest client's

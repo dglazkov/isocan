@@ -315,9 +315,12 @@ export function IdentityMenu({
             onClose={() => setPicking(false)}
             onPick={(emoji) => {
               setPicking(false);
+              setError(null);
               /* Picking the one you wear takes it back — the same gesture
                  both ways, which is why the picker shows it pressed. */
-              void setActorMark(actor, emoji === mine ? null : emoji);
+              setActorMark(actor, emoji === mine ? null : emoji).catch((err: unknown) =>
+                setError(refusalFor(err, trimmed)),
+              );
             }}
           />
         )}
