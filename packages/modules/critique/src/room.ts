@@ -393,7 +393,7 @@ export const PAUSE_STALE_MS = 30 * 60_000;
  * pause*. Null while they are still working (under `PAUSE_MS` since their
  * last edit), when the edit is stale, when that version was already
  * critted, or when no critic is set to speak on a pause. Pure: the person's
- * own client asks once, as the ripple's settle does.
+ * own client asks once.
  */
 export function pauseDue(canvas: CanvasContents, personId: string, now: number, critics: readonly { itemId: string; name: string }[]): { itemId: string; versionId: string; critics: string[] } | null {
   const pausing = critics.filter((c) => {

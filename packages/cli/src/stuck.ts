@@ -18,8 +18,8 @@ import { sayInChat, type ExplainDeps } from "./explain.ts";
 
 /**
  * **`isocan stuck [item]`** (proactive-agent phase 7, design §10) — stuck
- * detection, from a terminal. A top-level verb, as `ripple` and `explain`
- * are: it is about an exchange between a person and the agent answering them
+ * detection, from a terminal. A top-level verb, as `explain` is: it is about
+ * an exchange between a person and the agent answering them
  * on one item, not about the design system, and its question is not a design
  * request's (`design questions` needs an active brief; a person asking for a
  * fourth header usually has none).

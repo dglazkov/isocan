@@ -9654,36 +9654,6 @@ program
   );
 
 /**
- * **Changes ripple** (proactive-agent phase 6): a settled run of edits on one
- * screen, read against every other — what changed, which screens would
- * change, are already in sync or disagree, the lead's read-back and its
- * previews, the person's altitude, and with no item the pulse. Reads only,
- * unless an act is said. The body lives in `ripple.ts`, loaded on this verb only.
- */
-program
-  .command("ripple [item]")
-  .description("Changes ripple: a screen's settled edits read against every other screen — would change, already in sync, disagrees; with no item, the pulse")
-  .option("--ask", "\"I like this\": ask the canvas's lead, in the Chat, to read the run back now")
-  .option("--altitude <altitude>", "the person's choice: screens (the default — keep each preview), system (the lead proposes it in the design system), one-off (ripple=off)")
-  .option("--read-back", "the lead's answer: post --decision (up to three), --good, --exception and --sketch as the read-back (a record in the Chat)")
-  .option("--decision <words>", "with --read-back: one decision the edits made, in design words (repeatable, three at most)", collectList)
-  .option("--good <words>", "with --read-back: a good move the person made by hand, named once (\"caught doing it right\")")
-  .option("--exception <line>", "with --read-back: \"<screen> | why it should stay as it is\", one line (repeatable)", collectList)
-  .option("--sketch <words>", "with --read-back: one idea the change makes possible, set apart — two sentences at most")
-  .option("--sketch-file <file>", "with --sketch: draw it, as a hunch beneath the source")
-  .option("--preview <screen=file>", "the lead's preview of a screen that would change: a proposal beneath it citing the source's version (repeatable)", collectList)
-  .option("--why <text>", "with --preview: why, in design words (default: the read-back's first decision)")
-  .option("--hunch", "with --preview: a hunch rather than sure")
-  .option("--canvas <canvas>")
-  .action(
-    run(async (item: string | undefined, opts: import("./ripple.ts").RippleOpts, cmd: Command) => {
-      const ctx = await ctxOf(cmd);
-      const { ripple } = await import("./ripple.ts");
-      await ripple(ctx, goodnightDeps(), item, opts);
-    }),
-  );
-
-/**
  * **Stuck detection** (proactive-agent phase 7): several tries at one item
  * that all missed — the agent stops guessing and asks. Reads the detection,
  * the lead's question with its guesses, or why it waits; the lead's

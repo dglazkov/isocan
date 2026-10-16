@@ -31,8 +31,8 @@ import { propose } from "./propose.ts";
 
 /**
  * **`isocan walk`** (proactive-agent phase 9, design §11) — walk it as
- * someone else, from a terminal. A top-level verb, as `ripple`, `explain`
- * and `stuck` are: it is an exchange between the person and the canvas's
+ * someone else, from a terminal. A top-level verb, as `explain` and `stuck`
+ * are: it is an exchange between the person and the canvas's
  * lead about a flow, not an act on the design system, and design §13 names it.
  *
  * - `isocan walk <flow|screen> [--as <walker>…]`: the lanes, measured — which

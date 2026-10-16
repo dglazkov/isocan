@@ -84,7 +84,6 @@ import type { PhoneVisit } from "../components/PhoneFace.tsx";
 const ChatPlace = lazy(() => import("../components/ChatBar.tsx"));
 const PhoneFace = lazy(() => import("../components/PhoneFace.tsx").then((m) => ({ default: m.PhoneFace })));
 const AwayPanel = lazy(() => import("../components/VisitDigest.tsx").then((m) => ({ default: m.AwayPanel })));
-const RipplePulse = lazy(() => import("../components/RipplePulse.tsx"));
 const StuckCard = lazy(() => import("../components/StuckCard.tsx"));
 const CanvasTools = lazy(() => import("../components/CanvasTools.tsx").then((m) => ({ default: m.CanvasTools })));
 /** Asked for by a keystroke and unmounted when closed, so it need not be in
@@ -286,8 +285,6 @@ function CanvasSurface({
      top controls is the colour of what it is washing. Null on a canvas with
      no ground, where the stylesheet's `--ground` fallback is right. */
   const fadeTone = useCanvasStore((s) => groundTone(s.record ?? null));
-  /* Changes ripple (proactive-agent phase 6): the pulse loads where a screen has been edited, or one is marked a one-off. */
-  const ripples = useCanvasStore((s) => !!s.canvas && Object.values(s.canvas.items).some((i) => i.versions.length > 1 || i.properties.ripple));
   /* Stuck (proactive-agent phase 7): the card loads only while this person has said something in the last
      fifteen minutes (core's STUCK_WINDOW_MS, restated so the entry chunk does not carry the module). */
   const recentlyAsked = useCanvasStore((s) => {
@@ -1241,7 +1238,6 @@ function CanvasSurface({
       {/* The sprint's clock, when the Chat says one is running — derived,
           like `isocan sprint`; sits under the banners when one is up. */}
       <SprintChip lowered={Boolean(outdated) || Boolean(followedLabel)} canvasId={canvasId!} actor={actor} />
-      {!phone && ripples && <Suspense fallback={null}><RipplePulse canvasId={canvasId!} actor={actor} /></Suspense>}
       {!phone && recentlyAsked && <Suspense fallback={null}><StuckCard canvasId={canvasId!} actor={actor} /></Suspense>}
       {outdated && (
         <button className="follow-banner update-banner" onClick={() => location.reload()}>

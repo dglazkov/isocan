@@ -14,7 +14,6 @@
     "./questionnaire-adoption": "./src/questionnaire-adoption.ts",
     "./design-brief": "./src/design-brief.ts",
     "./brief-card": "./src/brief-card.ts",
-    "./ripple": "./src/ripple.ts",
     "./stuck": "./src/stuck.ts",
     "./desk-check": "./src/desk-check.ts",
     "./walk": "./src/walk.ts",

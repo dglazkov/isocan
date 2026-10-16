@@ -269,7 +269,7 @@ describe("the marks dock clears the zoom bar", () => {
 /**
  * **The canvas page is not a stacking context, so the scale holds across it.**
  *
- * The walk, explain and ripple panels mount themselves on `document.body`, at
+ * The walk and explain panels mount themselves on `document.body`, at
  * `--z-float`. The comment toasts live inside `.canvas-page`, at `--z-toast`.
  * By the scale the toast wins; on screen the panel did, and a toast's close
  * button could not be pressed while a walk was open (found by a real click in
