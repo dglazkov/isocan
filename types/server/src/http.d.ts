@@ -1,6 +1,7 @@
 import type { JudgmentOptions } from "./judgment.js";
 import type { SummaryOptions } from "./summaries.js";
 import type { TextOptions } from "./text.js";
+import type { ImageOptions } from "./image.js";
 import type { LiveTokenOptions } from "./live-token.js";
 import { type KeyRouteOptions } from "./key-routes.js";
 import type { FastifyInstance } from "fastify";
@@ -61,6 +62,9 @@ export interface RouteOptions {
     /** The talk module's Gemini Live tokens (`live-token.ts`): its key, rate and
      * transport. Absent, the key is `GEMINI_API_KEY`, else `keys.json`, read per call. */
     liveToken?: LiveTokenOptions;
+    /** The mood board's image model (`image.ts`): its key, model, rate and
+     * transport. Absent, the key is `GEMINI_API_KEY`, else `keys.json`, read per call. */
+    image?: ImageOptions;
     /** The machine-local key routes (`key-routes.ts`): the environment and the
      * provider transport they read. Absent, `process.env` and `fetch`. */
     keys?: KeyRouteOptions;

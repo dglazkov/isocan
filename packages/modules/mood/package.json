@@ -1,0 +1,21 @@
+{
+  "name": "@isocan/mood",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Mood board: explore the feeling of a thing with generated pictures, keep what moves you, and derive a design system from it",
+  "exports": {
+    "./core": "./src/core.ts",
+    "./web": "./src/web.tsx",
+    "./cli": "./src/cli.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "isocan": {
+    "engines": "^0.2.10"
+  },
+  "dependencies": {
+    "@isocan/core": "*"
+  }
+}

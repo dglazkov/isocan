@@ -3629,6 +3629,7 @@ var designRepairsRoute = (canvasId) => `/api/projects/${encodeURIComponent(canva
 init_src();
 init_src();
 init_src();
+var imagePath = "/api/image";
 var summariesPath = (canvasId) => `/api/projects/${encodeURIComponent(canvasId)}/summaries`;
 var OPERATIONS_ROUTE = "/api/ops";
 var platformFetch = (input, init) => fetch(input, init);
@@ -4406,6 +4407,15 @@ var DaemonRoutes = class {
    */
   judgment(request) {
     return this.request("POST", JUDGMENT_ROUTE, request);
+  }
+  /**
+   * **Draw a mood-board spread** (`POST /api/image`, moodboard phase 0): the
+   * home wraps the words in its template, spends its Gemini key, and adds the
+   * tiles as `actor`; the answer names them. Refusals arrive as the home's
+   * codes (`image-refused`, `image-owner-only`, `image-unavailable`, …).
+   */
+  image(request) {
+    return this.request("POST", imagePath, request);
   }
   /** Every slash command available here: built-ins under this home's own. */
   commands() {

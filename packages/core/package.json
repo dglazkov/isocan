@@ -34,6 +34,7 @@
     "./semantic-zoom": "./src/semantic-zoom.ts",
     "./keys": "./src/keys.ts",
     "./keystore": "./src/keystore.ts",
+    "./mood": "./src/mood.ts",
     "./copy-deck": "./src/copy-deck.ts",
     "./copy-variants": "./src/copy-variants.ts",
     "./copy-fit": "./src/copy-fit.ts",

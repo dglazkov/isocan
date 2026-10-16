@@ -6,6 +6,7 @@ import { type DesignDecisionsResponse } from "../../core/src/design-decision.js"
 import { type DesignRepairsResponse } from "../../core/src/design-repair.js";
 import { type RecapHeadResponse } from "../../core/src/index.js";
 import type { SummaryEntry, SummaryMake, SummaryRead, SummaryStats, SummaryWait } from "../../core/src/semantic-zoom.js";
+import type { ImageRequest, ImageResponse } from "../../core/src/mood.js";
 import type { Actor, ActorBindingRecord, ActorClaimOp, BadgesResponse, BlobUploadResponse, Capability, CanvasSnapshotResponse, CanvasGroupMigrationPreview, ContextManifest, ContextRequest, ContextContentPage, CreateSessionResponse, GcReport, GcRequest, HomeGcReport, GrantResponse, PublicCanvasesResponse, GrantsResponse, GrantSubject, HomesResponse, KillBadgeResponse, LogEntry, MintPassResponse, PanelActorResponse, PassResponse, Operation, PostOpResponse, PresenceSession, Canvas, RedeemPassResponse, UpdateSessionRequest, ParkAdvanceRequest, ParkClaimRequest, ParkClaimResponse, ParkDeliveredRequest, RcAnsweringResponse, RcHoldRequest, RcHoldResponse, WatchLogRequest, WatchLogResponse, ActorNames, ActorKinds, NewsResponse, PresenceWhereResponse, ServingResponse, SlashCommand, SpaceCanvasResponse, SpaceLinkRequest, SpaceLinkResponse, SpaceResponse, SpacesResponse, SeenMarksResponse, SeenResponse, GroupResponse, GroupAction, GroupsResponse, OperatorLogResponse, OperatorLookRequest, OperatorLookResponse, OperatorPurgeRequest, OperatorPurgeResponse, OperatorShowResponse, OperatorTakedownRequest, OperatorTakedownResponse, OperatorEndRequest, OperatorEndResponse, OperatorRevokeRequest, OperatorRevokeResponse, OperatorRefuseRequest, OperatorRefuseResponse, TakedownsResponse } from "../../core/src/index.js";
 import { type ForgetCanvasResponse } from "../../core/src/index.js";
 import type { BadgeStore, BuildStamp, UpgradeVerdict } from "../../core/src/index.js";
@@ -507,6 +508,13 @@ export declare class DaemonRoutes {
      * shape. Refused with `judgment-unavailable` when the home holds no key.
      */
     judgment(request: JudgmentRequest): Promise<unknown>;
+    /**
+     * **Draw a mood-board spread** (`POST /api/image`, moodboard phase 0): the
+     * home wraps the words in its template, spends its Gemini key, and adds the
+     * tiles as `actor`; the answer names them. Refusals arrive as the home's
+     * codes (`image-refused`, `image-owner-only`, `image-unavailable`, …).
+     */
+    image(request: ImageRequest): Promise<ImageResponse>;
     /** Every slash command available here: built-ins under this home's own. */
     commands(): Promise<SlashCommand[]>;
     /** Write one for this home. `text` is the file, frontmatter and all. */
