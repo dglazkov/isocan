@@ -40,6 +40,12 @@ export declare function readBadge(home: string, base: string): Promise<StoredBad
 /** Rename the home person, or explicitly choose a fresh ID, inside the same
  * transaction as credentials and pass adoption. Unknown fields remain intact. */
 export declare function writeIdentityName(home: string, name: string, fresh?: boolean): Promise<Actor>;
+/** Make an EXISTING actor this machine's person (`isocan identity --home
+ * --as`): the id and name the home answered with, replacing whoever the file
+ * named. Unlike `adoptIdentity` this overwrites on purpose — the caller has
+ * already been told by the home that this badge speaks for `actor`. Returns
+ * who the file named before, so the caller can say how to switch back. */
+export declare function writeIdentityActor(home: string, actor: Actor): Promise<Actor | null>;
 /** Merge a credential without dropping the person, other badges or private fields. */
 export declare function writeBadge(home: string, base: string, badge: StoredBadge): Promise<void>;
 /** Persist only an actor returned by successful pass redemption. A different

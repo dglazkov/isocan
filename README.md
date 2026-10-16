@@ -518,6 +518,11 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   `isocan agent mark <name> 🐕`. Both are `actor.setMark`; the home lets you
   mark an agent only when one of your own surfaces holds it, read through
   joined identities. Anybody else's click is told whose choice it is.
+- **Whose machine this is**: `isocan identity --home --as <actorId>` makes an
+  actor this machine's badge already speaks for — one a pass admitted
+  alongside the existing person — the machine's person, direct mode included.
+  Nothing is folded, the home refuses an actor the badge was never handed,
+  and the same command with the previous id switches back.
 - **Snapping**: dragging an item shows alignment guides — a line for every
   edge or center it has settled onto — and the item lands exactly on them. The
   pull is measured in screen pixels, so it feels the same at any zoom, and

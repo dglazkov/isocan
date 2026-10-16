@@ -317,6 +317,15 @@ person's identities, run `isocan identity --home --join <actorId>`: `--home`
 folds into the machine's person rather than into you, and the home refuses
 folding a person into an agent.
 
+`isocan identity --home --as <actorId>` is the reversible alternative when a
+machine already has a person and `isocan setup <pass>` admitted another one
+without making it the default ("admitted but not made default"): it makes
+that actor the machine's person — what the CLI speaks as with no session,
+direct mode included — under its own name, folding nothing. The home refuses
+an actor this machine's badge was never handed. The confirmation names who it
+was before; the same command with that id switches back. Run it only when the
+person asks.
+
 If `--session` found no harness session, mention it to the human after you
 have worked around it: a harness isocan has not met can opt in for good by
 exporting `ISOCAN_SESSION_ID` (with `ISOCAN_HARNESS` for the label), or by

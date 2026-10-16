@@ -35,7 +35,7 @@ export { configuredHomeAuthUrl, gatewayBaseFor, homeAuthFor, readConfigFile, res
 export { DocRefusal, clearGoogleToken, driveAccount, driveModifiedTime, fetchGoogleDoc, googleTokenFile, readGoogleToken, writeGoogleToken, type FetchedDoc, type GoogleToken, } from "./google.js";
 /** Machine configuration schema (`~/.isocan/config.json`) and per-home proxy auth types. */
 export type { HomeAuthConfig, HomeAuthEntry, HomeConfig } from "./config.js";
-export { adoptIdentity, askTheDoor, bearerHeader, fileBadgeStore, knockOnDoor, readBadge, writeBadge, writeIdentityName } from "./badge-store.js";
+export { adoptIdentity, askTheDoor, bearerHeader, fileBadgeStore, knockOnDoor, readBadge, writeBadge, writeIdentityActor, writeIdentityName } from "./badge-store.js";
 export type { BadgeStore, DoorAnswer, StoredBadge } from "./badge-store.js";
 export { MINT_PER_MINUTE, TOO_MANY_BADGES } from "./meter.js";
 export { HomeLink, HomeRefusedError, HomeUnreachableError } from "./home-link.js";
