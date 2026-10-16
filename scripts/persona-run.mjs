@@ -134,13 +134,16 @@ function preparePersonaEnv(persona) {
   }
   const tmpFile = path.join(os.tmpdir(), `isocan-canvas-frames-${process.pid}-${Date.now()}.json`);
   const framesScript = path.join(repo, "scripts/frames.mjs");
-  const res = spawnSync(
-    process.execPath,
-    [framesScript, "--html", "12", "--items", "36", "--scale", "0.5", "--throttle", "1", "--gestures", "pan,zoom", "--record", tmpFile],
-    { cwd: repo, encoding: "utf8", timeout: 5 * 60_000 },
-  );
-  if (res.status !== 0 || !existsSync(tmpFile)) {
-    throw new Error(`live canvas frame check failed: ${(res.stderr || res.stdout || "").trim().slice(0, 300)}`);
+  try {
+    execSync(
+      `${JSON.stringify(process.execPath)} ${JSON.stringify(framesScript)} --html 12 --items 36 --scale 0.5 --throttle 1 --gestures pan,zoom --record ${JSON.stringify(tmpFile)}`,
+      { cwd: repo, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 5 * 60_000 },
+    );
+  } catch (err) {
+    throw new Error(`live canvas frame check failed: ${String(err.stderr ?? err.message).trim().slice(0, 300)}`);
+  }
+  if (!existsSync(tmpFile)) {
+    throw new Error("live canvas frame check did not write a record");
   }
   return { ...process.env, ISOCAN_CANVAS_FRAMES: tmpFile };
 }
