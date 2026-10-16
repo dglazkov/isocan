@@ -87,6 +87,26 @@ goal:
     at most: 2ms
     measured by: node scripts/measure.mjs ground-frame-ms
     baseline: 1.5, 2026-10-10, 50d8a8152
+  # **Canvas pan and zoom responsiveness, and zero blank or flickering content**
+  # (16 Oct 2026). Every nightly run (`persona.yml` at 08:43 UTC) boots a fresh
+  # daemon, seeds 12 HTML screens and 36 Markdown notes, drives headless Chrome
+  # through a full pan and zoom walk, and writes that live reading into
+  # `ISOCAN_CANVAS_FRAMES` right before taking these numbers. On push,
+  # `ratchet.mjs` reads `scripts/canvas-frames.json` so commits do not pay a
+  # browser walk (`test/journeys.test.ts`).
+  #
+  # `canvas-pan-zoom-p90-ms` checks that panning and zooming stay responsive
+  # (`p90 <= 25ms`); `canvas-flicker-frames` checks that no visible card ever
+  # renders blank (`.item-standby` or an undecoded HTML shell) or flickers
+  # between rendered and blank states during motion or zoom (`at most: 0`).
+  - name: p90 frame time while panning and zooming a populated canvas
+    at most: 25ms
+    measured by: node scripts/measure.mjs canvas-pan-zoom-p90-ms
+    baseline: 16.8, 2026-10-16, 8792c5321
+  - name: blank or flickering frames while panning and zooming a canvas
+    at most: 0
+    measured by: node scripts/measure.mjs canvas-flicker-frames
+    baseline: 0, 2026-10-16, 8792c5321
 runs: docs/reviews/
 trigger:
   cron: 43 8 * * *
@@ -151,10 +171,14 @@ three times in one afternoon on the run that wrote the research above.
 
 ## What the goal does not cover
 
-The bundle number is the one thing measurable without a running canvas, which
-is why it is the goal. **The frame budget is the real subject** and needs a
-daemon and a real canvas, so it belongs in the run's prose with its numbers
-stated, not in a nightly bound.
+The bundle number is measurable without a running canvas. The canvas pan/zoom
+frame time (`canvas-pan-zoom-p90-ms`) and zero-flicker bound
+(`canvas-flicker-frames`) run live every night in `persona.yml` (which records a
+fresh `ISOCAN_CANVAS_FRAMES` walk before taking numbers) and read
+`scripts/canvas-frames.json` on push. When you change viewport, lookahead, or
+snapshot code locally, refresh that baseline with
+`node scripts/frames.mjs --html 12 --items 36 --scale 0.5 --throttle 1 --gestures pan,zoom --record scripts/canvas-frames.json`
+and inspect it with `node scripts/measure.mjs canvas-pan-zoom-p90-ms --names`.
 
 The living grounds' number is the one exception, and only half of one: the
 goal reads the last reading somebody recorded, so the nightly page can say

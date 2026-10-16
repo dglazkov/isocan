@@ -396,7 +396,7 @@ export declare function bindHandoff(claims: readonly ActorClaim[], envelope: {
  * the author", actor-scoped undo — become authorization the moment an actor
  * means something, with the isomorphism contract untouched.
  */
-export declare function claimsActor(claims: readonly ActorClaim[], actorId: string): boolean;
+export declare function claimsActor(claims: readonly ActorClaim[], actorId: string, joined?: ActorJoins): boolean;
 /** The refusal, in one voice wherever the check runs. The honest client's
  * remedy is always the same and always available — claim first, which the
  * agent guide already teaches as the first act. */

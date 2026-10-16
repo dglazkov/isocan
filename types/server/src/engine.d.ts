@@ -169,6 +169,8 @@ export declare class Engine {
     private loading;
     /** The actor registry, as a promise so concurrent first readers share one load. */
     private actorsRuntime;
+    /** When `actorsRuntime` was last checked against `store.tipActorsSeq()`. */
+    private actorsCheckedAt;
     private writers;
     private listeners;
     private colorListeners;
@@ -1074,12 +1076,16 @@ export declare class Engine {
      */
     private heldNames;
     /**
-     * The actor registry, loaded once. A PROMISE rather than the value, because
-     * canvas queues read it concurrently with the home queue writing it: two
-     * cold readers that each loaded and assigned their own copy would leave the
-     * identity writes landing on one object and the next reader holding the
-     * other — a lost name in memory, and the next registry append fenced.
+     * The actor registry, shared across concurrent readers and refreshed from the
+     * store when a cloud backing advances past this instance's cached `lastSeq`.
+     *
+     * On a file home (`tipActorsSeq` absent) one process owns the directory and
+     * the cached promise stays current forever. On a cloud home two instances
+     * share one Firestore, so `fresh = true` (every actor write and HTTP identity
+     * read) checks `tipActorsSeq()` immediately, and hot paths (`requireActor`,
+     * `resolveSessions`) check at most once per second.
      */
+    private loadActorsRuntime;
     private actors;
     /** Eligibility is a protected canvas read; joins affect comparison, never historical authorship. */
     designRespondents(canvasId: string): Promise<{

@@ -181,6 +181,16 @@ export interface Store {
     }>;
     saveActors(registry: ActorRegistry, lastSeq: number): Promise<void>;
     appendActorsLog(entry: LogEntry): Promise<void>;
+    /**
+     * **How far the actor registry has got on the backing, never from a cache.**
+     *
+     * On a file home one process owns the directory, so its in-memory registry is
+     * never behind and this method is absent. On the cloud backing, two instances
+     * share one Firestore: an `actor.setMark`, `actor.setColor`, `actor.join` or
+     * `actor.claim` on one instance leaves the other instance's cached registry
+     * behind until it checks this tip and reloads.
+     */
+    tipActorsSeq?(): Promise<number>;
     putBlob(id: string, data: Buffer, meta: {
         mimeType: string;
         filename: string;

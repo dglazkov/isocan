@@ -167,7 +167,6 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 - `propose`, `taste` — work left beneath an item with its trigger and why; what deletes taught (`proactive`)
 - `goodnight start|plan|read|note|fill|done|untick|show|review` — the night watch: a talk, a note and promised frames, the morning review (`proactive`)
 - `explain <item>` — how an item got here: versions that mattered, roads not taken, what moved since; `--critique` answers a Critique (`proactive`)
-- `ripple [item]` — a screen's settled edits read against every other screen; no item: the pulse (`proactive`)
 - `stuck [item]` — tries that missed: ask, don't guess; `walk [flow]` — a flow as simulated people see it (`proactive`)
 - `words` — a screen's copy deck; `--apply` rewords strings; `words vary` makes N voices; `words mix` folds a pick home; `words lint` checks DESIGN.md's Voice
 - `doc status` — where one of this repo's documents stands
@@ -4016,7 +4015,7 @@ then fix the cause rather than the symptom. Do not loop on the door, and do
 not delete your identity file to "start clean" — that is the one action that
 makes this refusal certain.
 
-<!-- topic: proactive | speaking first without speaking over — proposals, their cites and cap, the taste note, `/goodnight` and the morning review, Explain's critique, the brief card, `ripple`, `stuck`, critics, the desk check, `walk`, vague words -->
+<!-- topic: proactive | speaking first without speaking over — proposals, their cites and cap, the taste note, `/goodnight` and the morning review, Explain's critique, the brief card, `stuck`, critics, the desk check, `walk`, vague words -->
 
 ## Proposals: work beside the person's, never over it
 
@@ -4208,52 +4207,6 @@ isocan design card --reread --matters Menu --question "As well as regulars, or i
 It posts as a record (it wakes nobody) and the card shows it under the edit.
 Never edit a screen because the brief changed: propose, citing the line. With
 nobody to answer, the edit still lands and the card says the re-read waits.
-
-## Changes ripple
-
-When a person's run of edits on one screen **settles** — three or more new
-versions by them in a row, then a minute of quiet, or they say "I like this"
-(`isocan ripple <item> --ask`, **Ripple this** in the panel) — the canvas asks
-you, its lead, in the Chat: "Ripple, please (`<item>@v1..v4`): …". The ask
-already carries the deterministic half, which `isocan ripple <item> --json`
-prints whole: what the run changed that another screen could share (a token's
-value, a colour, type, space or shape value, a term), and every other screen
-in the source's scope in one of three states — **would change** (it holds the
-old form), **already in sync**, **disagrees, your call** (marked a one-off,
-a preview of it was deleted, or an exception you argued). Nothing on any
-other screen has changed, and nothing will until the person keeps something.
-
-Answer in one or two commands:
-
-```sh
-isocan ripple Menu --read-back --decision "a warmer, quieter accent" --decision "a tighter type scale" \
-  --good "you used proximity: the pickup time sits with the total" \
-  --exception "Profile | a settings list, not a decision screen" \
-  --sketch "With one accent, the brand mark could carry the colour alone." \
-  --preview "Checkout=checkout.html" --preview "Basket=basket.html"
-```
-
-- **The read-back is at most three decisions, in design words** — what the
-  edits *decided*, not a list of edits. `--good` names one good move the
-  person made by hand ("caught doing it right"), and a move is named once on
-  a canvas: the second time is refused.
-- **Previews are proposals**: each hangs beneath its screen citing
-  `version:<source>@vN`, under the cap of five like any other. Preview only a
-  screen that **would change**; a screen in sync needs nothing, and one that
-  disagrees is argued, not previewed. Draw the screen as it would look after
-  the decisions — the canvas outlines the changed regions and tags them.
-- **An exception is argued in one line** (`--exception "<screen> | why"`); it
-  moves that screen to *disagrees*, so the person decides.
-- **The sketch is one idea the change makes possible, set apart** from the
-  mechanical previews; `--sketch-file` draws it as a hunch beneath the source.
-
-The altitude is the person's, never yours: **screen by screen** is the
-default (they keep each preview), **put it in the design system** sends you
-"Ripple into the design system, please (…)" — propose the change beneath the
-DESIGN.md that governs the source, citing the same version — and **this one
-is a one-off** marks the source `ripple=off`, which silences it. Never edit
-another screen because one changed. `isocan ripple` with no item prints the
-pulse: one tick per screen, current, behind or in conflict.
 
 ## Stuck: stop guessing, and ask
 
