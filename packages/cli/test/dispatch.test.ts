@@ -222,11 +222,11 @@ describe("the doorbell works (journey 2)", () => {
     const pointer = JSON.parse(await fs.readFile(path.join(pointerDir, pointers[0]!), "utf8"));
     expect(pointer).toMatchObject({ canvasId: "prj_1", sessionId: face.sessionId });
 
-    // The adapter's tool call becomes an inferred status — the face keeps
-    // saying what the turn is doing instead of freezing on its first line.
+    // The adapter's tool call becomes a humanized inferred status — the face
+    // keeps saying what the turn is doing instead of freezing on its first line.
     const busy = await until(
       sessions,
-      (list) => list.some((s) => s.actor.name === "Sian" && s.status === "Bash: isocan comment reply"),
+      (list) => list.some((s) => s.actor.name === "Sian" && s.status === "writing a reply…"),
       "the tool call narrated on the face",
     );
     expect(busy.find((s) => s.actor.name === "Sian")!.statusSource).toBe("inferred");
