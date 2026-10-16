@@ -372,19 +372,37 @@ bar, tab bar) stays.
   `polish_intensity` (`0 | 4 | 8 | 12` patch budget) and applies `WireSpec.polish`
   refinements guarded by `verifyWireContract`, which rejects any patch that drops
   a `data-sec`, `data-wf`, `data-hot`, or `data-intent` attribute.
-- **Checkable fidelity layers (`isocan wire layer`)**: hovering or selecting a
-  wireframe screen on the canvas shows a small tier pill under it (`◧ High-Fi ▾`,
-  beside *Full screen*); clicking it opens a popover with the checkable layers
-  (`☑ System`, `☑ Copy`, `☑ Low-Fi`, `☑ High-Fi`) and one row, *Apply to all N
-  screens in “flow”*, which sets every screen in the flow to those layers and
-  rebuilds its prototype — `--flow` from the terminal. Right-clicking offers
-  **Layers ▸**. From the terminal, `isocan wire layer [directive] [<screens...>]
-  [--flow <flow>] [--list]` (or `/wire layer <directive>` in the Chat) checks or
-  unchecks individual layers (`+system`, `-system`, `+copy`, `-copy`, `+lofi`,
-  `-lofi`, `+hifi`, `-hifi`) or jumps between the four fidelity tiers (`wire`,
-  `system`, `lofi`, `hifi`) non-destructively in one op group, preserving saved
-  version pointers (`wireLayer:wire`, `wireLayer:system`, `wireLayer:lofi`,
-  `wireLayer:hifi`) and syncing the flow's prototype.
+- **Checkable fidelity layers (`isocan wire layer`) and the Leaf-Swap Contract**:
+  hovering or selecting a wireframe screen on the canvas shows a small tier pill
+  under it (`◧ High-Fi ▾`, beside *Full screen*); clicking it opens a popover
+  with the checkable layers (`☑ System`, `☑ Copy`, `☑ Low-Fi`, `☑ High-Fi`) and
+  one row, *Apply to all N screens in “flow”*, which sets every screen in the
+  flow to those layers and rebuilds its prototype — `--flow` from the terminal.
+  Right-clicking offers **Layers ▸**. From the terminal, `isocan wire layer
+  [directive] [<screens...>] [--flow <flow>] [--list]` (or `/wire layer
+  <directive>` in the Chat) checks or unchecks individual layers (`+system`,
+  `-system`, `+copy`, `-copy`, `+lofi`, `-lofi`, `+hifi`, `-hifi`) or jumps
+  between the four fidelity tiers (`wire`, `system`, `lofi`, `hifi`)
+  non-destructively in one op group, preserving saved version pointers
+  (`wireLayer:wire`, `wireLayer:system`, `wireLayer:lofi`, `wireLayer:hifi`)
+  and syncing the flow's prototype.
+  - **What the four tiers render:** Tier 1 (`wire`) draws monochrome blocks,
+    4-tier bar emphasis (`emp-primary`..`emp-subtle`), and pure-CSS media
+    pattern fills (`pat-striped` for video, `pat-dotted` for illustrations,
+    `pat-crosshatch` for logos, crossed box for photos). Tier 2 (`system`) adds
+    `DESIGN.md` tokens and domain `copy`. Tier 3 (`lofi`) unboxes slots into
+    fluid elevated cards, inset fields, and tactile controls. Tier 4 (`hifi`)
+    adds studio lighting, frosted chrome, crisp inner highlights, and elevated
+    hero/pricing surfaces.
+  - **Bespoke High-Fi leaf-swap migration:** when writing a custom High-Fi HTML
+    version for a screen, keep the container structure and every `data-sec`,
+    `data-wf`, `data-hot`, and `data-intent` attribute intact while swapping
+    only leaf placeholders (bars, pattern boxes, wireframe buttons) for finished
+    craft, embed the `WireSpec` via `embedWireSpec(html, { ...spec, layers: {
+    system: true, copy: true, lofi: true, hifi: true } })`, verify with
+    `verifyWireContract(baselineHtml, hifiHtml, spec)`, and record the version on
+    `wireLayer:hifi` so toggling layers never loses the craft or breaks flow
+    arrows.
 
 **Words are typed, never free.** A button's label is its **intent**'s label
 (`sign-in` → "Sign in", `back` → "Back"), chosen from a fixed vocabulary of

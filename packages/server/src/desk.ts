@@ -18,6 +18,7 @@ import type {
   SeenMarks,
   Space,
 } from "@isocan/core";
+import type { SummaryDay } from "@isocan/core/semantic-zoom";
 
 /** Re-exported so `BadgeRecord`'s neighbours keep importing it from here, and
  * so the type has one definition. It moved to core in phase 9 because
@@ -279,6 +280,17 @@ export interface BadgeRecord {
  */
 export interface PassRecord extends Pass {
   secretHash: string;
+}
+
+/**
+ * One actor's durable park cursor on one canvas: three watermarks
+ * (`cursor ≤ rehanded ≤ delivered`) and the active `parkId` lease.
+ */
+export interface ParkRow {
+  cursor: number;
+  delivered: number;
+  rehanded: number;
+  parkId: string;
 }
 
 export interface Desk extends PersonalDesk {
@@ -935,4 +947,24 @@ export interface Desk extends PersonalDesk {
   /** Every row not lifted — expired ones included, for the reason above.
    * What the registry is loaded from at boot. */
   refusals(): Promise<HomeRefusal[]>;
+
+  // ---- semantic zoom summary cost ledger, park cursors, and migration marks ----
+
+  /** Daily summary call/token tallies for one canvas at this home. */
+  summaryDays(canvasId: string): Promise<Record<string, SummaryDay>>;
+
+  /** Write the daily summary tallies for one canvas. */
+  putSummaryDays(canvasId: string, days: Record<string, SummaryDay>): Promise<void>;
+
+  /** One actor's durable park cursor on one canvas, or null if never parked. */
+  parkRow(canvasId: string, actorId: string): Promise<ParkRow | null>;
+
+  /** Write one actor's durable park cursor on one canvas. */
+  putParkRow(canvasId: string, actorId: string, row: ParkRow): Promise<void>;
+
+  /** Whether the one-time phase-7 link-grant migration has already run on this home. */
+  linkGrantsMigrated(): Promise<boolean>;
+
+  /** Record that the phase-7 link-grant migration has completed. */
+  markLinkGrantsMigrated(at: string): Promise<void>;
 }

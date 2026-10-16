@@ -347,6 +347,9 @@ export interface HomeConnection {
    * per-browser answer seen-marks exist to replace.
    */
   inbox(canvasId: string, actor: Actor, label?: string, signal?: AbortSignal): Promise<InboxResponse>;
+  /** Whether the home still has this canvas — false only on its 404, and a
+   *  throw when it does not answer (`isocan canvas forget` reads this). */
+  holds(canvasId: string, signal?: AbortSignal): Promise<boolean>;
   seen(actor?: Actor, canvasId?: string, signal?: AbortSignal): Promise<SeenMarksResponse>;
   markSeen(canvasId: string, seq: number, actor?: Actor): Promise<SeenResponse>;
   spaces(): Promise<SpacesResponse>;
@@ -566,6 +569,9 @@ export interface HomeLinkOptions {
    * key, the badge's key in `identity.json`, and the presence mirror's key,
    * and two spellings of one address would be two of each. */
   homeUrl: string;
+  /** Optional local authenticating gateway endpoint (e.g. `http://127.0.0.1:4442`)
+   * dialled on the wire while keeping `homeUrl` canonical everywhere else. */
+  gatewayUrl?: string;
   /** This machine's isocan home directory: where the badge is kept, beside
    * the CLI's own, in `identity.json`'s `auth` block. */
   home: string;
@@ -675,6 +681,7 @@ interface CanvasHealth {
 
 export class HomeLink implements HomeConnection {
   readonly homeUrl: string;
+  readonly dialUrl: string;
   private readonly home: string;
   private readonly engine: Engine;
   private readonly presence: PresenceHub;
@@ -758,6 +765,7 @@ export class HomeLink implements HomeConnection {
 
   constructor(options: HomeLinkOptions) {
     this.homeUrl = normalizeHomeUrl(options.homeUrl);
+    this.dialUrl = options.gatewayUrl ? normalizeHomeUrl(options.gatewayUrl) : this.homeUrl;
     this.home = options.home;
     this.engine = options.engine;
     this.presence = options.presence;
@@ -1142,7 +1150,7 @@ export class HomeLink implements HomeConnection {
     try { await this.classifyReplica(link.canvasId); } catch (error) { return gaveUp((error as Error).message); }
     const since = await this.localSeq(link.canvasId);
     if (link.dialSeq !== attempt) return;
-    const wsBase = this.homeUrl.replace(/^http:/, "ws:").replace(/^https:/, "wss:");
+    const wsBase = this.dialUrl.replace(/^http:/, "ws:").replace(/^https:/, "wss:");
     const url = `${wsBase}/ws?canvasId=${encodeURIComponent(link.canvasId)}&since=${since}&${CLIENT_FEATURES_PARAM}=${CURRENT_CLIENT_FEATURES}`;
     let socket: WebSocket;
     try {
@@ -1353,13 +1361,13 @@ export class HomeLink implements HomeConnection {
       case "resumed":
         this.carrying(link);
         this.hello({ canvasId, type: "resumed", since, lastSeq: message.lastSeq });
-        await this.engine.mergeRemoteIdentity(message.colors, message.names);
+        await this.engine.mergeRemoteIdentity(message.colors, message.names, message.joined);
         return;
       case "snapshot":
         this.carrying(link);
         this.hello({ canvasId, type: "snapshot", since, lastSeq: message.lastSeq });
         await this.engine.adoptRemoteSnapshot(canvasId, message);
-        await this.engine.mergeRemoteIdentity(message.colors, message.names);
+        await this.engine.mergeRemoteIdentity(message.colors, message.names, message.joined);
         return;
       case "op-applied": {
         const applied = await this.engine.applyRemote(canvasId, message.entry);
@@ -1411,7 +1419,7 @@ export class HomeLink implements HomeConnection {
           this.origin(),
           message.sessions.filter((session) => !ours.has(session.sessionId)),
         );
-        await this.engine.mergeRemoteIdentity(message.colors, message.names);
+        await this.engine.mergeRemoteIdentity(message.colors, message.names, message.joined);
         return;
       }
     }
@@ -1656,7 +1664,9 @@ export class HomeLink implements HomeConnection {
     if (this.rc) {
       const local = this.rc.answeringLocal(link.canvasId);
       const agents =
-        (await this.engine.getSnapshot(link.canvasId).catch(() => null))?.canvas.agents ?? {};
+        local.actorIds.length > 0
+          ? ((await this.engine.getSnapshot(link.canvasId).catch(() => null))?.canvas.agents ?? {})
+          : {};
       const answerable: string[] = [];
       for (const actorId of local.actorIds) {
         const record = agents[actorId];
@@ -1757,7 +1767,7 @@ export class HomeLink implements HomeConnection {
   }
 
   private async reBadge(): Promise<StoredBadge | null> {
-    const badge = await knockOnDoor(this.homeUrl);
+    const badge = await knockOnDoor(this.dialUrl);
     if (!badge) return null;
     this.badge = badge;
     await writeBadge(this.home, this.homeUrl, badge);
@@ -2003,6 +2013,21 @@ export class HomeLink implements HomeConnection {
     await abortable(this.ensureClaim(actor), signal);
     signal?.throwIfAborted();
     return abortable(this.api<InboxResponse>("GET", inboxRoute(actor.id, { canvasId, ...(label !== undefined ? { label } : {}) }), undefined, signal), signal);
+  }
+
+  /**
+   * Does the home still have this canvas? Only a 404 says no: a refusal is
+   * the home answering FOR the canvas (it just will not let this machine
+   * in), and an unreachable home answers nothing, so it throws.
+   */
+  async holds(canvasId: string, signal?: AbortSignal): Promise<boolean> {
+    try {
+      await this.api("GET", `/api/projects/${encodeURIComponent(canvasId)}/canvas`, undefined, signal);
+      return true;
+    } catch (err) {
+      if (err instanceof HomeRefusedError) return err.status !== 404;
+      throw err;
+    }
   }
 
   async seen(actor?: Actor, canvasId?: string, signal?: AbortSignal): Promise<SeenMarksResponse> {
@@ -2479,7 +2504,7 @@ export class HomeLink implements HomeConnection {
    */
   private async fetchHome(path: string, init: RequestInit): Promise<Response> {
     try {
-      return await fetch(`${this.homeUrl}${path}`, {
+      return await fetch(`${this.dialUrl}${path}`, {
         ...init,
         signal: AbortSignal.any([this.aborter.signal, AbortSignal.timeout(30_000), ...(init.signal ? [init.signal] : [])]),
       });
@@ -2507,7 +2532,7 @@ export class HomeLink implements HomeConnection {
   private async askBuild(): Promise<void> {
     if (this.stopped) return;
     try {
-      const res = await fetch(`${this.homeUrl}${healthPath(this.homeUrl)}`, {
+      const res = await fetch(`${this.dialUrl}${healthPath(this.homeUrl)}`, {
         signal: AbortSignal.any([
           this.aborter.signal,
           AbortSignal.timeout(BUILD_PROBE_TIMEOUT_MS),
@@ -2545,7 +2570,7 @@ export class HomeLink implements HomeConnection {
    * live home reads as dead (phase 5's finding). */
   async reachable(timeoutMs = 2000): Promise<boolean> {
     try {
-      const res = await fetch(`${this.homeUrl}${healthPath(this.homeUrl)}`, {
+      const res = await fetch(`${this.dialUrl}${healthPath(this.homeUrl)}`, {
         signal: AbortSignal.timeout(timeoutMs),
       });
       return res.ok;

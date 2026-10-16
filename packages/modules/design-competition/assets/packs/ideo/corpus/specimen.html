@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Build to Think — Specimen</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #fafafa;
+      color: #222222;
+      font-family: "Atkinson Hyperlegible", system-ui, sans-serif;
+      padding: 28px;
+      line-height: 1.5;
+    }
+    .sheet { max-width: 820px; margin: 0 auto; display: grid; gap: 20px; }
+    .hmw { font-size: 26px; font-weight: 700; }
+    .persona {
+      background: #ffffff;
+      border: 1.5px solid #222222;
+      border-radius: 4px;
+      padding: 14px 16px;
+      font-size: 16px;
+    }
+    .concepts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .c-box {
+      background: #ffffff;
+      border: 1.5px dashed #c8c8c8;
+      border-radius: 4px;
+      padding: 12px;
+      font-size: 14px;
+      color: #555555;
+    }
+    .c-box.chosen { border: 1.5px solid #222222; color: #222222; }
+    .proto-row { display: grid; grid-template-columns: 1fr 200px; gap: 16px; align-items: start; }
+    .frame {
+      background: #ffffff;
+      border: 1.5px solid #222222;
+      border-radius: 4px;
+      padding: 16px;
+      display: grid;
+      gap: 12px;
+    }
+    .marker {
+      display: inline-grid;
+      place-items: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 999px;
+      background: #222222;
+      color: #ffffff;
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .btn {
+      height: 48px;
+      background: #222222;
+      color: #ffffff;
+      border: 0;
+      border-radius: 4px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .sticky {
+      background: #ffd84d;
+      color: #222222;
+      font-family: Caveat, cursive, sans-serif;
+      font-size: 20px;
+      line-height: 1.15;
+      padding: 12px 14px;
+      border-radius: 2px;
+      transform: rotate(-1.5deg);
+      box-shadow: 0 2px 0 rgb(0 0 0 / 0.12);
+    }
+    .test-strip { background: #ececec; padding: 16px; font-size: 15px; }
+  </style>
+</head>
+<body>
+  <main class="sheet">
+    <h1 class="hmw">How might we let Sam send a house-warming plant without knowing the recipient's light levels?</h1>
+    <div class="persona">
+      <strong>Composite persona — Sam (one-handed on commuter train):</strong> Needs zero houseplant jargon and a guarantee the plant survives low light.
+    </div>
+    <div class="concepts">
+      <div class="c-box"><strong>A:</strong> Room photo upload → skipped (recipient room unknown)</div>
+      <div class="c-box chosen"><strong>B (Chosen):</strong> Pick room vibe in 1 tap → recipient picks delivery slot</div>
+      <div class="c-box"><strong>C:</strong> Subscription box → too heavy for a one-off gift</div>
+    </div>
+    <div class="proto-row">
+      <div class="frame">
+        <div><span class="marker">1</span> <strong>Hard-to-kill shade bundle ($54)</strong> — pothos + cast-iron plant</div>
+        <button class="btn" type="button">Text gift link to friend →</button>
+      </div>
+      <aside class="sticky">
+        1. Sam never enters an address — recipient picks the day they are actually home!
+      </aside>
+    </div>
+    <footer class="test-strip">
+      <strong>Riskiest assumption to test Friday:</strong> Will recipients trust an SMS link from a plant shop without thinking it is spam?
+    </footer>
+  </main>
+</body>
+</html>

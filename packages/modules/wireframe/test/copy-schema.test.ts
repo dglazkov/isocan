@@ -111,8 +111,8 @@ function memoryPort(): {
 }
 
 describe("schema-driven AI copy and flow naming (Phase 12)", () => {
-  it("builds blockContentSchema across all 50 catalog components and variants, validates payloads, and preserves actionable intents", async () => {
-    expect(COMPONENTS.size).toBe(50);
+  it("builds blockContentSchema across all 53 catalog components and variants, validates payloads, and preserves actionable intents", async () => {
+    expect(COMPONENTS.size).toBe(53);
     for (const comp of COMPONENTS.values()) {
       const variantOptions =
         comp.props.variant && comp.props.variant.kind === "choice"

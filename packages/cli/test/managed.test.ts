@@ -194,13 +194,40 @@ describe("the smoke test", () => {
 });
 
 describe("fetching a build", () => {
-  /** `installBuild`'s runner is handed the prefix; a fixture written into it is
-   * exactly what npm would have left there. */
+  /** `installBuild`'s runner is handed the staging target (git clone's
+   * destination or npm's `--prefix`); a fixture written into it is what the
+   * fetch leaves behind. */
+  const prefixOf = (args: string[]) =>
+    args.includes("--prefix")
+      ? args[args.indexOf("--prefix") + 1]!
+      : path.resolve(args.at(-1)!, "..", "..");
   const installing = (sha: string, claims?: string) => async (_c: string, args: string[]) => {
-    const prefix = args[args.indexOf("--prefix") + 1]!;
-    await makeBuild(prefix, claims ?? sha);
+    await makeBuild(prefixOf(args), claims ?? sha);
     return { status: 0, stdout: "", stderr: "" };
   };
+
+  it("fetches github: specs with git clone (no npm required) and strips .git", async () => {
+    const calls: { command: string; args: string[] }[] = [];
+    const result = await installBuild({
+      home,
+      spec: "github:dglazkov/isocan#release",
+      want: "aaaaaaa",
+      run: async (command, args) => {
+        calls.push({ command, args });
+        const target = args.at(-1)!;
+        await makeBuild(path.resolve(target, "..", ".."), "aaaaaaa");
+        await fs.mkdir(path.join(target, ".git"), { recursive: true });
+        return { status: 0, stdout: "", stderr: "" };
+      },
+    });
+    expect(result.ok).toBe(true);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.command).toMatch(/^git/);
+    expect(calls[0]!.args).toContain("--branch");
+    expect(calls[0]!.args).toContain("release");
+    expect(calls[0]!.args).toContain("https://github.com/dglazkov/isocan.git");
+    await expect(fs.stat(path.join(result.build!.root, ".git"))).rejects.toThrow();
+  });
 
   it("promotes a fetched tree to builds/<sha> once it can be named", async () => {
     const result = await installBuild({
@@ -301,7 +328,7 @@ describe("keeping three builds, and never one in use", () => {
   it("finds a running daemon's build through the pidfile and the health route", async () => {
     const root = await makeBuild(paths.buildDir(home, "aaaaaaa"), "aaaaaaa");
     const port = await reservePort();
-    const child = spawn(process.execPath, [path.join(root, "packages/cli/bin/isocan.js"), "serve"], {
+    const child = spawn(process.execPath, [path.join(root, "packages/cli/dist/isocan.mjs"), "serve"], {
       env: { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: String(port) },
       stdio: "ignore",
     });
@@ -348,14 +375,14 @@ describe("adopting an existing install", () => {
     const adoption = await adoptGlobal(home, bin);
     expect(adoption).toMatchObject({ managed: true, moved: true });
     expect(await fs.readlink(bin)).toBe(
-      path.join(paths.currentLink(home), "node_modules/isocan/packages/cli/bin/isocan.js"),
+      path.join(paths.currentLink(home), "node_modules/isocan/packages/cli/dist/isocan.mjs"),
     );
     // The link resolves all the way through `current` into the build — which is
     // what makes `rootOfBin` name the build root, and `stalenessOf` able to
     // compare two builds by their directories.
     expect(await fs.realpath(bin)).toBe(
       await fs.realpath(
-        path.join(paths.buildDir(home, "aaaaaaa"), "node_modules/isocan/packages/cli/bin/isocan.js"),
+        path.join(paths.buildDir(home, "aaaaaaa"), "node_modules/isocan/packages/cli/dist/isocan.mjs"),
       ),
     );
     // Untouched, and still uninstallable by npm.

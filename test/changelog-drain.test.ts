@@ -3,7 +3,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error — a plain .mjs script, imported for its two pure halves.
-import { FLOOR_DAYS, drainPlan, indexWithDraftRow } from "../scripts/changelog-drain.mjs";
+import { FLOOR_DAYS, drainPlan, indexWithDraftRow, run } from "../scripts/changelog-drain.mjs";
 
 /**
  * **The changelog queue drains itself** (AGENTS.md, "The night shift's pull
@@ -82,5 +82,23 @@ describe("the workflow", () => {
     expect(step).toContain("node scripts/changelog-drain.mjs");
     // The gather step skips the rest on a quiet day; the drain must not be skipped with it.
     expect(step.split(/\n\s*- name:/)[0]).not.toContain("steps.gather.outputs.day");
+  });
+});
+
+/**
+ * The merge path's first real run, 12 Oct 2026, died before merging anything:
+ * `checked()` runs `npm ci` and the test with stdout sent away from the pipe,
+ * `execFileSync` answers `null` for that, and `run` called `.trimEnd()` on it.
+ * The decisions above were all tested; the plumbing under them was not.
+ */
+describe("the drain's command runner", () => {
+  it("answers a string whether or not stdout is piped back", () => {
+    expect(run("node", ["-e", "console.log('  said  ')"])).toBe("  said");
+    expect(run("node", ["-e", "console.log('discarded')"], { stdio: ["ignore", "ignore", "inherit"], timeout: 20_000 })).toBe("");
+    expect(run("node", ["-e", "0"], { stdio: ["ignore", "inherit", "inherit"], timeout: 20_000 })).toBe("");
+  });
+
+  it("still throws when the command fails, so a red test leaves the PR for a person", () => {
+    expect(() => run("node", ["-e", "process.exit(3)"], { stdio: ["ignore", "ignore", "ignore"], timeout: 20_000 })).toThrow();
   });
 });

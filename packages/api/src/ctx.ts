@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { Actor, HomesResponse, Canvas, SourceRequestContext, SourceAccessResponse } from "@isocan/core";
 import { DEFAULT_PORT, newCanvasId, normalizeHomeUrl } from "@isocan/core";
-import { paths, readConfigFile, stalenessOf } from "@isocan/server";
+import { configuredHomeAuthUrl, homeAuthFor, paths, readConfigFile, resolveHomeUrl, stalenessOf } from "@isocan/server";
 import { ApiError, type DaemonRoutes, type Health } from "./routes.ts";
 import { DaemonClient } from "./client.ts";
 import {
@@ -164,6 +164,16 @@ export async function resolveBase(
   binding: DirBinding | null,
 ): Promise<{ base: string; direct: string | null }> {
   const declared = await resolveDeclared(isocanHome);
+  if (declared?.mode !== "daemon") {
+    const candidate =
+      (declared?.mode === "direct" ? declared.at : null) ??
+      binding?.home ??
+      (await resolveHomeUrl(isocanHome)) ??
+      configuredHomeAuthUrl(isocanHome);
+    if (candidate && homeAuthFor(candidate, isocanHome) !== null) {
+      return { base: candidate, direct: candidate };
+    }
+  }
   if (declared?.mode === "direct") {
     // The address, in order: whatever declared it, if it named one; then the
     // directory marker's `home`. The marker is what makes the cloned-repo case
@@ -248,6 +258,7 @@ export async function resolveCtx(options: CtxOptions = {}): Promise<Ctx> {
   const { base, direct } = await resolveBase(home, port, binding);
   options.signal?.throwIfAborted();
   const client = new DaemonClient(base, home, options.signal);
+  client.direct = Boolean(direct);
   // A person at a keyboard is asked once, up front. Everyone else is asked
   // only if it turns out to matter: looking (`ls`, `canvas list`, `show`)
   // stamps nothing, and an agent should be able to see where it has landed
@@ -815,6 +826,7 @@ async function bindFresh(ctx: Ctx): Promise<Canvas | null> {
   // canvas as its own, and the marker gets no `home` key: Dion's rig, byte for
   // byte what it was.
   const birth = ctx.birthHome;
+  const markerHome = birth ?? (ctx.client.direct ? ctx.client.base : null);
   await ctx.client.sendOp(
     null,
     ctx.actor,
@@ -822,8 +834,8 @@ async function bindFresh(ctx: Ctx): Promise<Canvas | null> {
     undefined,
     birth ?? undefined,
   );
-  const marker = { canvasId, title, ...(birth ? { home: birth } : {}) };
-  const file = await writeMarker(root, marker);
+  const marker = { canvasId, title, ...(markerHome ? { home: markerHome } : {}) };
+  const file = await writeMarker(root, marker, ctx.home);
   await recordDir(ctx.home, root, canvasId);
   console.error(`note: created "${title}" (${canvasId}) for this directory — bound via ${file}`);
   ctx.binding = { root, ...marker };
@@ -846,7 +858,7 @@ export async function ensureDirBinding(
    * goes. The per-canvas answers are read from the record below; this one
    * cannot be, because a canvas that does not exist yet has no row. */
   birthHome: string | null = null,
-): Promise<{ canvas: Canvas; root: string; created: boolean } | null> {
+): Promise<{ canvas: Canvas; root: string; created: boolean; marker?: string } | null> {
   const binding = await findBinding(process.cwd(), home);
   if (binding) {
     const existing = (await client.listCanvases()).find((p) => p.id === binding.canvasId);
@@ -902,7 +914,12 @@ export async function ensureDirBinding(
     undefined,
     birthHome ?? undefined,
   );
-  await writeMarker(root, { canvasId, title, ...(birthHome ? { home: birthHome } : {}) });
+  const markerHome = birthHome ?? (client.direct ? client.base : null);
+  const marker = await writeMarker(
+    root,
+    { canvasId, title, ...(markerHome ? { home: markerHome } : {}) },
+    home,
+  );
   await recordDir(home, root, canvasId);
-  return { canvas: await canvasById(client, canvasId), root, created: true };
+  return { canvas: await canvasById(client, canvasId), root, created: true, marker };
 }

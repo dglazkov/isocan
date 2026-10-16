@@ -3,6 +3,7 @@ import { wireframeModule } from "./record.ts";
 import { KEEP_MARK } from "./keep.ts";
 import { followOnWeb } from "./follow.ts";
 import { WIRE_COMMAND, WIRE_PROPERTY_KEYS } from "./wire-command.ts";
+import { prototypeWalkFlow } from "./walk-flow.ts";
 
 export { WIRE_COMMAND };
 
@@ -26,4 +27,6 @@ export const wireframeCore: CoreModule = {
   marks: [{ ...KEEP_MARK, follow: followOnWeb }],
   propertyKeys: [...WIRE_PROPERTY_KEYS],
   commands: [WIRE_COMMAND],
+  // A walk follows a prototype's links (proactive-agent phase 9).
+  walkFlow: prototypeWalkFlow,
 };

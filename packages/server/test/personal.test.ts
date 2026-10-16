@@ -3,7 +3,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
-import { SOURCE_POLICY_HEADER, sourcePolicyHeader, type Actor, type Operation, type PersonalEnsureResponse, type PersonalLinkResponse } from "@isocan/core";
+import { SOURCE_POLICY_HEADER, personRequired, sourcePolicyHeader, type Actor, type Operation, type PersonalEnsureResponse, type PersonalLinkResponse } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
 
@@ -11,9 +11,9 @@ const person: Actor = { id: "usr_personal_maya", name: "Maya" };
 const other: Actor = { id: "usr_personal_theo", name: "Theo" };
 const agent: Actor = { id: "usr_personal_rowan", name: "Rowan" };
 const nodes: Array<{ daemon: Daemon; dir: string }> = [];
-async function node(birthHome: string | null = null) {
+async function node(birthHome: string | null = null, servesWorld = true) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-personal-"));
-  const daemon = await startDaemon({ port: 0, home: dir, birthHome, homePollMs: 50, servesWorld: true });
+  const daemon = await startDaemon({ port: 0, home: dir, birthHome, homePollMs: 50, servesWorld });
   nodes.push({ daemon, dir });
   return { daemon, dir, base: `http://127.0.0.1:${(daemon.app.server.address() as { port: number }).port}` };
 }
@@ -191,7 +191,7 @@ it("rechecks a current source grant when a queued write starts", async () => {
 });
 
 it("forwards destination birth and private reads to the authority, without a replica birth link", async () => {
-  const { home, badge } = await fixture(); const local = await node(); const localBadge = await mintTestBadge(local.base);
+  const { home, badge } = await fixture(); const local = await node(null, false); const localBadge = await mintTestBadge(local.base);
   await localBadge.speakAs(person, "home:maya");
   const pass = await json<{ token: string }>(await request(home, badge, "POST", "/api/projects/prj_destination/passes", { actorId: person.id }));
   await json(await request(local, localBadge, "POST", "/api/passes/redeem", { home: home.base, token: pass.token }));
@@ -338,7 +338,7 @@ it("park setup and long-poll continuation recheck personal read policy", async (
 });
 
 it("two-home raw reads and watch fetches recheck current grants without reading retained private bytes", async () => {
-  const { home, badge } = await fixture(); const local = await node(); const localBadge = await mintTestBadge(local.base);
+  const { home, badge } = await fixture(); const local = await node(null, false); const localBadge = await mintTestBadge(local.base);
   await localBadge.speakAs(person, "home:maya"); await localBadge.speakAs(other, "home:theo");
   const pass = await json<{ token: string }>(await request(home, badge, "POST", "/api/projects/prj_destination/passes", { actorId: person.id }));
   await json(await request(local, localBadge, "POST", "/api/passes/redeem", { home: home.base, token: pass.token }));
@@ -363,7 +363,7 @@ it("two-home raw reads and watch fetches recheck current grants without reading 
   homeBytes.mockClear();
   const upload = await fetch(`${local.base}/api/projects/${source}/blobs`, { method: "POST", headers: { ...headers, "Content-Type": "text/plain", "X-Isocan-Filename": "forbidden.txt" }, body: "FORBIDDEN_RAW_WRITE" });
   expect(upload.status).toBe(403); expect(await upload.json()).toMatchObject({ code: "personal-intent-exceeded" });
-  const connection = local.daemon.homes.for(source)!;
+  const connection = local.daemon.homes!.for(source)!;
   const actual = connection.personalRequest.bind(connection);
   let entered!: () => void; let release!: () => void;
   const ready = new Promise<void>((resolve) => { entered = resolve; }); const gate = new Promise<void>((resolve) => { release = resolve; });
@@ -383,6 +383,14 @@ it("two-home raw reads and watch fetches recheck current grants without reading 
   const stalled = new PassThrough(); stalled.write("P");
   homeBytes.mockResolvedValueOnce(stalled);
   const forwarded = vi.spyOn(connection, "sourceRequest");
+  // The forwarded answer is the whole answer, even to a caller that hangs up
+  // mid-stream. fastify resumes the lifecycle when an early-answering async
+  // hook's reply CLOSES, not only when it finishes, so without the guard the
+  // local blob route ran too — reading this replica's private state and
+  // opening the bytes a second time, after the caller had gone, and on CI
+  // writing headers onto the closed response as an unhandled rejection.
+  const localSnapshots = vi.spyOn(local.daemon.engine, "getSnapshot"); const localMeta = vi.spyOn(local.daemon.store, "blobMeta");
+  const handlerBytes = vi.spyOn(connection, "openBlob");
   const controller = new AbortController();
   const ownerHeaders = { ...localBadge.headers, [SOURCE_POLICY_HEADER]: sourcePolicyHeader({ policy: { mode: "direct", actorId: person.id, intent: "read" }, expectedHome: home.base }) };
   const canceled = fetch(`${local.base}/api/projects/${source}/blobs/${blob.blobHash}`, { headers: ownerHeaders, signal: controller.signal }).then((response) => response.arrayBuffer()).then(() => false, () => true);
@@ -391,6 +399,12 @@ it("two-home raw reads and watch fetches recheck current grants without reading 
     controller.abort(); expect(await canceled).toBe(true);
     await expect.poll(() => forwarded.mock.calls[0]?.[5].signal?.aborted).toBe(true);
     await expect.poll(() => stalled.destroyed).toBe(true);
+    // A later request through the same daemon has run its whole lifecycle,
+    // so a route handler resumed by the close has had every chance to start.
+    expect((await fetch(`${local.base}/api/healthz`)).status).toBe(200);
+    expect(localSnapshots.mock.calls.filter(([id]) => id === source)).toEqual([]);
+    expect(localMeta).not.toHaveBeenCalled(); expect(handlerBytes).not.toHaveBeenCalled();
+    expect(forwarded).toHaveBeenCalledTimes(1);
   } finally { controller.abort(); stalled.destroy(); }
 });
 
@@ -432,4 +446,32 @@ it("invalid gesture identities cannot create a source or unlink a live card", as
   const result = await request(home, badge, "POST", "/api/projects/prj_destination/personal/unlink", { actorId: person.id, itemId: linked.link.itemId });
   expect(result.status).toBe(403); expect(await home.daemon.store.tipSeq("prj_destination")).toBe(tip);
   expect((await home.daemon.engine.getSnapshot("prj_destination")).canvas.items[linked.link.itemId]).toBeDefined();
+});
+
+/**
+ * **A person stays a person, and an agent is told how to switch** (14 Oct 2026).
+ * Reported from a hosted home: a person folded their browser into the id their
+ * laptop announced, and the bench answered "personal canvases belong to people"
+ * — the laptop's id read as an agent there. A fold that brings an agent's old
+ * id along must not do that either, and the refusal an agent does get names who
+ * is asking and what to do, rather than a code path's shorthand.
+ */
+it("keeps a person a person through a fold, refuses the fold that would not, and words the refusal", async () => {
+  const { home, badge } = await fixture();
+  const tab: Actor = { id: "usr_personal_maya_tab", name: "Maya Tab" };
+  const kit: Actor = { id: "usr_personal_kit", name: "Kit" };
+  await badge.speakAs(tab, "web:maya-tab");
+  await badge.speakAs(kit, "claude-code:kit");
+  // The browser folds into the laptop's person, and so does an agent's old id.
+  for (const from of [tab.id, agent.id]) await op(home, badge, null, { type: "actor.join", from, into: person.id });
+  expect((await home.daemon.engine.actorKinds())[person.id]).toBeUndefined();
+  expect(await json(await request(home, badge, "GET", `/api/personal?actorId=${tab.id}`))).toMatchObject({ owner: { id: person.id }, source: null });
+  // An agent session asked to "merge my identities" folds into ITSELF; the home refuses.
+  const wrongWay = await request(home, badge, "POST", "/api/ops", { actor: kit, canvasId: null, op: { type: "actor.join", from: person.id, into: kit.id } });
+  expect(wrongWay.status).toBe(400);
+  expect(await wrongWay.json()).toMatchObject({ code: "bad-join", error: expect.stringContaining(`isocan identity --home --join ${kit.id}`) });
+  // The agent itself is refused, by name, with the way to switch.
+  const refused = await request(home, badge, "GET", `/api/personal?actorId=${kit.id}`);
+  expect(refused.status).toBe(403);
+  expect(await refused.json()).toMatchObject({ code: "personal-person-required", error: personRequired("Kit") });
 });

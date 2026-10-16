@@ -1,6 +1,6 @@
 import type { ComponentType } from "react";
 import type { ModuleAction, RendererFacts, UnderlayFacts, WebModule } from "@isocan/core";
-import { mapOf, mapsOn, mindmap, tidyMap } from "./core.ts";
+import { mindmap, mapOf, mapsOn, tidyMap } from "./core.ts";
 import { MapEdges } from "./edges.tsx";
 
 /**

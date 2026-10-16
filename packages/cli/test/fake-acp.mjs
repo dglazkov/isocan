@@ -12,6 +12,7 @@
 // session transiently does, to exercise the client's retry.
 import { promises as fsp, readFileSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 
 const STORE = "fake-acp-sessions.json";
 const known = () => {
@@ -24,6 +25,7 @@ const known = () => {
 
 let buffer = "";
 const loaded = new Set();
+const cancelledSessions = new Set();
 let failedALoad = false;
 // FAKE_ACP_AUTH=<methodId>: advertise that one auth method and refuse
 // session verbs until `authenticate` names it — and, for gemini-api-key,
@@ -31,7 +33,7 @@ let failedALoad = false;
 // server reads it. The Antigravity shape, scripted.
 const authMethod = process.env.FAKE_ACP_AUTH ?? null;
 let authenticated = authMethod === null;
-// A model pinned at enrolment (`--model`, docs/projects/jetski/design.md)
+// A model pinned at enrolment (`--model`, docs/projects/antigravity/design.md)
 // arrives two ways: `{model}` filled in a declared adapter's arguments, and
 // ISOCAN_MODEL, which every pinned spawn carries. The reply reports both, and
 // nothing at all when neither is there.
@@ -169,7 +171,34 @@ function handle(msg) {
           });
         }, toolAt);
       }
+      // FAKE_ACP_USAGE=<dollars>: ACP's usage_update with a USD cost, as the
+      // Claude adapter reports a turn's spend; `tokens` sends one without a
+      // cost, as codex-acp 1.11 does. Before the linger, so a client that
+      // cancels on it is cancelling a turn still running.
+      if (process.env.FAKE_ACP_USAGE) {
+        const amount = Number(process.env.FAKE_ACP_USAGE);
+        send({
+          jsonrpc: "2.0",
+          method: "session/update",
+          params: {
+            sessionId: params.sessionId,
+            update: { sessionUpdate: "usage_update", used: 1200, size: 200000, ...(Number.isFinite(amount) ? { cost: { amount, currency: "USD" } } : {}) },
+          },
+        });
+      }
       if (slow > 0) await new Promise((r) => setTimeout(r, slow));
+      // FAKE_ACP_ACT=<path to a .mjs>: the turn's work, scripted — its default
+      // export is called with the prompt, the CLI and this turn's cwd, and
+      // runs isocan as the summoned agent (the injected environment says who
+      // that is). A journey's critics and builder, with no model at all.
+      if (process.env.FAKE_ACP_ACT) {
+        try {
+          const act = await import(pathToFileURL(process.env.FAKE_ACP_ACT).href);
+          await act.default({ prompt: promptText, cli: process.env.FAKE_ACP_CLI, cwd: process.cwd() });
+        } catch (err) {
+          process.stderr.write(`fake-acp: the scripted act failed — ${err?.stack ?? err}\n`);
+        }
+      }
       if (process.env.FAKE_ACP_REPLY === "1" && process.env.FAKE_ACP_CLI) {
         const threadId = promptText.match(/"threadId":\s*"([^"]+)"/)?.[1];
         const canvasId = promptText.match(/"canvasId":\s*"([^"]+)"/)?.[1];
@@ -234,8 +263,11 @@ function handle(msg) {
         method: "session/update",
         params: { sessionId: params.sessionId, update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text } } },
       });
-      send({ jsonrpc: "2.0", id, result: { stopReason: "end_turn" } });
+      send({ jsonrpc: "2.0", id, result: { stopReason: cancelledSessions.has(params.sessionId) ? "cancelled" : "end_turn" } });
     });
+  } else if (method === "session/cancel") {
+    // A notification: no answer, and the running prompt ends "cancelled".
+    cancelledSessions.add(params.sessionId);
   } else if (id !== undefined) {
     send({ jsonrpc: "2.0", id, error: { code: -32601, message: `unknown: ${method}` } });
   }

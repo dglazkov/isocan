@@ -279,10 +279,45 @@ describe("the box after its words or its look change", () => {
     expect(textNodeRefit(caption({ paper: "yellow" }, small), sentence, { removeProperties: ["paper"] })).not.toBeNull();
   });
 
-  it("fits a caption from scratch — which may shrink — and not paper", () => {
+  it("fits a caption's height at its own width — which may shrink — and not paper", () => {
     const stretched = caption({ textStyle: "heading" }, { width: 2000, height: 2000 });
-    expect(textNodeFit(stretched, sentence)).toEqual(textBox(sentence, "heading"));
+    const fitted = textNodeFit(stretched, sentence)!;
+    expect(fitted.width).toBe(2000);
+    expect(fitted.height).toBeLessThanOrEqual(textBox(sentence, "heading").height);
+    // A node at the estimate's own width fits to the estimate exactly.
+    const born = caption({ textStyle: "heading" }, { ...textBox(sentence, "heading"), height: 9 });
+    expect(textNodeFit(born, sentence)).toEqual(textBox(sentence, "heading"));
     expect(textNodeFit(caption({ paper: "blue" }, { width: 9, height: 9 }), sentence)).toBeNull();
+  });
+
+  /**
+   * **A wide note measured at its own width** (14 Oct 2026). `isocan fit` on
+   * an 840×400 note narrowed it to about 350×1600, and `isocan edit` on one
+   * grew its height to a 320 column's: both measured at the default column,
+   * whatever width the node had.
+   */
+  const notes = Array.from({ length: 6 }, (_, i) => `Acme planning note ${i + 1}: review the roadmap, the hiring plan and the budget for next quarter.`).join("\n\n");
+  it("fit keeps a wider hand-set width and measures the height inside it", () => {
+    const wide = caption({}, { width: 840, height: 400 });
+    const fitted = textNodeFit(wide, notes)!;
+    expect(fitted.width).toBe(840);
+    expect(fitted.height).toBeLessThan(textBox(notes).height);
+    // A box crushed narrower than its words still grows back to them.
+    expect(textNodeFit(caption({}, { width: 120, height: 40 }), notes)).toEqual(textBox(notes));
+  });
+
+  it("an edit to a wide note grows its height only to what its width needs", () => {
+    const wide = caption({}, { width: 840, height: 60 });
+    const next = textNodeRefit(wide, notes)!;
+    expect(next.width).toBe(840);
+    expect(next.height).toBe(textNodeFit(wide, notes)!.height);
+    expect(next.height).toBeLessThan(textBox(notes).height);
+    // And a wide note that already holds its words is left alone.
+    expect(textNodeRefit({ ...wide, height: next.height }, notes)).toBeNull();
+  });
+
+  it("counts the rows a word is broken onto when it is longer than the widest box", () => {
+    expect(textBox("Acme".repeat(20), "display").height).toBeGreaterThan(textBox("Acme", "display").height * 3);
   });
 });
 

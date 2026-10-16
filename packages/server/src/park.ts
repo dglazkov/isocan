@@ -1,7 +1,6 @@
-import { promises as fs } from "node:fs";
-import path from "node:path";
 import { randomBytes } from "node:crypto";
-import { writeFileAtomic } from "./fsutil.ts";
+import type { Desk, ParkRow } from "./desk.ts";
+export { parkCursorsFile } from "./paths.ts";
 
 /**
  * **The park's cursor, out of the parked process** (on-demand phase 1).
@@ -44,18 +43,11 @@ import { writeFileAtomic } from "./fsutil.ts";
  * redelivered, never as new. Journey 3's acceptance is both halves at once:
  * nothing in a gap is missed, and the same comment is never new twice.
  *
- * The file lives beside the daemon's other machine-local facts
- * (`homes.json`, `daemon.json`) — it is not canvas state and never goes
- * through the `Store` seam, which is what keeps a hosted home's backing
- * untouched by a feature only local parks use.
+ * Persisted behind `Desk` (`park-cursors.json` on `FileDesk`, Firestore
+ * `parks/` on `CloudDesk`): it is not canvas state so it never goes through
+ * the `Store` seam or replicates, while still surviving container restarts
+ * when an agent parks directly against a hosted home.
  */
-
-interface ParkRow {
-  cursor: number;
-  delivered: number;
-  rehanded: number;
-  parkId: string;
-}
 
 interface ParkClaim {
   parkId: string;
@@ -63,36 +55,20 @@ interface ParkClaim {
   redeliverUpTo: number | null;
 }
 
-export const parkCursorsFile = (home: string) => path.join(home, "park-cursors.json");
-
 export class ParkCursors {
-  private rows: Record<string, ParkRow> | null = null;
+  private readonly locks = new Map<string, Promise<unknown>>();
 
-  constructor(private readonly home: string) {}
+  constructor(private readonly desk: Desk) {}
 
-  private key(canvasId: string, actorId: string): string {
-    return `${canvasId} ${actorId}`;
-  }
-
-  private async load(): Promise<Record<string, ParkRow>> {
-    if (this.rows) return this.rows;
-    try {
-      const raw = await fs.readFile(parkCursorsFile(this.home), "utf8");
-      this.rows = JSON.parse(raw) as Record<string, ParkRow>;
-    } catch {
-      // Missing or torn: torn cannot happen (writes are atomic), missing is
-      // every home that has never parked. Either way, start empty — a lost
-      // row degrades to today's behavior, never to a wrong delivery.
-      this.rows = {};
-    }
-    return this.rows;
-  }
-
-  private async save(): Promise<void> {
-    await writeFileAtomic(
-      parkCursorsFile(this.home),
-      `${JSON.stringify(this.rows ?? {}, null, 2)}\n`,
-    );
+  private enqueue<T>(key: string, work: () => Promise<T>): Promise<T> {
+    const prev = this.locks.get(key) ?? Promise.resolve();
+    const next = prev.then(work);
+    const settled = next.catch(() => {});
+    this.locks.set(key, settled);
+    void settled.then(() => {
+      if (this.locks.get(key) === settled) this.locks.delete(key);
+    });
+    return next;
   }
 
   /**
@@ -113,61 +89,69 @@ export class ParkCursors {
       actorSpoke: (afterSeq: number) => Promise<boolean>;
     },
   ): Promise<ParkClaim> {
-    const rows = await this.load();
-    const key = this.key(canvasId, actorId);
-    const parkId = `park_${randomBytes(8).toString("hex")}`;
-    let row = rows[key];
+    return this.enqueue(`${canvasId} ${actorId}`, async () => {
+      const parkId = `park_${randomBytes(8).toString("hex")}`;
+      let row = await this.desk.parkRow(canvasId, actorId);
 
-    if (opts.since !== undefined || !row) {
-      const at = opts.since ?? opts.seedAt ?? (await opts.seed());
-      row = { cursor: at, delivered: at, rehanded: at, parkId };
-      rows[key] = row;
-      await this.save();
-      return { parkId, cursor: row.cursor, redeliverUpTo: null };
-    }
-
-    row.parkId = parkId; // newest adopts — the displaced reader learns at its next write
-    let redeliverUpTo: number | null = null;
-    if (row.delivered > row.cursor) {
-      if (await opts.actorSpoke(row.delivered)) {
-        // The turn left its trace in the log: the delivery completed.
-        row.cursor = row.delivered;
-        row.rehanded = row.delivered;
-      } else {
-        // No trace. What was already handed twice is settled — the actor
-        // came back after a marked redelivery, which is the door's bound on
-        // how many times one entry can be handed. The rest goes out again,
-        // marked.
-        row.cursor = row.rehanded;
-        redeliverUpTo = row.delivered > row.cursor ? row.delivered : null;
+      if (opts.since !== undefined || !row) {
+        const at = opts.since ?? opts.seedAt ?? (await opts.seed());
+        row = { cursor: at, delivered: at, rehanded: at, parkId };
+        await this.desk.putParkRow(canvasId, actorId, row);
+        return { parkId, cursor: row.cursor, redeliverUpTo: null };
       }
-    }
-    await this.save();
-    return { parkId, cursor: row.cursor, redeliverUpTo };
+
+      row = { ...row, parkId }; // newest adopts — the displaced reader learns at its next write
+      let redeliverUpTo: number | null = null;
+      if (row.delivered > row.cursor) {
+        if (await opts.actorSpoke(row.delivered)) {
+          // The turn left its trace in the log: the delivery completed.
+          row.cursor = row.delivered;
+          row.rehanded = row.delivered;
+        } else {
+          // No trace. What was already handed twice is settled — the actor
+          // came back after a marked redelivery, which is the door's bound on
+          // how many times one entry can be handed. The rest goes out again,
+          // marked.
+          row.cursor = row.rehanded;
+          redeliverUpTo = row.delivered > row.cursor ? row.delivered : null;
+        }
+      }
+      await this.desk.putParkRow(canvasId, actorId, row);
+      return { parkId, cursor: row.cursor, redeliverUpTo };
+    });
   }
 
   /** A wake handed entries out, up to `tip`. Records the high-water; the
    * cursor stays put until a claim finds completion. False = lease lost. */
   async delivered(canvasId: string, actorId: string, parkId: string, tip: number): Promise<boolean> {
-    const rows = await this.load();
-    const row = rows[this.key(canvasId, actorId)];
-    if (!row || row.parkId !== parkId) return false;
-    row.rehanded = row.delivered;
-    row.delivered = Math.max(row.delivered, tip);
-    await this.save();
-    return true;
+    return this.enqueue(`${canvasId} ${actorId}`, async () => {
+      const row = await this.desk.parkRow(canvasId, actorId);
+      if (!row || row.parkId !== parkId) return false;
+      const next: ParkRow = {
+        ...row,
+        rehanded: row.delivered,
+        delivered: Math.max(row.delivered, tip),
+      };
+      await this.desk.putParkRow(canvasId, actorId, next);
+      return true;
+    });
   }
 
   /** A lap matched nothing: settle up to `to` without a turn. False = lease
    * lost — the one other moment a displaced park finds out. */
   async advance(canvasId: string, actorId: string, parkId: string, to: number): Promise<boolean> {
-    const rows = await this.load();
-    const row = rows[this.key(canvasId, actorId)];
-    if (!row || row.parkId !== parkId) return false;
-    row.cursor = Math.max(row.cursor, to);
-    row.rehanded = Math.max(row.rehanded, row.cursor);
-    row.delivered = Math.max(row.delivered, row.cursor);
-    await this.save();
-    return true;
+    return this.enqueue(`${canvasId} ${actorId}`, async () => {
+      const row = await this.desk.parkRow(canvasId, actorId);
+      if (!row || row.parkId !== parkId) return false;
+      const cursor = Math.max(row.cursor, to);
+      const next: ParkRow = {
+        ...row,
+        cursor,
+        rehanded: Math.max(row.rehanded, cursor),
+        delivered: Math.max(row.delivered, cursor),
+      };
+      await this.desk.putParkRow(canvasId, actorId, next);
+      return true;
+    });
   }
 }

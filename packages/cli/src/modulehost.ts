@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import type { CanvasSnapshotResponse } from "@isocan/core";
-import type { Canvas, CoreModule, GroupBox, Item, Operation, Placement } from "@isocan/core";
+import type { Canvas, CanvasContents, CoreModule, GroupBox, Item, Operation, Placement } from "@isocan/core";
 import type { CopyEdit } from "@isocan/core/copy-deck";
 import type { Ctx } from "./ctx.ts";
 import type { FencedRequest, FencedRun } from "./sandbox.ts";
@@ -62,7 +62,7 @@ export interface CliHost {
    * prepares the agent's working directory first, and that directory is the
    * row's cwd.
    */
-  enrol: (ctx: Ctx, canvasId: string, ask: EnrolRequest) => Promise<{ actorId: string; dir: string | null }>;
+  enrol: (ctx: Ctx, canvasId: string, ask: EnrolRequest) => Promise<{ actorId: string; dir: string | null; reused: boolean }>;
   /** Take an agent's standing back — what `isocan rc rm` does. The log keeps
    *  everything; the working directory is left where it is. */
   withdraw: (ctx: Ctx, canvasId: string, actorId: string) => Promise<void>;
@@ -74,6 +74,19 @@ export interface EnrolRequest {
   args?: Readonly<Record<string, string>>;
   /** A harness name `isocan harness` knows; unset, the machine's default. */
   harness?: string;
+  /**
+   * **What one run of this agent may spend** (module API 0.2.9) — turns and
+   * dollars, the persona's `PersonaBudget`; the rc stops a run at either cap
+   * and says so in the thread. A run is the turns one thread summons.
+   */
+  budget?: { turnsPerRun?: number; usdPerRun?: number };
+  /**
+   * **Reuse a standing enrolment** (module API 0.2.9): when an agent of this
+   * name already stands on the canvas with its rc half on this machine, write
+   * its directory afresh from the template and refresh its budget, and send
+   * no op. `reused` in the answer says which happened.
+   */
+  reuse?: boolean;
 }
 
 /**
@@ -96,7 +109,15 @@ export interface EnrolTemplate {
   /** Namespaced: `<module>.<name>`. */
   id: string;
   describe: string;
-  prepare: (args: Readonly<Record<string, string>>, into: string) => Promise<{ harness?: string } | void>;
+  /**
+   * Writes the directory. May answer with what the agent IS as well as where
+   * it starts (module API 0.2.10): a `harness`, what one run may `budget`, and
+   * the `color` its face wears. The rc applies the last two when it enrols
+   * from a web ask, which carries nothing but the template's id and strings —
+   * so a critic asked from the browser is bounded by its card exactly as one
+   * asked from a terminal.
+   */
+  prepare: (args: Readonly<Record<string, string>>, into: string) => Promise<{ harness?: string; budget?: { turnsPerRun?: number; usdPerRun?: number }; color?: string } | void>;
 }
 
 export interface CliModule {
@@ -110,6 +131,27 @@ export interface CliModule {
   templates?: readonly EnrolTemplate[];
   /** The writer for a copy-deck kind whose words this module owns. */
   copy?: CopyWriter;
+  /** What this module adds to the desk check before a share (proactive-agent phase 8). */
+  deskCheck?: ModuleDeskCheck;
+}
+
+/**
+ * **What a module adds to the desk check** (proactive-agent phase 8, design
+ * §9 "Before you share"). `isocan share` and `isocan present` read the
+ * screens before they act; a part only a module knows is asked of the module
+ * that knows it, as a copy-deck kind's words are (`CopyWriter`), so removing
+ * the module removes its line from the check and nothing else. Each part is
+ * optional, and none may block: a part that throws is left out.
+ */
+export interface ModuleDeskCheck {
+  /** Wires drawn from an older version of their design system — the wireframe module's reading. */
+  behind?: (canvas: CanvasContents, readText: (blobHash: string) => Promise<string>) => Promise<{ title: string; system: string }[]>;
+  /**
+   * The critics set to *before I share*, asked of the canvas's lead over
+   * these screens with the check's findings, once per screen version — or
+   * each saying why it waits. The critique module's room.
+   */
+  critics?: (host: CliHost, ctx: Ctx, canvas: Canvas, snapshot: CanvasSnapshotResponse, screens: readonly string[], findings: readonly string[]) => Promise<{ agentName: string; asked: boolean; why?: string }[]>;
 }
 
 /**

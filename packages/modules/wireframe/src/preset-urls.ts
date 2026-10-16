@@ -20,14 +20,17 @@ export const PRESET_URLS: Readonly<Record<string, () => URL>> = {
   carbon: () => new URL("../assets/styles/carbon/DESIGN.md", import.meta.url),
   brutalist: () => new URL("../assets/styles/brutalist/DESIGN.md", import.meta.url),
   duarte: () => new URL("../../design-competition/assets/packs/duarte/DESIGN.md", import.meta.url),
+  field: () => new URL("../../design-competition/assets/packs/field/DESIGN.md", import.meta.url),
   frog: () => new URL("../../design-competition/assets/packs/frog/DESIGN.md", import.meta.url),
   ideo: () => new URL("../../design-competition/assets/packs/ideo/DESIGN.md", import.meta.url),
   ive: () => new URL("../../design-competition/assets/packs/ive/DESIGN.md", import.meta.url),
   kare: () => new URL("../../design-competition/assets/packs/kare/DESIGN.md", import.meta.url),
   linear: () => new URL("../../design-competition/assets/packs/linear/DESIGN.md", import.meta.url),
   rams: () => new URL("../../design-competition/assets/packs/rams/DESIGN.md", import.meta.url),
+  signals: () => new URL("../../design-competition/assets/packs/signals/DESIGN.md", import.meta.url),
   tufte: () => new URL("../../design-competition/assets/packs/tufte/DESIGN.md", import.meta.url),
   victor: () => new URL("../../design-competition/assets/packs/victor/DESIGN.md", import.meta.url),
+  vignelli: () => new URL("../../design-competition/assets/packs/vignelli/DESIGN.md", import.meta.url),
 };
 
 /** A wire style's DESIGN.md, fetched — or a refusal that says why it cannot be read here. */

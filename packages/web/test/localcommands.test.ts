@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_COMMAND_CATALOGUE, mergeCommands, type CommandMetadata } from "@isocan/core";
 
-const dispatch = vi.hoisted(() => ({ setHelpOpen: vi.fn(), openModuleDialog: vi.fn(), moduleDialog: vi.fn() }));
-vi.mock("../src/stores/uiStore.ts", () => ({ useUiStore: { getState: () => dispatch } }));
+const dispatch = vi.hoisted(() => ({ setHelpOpen: vi.fn(), openModuleDialog: vi.fn(), moduleDialog: vi.fn(), setState: vi.fn() }));
+vi.mock("../src/stores/uiStore.ts", () => ({ useUiStore: { getState: () => dispatch, setState: dispatch.setState } }));
 vi.mock("../src/modules.ts", () => ({ moduleDialog: dispatch.moduleDialog }));
 import { runLocalCommand } from "../src/lib/localcommands.ts";
 
@@ -13,6 +13,11 @@ describe("local dispatch needs metadata, never agent instruction bodies", () => 
     expect(runLocalCommand("/help keyboard", [...DEFAULT_COMMAND_CATALOGUE])).toBe(true);
     expect(dispatch.setHelpOpen).toHaveBeenCalledWith(true);
     expect(runLocalCommand("/format grid", [...DEFAULT_COMMAND_CATALOGUE])).toBe(false);
+  });
+
+  it("opens your vocabulary where it is typed, asking no agent (proactive-agent phase 10)", () => {
+    expect(runLocalCommand("/vocabulary", [...DEFAULT_COMMAND_CATALOGUE])).toBe(true);
+    expect(dispatch.setState).toHaveBeenCalledWith({ vocabularyOpen: true });
   });
 
   it("does not run a home's shadowing help locally even if it claims local or opens", () => {

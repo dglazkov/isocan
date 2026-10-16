@@ -5,6 +5,9 @@ import type { PresenceSession, RowState } from "@isocan/core";
 import { useCanEdit } from "../lib/capability.ts";
 import { useAnswerable } from "../lib/answerable.ts";
 import {
+  ApiError,
+} from "../lib/api.ts";
+import {
   createBar,
   createGrant,
   createSpaceGrant,
@@ -17,9 +20,9 @@ import {
   revokeSpaceGrant,
   setSpaceLink,
   setPublicListing,
-  ApiError,
-} from "../lib/api.ts";
-import { attesterOffer, canVerifyEmail } from "../lib/signin.ts";
+} from "../lib/api-access.ts";
+import { attesterOffer, canInviteByEmail } from "../lib/signin.ts";
+import { isSsoHome } from "../lib/faces.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useActorColors } from "../lib/colors.ts";
 import { faceMarkClass, faceMarkStyle } from "../lib/face.ts";
@@ -612,7 +615,7 @@ export function ShareDialog({
 
       {/* The "who" field — on a home that can verify one, for somebody who
           may invite. */}
-      {!canEdit ? null : offer && canVerifyEmail(offer) ? (
+      {!canEdit ? null : offer && canInviteByEmail(offer) ? (
         <>
           <form
             className="share-address"
@@ -683,9 +686,15 @@ export function ShareDialog({
             </button>
           </form>
           <div className="share-link-note">
-            They get in by proving that address — nothing is emailed from here, and no account
-            is made for them. Send them the link above; the door does the rest.
-            {groups.length > 0 && " A group's members get in by proving an address in it."}
+            {isSsoHome() ? (
+              "Nothing is emailed from here — send them the link above."
+            ) : (
+              <>
+                They get in by proving that address — nothing is emailed from here, and no account
+                is made for them. Send them the link above; the door does the rest.
+                {groups.length > 0 && " A group's members get in by proving an address in it."}
+              </>
+            )}
           </div>
         </>
       ) : (
@@ -791,8 +800,9 @@ export function ShareDialog({
                   <b>{subjectLabel(grant.subject, views)}</b>
                   <span className="share-roster-kind">
                     {canEdit ? "" : `${capabilityWord.dialog[capabilityOf(grant)]} · `}
-                    invited {grant.at.slice(0, 10)} ·{" "}
-                    {groupIdOf(grant.subject) ? "its members get in by proving an address in it" : "gets in by proving it"}
+                    invited {grant.at.slice(0, 10)}
+                    {!isSsoHome() &&
+                      ` · ${groupIdOf(grant.subject) ? "its members get in by proving an address in it" : "gets in by proving it"}`}
                     {belowSpace(grant, fromSpace)}
                   </span>
                 </span>
@@ -1195,7 +1205,7 @@ function SpaceShare({
 
       {error && <div className="identity-warning">{error}</div>}
 
-      {offer && canVerifyEmail(offer) ? (
+      {offer && canInviteByEmail(offer) ? (
         <>
           <form
             className="share-address"
@@ -1255,8 +1265,9 @@ function SpaceShare({
             </button>
           </form>
           <div className="share-link-note">
-            They get in to every canvas here by proving that address. A canvas's own rows can only
-            add to what the space gives, never take away.
+            {isSsoHome()
+              ? "Nothing is emailed from here — a canvas's own rows can only add to what the space gives, never take away."
+              : "They get in to every canvas here by proving that address. A canvas's own rows can only add to what the space gives, never take away."}
           </div>
         </>
       ) : (

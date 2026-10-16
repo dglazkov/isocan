@@ -7,6 +7,10 @@ import { designRequestsRoute, type DesignRecordOperation, type DesignRequestsRes
 import { designDecisionsRoute, type DesignDecisionsResponse } from "@isocan/core/design-decision";
 import { designRepairsRoute, type DesignRepairsResponse } from "@isocan/core/design-repair";
 import { recapHeadRoute, type RecapHeadResponse } from "@isocan/core";
+import type { SummaryEntry, SummaryMake, SummaryRead, SummaryStats, SummaryWait } from "@isocan/core/semantic-zoom";
+
+/** Core's `summariesRoute`, spelled here: see `DaemonRoutes.summaries` for why it is not imported. */
+const summariesPath = (canvasId: string) => `/api/projects/${encodeURIComponent(canvasId)}/summaries`;
 import type {
   Actor,
   ActorBindingRecord,
@@ -33,6 +37,7 @@ import type {
   KillBadgeResponse,
   LogEntry,
   MintPassResponse,
+  PanelActorResponse,
   PassResponse,
   Operation,
   PostOpResponse,
@@ -83,6 +88,8 @@ import type {
 } from "@isocan/core";
 import {
   BADGE_ENDED,
+  parseSessionHeader,
+  SESSION_HEADER,
   PUBLIC_CANVASES_ROUTE,
   publicListingRoute,
   CURRENT_CLIENT_FEATURES,
@@ -119,9 +126,12 @@ import {
   narrowed,
   HOME_GC_ROUTE,
   HOME_JOIN_ROUTE,
+  HOME_FORGET_ROUTE,
+  type ForgetCanvasResponse,
   HOMES_ROUTE,
   normalizeHomeUrl,
   PASS_REDEEM_ROUTE,
+  panelActorRoute,
   passesRoute,
   passRoute,
   SERVING_ROUTE,
@@ -277,6 +287,29 @@ export class DaemonRoutes {
    */
   protected fetcher: typeof fetch = platformFetch;
 
+  /** Transport fetcher used for unretried probes (`healthz`); matches `platformFetch` on loopback
+   * so probes never trigger retry budgets, while routing through configured proxies/gateways. */
+  protected probeFetcher: typeof fetch = platformFetch;
+
+  /**
+   * Optional session key provider (`<harness>:<sessionId>`) for stateless
+   * per-session agent attribution (`X-Isocan-Session`). Populated by
+   * `DaemonClient` from the ambient harness session when not overridden by
+   * `isBadgeUpstream`, `--as`, or an enrolled `agent:` identity.
+   */
+  protected sessionKey?: () => Promise<string | null> | string | null;
+
+  /** Configure or suppress the `X-Isocan-Session` header sent on HTTP requests. */
+  useSessionKey(provider: (() => Promise<string | null> | string | null) | string | null): void {
+    this.sessionKey = typeof provider === "function" ? provider : () => provider;
+  }
+
+  private async sessionHeaders(): Promise<Record<string, string>> {
+    const raw = await this.sessionKey?.();
+    const valid = parseSessionHeader(raw);
+    return valid ? { [SESSION_HEADER]: valid } : {};
+  }
+
   /**
    * Every request carries the badge, and a refused one heals itself and comes
    * straight back. This is what makes neither the door nor the membership
@@ -303,8 +336,18 @@ export class DaemonRoutes {
   ): Promise<T> {
     signal = this.requestSignal(signal);
     signal?.throwIfAborted();
+    const isClaimOp =
+      body !== null &&
+      typeof body === "object" &&
+      (body as { op?: { type?: string } }).op?.type === "actor.claim";
     const send = async () => {
-      const headers: Record<string, string> = { ...(await this.authHeader()), [CLIENT_FEATURES_HEADER]: CURRENT_CLIENT_FEATURES, ...extra, ...this.policyHeaders() };
+      const headers: Record<string, string> = {
+        ...(await this.authHeader()),
+        ...(isClaimOp ? {} : await this.sessionHeaders()),
+        [CLIENT_FEATURES_HEADER]: CURRENT_CLIENT_FEATURES,
+        ...extra,
+        ...this.policyHeaders(),
+      };
       signal?.throwIfAborted();
       if (body !== undefined) headers["Content-Type"] = "application/json";
       return this.fetcher(`${this.base}${url}`, {
@@ -373,7 +416,7 @@ export class DaemonRoutes {
   private async reBadge(signal: AbortSignal | undefined = this.lifetime): Promise<boolean> {
     if (this.badgeStore.upstream) return false;
     signal?.throwIfAborted();
-    const answer = await askTheDoor(this.base, 10_000, signal);
+    const answer = await askTheDoor(this.base, 10_000, signal, this.fetcher);
     signal?.throwIfAborted();
     if ("refused" in answer) {
       if (answer.refused.status === 403 || answer.refused.status === 429) {
@@ -457,6 +500,42 @@ export class DaemonRoutes {
     }
   }
 
+  /** Probe the health route through `probeFetcher`, returning either the
+   * verified `Health` body (`ok: true`) or why the address did not answer as a
+   * home (non-2xx status, HTML login redirect / non-JSON body, or timeout). */
+  async probeHealth(timeoutMs = 5_000): Promise<{ ok: true; health: Health } | { ok: false; why: string }> {
+    try {
+      this.lifetime?.throwIfAborted();
+      // Deliberately NOT `this.fetcher`: this is the probe, and it already
+      // carries the tighter bound. A connect deadline under a 300ms abort
+      // could never fire, and a retry under it would only make `isocan
+      // status` slower at answering the question it answers correctly now —
+      // "nothing is there yet". The deadline is for the calls whose failure
+      // reaches a person as an error.
+      const res = await this.probeFetcher(`${this.base}${healthPath(this.base)}`, {
+        signal: AbortSignal.any([AbortSignal.timeout(timeoutMs), ...(this.lifetime ? [this.lifetime] : [])]),
+      });
+      if (!res.ok) {
+        return { ok: false, why: `it answered ${res.status} — is that address a home?` };
+      }
+      const body = (await res.json().catch(() => null)) as Health | null;
+      if (body?.ok !== true) {
+        return {
+          ok: false,
+          why: "it answered 200 without a health payload — is that address behind a login page or not a home?",
+        };
+      }
+      return { ok: true, health: body };
+    } catch (err) {
+      this.lifetime?.throwIfAborted();
+      const why =
+        (err as Error).name === "TimeoutError"
+          ? `no answer in ${Math.round(timeoutMs / 1000)}s`
+          : (err as Error).message;
+      return { ok: false, why };
+    }
+  }
+
   /** The daemon's own account of itself — pid, when it started, and which
    * copy of isocan it is running. Null when nothing answers.
    *
@@ -467,22 +546,8 @@ export class DaemonRoutes {
    * `warnIfStale` — all three of which would otherwise report a live home as
    * dead. See `healthPath`. */
   async healthz(timeoutMs = 300): Promise<Health | null> {
-    try {
-      this.lifetime?.throwIfAborted();
-      // Deliberately NOT `this.fetcher`: this is the probe, and it already
-      // carries the tighter bound. A connect deadline under a 300ms abort
-      // could never fire, and a retry under it would only make `isocan
-      // status` slower at answering the question it answers correctly now —
-      // "nothing is there yet". The deadline is for the calls whose failure
-      // reaches a person as an error.
-      const res = await fetch(`${this.base}${healthPath(this.base)}`, {
-        signal: AbortSignal.any([AbortSignal.timeout(timeoutMs), ...(this.lifetime ? [this.lifetime] : [])]),
-      });
-      return res.ok ? ((await res.json()) as Health) : null;
-    } catch {
-      this.lifetime?.throwIfAborted();
-      return null;
-    }
+    const res = await this.probeHealth(timeoutMs);
+    return res.ok ? res.health : null;
   }
 
   /** Name (or resume) the actor behind a session key — the one op sent
@@ -762,6 +827,11 @@ export class DaemonRoutes {
     return this.request("GET", grantsRoute(canvasId));
   }
 
+  /** Provision or re-read a panel extension's actor, badge, and standing grant on `canvasId`. */
+  panelActor(canvasId: string, itemId: string): Promise<PanelActorResponse> {
+    return this.request("POST", panelActorRoute(canvasId, itemId), {});
+  }
+
   createGrant(
     canvasId: string,
     subject: GrantSubject,
@@ -1018,6 +1088,12 @@ export class DaemonRoutes {
     return canvas;
   }
 
+  /** Drop this machine's copy of a canvas its home no longer has
+   *  (`HOME_FORGET_ROUTE` in core says when the daemon refuses). */
+  forgetCanvas(canvasId: string): Promise<ForgetCanvasResponse> {
+    return this.request<ForgetCanvasResponse>("POST", HOME_FORGET_ROUTE, { canvasId });
+  }
+
   /**
    * **Which canvas lives where, and which homes are answering.**
    *
@@ -1028,6 +1104,45 @@ export class DaemonRoutes {
    */
   homes(): Promise<HomesResponse> {
     return this.request("GET", HOMES_ROUTE);
+  }
+
+  /**
+   * **Semantic Zoom's cached summaries, by content key** (an experiment;
+   * `docs/projects/semantic-zoom/design.md` §5). `sourceIds`, in the keys'
+   * order, lets the home answer a key it has no entry for with the newest
+   * entry for that source, marked `stale`. A read never makes one.
+   *
+   * The path is spelled here rather than imported from core's
+   * `summariesRoute`, on purpose and measured: any runtime import of
+   * `@isocan/core/semantic-zoom` from this file, static or lazy, re-cuts the
+   * CLI bundle's chunks and costs `isocan --version` a module past its budget
+   * (`test/cli-bundle.test.ts`; 40 → 41, 14 Oct 2026). The CLI's summary
+   * tests read and make through these two methods against a real home, so a
+   * drift from core's spelling fails there.
+   */
+  summaries(canvasId: string, keys: string[], sourceIds: string[]): Promise<SummaryRead> {
+    const query = `keys=${keys.join(",")}&for=${sourceIds.map(encodeURIComponent).join(",")}`;
+    return this.request("GET", `${summariesPath(canvasId)}?${query}`);
+  }
+
+  /**
+   * **Ask the home to make one summary** — the route the web's fetcher asks,
+   * under the same rules (edit capability, the key's own spend rules, rate,
+   * the quiet period). The home collects the words; the client names only the
+   * kind and the source. A 202 is `summary-quiet`, carrying `retryAfterMs`.
+   */
+  makeSummary(canvasId: string, make: SummaryMake): Promise<SummaryEntry | SummaryWait> {
+    return this.request("POST", summariesPath(canvasId), make);
+  }
+
+  /**
+   * **What a canvas's summaries have cost** (`GET …/summaries/stats`, phase
+   * 3): calls, tokens, makes and hits per day, the hour's budget, the cache.
+   * Editors only — it says what somebody's key spent. `days` defaults to 30
+   * at the home, at most 90.
+   */
+  summaryStats(canvasId: string, days?: number): Promise<SummaryStats> {
+    return this.request("GET", `${summariesPath(canvasId)}/stats${days ? `?days=${days}` : ""}`);
   }
 
   /** Complete current scope; omitted roots read ambient pins. Reads never move presence. */
@@ -1458,12 +1573,13 @@ export class DaemonRoutes {
     // the recovery retry spelled out — easy to miss, and a 401 on an upload
     // would read as a broken drop.
     const send = async () => {
-      const auth = await this.authHeader();
+      const [auth, session] = await Promise.all([this.authHeader(), this.sessionHeaders()]);
       signal?.throwIfAborted();
       return this.fetcher(`${this.base}/api/projects/${canvasId}/blobs`, {
         method: "POST",
         headers: {
           ...auth,
+          ...session,
           ...this.policyHeaders(),
           "Content-Type": mimeType,
           [FILENAME_HEADER]: encodeFilename(filename),
@@ -1484,7 +1600,7 @@ export class DaemonRoutes {
     signal = this.requestSignal(signal);
     signal?.throwIfAborted();
     const send = async () => {
-      const headers = { ...await this.authHeader(), ...this.policyHeaders() };
+      const headers = { ...(await this.authHeader()), ...(await this.sessionHeaders()), ...this.policyHeaders() };
       signal?.throwIfAborted();
       return this.fetcher(`${this.base}/api/projects/${canvasId}/blobs/${blobHash}`, {
         headers,

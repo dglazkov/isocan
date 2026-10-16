@@ -21,6 +21,137 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 15 October 2026
+
+- **Make a person a pass admitted your machine's person.** `isocan setup
+  <pass>` on a machine that already has someone keeps them as the default.
+  `isocan identity --home --as <actor id>` now switches the machine to the
+  admitted person, without folding anyone into anyone, and the same command
+  with the old id switches back. Tools that speak for the machine — scripts,
+  direct mode — then speak as them.
+
+
+## 14 October 2026
+
+- **Say it like a designer.** Type "make the header pop more, it feels
+  cramped" and only *pop* and *cramped* are underlined, each with the three
+  ways an agent could read it and the sentence a designer would say. Tab
+  takes that sentence; Enter sends your own words, and a reading you picked
+  goes with them. `/vocabulary` shows the design words you now use and the
+  words of yours the agent has learned. Nothing is graded.
+
+- **Walk it as someone else.** Pick a flow, say the task, and walk it
+  one-handed on a phone, with low vision, with a screen reader, as a
+  first-time visitor, or as someone you describe in a line. Each walker gets
+  a lane: the thumb's reach over each screen, the screen as low vision sees
+  it beside the fix, the reading order. The agent pins each stumble and
+  proposes one fix where several stumble. These are simulations, and every
+  surface says so: they do not replace testing with people. `isocan walk`.
+
+- **Critics in the room.** Switch on lenses for a canvas (The Reductionist,
+  The Brand Voice, or one you describe in a line), each with how loud and
+  when. Ask the room about a screen and pins land in each critic's colour;
+  the read of the room says where they agree, where they split (never
+  averaged, with **Build both**) and any blocker. Critics never edit.
+  Settings → Experiments → Critique; `isocan critic`, `isocan critique`.
+- **A desk check before you share.** `isocan share` and `isocan present`
+  first read your screens the way a reviewer would (audit, contrast, words,
+  stale receipts) and ask the critics you set to "before I share". It
+  reports and never blocks. `isocan share --check` runs it alone.
+
+- **Stuck, said out loud.** When three takes in a row at the same thing
+  have missed, your next ask gets a question instead of a fourth take: the
+  agent says it has been guessing and what it noticed in what you kept, then
+  asks four now-or-instead pairs (density, brand, layout, tone) with its own
+  guess highlighted. Or ask it to show you extremes, or name a product that
+  gets it right. `isocan stuck`.
+
+- **The brief, as a card.** A design request's brief sits on the canvas as
+  six lines: Making, For, Should feel, Never, Constraints, Right now. What
+  you said is ruled solid; what an agent assumed is in pencil, with Right
+  and Wrong beside it. Proposals say which line they answer. Changing a line
+  changes nothing else: each screen is sorted into *assumed the old line*,
+  *still holds* or *matters more now*, and your agent asks you one question.
+  `isocan design card`.
+
+- **Explain this item.** Choose **Explain** from an item's menu (or ⌘K) and
+  a panel beside the canvas tells you how it got here: the few versions that
+  mattered and why, the roads not taken, what has changed around it since,
+  and how a designer would say what people typed about it. Plain, Designer
+  or Deep dive. **Critique** asks the canvas's agent what works, one risk
+  and one thing to try, which arrives as a proposal. **Copy as rationale**
+  puts the story on the canvas. `isocan explain <item>`.
+
+- **The night's work is waiting in the morning.** If you said `/goodnight`,
+  the "While you were away" panel, now on desktop too, opens with your
+  agent's brief: at most five proposals, the surest first, each with why;
+  any promise that did not work and why; what it left alone; and every
+  screen it changed because you named it, with the version before one click
+  away. `isocan goodnight review` prints the same.
+
+- **Goodnight.** Type `/goodnight` in the Chat when you stop for the day.
+  The canvas's agent tells you what you settled, what is still open, and a
+  few things it could try overnight. Steer it, then press **That's the
+  plan**: it leaves a note with tonight's list and an empty dashed frame
+  under each screen it will work on, and you can untick anything. It only
+  reworks a screen you named, never what you settled today or your design
+  system, and never what a teammate's goodnight claimed. If no agent can
+  work tonight, the note says so. From a terminal: `isocan goodnight`.
+
+- **Agents can propose instead of edit.** An agent with an idea about your
+  screen leaves it beside the screen: a dashed copy hanging beneath it, a
+  chip saying what prompted it, and a short why whose design terms you can
+  hover to learn. **Keep** makes it your next version, **Compare** shows the
+  two side by side, and **Delete** (⌫) bins it and tells the agent; type a
+  reason if you like. What it learns goes into **What your deletes taught**,
+  a note every agent reads. At most five wait for you at a time. Agents:
+  `isocan propose`, `isocan taste`, `isocan --agent-help proactive`.
+
+- **A shorter right-click menu.** Rows that cannot apply to what you selected
+  are gone instead of greyed out: four items now get 14 rows, not 30. Tidy is
+  one row; Align, Space evenly and Pack into a grid live under **Arrange**.
+  On a single item, **Agents always read this** and **Agents skip this**
+  (under For agents) replace "Pin into context" and "Keep out of context".
+
+- **Tidy lines things up where they are.** Tidy on a selection now snaps
+  nearly-aligned edges into shared rows and columns and evens out nearly-equal
+  gaps, keeping your arrangement and never landing on a neighbour's name. The
+  old re-dealing onto a grid is still there as **Tidy — grid**.
+- **Your bench opens.** A person whose identities were merged could be refused
+  their own bench as if they were an agent; that is fixed, and the panel is a
+  readable width.
+
+- **Critics, as cards on your canvas (an experiment).** Turn on **Critique**
+  in Experiments, then `isocan critic add inevitable` puts a critic on the
+  canvas as a card: its three questions, what it looks for, and a credit
+  line. Nine come with isocan, each named for a principle (*Less but
+  Better*, *Form Follows Emotion*), and `isocan critic new "<name>"` writes
+  your own. Edit a card and the critic changes. Asking one for a critique
+  comes next.
+- **Semantic Zoom, an experiment.** Turn it on in Settings → Experiments.
+  Zoomed out past where a long note can be read, it shows a short summary,
+  marked ≈, instead of only its first line. When the note changes, the old
+  summary stays, marked as updating, until the new one arrives. Summaries
+  are made with the canvas owner's model key and never change the canvas.
+  Groups get one too: zoomed out, a group says what is in it. A second
+  setting, **look at pictures**, lets summaries describe screens and images
+  too, where the canvas's model can see them.
+
+## 13 October 2026
+
+- **Text far away says what it is.** Zoomed out past where a note's words
+  can be read, it used to show a single "T". Now it shows its opening words
+  at a size you can read, so you can tell notes apart from across the canvas.
+- **An edit that checks first.** `isocan edit <item> <file> --if-version
+  <versionId>` writes the new version only if nobody changed the item since
+  you read it. If somebody did, it writes nothing and says where the item
+  stands now. A title or property change can ride in the same edit, and a
+  retry after a dropped connection never applies twice. It is for scripts
+  that keep one card current, such as a weekly report.
+- **The faces overlap.** The people and agents on a canvas now sit as a pile,
+  each tucked a little under the next, so a full room takes less of the bar.
+  An unread badge and the face you point at still come to the front.
+
 ## 10 October 2026
 
 - **Four more living grounds.** **Pond**: still water your cursor drags

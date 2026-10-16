@@ -40,6 +40,7 @@ import {
 // rather than retyped, so a raised `ANSWER_DAYS` cannot leave every page
 // promising the old number.
 import { ANSWER_DAYS } from "./reviews.mjs";
+import { unreadOf } from "./lib/reading.mjs";
 /**
  * **The personas are read through the CLI, not parsed again here.**
  *
@@ -101,11 +102,14 @@ function personas() {
  * week produced three instruments that reported the first while meaning the
  * second.
  */
-function take(goal) {
+function take(goal, env = process.env) {
   let out;
   try {
-    out = execSync(goal.measuredBy, { cwd: repo, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    out = execSync(goal.measuredBy, { cwd: repo, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   } catch (err) {
+    // A recorded reading nobody has taken yet is said as such, never as a number or a broken instrument.
+    const line = unreadOf(err);
+    if (line) return { unread: line };
     return { broken: `the command failed: ${String(err.stderr ?? err.message).trim().slice(0, 200)}` };
   }
   const value = Number(out.trim().split(/\s+/).pop());
@@ -113,6 +117,35 @@ function take(goal) {
     return { broken: `expected a number on stdout, got ${JSON.stringify(out.trim().slice(0, 80))}` };
   }
   return { value };
+}
+
+/**
+ * **Live canvas pan/zoom frame check on CI** (`performance` persona).
+ *
+ * `scripts/measure.mjs` reads `scripts/canvas-frames.json` during fast local
+ * checks, and reads `ISOCAN_CANVAS_FRAMES` when set. On nightly CI (`CI=true`)
+ * this records a fresh pan+zoom run in a real headless browser into `os.tmpdir()`
+ * before taking the `performance` persona's numbers, keeping the checkout clean
+ * while ensuring nightly runs always check live canvas panning and zooming.
+ */
+function preparePersonaEnv(persona) {
+  if (persona.name !== "performance" || process.env.ISOCAN_CANVAS_FRAMES || process.env.CI !== "true") {
+    return process.env;
+  }
+  const tmpFile = path.join(os.tmpdir(), `isocan-canvas-frames-${process.pid}-${Date.now()}.json`);
+  const framesScript = path.join(repo, "scripts/frames.mjs");
+  try {
+    execSync(
+      `${JSON.stringify(process.execPath)} ${JSON.stringify(framesScript)} --html 12 --items 36 --scale 0.5 --throttle 1 --gestures pan,zoom --record ${JSON.stringify(tmpFile)}`,
+      { cwd: repo, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 5 * 60_000 },
+    );
+  } catch (err) {
+    throw new Error(`live canvas frame check failed: ${String(err.stderr ?? err.message).trim().slice(0, 300)}`);
+  }
+  if (!existsSync(tmpFile)) {
+    throw new Error("live canvas frame check did not write a record");
+  }
+  return { ...process.env, ISOCAN_CANVAS_FRAMES: tmpFile };
 }
 
 /**
@@ -185,12 +218,22 @@ function smallPass(persona, missed) {
 const money = (usd) => (usd === null ? "unknown" : `$${usd.toFixed(4)}`);
 
 function runOne(persona) {
+  let personaEnv = process.env;
+  let prepareErr = null;
+  try {
+    personaEnv = preparePersonaEnv(persona);
+  } catch (err) {
+    prepareErr = String(err.message ?? err);
+  }
   const readings = persona.goals.map((goal) => {
-    const reading = { goal, ...take(goal) };
-    return reading.broken ? reading : { ...reading, ...basisOf(goal) };
+    if (prepareErr && /canvas-(?:pan-zoom-p90-ms|flicker-frames)/.test(goal.measuredBy)) {
+      return { goal, broken: prepareErr };
+    }
+    const reading = { goal, ...take(goal, personaEnv) };
+    return reading.broken || reading.unread ? reading : { ...reading, ...basisOf(goal) };
   });
   const broken = readings.filter((r) => r.broken);
-  const missed = readings.filter((r) => !r.broken && !met(r.goal, r.value));
+  const missed = readings.filter((r) => !r.broken && !r.unread && !met(r.goal, r.value));
   for (const r of missed) r.missed = true;
 
   // The cheap tier, when this persona is one: see `scripts/lib/persona-tier.mjs`.
@@ -226,6 +269,8 @@ function runOne(persona) {
         (r.basis === undefined ? "" : ` of ${r.basis}${unit}`);
       if (r.broken) {
         lines.push(`| ${r.goal.name} | ${target} | — | **instrument broken** |`);
+      } else if (r.unread) {
+        lines.push(`| ${r.goal.name} | ${target} | — | no reading yet |`);
       } else {
         const ok = met(r.goal, r.value);
         // Against the BASELINE as well as the bound: a number inside its bound
@@ -240,6 +285,7 @@ function runOne(persona) {
     }
     lines.push("");
     for (const r of broken) lines.push(`- \`${r.goal.measuredBy}\` — ${r.broken}`);
+    for (const r of readings.filter((x) => x.unread)) lines.push(`- \`${r.goal.measuredBy}\` — ${r.unread}`);
     if (broken.length) lines.push("");
   }
 

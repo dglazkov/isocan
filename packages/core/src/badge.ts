@@ -223,9 +223,14 @@ export type DoorAnswer =
  * Knock on the door at `base` for a bearer badge, and keep the refusal if there is one:
  * never throws, and an unreachable door is a refusal with status 0.
  */
-export async function askTheDoor(base: string, timeoutMs = 10_000, signal?: AbortSignal): Promise<DoorAnswer> {
+export async function askTheDoor(
+  base: string,
+  timeoutMs = 10_000,
+  signal?: AbortSignal,
+  fetchFn: typeof fetch = fetch,
+): Promise<DoorAnswer> {
   try {
-    const res = await fetch(`${base}${DOOR_ROUTE}`, {
+    const res = await fetchFn(`${base}${DOOR_ROUTE}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ carrier: "bearer" }),

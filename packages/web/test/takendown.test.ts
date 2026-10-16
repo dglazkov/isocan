@@ -87,7 +87,7 @@ describe("the canvas list", () => {
      * one: Priya's canvas vanishing from her own list is indistinguishable
      * from her having lost it.
      */
-    expect(list).toMatch(/fetchTakedowns\(\)/);
+    expect(list).toMatch(/fetchTakedowns\(undefined, signal\)/);
     expect(list).toMatch(/takenDown\.get\(canvas\.id\)/);
     expect(list).toMatch(/down \? " taken-down" : ""/);
     expect(list).toMatch(/down\.sentence/);
@@ -100,7 +100,15 @@ describe("the canvas list", () => {
   });
 
   it("reads the takedowns BESIDE the canvases, so a home that cannot answer costs nothing", () => {
-    expect(list).toMatch(/fetchTakedowns\(\)\.catch\(/);
+    /* A refusal is caught: the takedowns read has its own deadline and its
+       own failure arm, which leaves an empty map (nothing greyed). */
+    expect(list).toMatch(
+      /withDeadline\(SIDE_READ_DEADLINE_MS, "the takedowns did not answer", \(signal\) => fetchTakedowns\(undefined, signal\)\)\.then\(\s*\(down\) => [^\n]+\n\s*\(\) => \{ if \(current\(\)\) setTakenDown\(new Map\(\)\); \},/,
+    );
+    /* And "beside" means beside: never awaited together with the list, which
+       is how a takedowns read that never answered held the page on Loading…
+       (14 Oct 2026). Behaviourally, in canvaslist-reads.test.ts. */
+    expect(list).not.toMatch(/Promise\.all\(\[\s*listCanvases/);
   });
 
   it("greys the card and takes the pointer off it", () => {

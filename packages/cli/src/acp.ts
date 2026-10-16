@@ -184,9 +184,13 @@ interface JsonRpcMessage {
 
 export interface TurnEvent {
   /** "chunk" carries agent-authored text; the rest are narration beats. */
-  kind: "chunk" | "thought" | "tool" | "permission" | "other";
+  kind: "chunk" | "thought" | "tool" | "permission" | "usage" | "other";
   text?: string;
   detail?: string;
+  /** `usage`: what the session has cost, in dollars, when the adapter's
+   *  `usage_update` carries a USD `cost` — absent when it carries none
+   *  (codex-acp 1.11 sends tokens only). */
+  usd?: number;
 }
 
 /**
@@ -429,6 +433,12 @@ export class AcpAgentProcess {
       this.onEvent?.({ kind: "thought" });
     } else if (kind === "tool_call" || kind === "tool_call_update") {
       this.onEvent?.({ kind: "tool", detail: String(update.title ?? update.toolCallId ?? "") });
+    } else if (kind === "usage_update") {
+      // ACP's context-and-cost beat: `cost` is optional, and only dollars are
+      // something a budget written in dollars can be held to.
+      const cost = update.cost as { amount?: unknown; currency?: unknown } | null | undefined;
+      const usd = cost && cost.currency === "USD" && typeof cost.amount === "number" ? cost.amount : undefined;
+      this.onEvent?.({ kind: "usage", ...(usd !== undefined ? { usd } : {}) });
     } else {
       this.onEvent?.({ kind: "other", detail: kind ?? "" });
     }
@@ -510,6 +520,12 @@ export class AcpAgentProcess {
     } finally {
       this.onEvent = null;
     }
+  }
+
+  /** Stop the running prompt — ACP's `session/cancel`, a notification; the
+   *  prompt then answers `stopReason: "cancelled"`. */
+  cancel(sessionId: string): void {
+    this.send({ jsonrpc: "2.0", method: "session/cancel", params: { sessionId } });
   }
 
   close(): void {

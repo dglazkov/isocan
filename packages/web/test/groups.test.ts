@@ -9,7 +9,7 @@ import {
   listGroups,
   readGroup,
   removeGroupMember,
-} from "../src/lib/api.ts";
+} from "../src/lib/api-access.ts";
 
 /**
  * **The group, on the web surface** (roles phase 5). Two things worth

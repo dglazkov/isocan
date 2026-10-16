@@ -174,6 +174,8 @@ interface UiStore {
   penSession: boolean;
   /** The help panel (?): what the canvas answers to. */
   helpOpen: boolean;
+  /** Your design vocabulary (`/vocabulary`, proactive-agent phase 10), drawn above the Chat's composer. */
+  vocabularyOpen: boolean;
   /** The Pen's color, or null for "whatever color I am" — the identity color
    * worn by your cursor and your face in the pile. Remembered per browser. */
   inkColor: string | null;
@@ -233,6 +235,10 @@ interface UiStore {
   agentsPanelOpen: boolean;
   contextPanelOpen: boolean;
   personasPanelOpen: boolean;
+  /** Whether a canvas-carried panel extension occupies the left dock. */
+  extensionPanelOpen: boolean;
+  /** Item id of the open canvas-carried panel extension, or null. */
+  extensionPanelId: string | null;
   /** Whose WORK the camera follows: the agent whose new items it flies to,
    *  or null. Off by default — this moves the canvas on somebody's behalf, so
    *  it is a mode they choose rather than one they discover happening to
@@ -393,6 +399,8 @@ interface UiStore {
   setAgentsPanelOpen: (open: boolean) => void;
   setContextPanelOpen: (open: boolean) => void;
   setPersonasPanelOpen: (open: boolean) => void;
+  setExtensionPanelOpen: (open: boolean) => void;
+  setExtensionPanelId: (itemId: string | null) => void;
   setFollowingActor: (actorId: string | null) => void;
   setMarksOpen: (open: boolean) => void;
   setHistoryOpen: (open: boolean) => void;
@@ -717,6 +725,7 @@ export const useUiStore = create<UiStore>((set, get) => {
     sketchError: null,
     penSession: false,
     helpOpen: false,
+    vocabularyOpen: false,
     inkColor: readInkColor(),
     activeTool: "select",
     commentMode: false,
@@ -743,6 +752,8 @@ export const useUiStore = create<UiStore>((set, get) => {
     agentsPanelOpen: false,
     contextPanelOpen: false,
     personasPanelOpen: false,
+    extensionPanelOpen: false,
+    extensionPanelId: null,
     followingActorId: null,
     marksOpen: false,
     historyOpen: false,
@@ -858,6 +869,8 @@ export const useUiStore = create<UiStore>((set, get) => {
     setAgentsPanelOpen: (agentsPanelOpen) => set({ agentsPanelOpen }),
     setContextPanelOpen: (contextPanelOpen) => set({ contextPanelOpen }),
     setPersonasPanelOpen: (personasPanelOpen) => set({ personasPanelOpen }),
+    setExtensionPanelOpen: (extensionPanelOpen) => set({ extensionPanelOpen }),
+    setExtensionPanelId: (extensionPanelId) => set({ extensionPanelId }),
     setFollowingActor: (followingActorId) => set({ followingActorId }),
     setMarksOpen: (marksOpen) => set({ marksOpen }),
     setHistoryOpen: (historyOpen) => set({ historyOpen }),
@@ -930,7 +943,7 @@ export const useUiStore = create<UiStore>((set, get) => {
      * because the reason generalises — anything outside the viewport that
      * reacts to the camera wants to know when a person is driving it.
      */
-    setPanning: (panning) => set({ panning }),
+    setPanning: (panning) => set((s) => (s.panning === panning ? s : { panning })),
     setRailPanning: (railPanning) => set({ railPanning }),
     setPanelWidth: (width) => {
       // Clamped HERE rather than at the drag, so every caller gets the same

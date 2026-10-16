@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { CanvasContents, Item } from "../src/model.ts";
 import type { Operation, Placement } from "../src/ops.ts";
 import {
+  anchorAtFraction,
   besideBox,
+  fractionOfAnchor,
   isBesideSide,
   nearestFreeSpot,
   PLACEMENT_CLEARANCE,
@@ -354,3 +356,16 @@ const overlapsBox = (
   b: { x: number; y: number; width: number; height: number },
 ): boolean =>
   a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+
+describe("a thread anchored at a point on an item", () => {
+  const screen = { width: 400, height: 800 };
+  it("turns fractions of the item into the offset the model stores, and back", () => {
+    expect(anchorAtFraction(screen, { x: 0.62, y: 0.81 })).toEqual({ x: 248, y: 648 });
+    expect(fractionOfAnchor(screen, { x: 248, y: 648 })).toEqual({ x: 0.62, y: 0.81 });
+    expect(anchorAtFraction(screen, { x: 0, y: 1 })).toEqual({ x: 0, y: 800 });
+  });
+  it("refuses a point off the item, in words", () => {
+    expect(() => anchorAtFraction(screen, { x: 1.2, y: 0.5 })).toThrow(/fractions of the item's size/);
+    expect(() => anchorAtFraction(screen, { x: Number.NaN, y: 0.5 })).toThrow(RangeError);
+  });
+});

@@ -242,6 +242,7 @@ file:
 | `project.delete` — soft, the directory moved aside (which frees the id) | soft too — `deleted: true` on the canvas document, ops untouched. The id therefore stays **taken forever**: its seqs are still claimed, so re-creating it is refused with `duplicate-id` rather than being fenced. The one place the two backings differ in what they *allow*; canvas ids are minted, never chosen, so nothing reaches it |
 | `blobs/<sha256>.<ext>` | GCS objects, same content addressing |
 | `blobs.json` index | `canvases/{id}/blobmeta/{hash}` — one doc per blob, no read-modify-write of a shared index. Costlier than it looks: `Engine.gc` drove that read-modify-write from *above* the seam (read the whole index, age each blob, delete, write back), so this row was not a schema swap behind an unchanged method. Phase 4 moved it: the seam now says `listBlobs` and `deleteBlobs`, the policy stays in the engine where `gc.test.ts` already tests it, and no shared-index concept crosses in either direction |
+| `summaries/<id>/<key>.json` | `canvases/{id}/summaries/{key}.json` in GCS — Semantic Zoom's content-addressed summary cache (`touch` stamped on `customTime` so GC ages unused summaries the same way on both backings, and `purgeCanvas` deletes the prefix alongside `blobs/`) |
 | `actors.jsonl` + `actors.json` | same op-docs-plus-snapshot pattern, for the registry's public face (ids, names, colors); the claims half re-keys onto `badges/` — the two-ledger split, drawn in code |
 
 The durability contract is unchanged: an op is durable **before** it is
@@ -570,6 +571,29 @@ two-ledger rule:
   token is KMS-wrapped at write and unwrapped only at fire time.
 - `audit/` — append-only firing and admission ledger. The audit ledger
   is Firestore, not Cloud Logging: logs rotate, the ledger answers.
+- `summaryStats/{canvasId}` — per-day Semantic Zoom call and word counts
+  (private home accounting, never replicated).
+- `parks/{canvasId}:{actorId}` — the durable park cursor's three watermarks
+  (`cursor`, `delivered`, `rehanded`, `parkId`), persisted on `Desk` so a
+  hosted container restart never loses a parked agent's cursor or re-delivers
+  settled turns.
+- `meta/migrations` — one-time home migration markers (`linkGrants: true`),
+  recorded on `Desk` rather than in `/tmp/isocan` so cold starts do not
+  re-scan every canvas.
+
+**The third seam: `Workstation | null` (14 Oct 2026, lesson #120).** `Store`
+and `Desk` separate replicated canvas state from a home's private ledgers,
+and both exist on every daemon. Single-user machine state — `HomeLinks`
+(`homes.json` and `identity.json` replica badges), local directories
+(`dirs.json`), the person's API keys (`keys.json`), Google Drive OAuth
+(`google.json`), and local model weights (`models/`) — belongs behind a third
+seam, `Workstation` (`FileWorkstation` on a personal machine, `null` when
+`ISOCAN_STORE=cloud` or `servesWorld: true`). A hosted home therefore has no
+replica registry at all, writes no durable or tenant state to `ISOCAN_HOME`
+(`/tmp/isocan`), refuses replica-only gestures (`POST /api/home/join`,
+`project.create { home }` to another origin) with `409 not-a-replica`, and
+both hosted and local daemons refuse self-links (`409 self-link`) across
+every door (`join`, `create`, `teleport`).
 
 **The canvas's public address is `/p/<id>`, and it has exactly one
 definition.** This is the one URL in the product that strangers hand each

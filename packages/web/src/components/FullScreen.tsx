@@ -2,16 +2,16 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { FrameAnchor } from "../lib/frameanchor.ts";
 import type { Actor } from "@isocan/core";
-import { sourceOf, canvasPath, deckStep, itemPath, isFramedItem, noteFor, visualFaceOf, isDesignSystem, isTextItem } from "@isocan/core";
+import { sourceOf, canvasPath, deckStep, itemPath, workbenchItemPath, nodeCapabilitiesFor, isFramedItem, noteFor, visualFaceOf, isDesignSystem, isTextItem } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
+import { useFocusStore } from "../stores/focusStore.ts";
 import { readBlobText } from "../lib/api.ts";
 import { Markdown } from "../lib/markdown.tsx";
 import { VersionContent } from "./ItemView.tsx";
 import { ArtifactStage } from "./ArtifactStage.tsx";
-import { KindIcon } from "./KindIcon.tsx";
-import { CanvasPresence, CanvasTitle, ShareButton} from "./CanvasCrumb.tsx";
-import { iconKindFor } from "../lib/kinds.ts";
+import { FocusHeader } from "./FocusHeader.tsx";
+import { useCanEdit } from "../lib/capability.ts";
 import { findNextItem, type Direction } from "../lib/spatialnav.ts";
 import { FLIP_NEXT, FLIP_PREV, REST_AFTER_MS, flipTo } from "../lib/deckflip.ts";
 import { revealItem } from "../lib/zoomactions.ts";
@@ -73,6 +73,11 @@ export function FullScreen({
   }, undefined, true);
 
   const item = useCanvasStore((s) => s.canvas?.items[itemId] ?? null);
+  const canEdit = useCanEdit();
+
+  useEffect(() => {
+    useFocusStore.getState().syncItem(itemId);
+  }, [itemId]);
 
   const back = () => navigate(canvasPath(canvasId));
 
@@ -111,6 +116,25 @@ export function FullScreen({
         useUiStore.getState().select(next.id);
         revealItem(next.id);
         navigate(itemPath(canvasId, next.id));
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "j") {
+        if (isTyping(e.target)) return;
+        const current = useCanvasStore.getState().canvas?.items[itemId];
+        if (!current || !canEdit || !nodeCapabilitiesFor(current).edit) return;
+        e.preventDefault();
+        e.stopPropagation();
+        useFocusStore.getState().setChatOpen(true);
+        navigate(workbenchItemPath(canvasId, itemId));
+        return;
+      }
+      if (!e.metaKey && !e.ctrlKey && !e.altKey && (e.key === "e" || e.key === "E")) {
+        if (isTyping(e.target)) return;
+        const current = useCanvasStore.getState().canvas?.items[itemId];
+        if (!current || !canEdit || !nodeCapabilitiesFor(current).edit) return;
+        e.preventDefault();
+        e.stopPropagation();
+        navigate(workbenchItemPath(canvasId, itemId));
         return;
       }
       // N: the speaker notes, under the slide, for the presenter (core/slides.ts).
@@ -248,50 +272,24 @@ export function FullScreen({
   // not depend on the item existing.
   return (
     <div data-presented-item={itemId ?? undefined} className={`fullscreen${phone ? " touch-presenting" : ""}${resting ? " resting" : ""}`}>
-      {phone ? <Suspense><PhonePresenting canvasId={canvasId} itemId={itemId} title={item?.title ?? "Presentation"} onExit={back} /></Suspense> : <>
-      <div className="fs-bar">
-        {/* The way back, and it says where back IS. An arrow alone would be a
-            guess; "Canvas" is the answer to "where am I". */}
-        <div className="floats fs-cluster">
-        <button className="fullscreen-back" onClick={back} title="Back to the canvas (Esc)">
-          ← Canvas
-        </button>
-        <CanvasTitle actor={actor} />
-        {item && (
-          <span className="fullscreen-title">
-            <KindIcon className="kind-icon" kind={iconKindFor(item)} />
-            <b>{item.title}</b>
-            <i>{item.versions.find((v) => v.id === item.currentVersionId)?.filename}</i>
-          </span>
-        )}
-        </div>
-        <span className="spacer" />
-        <div className="floats fs-cluster">
-        {/* No "Copy link" button: the address bar already holds the address of
-            this exact view — that IS what the route bought — and a button that
-            re-copies what the browser is already showing is chrome earning
-            nothing. What belongs here instead is what this view had been
-            throwing away: which canvas you are in, and who is in it. */}
-        <button
-          type="button"
-          className={`fullscreen-notes-toggle${presenterNotes ? " on" : ""}`}
-          onClick={() => useUiStore.getState().setPresenterNotes(!presenterNotes)}
-          title={presenterNotes ? "Hide the speaker notes (N)" : "Show the speaker notes under the slide (N)"}
-          aria-pressed={presenterNotes}
-        >
-          Notes
-        </button>
-        <ShareButton actor={actor} />
-          <CanvasPresence actor={actor} onIdentity={onIdentity} />
-        </div>
-      </div>
-      </>}
+      {phone ? <Suspense><PhonePresenting canvasId={canvasId} itemId={itemId} title={item?.title ?? "Presentation"} onExit={back} /></Suspense> : (
+        <FocusHeader
+          canvasId={canvasId}
+          item={item}
+          mode="view"
+          actor={actor}
+          onIdentity={onIdentity}
+          onBack={back}
+          presenterNotes={presenterNotes}
+          onToggleNotes={() => useUiStore.getState().setPresenterNotes(!presenterNotes)}
+        />
+      )}
       <div className={`fullscreen-stage${presenterNotes ? " with-notes" : ""}`} {...gestures}>
         <FrameAnchor.Provider value={anchor}>
         {phone && item ? (() => {
           const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0];
           if (!current) return <p>This item has no preview.</p>;
-          const visual = visualFaceOf(current);
+          const visual = visualFaceOf(current, item.properties.face);
           return <VersionContent canvasOf={item.properties.canvas ?? null} canvasSource={sourceOf(item)} canvasId={canvasId} blobHash={visual.blobHash} mimeType={visual.mimeType} filename={visual.filename ?? current.filename} entered designSystem={isDesignSystem(item)} textNode={isTextItem(item)} reloadToken={0} />;
         })() : <ArtifactStage canvasId={canvasId} itemId={itemId} actor={actor} surface="fullscreen" />}
         </FrameAnchor.Provider>

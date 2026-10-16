@@ -2,14 +2,17 @@ import { isGroupItem, keyFor, stackToggle } from "@isocan/core";
 import { changeCanvasGroup, groupsEnabled, enterCanvasGroup, groupTask, openGroupCreation, openGroupMigration, openGroupAddition, selectParentGroup } from "./canvasgroups.ts";
 import type { NavigateFunction } from "react-router-dom";
 import type { Actor, AlignEdge } from "@isocan/core";
-import { groupArrangeAction, groupScopeRoots, alignMoves, canvasPath, deckPath, itemPath, modulePagePath } from "@isocan/core";
+import { groupArrangeAction, groupScopeRoots, alignMoves, canvasPath, deckPath, itemPath, modulePagePath, nodeCapabilitiesFor, workbenchItemPath } from "@isocan/core";
 import { sendEchoed } from "../stores/canvasStore.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
-import { chatHiddenNow, openPanel } from "./panels.ts";
+import { chatHiddenNow, extensionPanelKey, openPanel } from "./panels.ts";
+import { panelExtensionItems } from "@isocan/core";
 import { zoomBy, zoomTo100, zoomToFit, zoomToSelection } from "./zoomactions.ts";
-import { formatMoves, formatScope } from "@isocan/core";
+import { formatMoves, formatScope, itemChrome, tidyMoves, type FormatMode, type Item } from "@isocan/core";
+import { hasRoomForChrome } from "./chrome.ts";
 import { canEditNow } from "./capability.ts";
+import { explainItem, walkItem } from "./itemactions.ts";
 import { hideChrome, showAllChrome, showChrome } from "./hideable.ts";
 import { modules, moduleViews } from "../modules.ts";
 
@@ -67,6 +70,12 @@ const onCanvas = (ctx: ActionContext) => ctx.canvasId !== null;
 const isScreen = (id: string) => {
   const item = useCanvasStore.getState().canvas?.items[id];
   return item?.versions.find((v) => v.id === item.currentVersionId)?.mimeType === "text/html";
+};
+const selectedCaps = (ctx: ActionContext) => {
+  if (ctx.selection.length !== 1) return null;
+  const item = useCanvasStore.getState().canvas?.items[ctx.selection[0]!];
+  const version = item?.versions.find((v) => v.id === item.currentVersionId);
+  return item && version ? nodeCapabilitiesFor(item, version) : null;
 };
 const withSelection = (ctx: ActionContext) => ctx.selection.length > 0;
 
@@ -264,9 +273,18 @@ export const ACTIONS: readonly Action[] = [
   },
   // ---- Canvas ----
   {
+    id: "tidy-in-place",
+    name: "Tidy in place",
+    hint: "line the selection up where it is — nothing re-dealt, nothing overlapping",
+    group: "Canvas",
+    available: (ctx) => onCanvas(ctx) && ctx.selection.length > 1,
+    writes: true,
+    run: (ctx) => runFormat(ctx, "in-place"),
+  },
+  {
     id: "format-grid",
     name: "Format: grid",
-    hint: "straighten the lines, decide nothing",
+    hint: "re-deal onto one lattice, decide nothing",
     group: "Canvas",
     available: onCanvas,
     writes: true,
@@ -282,13 +300,23 @@ export const ACTIONS: readonly Action[] = [
     run: (ctx) => runFormat(ctx, "smart"),
   },
   {
-    id: "full-screen",
-    name: "Full screen this",
-    hint: "the selected item, filling the screen",
+    id: "view-selection",
+    name: "View selection",
+    hint: "open View Focus for the selected item",
     keys: "↵",
     group: "Canvas",
-    available: (ctx) => onCanvas(ctx) && ctx.selection.length === 1,
+    available: (ctx) => onCanvas(ctx) && selectedCaps(ctx)?.view === true,
     run: (ctx) => ctx.navigate(itemPath(ctx.canvasId!, ctx.selection[0]!)),
+  },
+  {
+    id: "edit-selection",
+    name: "Edit selection",
+    hint: "open Edit Focus for the selected item",
+    keys: "E",
+    group: "Canvas",
+    writes: true,
+    available: (ctx) => onCanvas(ctx) && selectedCaps(ctx)?.edit === true,
+    run: (ctx) => ctx.navigate(workbenchItemPath(ctx.canvasId!, ctx.selection[0]!)),
   },
   {
     id: "export-deck",
@@ -319,6 +347,10 @@ export const ACTIONS: readonly Action[] = [
       );
     },
   },
+  // Proactive-agent phase 4: how the selected item got here — `isocan explain`'s door.
+  { id: "explain", name: "Explain this item", group: "Open", available: (ctx) => onCanvas(ctx) && ctx.selection.length === 1, run: (ctx) => explainItem(ctx.canvasId!, ctx.actor, ctx.selection[0]!) },
+  // Proactive-agent phase 9: the selected flow walked as simulated people — `isocan walk`'s door.
+  { id: "walk", name: "Walk it as someone else", group: "Open", available: (ctx) => onCanvas(ctx) && ctx.selection.length === 1, run: (ctx) => walkItem(ctx.canvasId!, ctx.actor, ctx.selection[0]!) },
   {
     // Copy-edit phase 2: N voices for one screen's words, as variations — `isocan words vary`'s door.
     id: "vary-copy",
@@ -413,19 +445,34 @@ function moduleActions(): Action[] {
  * it was asked for, on work that was not selected. `formatScope` is the fold
  * both surfaces read, so the same selection lands on the same coordinates
  * whether the ask came from here or from `isocan tidy <items...>`.
+ *
+ * **`in-place` is what Tidy on a selection means** (14 Oct 2026): the
+ * arrangement kept, its lines straightened (`tidy.ts` in core). The footprint
+ * it keeps clear is the one on screen — the name strip and marks row at THIS
+ * zoom, where the item is big enough to wear them — and "nearly lined up" is
+ * a few screen pixels at this zoom too, so it means what it looks like.
  */
 export async function tidyItems(
   canvasId: string,
   actor: Actor,
   itemIds: readonly string[],
-  mode: "grid" | "smart",
+  mode: FormatMode,
 ): Promise<void> {
   const canvas = useCanvasStore.getState().canvas;
   if (!canvas) return;
+  const scale = useUiStore.getState().viewport.scale;
+  const chrome = (item: Item) => hasRoomForChrome(item.width, item.height, scale) ? itemChrome(item, scale) : { above: 0, below: 0 };
+  const tolerance = 16 / scale;
   if (groupsEnabled()) {
     const project = useCanvasStore.getState().record!;
     const ids = itemIds.length ? [...itemIds] : groupScopeRoots(canvas, useUiStore.getState().activeGroupId).map((item) => item.id);
-    if (ids.length) await changeCanvasGroup(canvasId, actor, groupArrangeAction({ project, canvas }, ids, { kind: "tidy", mode }));
+    if (ids.length) await changeCanvasGroup(canvasId, actor, groupArrangeAction({ project, canvas }, ids, { kind: "tidy", mode, ...(mode === "in-place" ? { chrome, tolerance } : {}) }));
+    return;
+  }
+  if (mode === "in-place") {
+    const ids = itemIds.length ? itemIds : Object.keys(canvas.items);
+    const moves = tidyMoves(canvas, ids, { chrome, tolerance });
+    if (moves.length) await sendEchoed(canvasId, actor, { type: "items.move", moves });
     return;
   }
   const scoped = formatScope(canvas, itemIds);
@@ -473,7 +520,7 @@ export async function distributeGroupItems(canvasId: string, actor: Actor, itemI
   await changeCanvasGroup(canvasId, actor, groupArrangeAction({ project, canvas }, itemIds, { kind: "distribute", axis }));
 }
 
-async function runFormat(ctx: ActionContext, mode: "grid" | "smart"): Promise<void> {
+async function runFormat(ctx: ActionContext, mode: FormatMode): Promise<void> {
   if (!ctx.canvasId) return;
   await tidyItems(ctx.canvasId, ctx.actor, ctx.selection, mode);
 }
@@ -485,8 +532,19 @@ export function availableActions(ctx: ActionContext): Action[] {
   // The module actions are read live, so a runtime module's arrive without a
   // reload; the build-time ones are already in ACTIONS and are not doubled.
   const live = moduleActions();
+  const canvas = useCanvasStore.getState().canvas;
+  const panelActions: Action[] = canvas
+    ? panelExtensionItems(canvas).map((item) => ({
+        id: `open-panel-${item.id}`,
+        name: `Open ${item.title}`,
+        hint: "canvas panel extension",
+        group: "Open",
+        available: onCanvas,
+        run: (c) => openPanel(c.canvasId!, extensionPanelKey(item.id)),
+      }))
+    : [];
   const known = new Set(ACTIONS.map((a) => a.id));
-  return [...ACTIONS, ...live.filter((a) => !known.has(a.id))].filter((action) => {
+  return [...ACTIONS, ...panelActions, ...live.filter((a) => !known.has(a.id))].filter((action) => {
     if (!canEditNow() && action.writes) return false;
     return action.available?.(ctx) ?? true;
   });

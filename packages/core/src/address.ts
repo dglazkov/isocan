@@ -213,7 +213,7 @@ function queryOf(search: string): URLSearchParams {
 }
 
 /**
- * The address `isocan embed` hands a host pane (`docs/projects/jetski/design.md`).
+ * The address `isocan embed` hands a host pane (`docs/projects/antigravity/design.md`).
  *
  * When a canvas is framed inside an agent manager's pane beside an existing
  * conversation column, opening the 320px left Chat dock by default puts two

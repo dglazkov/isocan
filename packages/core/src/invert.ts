@@ -69,6 +69,7 @@ export function invertOperation(
     case "agent.enroll":
     case "agent.invite":
     case "agent.withdraw":
+    case "agent.ceiling":
       // Standing is granted and withdrawn deliberately, never by a casual ⌘Z
       // — an undo that silently re-armed (or silently silenced) an agent
       // would be exactly the invisible standing change journey 8 refuses.
@@ -104,13 +105,28 @@ export function invertOperation(
 
     case "item.update": {
       const item = getItem(op.itemId);
+      // A morning review seen (`goodnight.ts`'s `HANDOFF_REVIEWED_PROP`,
+      // spelled here for `converge.ts`'s reason): the person's client closes
+      // the night's note on arrival, which is not an act of theirs — so it is
+      // never on their ⌘Z, where an accident would reopen the note.
+      if (op.filename === undefined && op.faces === undefined && Object.keys(op.patch).join() === "properties" && Object.keys(op.patch.properties ?? {}).join() === "handoffReviewed") return null;
       const current = item.versions.find((version) => version.id === item.currentVersionId);
+      const inverseFaces =
+        op.faces !== undefined && current
+          ? (Object.fromEntries(
+              Object.keys(op.faces).map((key) => [
+                key,
+                current.faces?.[key as keyof NonNullable<typeof current.faces>] ?? null,
+              ]),
+            ) as NonNullable<typeof op.faces>)
+          : undefined;
       return {
         type: "item.update",
         itemId: op.itemId,
         patch: invertMetaPatch(item, op.patch),
         // Undoing a rename puts the file back under its old name.
         ...(op.filename !== undefined && current ? { filename: current.filename } : {}),
+        ...(inverseFaces !== undefined ? { faces: inverseFaces } : {}),
       };
     }
 

@@ -46,6 +46,8 @@ import { useUiStore } from "../stores/uiStore.ts";
  * *New note* on the phase's paper in the sheet, *Hand in* for what you
  * have selected. Each is the same act the item menu or the terminal does.
  */
+const NO_SELECTED_IDS: string[] = [];
+
 export function SprintChip({ lowered, canvasId, actor }: { lowered: boolean; canvasId: string; actor: Actor }) {
   const { state, nowMs } = useSprint();
   const names = useActorNames();
@@ -55,8 +57,6 @@ export function SprintChip({ lowered, canvasId, actor }: { lowered: boolean; can
   // mounted yet", which is the one state that must never flash or walk.
   const lastPhase = useRef<string | null | undefined>(undefined);
   const rang = useRef<string | null>(null);
-  const selectedIds = useUiStore((s) => s.selectedItemIds);
-  const stamp = useUiStore((s) => s.stamp);
   // A reader (roles phase 1) sees the clock and may go there; every action
   // that writes — a note, a hand-in, a placed mark — is offered only to
   // somebody the daemon would let write.
@@ -68,6 +68,9 @@ export function SprintChip({ lowered, canvasId, actor }: { lowered: boolean; can
   const project = useCanvasStore((s) => s.record);
   const deskOf = state ? null : deskSprintOf(project);
   const remote = useRemoteSprint(deskOf);
+  const sprintActive = state !== null || (deskOf !== null && remote.state !== null);
+  const selectedIds = useUiStore((s) => (sprintActive ? s.selectedItemIds : NO_SELECTED_IDS));
+  const stamp = useUiStore((s) => (sprintActive ? s.stamp : null));
 
   const remaining = state ? remainingSeconds(state, nowMs) : null;
 

@@ -73,7 +73,8 @@ In the module's core (`packages/modules/wireframe/src/catalog/`):
 
 - **Archetypes** — wave 1's 18 recipes (research §2): each an ordered list of
   slots, each slot fixed, optional (yes/no) or a choice among 2–4 blocks.
-- **Blocks** — wave 1's 28 composites (research §1, *Blocks*): each with typed
+- **Blocks** — wave 1's 31 composites (research §1, *Blocks*, plus `hero-banner`,
+  `pricing-cards`, and `accordion`): each with typed
   props (`choice` enums, flags, counts as `score`), the actionable elements
   that take an intent, and a draw function over primitives.
 - **Primitives** — the 22 the recipes name directly: button, text-field,

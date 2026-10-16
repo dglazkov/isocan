@@ -55,6 +55,10 @@ type OpErrorCode =
    * `name-taken`, because the remedy differs — a pass will not help, and the
    * message is the home's sentence, with the address to write to. */
   | "refused"
+  /** The acting agent has a ceiling on this canvas (critique phase 2's
+   * `note`: a critic's notes, replies and reactions) and this op is above
+   * it. Nothing was written; the remedy is the person who enrolled it. */
+  | "beyond-ceiling"
   | "bad-op";
 
 /**

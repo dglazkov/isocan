@@ -8,23 +8,24 @@ import {
   workbenchItemPath,
   workbenchPath,
   itemKind,
+  nodeCapabilitiesFor,
 } from "@isocan/core";
-import { CanvasPresence, CanvasTitle, ShareButton} from "./CanvasCrumb.tsx";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { WB_AGENTS_MIN_WIDTH, useUiStore } from "../stores/uiStore.ts";
+import { useFocusStore } from "../stores/focusStore.ts";
 import { PanelResizer } from "./PanelResizer.tsx";
 import { ArtifactStage } from "./ArtifactStage.tsx";
-import { KindIcon } from "./KindIcon.tsx";
+import { FocusHeader } from "./FocusHeader.tsx";
+import { NodeFocusChat } from "./NodeFocusChat.tsx";
 import { MainThreadBody } from "./MainThreadPanel.tsx";
 import { WbFiles } from "./WbFiles.tsx";
 import { AgentRowView } from "./AgentRow.tsx";
 import { SectionResizer, useSectionHeight } from "./SectionResizer.tsx";
-import { iconKindFor } from "../lib/kinds.ts";
 import { moduleInspectorsFor } from "../modules.ts";
 import { useWebHost } from "../lib/modulehost.ts";
 import { readBlobText } from "../lib/api.ts";
+import { isTyping } from "../lib/keys.ts";
 const DesignTaskPanel = lazy(() => import("./DesignTaskPanel.tsx").then((module) => ({ default: module.DesignTaskPanel })));
-import { DesignSystemsButton } from "./DesignSystemsButton.tsx";
 import { useAnswerable } from "../lib/answerable.ts";
 
 /**
@@ -70,8 +71,13 @@ export function Workbench({
 }) {
   const navigate = useNavigate();
   const item = useCanvasStore((s) => (itemId ? (s.canvas?.items[itemId] ?? null) : null));
+  const chatOpen = useFocusStore((s) => s.chatOpen);
   const agentsWidth = useUiStore((s) => s.wbAgentsWidth);
   const followSessionId = useUiStore((s) => s.followSessionId);
+
+  useEffect(() => {
+    useFocusStore.getState().syncItem(itemId);
+  }, [itemId]);
   const followed = useCanvasStore((s) =>
     followSessionId ? (s.sessions.find((x) => x.sessionId === followSessionId) ?? null) : null,
   );
@@ -120,6 +126,13 @@ export function Workbench({
   // else's page and may swallow events on the way up.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "j") {
+        if (!itemId || isTyping(e.target)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        useFocusStore.getState().toggleChat();
+        return;
+      }
       if (e.key !== "Escape") return;
       e.preventDefault();
       e.stopPropagation();
@@ -134,76 +147,67 @@ export function Workbench({
     return () => window.removeEventListener("keydown", onKey, true);
   });
 
+  const caps = item ? nodeCapabilitiesFor(item) : null;
+  const showWholeWorkbenchColumn = !itemId || (caps?.file ?? false);
+
   return (
     <div className="workbench">
-      <div className="wb-bar">
-        <div className="floats fs-cluster">
-        <button className="fullscreen-back" onClick={back} title="Back to the canvas (Esc)">
-          ← Canvas
-        </button>
-        <CanvasTitle actor={actor} />
-        {item && (
-          <span className="fullscreen-title">
-            <KindIcon className="kind-icon" kind={iconKindFor(item)} />
-            <b>{item.title}</b>
-          </span>
-        )}
-        </div>
-        {followed && (
-          <button
-            className="follow-banner wb"
-            onClick={() => useUiStore.getState().setFollow(null)}
-            title="Stop watching (Esc)"
-          >
-            Watching {followed.label ?? followed.actor.name} — Esc to stop
-          </button>
-        )}
-        <span className="spacer" />
-        {/* No "Copy link": the address bar is already showing the address of
-            this exact view. What this bar had been throwing away is worth far
-            more — which canvas you are in, whether you are live, and everyone
-            else's faces. Losing the pile on the way into the room where the
-            agents are was the worst of it. */}
-        <div className="floats fs-cluster">
-          <DesignSystemsButton canvasId={canvasId} actor={actor} target={itemId ? { kind: "item", itemId } : { kind: "canvas" }} compact />
-          <ShareButton actor={actor} />
-          <CanvasPresence actor={actor} onIdentity={onIdentity} />
-        </div>
-      </div>
-      <div className="wb-body">
-        {/* Collapsible to a RAIL, never removed: the agent view is the reason
-            this room exists (design doc, "the frame"). The rail keeps the
-            reopen affordance and nothing else. */}
-        {rail ? (
-          <div className="wb-agents rail">
+      <FocusHeader
+        canvasId={canvasId}
+        item={item}
+        mode="edit"
+        actor={actor}
+        onIdentity={onIdentity}
+        onBack={back}
+        centerAddon={
+          followed ? (
             <button
-              className="wb-fold"
-              title="Show the agents and the thread"
-              aria-label="Expand the agent column"
-              onClick={() => setRailKept(false)}
+              className="follow-banner wb"
+              onClick={() => useUiStore.getState().setFollow(null)}
+              title="Stop watching (Esc)"
             >
-              »
+              Watching {followed.label ?? followed.actor.name} — Esc to stop
             </button>
-          </div>
-        ) : (
-          <div className="wb-agents" style={{ width: agentsWidth }}>
-            <Roster
-              canvasId={canvasId}
-              focused={itemId}
-              viewer={actor.id}
-              onFold={() => setRailKept(true)}
-            />
-            <WbFiles canvasId={canvasId} actor={actor} />
-            <MainThreadBody canvasId={canvasId} actor={actor} docked={false} />
-            <PanelResizer
-              value={agentsWidth}
-              onChange={(w) => useUiStore.getState().setWbAgentsWidth(w)}
-              resetTo={WB_AGENTS_MIN_WIDTH}
-              min={WB_AGENTS_MIN_WIDTH}
-              max={window.innerWidth - 360}
-              label="Resize the agent column"
-            />
-          </div>
+          ) : null
+        }
+      />
+      <div className="wb-body">
+        {/* Collapsible to a RAIL, never removed on the whole-canvas workbench or
+            file-backed nodes: the agent view is the reason this room exists.
+            For non-file nodes (e.g. PNG images) in Node Edit Focus, file-tree
+            chrome stays out of the way and Node-Anchored Chat handles the conversation. */}
+        {showWholeWorkbenchColumn && (
+          rail || itemId ? (
+            <div className="wb-agents rail">
+              <button
+                className="wb-fold"
+                title="Show the agents and files"
+                aria-label="Expand the agent column"
+                onClick={() => setRailKept(false)}
+              >
+                »
+              </button>
+            </div>
+          ) : (
+            <div className="wb-agents" style={{ width: agentsWidth }}>
+              <Roster
+                canvasId={canvasId}
+                focused={itemId}
+                viewer={actor.id}
+                onFold={() => setRailKept(true)}
+              />
+              <WbFiles canvasId={canvasId} actor={actor} />
+              <MainThreadBody canvasId={canvasId} actor={actor} docked={false} />
+              <PanelResizer
+                value={agentsWidth}
+                onChange={(w) => useUiStore.getState().setWbAgentsWidth(w)}
+                resetTo={WB_AGENTS_MIN_WIDTH}
+                min={WB_AGENTS_MIN_WIDTH}
+                max={window.innerWidth - 360}
+                label="Resize the agent column"
+              />
+            </div>
+          )
         )}
         <div className="wb-stage">
           {itemId ? (
@@ -234,6 +238,9 @@ export function Workbench({
               );
             })}
           </aside>
+        )}
+        {item && chatOpen && (
+          <NodeFocusChat canvasId={canvasId} item={item} actor={actor} />
         )}
       </div>
     </div>

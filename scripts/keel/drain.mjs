@@ -11,7 +11,8 @@
 // repo (a fork's PR is never a machine PR, whatever its branch is called).
 // The newest by createdAt is kept. Each older one, oldest first:
 //   - it holds only data (DATA: docs/health/, docs/inbox/, docs/INBOX.md,
-//     .keel/bounds.json, and the dated pages (<dir>/YYYY-MM-DD.md) in the
+//     .keel/bounds.json, the night's plan records (docs/night/YYYY-MM-DD.json),
+//     and the dated pages (<dir>/YYYY-MM-DD.md) in the
 //     health directory .keel/keel.json "health" names, when it names one; for keel-loop/ instead docs/loop/ and docs/LOOP.md,
 //     DATA_BY_PREFIX, plus the files .keel/keel.json "loop" "afterRenderWrites"
 //     names) and GitHub says MERGEABLE → squash-merged, branch kept;
@@ -34,7 +35,9 @@ import { isMain, rootOf, main, healthDirOf, HEALTH_DIR } from './lib.mjs';
 export const DATA_DIRS = ['docs/inbox/'];
 /** A health directory's dated pages: the night's data there, never its other files (an index, a shared script). */
 export const datedPages = dir => new RegExp(`^${dir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/\\d{4}-\\d{2}-\\d{2}\\.md$`);
-export const DATA_PAGES = [datedPages(HEALTH_DIR)];
+/** The night's plan as it ended (phase 73): docs/night/<date>.json, one dated file, never the directory's other files. */
+export const NIGHT_RECORDS = /^docs\/night\/\d{4}-\d{2}-\d{2}\.json$/;
+export const DATA_PAGES = [datedPages(HEALTH_DIR), NIGHT_RECORDS];
 export const DATA_FILES = ['docs/INBOX.md', '.keel/bounds.json'];
 /**
  * A queue whose data is something else: its own paths, instead of the

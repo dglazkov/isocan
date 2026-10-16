@@ -25,8 +25,8 @@ import { warnRefusedKeys } from "./text.ts";
 export interface LiveTokenOptions {
   /** The key, read per call. Default: `resolveKey("gemini")` under `keysHome`. A key handed in here counts as the environment's (the operator's). */
   key?: () => string | undefined;
-  /** Whose `keys.json` the default key reads: the daemon's home. */
-  keysHome?: string;
+  /** Whose `keys.json` the default key reads: the daemon's home, or `null` when this daemon has no workstation. */
+  keysHome?: string | null | undefined;
   /** The transport — the seam a test fakes Google through. */
   fetch?: typeof fetch;
   /** Tokens per badge per minute. Default `LIVE_TOKENS_PER_MINUTE`. */
@@ -54,7 +54,7 @@ export class LiveTokens {
       const key = this.opts.key()?.trim();
       return key ? { key, source: "env" } : undefined;
     }
-    const found = warnRefusedKeys(() => resolveKey("gemini", this.opts.keysHome ? { home: this.opts.keysHome } : {}));
+    const found = warnRefusedKeys(() => resolveKey("gemini", this.opts.keysHome !== undefined ? { home: this.opts.keysHome } : {}));
     return found ? { key: found.key, source: found.source } : undefined;
   }
 

@@ -27,6 +27,8 @@
  */
 
 import type { CanvasTakedown } from "./takedown.ts";
+import { PROVE_PATH_PREFIX } from "./prove-path.ts";
+export * from "./prove-path.ts";
 
 /**
  * **The one header the proof rides in.**
@@ -96,19 +98,6 @@ export const NO_OPERATOR_PROOF = "no-operator-proof";
 export type OperatorRefusalCode = typeof NO_OPERATOR | typeof NOT_OPERATOR | typeof PROOF_STALE;
 
 /**
- * **Where the browser makes the proof**, and the handoff rides in the PATH.
- *
- * Not in the query, and the reason is measured rather than stylistic. The
- * magic-link path returns through `/__/auth/action`, which resolves the
- * provider's `continueUrl` and keeps the path (`authaction.ts`); the provider
- * appends `continueUrl` to its link **unencoded**, so a second `&`-separated
- * parameter inside it is parsed as a parameter of the outer link and never
- * reaches the landing page. One opaque segment survives that round trip; a
- * query string does not survive it whole.
- */
-export const PROVE_PATH_PREFIX = "/operator/prove";
-
-/**
  * What a terminal asks the browser to do, carried in that one segment.
  *
  * `to` is the whole destination rather than a port, so the page's refusal is
@@ -164,13 +153,6 @@ export function decodeHandoff(segment: string): OperatorHandoff | null {
 /** The address to open in a browser, on a home, for one act. */
 export function provePath(handoff: OperatorHandoff): string {
   return `${PROVE_PATH_PREFIX}/${encodeHandoff(handoff)}`;
-}
-
-/** The handoff segment in a path this page was loaded at, or null. */
-export function proveSegmentIn(pathname: string): string | null {
-  if (!pathname.startsWith(`${PROVE_PATH_PREFIX}/`)) return null;
-  const rest = pathname.slice(PROVE_PATH_PREFIX.length + 1);
-  return rest.length > 0 ? rest.split("/")[0]! : null;
 }
 
 /**

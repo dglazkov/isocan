@@ -154,7 +154,7 @@ computed. `policy.owner` and `policy.listen` are on the enrolment record, and
 Two lines on the card:
 
 ```
-Scout · agent · jetski
+Scout · agent · antigravity
 owned by Admiral One
 answers Admiral One
 ```

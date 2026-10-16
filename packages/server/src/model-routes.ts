@@ -1,9 +1,10 @@
 import { promises as fs } from "node:fs";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { atLeast, sameActor, type ActorClaim, JUDGMENT_BAD_REQUEST, JUDGMENT_MAX_BYTES, JUDGMENT_RATE_LIMITED, JUDGMENT_ROUTE, JUDGMENT_TOO_LARGE, JUDGMENT_UNAVAILABLE, type JudgmentRequest } from "@isocan/core";
-import { TEXT_BAD_REQUEST, TEXT_MAX_BYTES, TEXT_RATE_LIMITED, TEXT_ROUTE, TEXT_TOO_LARGE, TEXT_UNAVAILABLE, type TextRequest } from "@isocan/core/text";
+import { TEXT_BAD_REQUEST, TEXT_MAX_BYTES, TEXT_PICTURES_ROUTE, TEXT_RATE_LIMITED, TEXT_ROUTE, TEXT_TOO_LARGE, TEXT_UNAVAILABLE, type TextPictures, type TextRequest } from "@isocan/core/text";
 import { JUDGMENT_OWNER_ONLY, LIVE_TOKEN_BAD_REQUEST, LIVE_TOKEN_OWNER_ONLY, LIVE_TOKEN_RATE_LIMITED, LIVE_TOKEN_ROUTE, LIVE_TOKEN_UNAVAILABLE, ownerOnlySentence, TEXT_OWNER_ONLY } from "@isocan/core/keys";
-import { defaultKeysHome, readKeyFile } from "@isocan/core/keystore";
+import { readKeyFile } from "@isocan/core/keystore";
+import type { Desk } from "./desk.ts";
 import type { Engine } from "./engine.ts";
 import { capabilityIn, type ViewOnlyError } from "./grants.ts";
 import type { RouteOptions } from "./http.ts";
@@ -11,7 +12,10 @@ import { Judge } from "./judgment.ts";
 import { LiveTokens } from "./live-token.ts";
 import { identityFile } from "./paths.ts";
 import { RefusedError, TakenDownError, type Refusals } from "./takedowns.ts";
+import { registerSummaryRoutes } from "./summaries.ts";
+import type { Store } from "./store.ts";
 import { TextModel } from "./text.ts";
+import type { Workstation } from "./workstation.ts";
 
 /**
  * **The routes that spend the home's keys** — `POST /api/judgment` (the
@@ -26,6 +30,12 @@ import { TextModel } from "./text.ts";
  */
 interface ModelRouteScope {
   engine: Engine;
+  /** The canvas's blobs, which Semantic Zoom's make route reads a note's words from. */
+  store: Store;
+  /** The home's desk, where Semantic Zoom's summary budget lives. */
+  desk: Desk;
+  /** The local workstation (`keys.json`, `identity.json`, `homes`), or null on a hosted home. */
+  workstation: Workstation | null | undefined;
   options: RouteOptions;
   refusals: Refusals;
   admit: (req: FastifyRequest, canvasId: string) => Promise<unknown>;
@@ -46,7 +56,12 @@ async function personAt(home: string): Promise<{ id: string; name: string } | nu
 
 /** The judgment and text routes, on `app`, at the point `registerRoutes` reaches them. */
 export function registerModelRoutes(app: FastifyInstance, scope: ModelRouteScope): void {
-  const { engine, options, refusals, admit, viewOnly, claimsOf } = scope;
+  const { engine, store, desk, workstation, options, refusals, admit, viewOnly, claimsOf } = scope;
+  const homes = workstation?.homes ?? null;
+  const keysHomeOf = (explicit: string | null | undefined): string | null =>
+    explicit !== undefined ? explicit : (workstation?.keysHome ?? null);
+  const personFor = (keysHome: string): Promise<{ id: string; name: string } | null> =>
+    workstation && keysHome === workstation.keysHome ? workstation.person() : personAt(keysHome);
   /**
    * **Owner-only spend** (keys phase 3; `docs/projects/keys/design.md`). A key
    * from keys.json is this machine's person's own, and pays only for them:
@@ -59,10 +74,11 @@ export function registerModelRoutes(app: FastifyInstance, scope: ModelRouteScope
    *
    * The answer is the owner's name when the badge is not theirs, else null.
    */
-  const notTheOwners = async (req: FastifyRequest, keysHome: string): Promise<{ owner: string | null } | null> => {
+  const notTheOwners = async (req: FastifyRequest, keysHome: string | null): Promise<{ owner: string | null } | null> => {
+    if (!keysHome) return null;
     const shared = await readKeyFile(keysHome).then((file) => file.share, () => false);
     if (shared) return null;
-    const person = await personAt(keysHome);
+    const person = await personFor(keysHome);
     if (!person) return { owner: null };
     const [joined, claims] = await Promise.all([engine.actorJoins(), claimsOf(req.badge!.badgeId)]);
     return claims.some((row) => sameActor(joined, row.actorId, person.id)) ? null : { owner: person.name };
@@ -81,7 +97,8 @@ export function registerModelRoutes(app: FastifyInstance, scope: ModelRouteScope
    * elsewhere — that home's own judgment, then whose key it is (owner-only
    * spend), then the key and the badge's budget.
    */
-  const judge = new Judge(options.judgment ?? {});
+  const judgmentKeysHome = keysHomeOf(options.judgment?.keysHome);
+  const judge = new Judge({ keysHome: judgmentKeysHome, ...options.judgment });
   app.post(JUDGMENT_ROUTE, { bodyLimit: 1024 * 1024 }, async (req, reply) => {
     const declared = Number(req.headers["content-length"]);
     const size = Number.isFinite(declared) && declared > 0 ? declared : Buffer.byteLength(JSON.stringify(req.body ?? null));
@@ -108,12 +125,12 @@ export function registerModelRoutes(app: FastifyInstance, scope: ModelRouteScope
     const question = { ...(body.model !== undefined ? { model: body.model } : {}), state: body.state, questions: body.questions };
     // A canvas homed elsewhere is judged there — with that home's key, against
     // that home's budget — unless this machine holds a key of its own.
-    const home = options.homes?.for(canvasId) ?? null;
+    const home = homes?.for(canvasId) ?? null;
     const source = judge.keySource();
     // The machine's person's own key, asked for by someone else with sharing
     // off: theirs to spend, not this badge's (owner-only spend). A canvas
     // homed elsewhere is asked there instead, under the home's own rule.
-    const refused = source === "file" ? await notTheOwners(req, options.judgment?.keysHome ?? defaultKeysHome()) : null;
+    const refused = source === "file" ? await notTheOwners(req, judgmentKeysHome) : null;
     if (home && (!source || refused)) return home.personalRequest("POST", JUDGMENT_ROUTE, { canvasId, ...question });
     // No judgment for a canvas that is not here: the door's test admits by
     // badge, and a canvas nobody holds has no editors to spend on.
@@ -138,7 +155,8 @@ export function registerModelRoutes(app: FastifyInstance, scope: ModelRouteScope
    * the edit rung, then — for a canvas homed elsewhere — that home's own text
    * model, then whose key it is, then the key and the badge's budget.
    */
-  const textModel = new TextModel(options.text ?? {});
+  const textKeysHome = keysHomeOf(options.text?.keysHome);
+  const textModel = new TextModel({ keysHome: textKeysHome, ...options.text });
   app.post(TEXT_ROUTE, { bodyLimit: 1024 * 1024 }, async (req, reply) => {
     const declared = Number(req.headers["content-length"]);
     const size = Number.isFinite(declared) && declared > 0 ? declared : Buffer.byteLength(JSON.stringify(req.body ?? null));
@@ -162,10 +180,10 @@ export function registerModelRoutes(app: FastifyInstance, scope: ModelRouteScope
     const asked = { prompt: body.prompt, schema: body.schema };
     // A canvas homed elsewhere is written for there — with that home's key,
     // against that home's budget — unless this machine holds a key of its own.
-    const home = options.homes?.for(canvasId) ?? null;
+    const home = homes?.for(canvasId) ?? null;
     const source = textModel.keySource();
     // The judgment route's owner-only rule, for words.
-    const refused = source === "file" ? await notTheOwners(req, options.text?.keysHome ?? defaultKeysHome()) : null;
+    const refused = source === "file" ? await notTheOwners(req, textKeysHome) : null;
     if (home && (!source || refused)) return home.personalRequest("POST", TEXT_ROUTE, { canvasId, ...asked });
     // Nothing is written for a canvas that is not here.
     if (!home) await engine.getSnapshot(canvasId);
@@ -180,6 +198,28 @@ export function registerModelRoutes(app: FastifyInstance, scope: ModelRouteScope
     return reply.status(written.status).send(written.body);
   });
   /**
+   * **`GET /api/text/pictures` — does the text model here look at pictures**
+   * (Semantic Zoom design §11). What Settings' "look at pictures" row asks
+   * before it offers itself: with a model that takes none, the row says so
+   * and stays off. It names no key and spends nothing, so any badge may ask.
+   */
+  app.get(TEXT_PICTURES_ROUTE, async () => {
+    if (!textModel.available()) return { pictures: false, why: "This home has no text model, so nothing is summarised here." } satisfies TextPictures;
+    if (!textModel.takesImages()) return { pictures: false, why: "This home's text model takes no pictures, so this stays off." } satisfies TextPictures;
+    return { pictures: true } satisfies TextPictures;
+  });
+  /**
+   * **Semantic Zoom's summaries** (`summaries.ts`): read by anyone who may
+   * view, made through this text model and this owner-only rule, in-process
+   * — `/api/text`'s guards, with a summary's own system line and model.
+   */
+  registerSummaryRoutes(app, {
+    engine, store, desk, homes, refusals, admit, viewOnly, textModel,
+    notTheOwners: (req) => notTheOwners(req, textKeysHome),
+    keyOwner: async () => (textKeysHome ? (await personFor(textKeysHome))?.id ?? null : null),
+    options: options.summaries ?? {},
+  });
+  /**
    * **`POST /api/voice/token` — a short-lived Gemini Live token, minted with
    * this home's key** (keys phase 4; `live-token.ts` holds the key and the
    * rate). What the talk module asks once per session, so the browser opens
@@ -189,7 +229,8 @@ export function registerModelRoutes(app: FastifyInstance, scope: ModelRouteScope
    * the canvas), then — for a canvas homed elsewhere — that home's own token,
    * then whose key it is, then the key and the badge's budget.
    */
-  const liveTokens = new LiveTokens(options.liveToken ?? {});
+  const liveKeysHome = keysHomeOf(options.liveToken?.keysHome);
+  const liveTokens = new LiveTokens({ keysHome: liveKeysHome, ...options.liveToken });
   app.post(LIVE_TOKEN_ROUTE, { bodyLimit: 4096 }, async (req, reply) => {
     const body = req.body as { canvasId?: unknown } | null;
     if (!body || typeof body !== "object" || typeof body.canvasId !== "string" || !body.canvasId) {
@@ -202,9 +243,9 @@ export function registerModelRoutes(app: FastifyInstance, scope: ModelRouteScope
     if (refusedBadge) throw new RefusedError(refusedBadge);
     await admit(req, canvasId);
     if (!atLeast(capabilityIn(req.badge!, canvasId) ?? "edit", "edit")) throw await viewOnly(canvasId);
-    const home = options.homes?.for(canvasId) ?? null;
+    const home = homes?.for(canvasId) ?? null;
     const source = liveTokens.keySource();
-    const refused = source === "file" ? await notTheOwners(req, options.liveToken?.keysHome ?? defaultKeysHome()) : null;
+    const refused = source === "file" ? await notTheOwners(req, liveKeysHome) : null;
     if (home && (!source || refused)) return home.personalRequest("POST", LIVE_TOKEN_ROUTE, { canvasId });
     if (!home) await engine.getSnapshot(canvasId);
     if (refused) return reply.status(403).send({ error: ownerOnlySentence(refused.owner), code: LIVE_TOKEN_OWNER_ONLY });

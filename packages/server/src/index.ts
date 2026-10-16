@@ -25,8 +25,10 @@ export type {
   Store,
 } from "./store.ts";
 export { FileStore } from "./file-store.ts";
-export type { Desk, BadgeRecord, Admission, PassRecord, Provenance, BadgeKind } from "./desk.ts";
+export type { Desk, BadgeRecord, Admission, PassRecord, ParkRow, Provenance, BadgeKind } from "./desk.ts";
 export { FileDesk } from "./file-desk.ts";
+export type { Workstation } from "./workstation.ts";
+export { FileWorkstation } from "./file-workstation.ts";
 /**
  * `liveAdmission` crosses the package boundary because the second desk backing
  * has to ask it too (operator phase 2): "an admission that has run out is
@@ -35,7 +37,15 @@ export { FileDesk } from "./file-desk.ts";
  */
 export { admissionIn, liveAdmission, rungOfAdmission, keepsAdmission } from "./grants.ts";
 export { Refusals, TakenDownError, RefusedError } from "./takedowns.ts";
-export { readConfigFile, resolveHomeUrl, updateConfigFile } from "./config.ts";
+/** Configuration readers, birth-home resolution, and per-home proxy auth lookup (`homeAuth`). */
+export {
+  configuredHomeAuthUrl,
+  gatewayBaseFor,
+  homeAuthFor,
+  readConfigFile,
+  resolveHomeUrl,
+  updateConfigFile,
+} from "./config.ts";
 export {
   DocRefusal,
   clearGoogleToken,
@@ -48,8 +58,9 @@ export {
   type FetchedDoc,
   type GoogleToken,
 } from "./google.ts";
-export type { HomeConfig } from "./config.ts";
-export { adoptIdentity, askTheDoor, bearerHeader, fileBadgeStore, knockOnDoor, readBadge, writeBadge, writeIdentityName } from "./badge-store.ts";
+/** Machine configuration schema (`~/.isocan/config.json`) and per-home proxy auth types. */
+export type { HomeAuthConfig, HomeAuthEntry, HomeConfig } from "./config.ts";
+export { adoptIdentity, askTheDoor, bearerHeader, fileBadgeStore, knockOnDoor, readBadge, writeBadge, writeIdentityActor, writeIdentityName } from "./badge-store.ts";
 export type { BadgeStore, DoorAnswer, StoredBadge } from "./badge-store.ts";
 export { MINT_PER_MINUTE, TOO_MANY_BADGES } from "./meter.ts";
 export { HomeLink, HomeRefusedError, HomeUnreachableError } from "./home-link.ts";
@@ -60,7 +71,7 @@ export type {
   HomeHello,
   HomeRegistry,
 } from "./home-link.ts";
-export { HomeLinks } from "./home-links.ts";
+export { HomeLinks, NotAReplicaError, SelfLinkError, isSelfAddress } from "./home-links.ts";
 export type { HomeLinksOptions } from "./home-links.ts";
 export { homesRecorded, readHomes, writeHomes } from "./homes.ts";
 export type { HomeAssignments } from "./homes.ts";
@@ -81,6 +92,7 @@ export {
   markerFile,
   readMarker,
   recordDir,
+  removeMarker,
   writeMarker,
 } from "./binding.ts";
 export type { DirBinding, DirMarker } from "./binding.ts";

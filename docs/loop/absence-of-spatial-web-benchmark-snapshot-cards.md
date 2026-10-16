@@ -3,7 +3,7 @@ title: Absence of spatial web benchmark snapshot cards
 loop:
   - f9899e0f-40e2-4849-ba2a-d757f4af6114
 loop_rank: P2
-loop_state: ACTIVE
+loop_state: DISMISSED
 loop_goal: pg_v67IPNa4
 decision: untriaged
 ---

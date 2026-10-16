@@ -24,12 +24,14 @@ describe("the kind mark stands in for the chrome that hid", () => {
   });
 
   it("exempts the kinds that already say what they are", () => {
-    /* An image, a video and a drawing ARE their small form — a mark over one
-       says nothing it did not already say and covers the thing it names. It is
-       the pale rectangles that become indistinguishable. This is the same rule
-       `textIsLegible` applies to words, reaching the other kinds. */
+    /* An image, a video, a drawing and an HTML screen ARE their small form —
+       a mark over one says nothing it did not already say and covers the
+       thing it names (`useHtmlSnapshot` gives HTML screens a lightweight WebP
+       proxy that scales down cleanly without mounting an iframe). It is the
+       remaining pale rectangles that become indistinguishable. This is the
+       same rule `textIsLegible` applies to words, reaching the other kinds. */
     expect(item).toContain('const picture = kind === "image" || kind === "video" || kind === "drawing"');
-    expect(item).toMatch(/kindMark = !roomy && !isText && !picture/);
+    expect(item).toMatch(/kindMark = !roomy && !isText && !picture && !htmlScreen/);
   });
 
   it("is sized by the item, using the rule the text mark already uses", () => {

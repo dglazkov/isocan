@@ -1,5 +1,12 @@
 import { inboxNewestFirst, mergeSeen, type Canvas, type InboxEntry, type InboxResponse, type LogEntry } from "@isocan/core";
 
+/** The canvas's home answered 404 for it: deleted there while this machine
+ * was away. Its own kind of unavailable, because the remedy is the person's
+ * (`isocan canvas forget`) rather than waiting for a home to come back. */
+export class CanvasGoneAtHomeError extends Error {
+  readonly gone = true;
+}
+
 /** A home that is down costs its own rows, never the rest of the inbox.
  * Four reads at a time; cancellation stops dispatching and reaches each read. */
 export async function collectInbox(
@@ -22,7 +29,11 @@ export async function collectInbox(
         result.unavailable.push(...found.unavailable);
       } catch (err) {
         if (signal.aborted) break;
-        result.unavailable.push({ canvasId: canvas.id, error: err instanceof Error ? err.message : "Could not read this canvas" });
+        result.unavailable.push({
+          canvasId: canvas.id,
+          error: err instanceof Error ? err.message : "Could not read this canvas",
+          ...(err instanceof CanvasGoneAtHomeError ? { gone: true as const, title: canvas.title } : {}),
+        });
       }
     }
   }));

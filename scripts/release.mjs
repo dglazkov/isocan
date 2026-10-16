@@ -34,7 +34,7 @@
  * which keeps the branch fast-forwardable (no force pushes) and makes "which
  * commit is this build?" answerable by `git log`.
  */
-import { promises as fs, statSync } from "node:fs";
+import { promises as fs, realpathSync, statSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
@@ -355,8 +355,15 @@ export const RELEASE_NODE_ENTRIES = {
  * without this line the first bundle built here pulled in
  * @google-cloud/firestore and @google-cloud/storage — 1.7 MB of generated
  * protobuf in the largest single input — and quietly undid that.
+ *
+ * `sharp` is the second (Semantic Zoom phase 3b, 14 Oct 2026): an optional
+ * dependency of `@isocan/server`, reached by `import("sharp")` inside
+ * `summary-pictures.ts` to scale pictures for a summary. It is native — a
+ * `.node` binding and ~20 MB of libvips per platform — so it cannot be
+ * inlined, and the release manifest does not declare it: an install's import
+ * fails, and the daemon falls back to scaling PNGs alone, as it did before.
  */
-export const CLI_BUNDLE_EXTERNAL = ["@isocan/cloudstore"];
+export const CLI_BUNDLE_EXTERNAL = ["@isocan/cloudstore", "sharp"];
 
 /**
  * **A `require` for the CommonJS half of the dependency tree** (phase 2).
@@ -381,7 +388,8 @@ const CJS_SHIM = [
  *
  * node platform, ESM, not minified: these files are read by people debugging
  * an install, and the win being chased is file opens, not bytes. npm
- * **Nothing is external but `@isocan/cloudstore`** (phase 2). The npm
+ * **Nothing is external but `@isocan/cloudstore` and `sharp`** (phase 2;
+ * `sharp` since 14 Oct 2026, see CLI_BUNDLE_EXTERNAL). The npm
  * dependencies are inlined, so the release manifest declares none of them and
  * an install has nothing to resolve: 227 packages became two. The cost is one
  * banner — see CJS_SHIM — because half the dependency tree is CommonJS and
@@ -735,21 +743,25 @@ export async function assembleReleaseTree({ base, out, artifacts, sourceCommit =
      * a daemon serves), `packages/rc/dist` and `packages/cli/dist` (the
      * bundles), `types/` (what an editor resolves), the modules' `assets/`
      * and `agent-guide.md`, `.agents/skills` (which `isocan setup` copies out),
-     * `plugins/jetski` (which `isocan setup --jetski` links out), `WHATSNEW.md`,
+     * `plugins/antigravity` (which `isocan setup --antigravity` links out), `WHATSNEW.md`,
      * and the scripts a CLI verb can spawn.
      */
     for (const spec of RELEASE_DROPS) {
       git("rm", "-r", "--cached", "--ignore-unmatch", "-q", ...spec, { env });
     }
     const generatedEntries = [
-      ...Object.entries(RELEASE_NODE_ENTRIES).map(([file, { out: name }]) => [file, nodeEntrySource(name)]),
-      ...Object.entries(RELEASE_SCRIPTS).map(([file, name]) => [file, scriptEntrySource(file, name)]),
+      ...Object.entries(RELEASE_NODE_ENTRIES).map(([file, { out: name }]) => [file, nodeEntrySource(name), "100644"]),
+      ...Object.entries(RELEASE_SCRIPTS).map(([file, name]) => [file, scriptEntrySource(file, name), "100644"]),
+      // Pre-bundle installs hardcode `<candidate>/packages/cli/bin/isocan.js` in
+      // their running `smokeTest` and global `PATH` symlinks; dropping `bin/`
+      // removes tsx + workspace-loader, and this stub bridges old upgrades cleanly.
+      ["packages/cli/bin/isocan.js", '#!/usr/bin/env node\nimport "../dist/isocan.mjs";\n', "100755"],
     ];
-    for (const [i, [file, source]] of generatedEntries.entries()) {
+    for (const [i, [file, source, mode]] of generatedEntries.entries()) {
       const generated = path.join(tmp, `entry-${i}.mjs`);
       await fs.writeFile(generated, source);
       const hash = git("hash-object", "-w", "--path", file, generated, { env });
-      git("update-index", "--add", "--cacheinfo", `100644,${hash},${file}`, { env });
+      git("update-index", "--add", "--cacheinfo", `${mode},${hash},${file}`, { env });
     }
 
     // From the base, not from disk: a release is of a commit, so nothing an
@@ -815,7 +827,8 @@ export async function extractTree(tree, dir) {
  * - the package's own name resolves through its `exports`;
  * - a bare name resolves if the manifest declares it (npm installs it) or it
  *   is CLI_BUNDLE_EXTERNAL — imported by the hosted daemon alone, from an
- *   image that installs it; everything else is unresolvable.
+ *   image that installs it, or (`sharp`) optional, its failed import caught;
+ *   everything else is unresolvable.
  *
  * `esbuild` does the reading, with every import marked external, so each file
  * is parsed once and nothing is followed or bundled. `require()` is left out
@@ -826,6 +839,7 @@ export async function extractTree(tree, dir) {
  * Returns `[{ file, specifier }]`, paths relative to `dir`; empty is the pass.
  */
 export async function unresolvedImports(dir) {
+  dir = realpathSync(dir);
   const { build } = await import("esbuild");
   const { isBuiltin } = await import("node:module");
   const manifest = JSON.parse(await fs.readFile(path.join(dir, "package.json"), "utf8"));
@@ -874,7 +888,7 @@ export async function unresolvedImports(dir) {
     }
   };
   const web = path.join(dir, "packages/web/dist");
-  const jetskiPlugin = path.join(dir, "plugins/jetski");
+  const antigravityPlugin = path.join(dir, "plugins/antigravity");
   const selfReference = (subpath) => {
     const entry = manifest.exports?.[subpath];
     const target = typeof entry === "string" ? entry : (entry?.import ?? entry?.default);
@@ -891,10 +905,10 @@ export async function unresolvedImports(dir) {
     const subpath = [".", ...parts.slice(bare.startsWith("@") ? 2 : 1)].join("/");
     if (name === manifest.name) return selfReference(subpath);
     if (CLI_BUNDLE_EXTERNAL.includes(name)) return true;
-    // The Jetski sidecar runs inside the Jetski host, which puts `sidecar_sdk`
-    // on NODE_PATH when spawning the pane; standalone (`ISOCAN_JETSKI_PORT`)
+    // The Antigravity sidecar runs inside the Antigravity host, which puts `sidecar_sdk`
+    // on NODE_PATH when spawning the pane; standalone (`ISOCAN_ANTIGRAVITY_PORT`)
     // that branch does not run.
-    if (name === "sidecar_sdk" && importer.startsWith(jetskiPlugin + path.sep)) return true;
+    if (name === "sidecar_sdk" && importer.startsWith(antigravityPlugin + path.sep)) return true;
     return Boolean(manifest.dependencies?.[name]);
   };
   const unresolved = new Map();

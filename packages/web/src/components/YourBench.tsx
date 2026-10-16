@@ -29,13 +29,17 @@ export function YourBench({ actor, onClose }: { actor: Actor; onClose: () => voi
   const { rows, error, canvasId: benchCanvasId } = useBench(actor.id);
 
   return (
-    <div className="identity-menu bench-panel" onKeyDown={(e) => e.key === "Escape" && onClose()}>
-      <h3>Your bench</h3>
+    // `.terminal-menu`, like every other panel the identity menu opens: the
+    // popover widens for it and becomes a sheet on a phone (styles.css). As
+    // `.identity-menu` it stayed 260px wide under a 320px panel, and the text
+    // ran off the right edge (14 Oct 2026).
+    <div className="terminal-menu" onKeyDown={(e) => e.key === "Escape" && onClose()}>
+      <div className="share-head">Your bench</div>
       <p className="bench-why">
         The agents you have, kept on your own private canvas. A row is a record: it grants no
         standing and no reach. Whether anything could answer is measured, every time you look.
       </p>
-      {error && <p role="alert" className="bench-why">{error}</p>}
+      {error && <div role="alert" className="identity-warning">{error}</div>}
       {rows === null && !error && <p className="bench-why">Reading your bench…</p>}
       {rows?.length === 0 && (
         <p className="bench-why">
@@ -56,9 +60,11 @@ export function YourBench({ actor, onClose }: { actor: Actor; onClose: () => voi
           ))}
         </ul>
       )}
-      <button className="btn" onClick={onClose}>
-        Close
-      </button>
+      <div className="terminal-actions">
+        <button className="btn" onClick={onClose}>
+          Close
+        </button>
+      </div>
     </div>
   );
 }

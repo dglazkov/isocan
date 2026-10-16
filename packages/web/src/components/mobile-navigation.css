@@ -1,9 +1,17 @@
 /* The global Inbox has a reserved header slot on the phone canvas face. Not
    on a presentation: `.fullscreen` sits above every floating control, so the
    Inbox is under the slide there and a slot kept for it was 112px of the
-   bar's 335 kept for nothing — the title was squeezed to one letter. */
+   bar's 335 kept for nothing — the title was squeezed to one letter.
+
+   `--z-bar`, one step over the face it sits in. The Inbox is mounted before
+   the canvas page, and the face is `--z-float` too, so on a tie the face
+   painted over its own header slot. That only began on 14 Oct 2026: until
+   then `.canvas-page` was `position: fixed`, a stacking context that put the
+   whole face under the Inbox — and the Inbox over every slide as well, the
+   opposite of the paragraph above. Under `--z-fullscreen` still, so a
+   presentation covers it (mobile-journeys, both halves). */
 @media (max-width: 639px) {
-  body:has(.phone-face) .navigation-inbox { top: 6px; right: 8px; bottom: auto; width: 96px; height: 44px; min-height: 44px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 8px; }
+  body:has(.phone-face) .navigation-inbox { z-index: var(--z-bar); top: 6px; right: 8px; bottom: auto; width: 96px; height: 44px; min-height: 44px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 8px; }
   body:has(.phone-face) .navigation-inbox-panel { top: 64px; bottom: 68px; left: 8px; right: 8px; width: auto; max-height: none; }
   .phone-face .phone-header { padding-right: 112px; }
 }

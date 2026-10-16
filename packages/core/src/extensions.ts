@@ -1,5 +1,9 @@
-import type { CanvasContents, Item } from "./model.ts";
+import type { Actor, CanvasContents, Item } from "./model.ts";
+import type { Grant } from "./grants.ts";
 import { COMMAND_NAME, findCommand, parseSlashCommand, type CommandMetadata } from "./commands.ts";
+import { EXTENSION_ACTOR_PREFIX, EXTENSION_COLORS, extensionColor, isExtensionActor } from "./identity.ts";
+
+export { EXTENSION_ACTOR_PREFIX, EXTENSION_COLORS, extensionColor, isExtensionActor };
 
 /**
  * **Extending the canvas from inside it** — the one reader for
@@ -482,11 +486,50 @@ export function panelCapabilities(panel: PanelExtension): string[] {
   return [
     `shows ${panel.bytes.filename} (${panel.bytes.itemId}): its bytes are an item on this canvas, and the manifest can name no other source`,
     `whoever may edit ${panel.src} decides what this panel shows, without touching this manifest — and its versions are the panel's history, so a bad one rolls back`,
-    "cannot run yet: nothing renders a panel in this build, so these bytes are stored and read and never executed",
-    "when it renders it will be a sandboxed page served from the content origin — never isocan's own origin, so it holds no badge and cannot act as you",
-    `it will paint in the ${panel.side} dock and nowhere else: not over the canvas, the top bar or another panel`,
-    "it cannot send an operation: the door a panel asks through is not built, so nothing it contains can change this canvas",
+    "renders as a sandboxed page served from the content origin — never isocan's own origin, so it holds no badge and cannot act as you",
+    `paints in the ${panel.side} dock and nowhere else: not over the canvas, the top bar or another panel`,
+    "cannot read what is selected yet: the selection message is not built in this phase",
+    "cannot send an operation: the door a panel asks through is not built, so nothing it contains can change this canvas",
   ];
+}
+
+/** Deterministic actor id for a panel item on a canvas (`ext_<suffix>`). */
+export function panelActorId(itemId: string): string {
+  const trimmed = itemId.trim();
+  if (trimmed.startsWith(EXTENSION_ACTOR_PREFIX)) return trimmed;
+  const suffix = trimmed.startsWith("itm_") ? trimmed.slice(4) : trimmed;
+  return `${EXTENSION_ACTOR_PREFIX}${suffix}`;
+}
+
+/** The `Actor` a panel item speaks and writes as on its canvas. */
+export function panelActor(itemId: string, title: string): Actor {
+  return { id: panelActorId(itemId), name: title.trim() };
+}
+
+/** Every panel item's actor on `canvas`, in item order. */
+export function panelActorsIn(canvas: CanvasContents): Actor[] {
+  const out: Actor[] = [];
+  for (const item of panelExtensionItems(canvas)) {
+    const title = item.title.trim();
+    if (title) out.push(panelActor(item.id, title));
+  }
+  return out;
+}
+
+/** `POST` provisions (or re-reads) the panel's actor, badge and grant on `canvasId`. */
+export const panelActorRoute = (canvasId: string, itemId: string): string =>
+  `/api/projects/${encodeURIComponent(canvasId)}/panels/${encodeURIComponent(itemId)}/actor`;
+
+/** What {@link panelActorRoute} hands back: the panel's own actor, its
+ *  standing grant on this canvas, and the bearer credential bound to that
+ *  grant so the panel's asks go through the door as the panel and not as
+ *  the person watching it. */
+export interface PanelActorResponse {
+  actor: Actor;
+  grant: Grant;
+  badgeId: string;
+  token: string;
+  color: string;
 }
 
 /**

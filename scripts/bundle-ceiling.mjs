@@ -486,11 +486,28 @@
  * plus 5,000 of headroom, rounded to the hundred. Nothing grew to fill it.
  * GOAL still says where this should go, and JUMP still catches a single
  * change that spends the room at once.
+ *
+ * **706,300 → 734,500 on 15 Oct 2026: ten days of deliberate core and canvas
+ * shell features.** Over the ten days since 5 Oct, six bodies of work landed
+ * on `main` without any new eager third-party dependency:
+ *
+ * - `node-focus` phases 1–5 (`[ View | Edit ]` card focus strip, capabilities)
+ * - `extensions` phases 1–5 (extension actor, grants, panel registration)
+ * - `@isocan/lottie` (kind registration in `core/kinds.ts`, deferred module)
+ * - `proxy-identity` (`proxyTunnel` and identity headers)
+ * - `multi-face-nodes` (#479: named fidelity faces on item versions in `core`
+ *   and `ItemView`, +3,445 bytes, which crossed the cumulative 20,000 jump
+ *   threshold from the 5 Oct baseline)
+ * - `cursors` (resolving marks and colours through folded actors, +93 bytes)
+ *
+ * CI measured the combined entry at 729,497 bytes. Following the 5 Oct rule
+ * (measured entry + 5,000 headroom, rounded to the hundred), CEILING moves to
+ * 734,500; GOAL 640,000 and JUMP 20,000 stay unchanged.
  */
 
 /** The last number somebody agreed to. Raised in the ANSWER to a finding, with
  *  the reason in that answer — not quietly in a diff. */
-export const CEILING = 706_300;
+export const CEILING = 734_500;
 
 /**
  * **Run as a program it prints that number**, so the performance persona's

@@ -5,8 +5,9 @@ import { fileURLToPath } from "node:url";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
-import { SKILL_INSTALL_COMMAND } from "@isocan/core";
-import { PUBLIC_PATH, TERMS_PATH, faceFor } from "../src/lib/faces.ts";
+import { attestedEmail, attestedEmailLocalPart, SKILL_INSTALL_COMMAND } from "@isocan/core";
+import { PUBLIC_PATH, TERMS_PATH, faceFor, isSsoHome } from "../src/lib/faces.ts";
+import { enterFromAttestOffer } from "../src/lib/identity.ts";
 import { browserClipboard, copyLabel, copySaid, copyToClipboard } from "../src/lib/copy.ts";
 import { LEDGER, verbOf } from "../src/lib/ledger.ts";
 import { TERMS } from "../src/lib/terms.ts";
@@ -74,6 +75,7 @@ function stubBrowserGlobals(): void {
   (globalThis as { window?: unknown }).window = {
     matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }),
   };
+  delete (globalThis as { document?: unknown }).document;
 }
 
 stubBrowserGlobals();
@@ -142,6 +144,14 @@ describe("which face the origin wears", () => {
     expect(faceFor("/terms/why", null)).toBe("door");
     expect(faceFor("/p/terms", null)).toBe("door");
   });
+
+  it("skips the marketing front page at the origin on an SSO home while keeping terms and public accessible", () => {
+    expect(faceFor("/", null, true)).toBe("door");
+    expect(faceFor("//", null, true)).toBe("door");
+    expect(faceFor(TERMS_PATH, null, true)).toBe("terms");
+    expect(faceFor(PUBLIC_PATH, null, true)).toBe("public");
+    expect(faceFor("/", priya, true)).toBe("here");
+  });
 });
 
 /** What `Doorway` actually renders — the rule wired to the pages. */
@@ -209,6 +219,173 @@ describe("the front door", () => {
       expect(html).not.toContain("the app, for");
       expect(html).not.toContain(SKILL_INSTALL_COMMAND);
     }
+  });
+
+  it("auto-enters a cold browser at the origin on an SSO home instead of showing the front page", () => {
+    (globalThis as { document?: unknown }).document = {
+      documentElement: { dataset: { sso: "true" } },
+    };
+    expect(isSsoHome()).toBe(true);
+    const html = meet("/", null);
+    expect(html).toContain("Letting you in…");
+    expect(html).not.toContain(SKILL_INSTALL_COMMAND);
+    expect(html).not.toContain("Pick a name");
+  });
+
+  it("shows the identity dialog (not SsoGate or FrontPage) when a browser on an SSO home deliberately stepped out", () => {
+    (globalThis as { document?: unknown }).document = {
+      documentElement: { dataset: { sso: "true" } },
+    };
+    localStorage.setItem("isocan.identities", JSON.stringify([priya]));
+    const html = meet("/", null);
+    expect(html).toContain("Who&#x27;s writing?");
+    expect(html).not.toContain("Letting you in…");
+    expect(html).not.toContain(SKILL_INSTALL_COMMAND);
+  });
+});
+
+describe("SSO auto-entry from an attested badge offer", () => {
+  const alice: { id: string; name: string } = { id: "usr_alice", name: "Alice" };
+  const aliceAdmin: { id: string; name: string } = { id: "usr_alice_admin", name: "Alice (Ops)" };
+  const proxyAttestation = {
+    attribute: "email:alice@acme.example",
+    verifiedVia: "proxy",
+    at: "2026-10-14T00:00:00.000Z",
+  };
+
+  it("extracts the address and local-part from the newest email attestation", () => {
+    expect(attestedEmail([])).toBeNull();
+    expect(attestedEmail([{ attribute: "repo:acme/app", verifiedVia: "github", at: "now" }])).toBeNull();
+    expect(attestedEmail([proxyAttestation])).toBe("alice@acme.example");
+    expect(attestedEmailLocalPart([])).toBeNull();
+    expect(attestedEmailLocalPart([{ attribute: "repo:acme/app", verifiedVia: "github", at: "now" }])).toBeNull();
+    expect(attestedEmailLocalPart([proxyAttestation])).toBe("alice");
+  });
+
+  it("adopts offer.bound directly into localStorage under home:person without issuing a redundant actor.claim", async () => {
+    const who = await enterFromAttestOffer(
+      {
+        attesters: ["email"],
+        auth: null,
+        attestations: [proxyAttestation],
+        resumable: [],
+        bound: alice,
+      },
+      {
+        adopt: async () => {
+          throw new Error("should not call adopt when offer.bound is present");
+        },
+        enter: async () => {
+          throw new Error("should not call enter when offer.bound is present");
+        },
+      },
+    );
+    expect(who).toEqual(alice);
+    expect(JSON.parse(localStorage.getItem("isocan.identity") ?? "{}")).toEqual({
+      id: "usr_alice",
+      name: "Alice",
+      key: "home:person",
+    });
+  });
+
+  it("auto-resumes when exactly one persona is resumable on the attested email", async () => {
+    const adopted: string[] = [];
+    const who = await enterFromAttestOffer(
+      {
+        attesters: ["email"],
+        auth: null,
+        attestations: [proxyAttestation],
+        resumable: [alice],
+      },
+      {
+        adopt: async (actor) => {
+          adopted.push(actor.id);
+          return actor;
+        },
+        enter: async () => {
+          throw new Error("should not mint fresh actor when resumable exists");
+        },
+      },
+    );
+    expect(who).toEqual(alice);
+    expect(adopted).toEqual(["usr_alice"]);
+  });
+
+  it("auto-claims the email local-part when no persona exists yet on the attested email", async () => {
+    const entered: string[] = [];
+    const who = await enterFromAttestOffer(
+      {
+        attesters: ["email"],
+        auth: null,
+        attestations: [proxyAttestation],
+        resumable: [],
+      },
+      {
+        adopt: async () => {
+          throw new Error("nothing to adopt");
+        },
+        enter: async (name) => {
+          entered.push(name);
+          return { id: "usr_new", name };
+        },
+      },
+    );
+    expect(who).toEqual({ id: "usr_new", name: "alice" });
+    expect(entered).toEqual(["alice"]);
+  });
+
+  it("auto-resumes the persona matching the email local-part when multiple personas are resumable", async () => {
+    const adopted: string[] = [];
+    const who = await enterFromAttestOffer(
+      {
+        attesters: ["email"],
+        auth: null,
+        attestations: [proxyAttestation],
+        resumable: [aliceAdmin, alice],
+      },
+      {
+        adopt: async (actor) => {
+          adopted.push(actor.id);
+          return actor;
+        },
+        enter: async () => {
+          throw new Error("should not mint fresh actor when resumable matches local-part");
+        },
+      },
+    );
+    expect(who).toEqual(alice);
+    expect(adopted).toEqual(["usr_alice"]);
+  });
+
+  it("defers to the identity dialog when multiple personas are ambiguous or the claim is refused", async () => {
+    const ambiguous = await enterFromAttestOffer(
+      {
+        attesters: ["email"],
+        auth: null,
+        attestations: [proxyAttestation],
+        resumable: [aliceAdmin, { id: "usr_alice_review", name: "Alice (Review)" }],
+      },
+      {
+        adopt: async () => alice,
+        enter: async () => alice,
+      },
+    );
+    expect(ambiguous).toBeNull();
+
+    const taken = await enterFromAttestOffer(
+      {
+        attesters: ["email"],
+        auth: null,
+        attestations: [proxyAttestation],
+        resumable: [],
+      },
+      {
+        enter: async () => {
+          throw new Error("name-taken");
+        },
+      },
+    );
+    expect(taken).toBeNull();
   });
 });
 

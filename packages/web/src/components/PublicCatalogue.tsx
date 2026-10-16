@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { canvasUrl, capabilityWord, type PublicCanvas } from "@isocan/core";
-import { publicCanvases } from "../lib/api.ts";
+import { publicCanvases } from "../lib/api-access.ts";
 import "./public.css";
 
 /** Shared by the named home and the unsigned public page. No canvas content reader. */

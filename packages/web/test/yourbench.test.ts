@@ -259,3 +259,21 @@ describe("the bench is behind a lazy boundary", () => {
     expect(agentTray).toMatch(/<Suspense fallback=\{null\}>\s*<BenchJoin /);
   });
 });
+
+/**
+ * **The panel is sized like its siblings** (14 Oct 2026). Opened as
+ * `.identity-menu` with a 320px minimum, it sat inside the identity
+ * popover's 260px and its text ran off the right edge, clipped, with the
+ * Close button stretched across the column. Every other panel the identity
+ * menu opens is a `.terminal-menu`, which the popover widens for and turns
+ * into a sheet on a phone; the bench is one too.
+ */
+describe("Your bench opens at the width its siblings do", () => {
+  const css = readFileSync(fileURLToPath(new URL("../src/components/yourbench.css", import.meta.url)), "utf8");
+  it("is a terminal-menu, with Close at its own width", () => {
+    expect(panel).toMatch(/<div className="terminal-menu"/);
+    expect(panel).not.toMatch(/identity-menu/);
+    expect(panel).toMatch(/<div className="terminal-actions">\s*<button className="btn" onClick=\{onClose\}>/);
+    expect(withoutComments(css)).not.toMatch(/min-width:\s*3\d\dpx/);
+  });
+});

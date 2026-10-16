@@ -43,6 +43,7 @@ export function MentionField({
   autoFocus,
   multiline,
   grow,
+  marks,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -64,6 +65,12 @@ export function MentionField({
    *  For a composer: at rest it should cost a single line, and while you are
    *  writing you should be able to read what you wrote. */
   grow?: boolean;
+  /**
+   * Ranges of the text to underline in the backdrop — the Chat's vague words
+   * (proactive-agent phase 10). Painted under the real text like a chip, so
+   * the field stays a plain field; the lazy `DesignerWords` sheet draws them.
+   */
+  marks?: readonly { start: number; end: number }[] | undefined;
 }) {
   const fieldRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
@@ -178,7 +185,7 @@ export function MentionField({
   return (
     <div className={`mention-field${multiline ? " multiline" : ""}${grow ? " grow" : ""}`}>
       <div className="mention-backdrop" ref={backdropRef} aria-hidden="true">
-        {paintText(value, candidates, itemCandidates, bench, open ? trigger!.at : null, markerRef)}
+        {paintText(value, candidates, itemCandidates, bench, open ? trigger!.at : null, markerRef, marks)}
         {"​" /* keeps a trailing newline's line box alive */}
       </div>
       {multiline || grow ? (
@@ -398,6 +405,7 @@ function paintText(
   bench: readonly MentionCandidate[],
   markAt: number | null,
   markerRef: RefObject<HTMLSpanElement>,
+  marks: readonly { start: number; end: number }[] = [],
 ) {
   const nodes: ReactNode[] = [];
   let offset = 0;
@@ -412,11 +420,16 @@ function paintText(
         ? { className: "item-ref" }
         : {};
     if (markAt === null || markAt < start || markAt >= offset) {
-      nodes.push(
-        <span key={start} {...props}>
-          {piece.text}
-        </span>,
-      );
+      // Underlined ranges split the piece; the rest of it paints as before.
+      let at = start;
+      for (const m of marks) {
+        if (m.end <= at || m.start >= offset) continue;
+        if (m.start > at) nodes.push(<span key={at} {...props}>{value.slice(at, m.start)}</span>);
+        const end = Math.min(m.end, offset);
+        nodes.push(<span key={`${Math.max(m.start, at)}-v`} {...props} className="vague-word">{value.slice(Math.max(m.start, at), end)}</span>);
+        at = end;
+      }
+      if (at < offset) nodes.push(<span key={at} {...props}>{value.slice(at, offset)}</span>);
       continue;
     }
     const cut = markAt - start;

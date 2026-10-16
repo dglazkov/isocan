@@ -515,7 +515,7 @@ describe("an unmatched /api path says so, in JSON, with a code", () => {
       // what an older home now looks like from a replica. Injected rather than
       // deployed, because the other way to get one is to check out phase 7.
       let asked = false;
-      replica.homes.link(base)!.freeName = async () => {
+      replica.homes!.link(base)!.freeName = async () => {
         asked = true;
         throw new HomeRefusedError(404, "no such route", UNKNOWN_ROUTE);
       };
@@ -621,7 +621,8 @@ describe("on a replica", () => {
       // the link is OFF, so nothing else could have listed it.
       await waitFor(async () => {
         const res = await fetch(`${replicaBase}/api/projects/${CANVAS}/canvas`, { headers: cli.headers });
-        return res.status === 200;
+        if (res.status !== 200) return false;
+        return ((await replica.desk.badge(cli.badgeId))?.admissions.length ?? 0) > 0;
       }, "the canvas to replicate after redemption");
 
       // No local admission was written for the CLI badge: what let it in was

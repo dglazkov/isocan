@@ -9,14 +9,15 @@ import { PersonalService, PersonalError } from "./personal.ts";
 import { SOURCE_POLICY_HEADER, parseSourcePolicyHeader, SOURCE_ACCESS_ROUTE, type SourceRequestContext, type SourceAccessRequest, type PersonalLinkRequest, type PersonalUnlinkRequest, type PersonalReadRequest } from "@isocan/core";
 import { PUBLIC_CANVASES_ROUTE, isListedGrant, type PublicCanvasesResponse, type SetPublicListingRequest } from "@isocan/core";
 import { INBOX_ROUTE, inboxOn, namesFor, type InboxResponse } from "@isocan/core";
-import { collectInbox, sequenceInbox } from "./inbox.ts";
+import { CanvasGoneAtHomeError, collectInbox, sequenceInbox } from "./inbox.ts";
 import type { JudgmentOptions } from "./judgment.ts";
+import type { SummaryOptions } from "./summaries.ts";
 import type { TextOptions } from "./text.ts";
 import type { LiveTokenOptions } from "./live-token.ts";
 import { registerModelRoutes } from "./model-routes.ts";
 import { registerKeyRoutes, type KeyRouteOptions } from "./key-routes.ts";
 import { judgeWorkerPolicy, registerModelFileRoutes } from "./model-files.ts";
-import { textAttention } from "@isocan/core";
+import { textAttention, contributions } from "@isocan/core";
 import { CLIENT_FEATURES_HEADER, supportsCanvasGroups, GroupConflictError, MigrationBoundaryError } from "@isocan/core";
 import { CanvasGroupsClientError, groupOperation, requireGroupClient } from "./canvas-groups.ts";
 import { QuestionnaireClientError, questionnaireOperation, requireQuestionnaireClient } from "./questionnaire-capability.ts";
@@ -24,7 +25,7 @@ import { supportsQuestionnaires } from "@isocan/core";
 import { supportsDesignRequests } from "@isocan/core";
 import { DesignRequestClientError, designRequestOperation } from "./design-request-capability.ts";
 import { registerCanvasGroupContext } from "./canvas-group-context.ts";
-import { createReadStream, existsSync, statSync, promises as fs } from "node:fs";
+import { createReadStream, existsSync, readFileSync, statSync, promises as fs } from "node:fs";
 import os from "node:os";
 import { createHash } from "node:crypto";
 import path from "node:path";
@@ -100,6 +101,9 @@ import {
   isSpaceGrant,
   normalizeAttribute,
   sameGroupName,
+  isPanelExtension,
+  isPanelSubject,
+  panelItemIdOf,
   BADGE_RESTART_HINT,
   BADGES_ROUTE,
   cancelledSince,
@@ -181,16 +185,20 @@ import {
   type HomeRefusal,
 } from "@isocan/core";
 import { Engine, NothingToUndoError, CanvasNotFoundError } from "./engine.ts";
-import { isocanHome } from "./paths.ts";
-import { moduleFile, readRuntimeModules } from "./modules.ts";
-import { boundDirs, hashBound, pickList, readBound, readTree, writeBound } from "./tree.ts";
+import { builtInAsset } from "./modules.ts";
+import { hashBound, readBound, readTree, writeBound } from "./tree.ts";
 import {
+  attestationFromProxy,
   attestersOf,
   attesterRefusal,
   BadIdTokenError,
+  ensureProxyAttestation,
+  ensureProxySessionClaim,
   googleSigningKeys,
+  resolveProxyPrincipal,
   verifyIdToken,
   type AuthConfig,
+  type ProxyAuthConfig,
   type SigningKeys,
 } from "./attest.ts";
 import { gcCanvases } from "./gc.ts";
@@ -236,18 +244,21 @@ import {
 import { PresenceHub, SESSION_TTL_MS } from "./presence.ts";
 import { buildRoot, buildStamp } from "./build.ts";
 import { HomeRefusedError, HomeUnreachableError } from "./home-link.ts";
-import type { HomeLinks } from "./home-links.ts";
+import { NotAReplicaError, SelfLinkError } from "./home-links.ts";
 import type { ParkCursors } from "./park.ts";
-import { DocRefusal, fetchGoogleDoc, type GoogleToken } from "./google.ts";
+import { DocRefusal, fetchGoogleDoc } from "./google.ts";
 import { RcHolds, rcPoliciesOf } from "./rc-holds.ts";
 import { isContentPath, isContentRequest, registerContentRoutes, type ContentSigning } from "./content.ts";
 import { BLOBS_PRESENT_LIMIT, BLOBS_PRESENT_ROUTE, type BlobsPresentResponse } from "./blobs-present.ts";
 import { signedBlobPath } from "./content-auth.ts";
-import { bindableRoot, markerFile, readMarker, recordDir, writeMarker } from "./binding.ts";
+import { markerFile, readMarker, writeMarker } from "./binding.ts";
 import { personaRefusal, readPersonas, writePersona } from "./personas.ts";
-import { liveGrants, loopbackBound, refuseAmbiguousHome } from "./route-helpers.ts";
+import { isRequestSelfAddress, liveGrants, loopbackBound, refuseAmbiguousHome, resolveCreateHome, resolveJoinHome } from "./route-helpers.ts";
+import type { Workstation } from "./workstation.ts";
 import { registerOperatorRoutes } from "./operator-routes.ts";
 import { registerPassRoutes } from "./pass-routes.ts";
+import { registerForgetRoutes } from "./forget-routes.ts";
+import { registerPanelRoutes } from "./panel-routes.ts";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -484,15 +495,25 @@ export interface RouteOptions {
   /** The home's text model (`text.ts`): its key, provider, rate and transport.
    * Absent, the key is `ISOCAN_TEXT_API_KEY`, else `keys.json`, read per call. */
   text?: TextOptions;
+  /** Semantic Zoom's summaries (`summaries.ts`): the quiet period, the model, the bound and the clock. Absent, the production defaults. */
+  summaries?: SummaryOptions;
   /** The talk module's Gemini Live tokens (`live-token.ts`): its key, rate and
    * transport. Absent, the key is `GEMINI_API_KEY`, else `keys.json`, read per call. */
   liveToken?: LiveTokenOptions;
   /** The machine-local key routes (`key-routes.ts`): the environment and the
    * provider transport they read. Absent, `process.env` and `fetch`. */
   keys?: KeyRouteOptions;
-  /** Local setup persists its pass-returned person in the same process as
-   * home badge writes. The route guards local custody before spending a pass. */
-  adoptIdentity?: (actor: Actor) => Promise<{ actor: Actor; adopted: boolean }>;
+  /**
+   * **The local workstation seam** (`Workstation | null`).
+   *
+   * Holds single-user machine state (`keys.json`, `identity.json`, `google.json`,
+   * `dirs.json`, `modules/`) and outbound replica state (`homes.json`, `HomeLinks`).
+   * Present on a local daemon (`FileWorkstation`) and `null` on a hosted home
+   * (`ISOCAN_STORE=cloud` or `servesWorld: true`), so a hosted home has no
+   * object to become a replica through, spend local keys from, or bind local
+   * directories in.
+   */
+  workstation?: Workstation | null;
   /**
    * Where a sweep's per-badge outcomes go (roles design, "Reaching an open
    * socket"): the daemon hands the same hub to `ws.ts`, which tells the
@@ -500,41 +521,6 @@ export interface RouteOptions {
    * constructs routes alone, in which case one is made and nobody listens.
    */
   sweeps?: SweepHub;
-  /** Where a canvas born here, naming nothing, is born — or null when it stays
-   * here. What the health route reports as `home` (redefined in phase 10.3,
-   * because `stalenessOf` and older CLIs read that key and the birth default
-   * is the one whole-daemon answer that still exists), and what a `POST
-   * /api/home/join` with no address falls back to. */
-  birthHome?: string | null;
-  /**
-   * **Every home this daemon dials, and which canvas belongs to which.**
-   *
-   * It decides three things here: which canvas's writes and reads forward and
-   * to where, whether a given page is served at this origin at all (see
-   * `registerPages` — the one-origin rule is per canvas now), and what `GET
-   * /api/homes` answers. Absent means a daemon that is the home of everything
-   * it holds, which is every daemon a test constructs without one.
-   */
-  homes?: HomeLinks | null;
-  /**
-   * **This machine's runtime modules** (`docs/projects/modules/design.md`,
-   * phase 3): the isocan home whose `modules/` directory holds them. Read per
-   * request by `/api/serving` and `/modules/<slug>/…`, so `isocan module add`
-   * needs no restart. Absent on a daemon that should serve none.
-   */
-  modulesHome?: string;
-  /**
-   * **Whose `dirs.json` the directory routes read and write** — the roster of
-   * which directory is bound to which canvas (`binding.ts`), behind the tree,
-   * the picker, the bind and the backing. `daemon.ts` passes the home it runs
-   * out of; absent, the process's own (`isocanHome()`), read per request.
-   *
-   * It was always the process's, which is the same directory in every real
-   * daemon and a different one in every test: a daemon started on a temp home
-   * recorded its binds in the person's own `~/.isocan/dirs.json`
-   * (`docs/reviews/lessons.md` #104).
-   */
-  rosterHome?: string;
   /**
    * **Does this daemon serve the world?** What the bind says, stated rather
    * than sniffed: `daemon.ts` derives it from the address it was told to listen
@@ -574,13 +560,6 @@ export interface RouteOptions {
    */
   contentSigning?: ContentSigning | null;
   /**
-   * The Drive token on THIS machine, read fresh per request so `isocan gdoc
-   * auth` takes effect without a restart — or null, which is every hosted
-   * home and most local ones. Only `/api/docs/export` reads it, and only
-   * after the anonymous export has refused. See `google.ts`.
-   */
-  googleToken?: () => Promise<GoogleToken | null>;
-  /**
    * **The attester this home has borrowed**, or null when it has borrowed
    * none — which is every local daemon and is not a defect.
    *
@@ -593,6 +572,8 @@ export interface RouteOptions {
    * boolean somebody could set wrongly.
    */
   auth?: AuthConfig | null;
+  /** Trusted reverse-proxy identity header configuration (`ISOCAN_PROXY_EMAIL_HEADER`). */
+  proxyAuth?: ProxyAuthConfig | null;
   /**
    * **The addresses this home calls its operator** (operator phase 1), or
    * absent/empty for none — which is every daemon in this repo.
@@ -645,10 +626,81 @@ export interface RouteOptions {
   refusals?: Refusals;
 }
 
-/** The home whose `dirs.json` the directory routes read and write: the one the
- * daemon runs out of (`RouteOptions.rosterHome`), else the process's. Out here
- * rather than inside `registerRoutes`, which is held to a length. */
-const rosterHomeOf = (options: RouteOptions): string => options.rosterHome ?? isocanHome();
+/**
+ * **The forwarded answer is the whole answer, even to a caller who hangs up.**
+ * An async hook that answers early returns `reply`, and fastify then waits
+ * for the response to END before deciding whether the route still runs —
+ * except that a response which CLOSES first (the caller aborted mid-stream)
+ * counts as done without being `sent`, and the lifecycle resumes: the local
+ * route handler ran after the caller had gone, read this replica's state for
+ * a canvas whose authority is elsewhere, opened the bytes a second time, and
+ * — when its own read failed — wrote headers onto the closed response, which
+ * CI saw as an unhandled ERR_HTTP_HEADERS_SENT. Taking the reply over on a
+ * premature close is what marks it sent; the source signal already cancels
+ * the forwarded stream (`personal.test.ts`, "two-home raw reads"). True when
+ * the caller is already gone and nothing should be sent.
+ *
+ * Its own function so `registerRoutes` stays inside its agreed length.
+ */
+async function forwardedCallerGone(reply: FastifyReply, response: Response): Promise<boolean> {
+  const answered = () => { if (!reply.raw.writableEnded) reply.hijack(); };
+  if (reply.raw.destroyed) {
+    answered();
+    await response.body?.cancel().catch(() => {});
+    return true;
+  }
+  reply.raw.once("close", answered);
+  return false;
+}
+
+async function attachProxyBadge(
+  desk: Desk,
+  engine: Engine,
+  req: FastifyRequest,
+  pathname: string,
+  proxyAuth: ProxyAuthConfig | null,
+): Promise<BadgeRecord | null> {
+  if (req.method === "POST" && pathname === DOOR_ROUTE) return null;
+  const resolved = await resolveProxyPrincipal(desk, engine, req.headers, proxyAuth);
+  if (resolved?.kind === "badge") req.badge = resolved.badge;
+  return resolved?.kind === "ended" ? resolved.ended : null;
+}
+
+async function refreshProxyBadge(
+  desk: Desk,
+  engine: Engine,
+  badge: BadgeRecord,
+  req: FastifyRequest,
+  pathname: string,
+  proxyAuth: ProxyAuthConfig | null,
+): Promise<BadgeRecord> {
+  const attested = await ensureProxyAttestation(desk, badge, req.headers, proxyAuth);
+  if (req.method === "POST" && pathname === DOOR_ROUTE) return attested;
+  return ensureProxySessionClaim(desk, engine, attested, req.headers, proxyAuth);
+}
+
+function sendEndedBadge(reply: FastifyReply, gone: BadgeRecord): FastifyReply {
+  const ended = endOf(gone);
+  return reply.status(401).send({ error: ended.sentence, code: BADGE_ENDED, reason: ended.by, ended });
+}
+
+async function buildAttestOffer(
+  engine: Engine,
+  attesters: AttestOffer["attesters"],
+  auth: AuthConfig | null,
+  badge: BadgeRecord,
+): Promise<AttestOffer> {
+  const bound = badge.claims.some((row) => row.sessionKey === "home:person")
+    ? (await engine.actorBindings(badge.badgeId, ["home:person"]))[0]?.actor
+    : undefined;
+  return {
+    attesters,
+    auth,
+    attestations: badge.attestations ?? [],
+    resumable: (await engine.resumable(badge.badgeId)).map((row) => row.actor),
+    ...(bound ? { bound } : {}),
+  };
+}
 
 export function registerRoutes(
   app: FastifyInstance,
@@ -658,6 +710,7 @@ export function registerRoutes(
   presence: PresenceHub,
   options: RouteOptions = {},
 ): void {
+  const workstation = options.workstation ?? null, homes = workstation?.homes ?? null;
   // Raw bodies for blob uploads; JSON stays JSON.
   app.addContentTypeParser("*", { parseAs: "buffer" }, (_req, body, done) => done(null, body));
 
@@ -690,7 +743,8 @@ export function registerRoutes(
   // recomputed it per call would invite somebody to make it a lookup that can
   // fail halfway through a request.
   const auth = options.auth ?? null;
-  const attesters = attestersOf(auth);
+  const proxyAuth = options.proxyAuth ?? null;
+  const attesters = attestersOf(auth, proxyAuth);
   const signingKeys = options.signingKeys ?? googleSigningKeys;
   /** Who this home calls its operator, derived once for `auth`'s reason: it
    * cannot change while the process is up, and a list recomputed per call
@@ -834,7 +888,7 @@ export function registerRoutes(
     if (err instanceof CanvasGroupsClientError || err instanceof QuestionnaireClientError || err instanceof DesignRequestClientError || err instanceof DesignDecisionClientError || err instanceof DesignRepairClientError) {
       return reply.status(426).send({ error: err.message, code: err.code });
     }
-    if (err instanceof GroupConflictError || err instanceof MigrationBoundaryError) {
+    if (err instanceof GroupConflictError || err instanceof MigrationBoundaryError || err instanceof SelfLinkError || err instanceof NotAReplicaError) {
       return reply.status(409).send({ error: err.message, code: err.code });
     }
     if (err instanceof OpValidationError) {
@@ -1017,7 +1071,7 @@ export function registerRoutes(
      * for a canvas that does not live there) is the acceptable half of that
      * trade, made deliberately. Per-canvas questions go to `GET /api/homes`.
      */
-    ...(options.birthHome ? { home: options.birthHome } : {}),
+    ...(workstation?.birthHome ? { home: workstation.birthHome } : {}),
     ...buildStamp(),
     /**
      * **The third kind of stale** (auto-upgrade phase 2): this daemon's build
@@ -1031,7 +1085,7 @@ export function registerRoutes(
      * too old to name its own commit all produce.
      */
     ...(() => {
-      const verdict = options.homes?.upgrade() ?? null;
+      const verdict = homes?.upgrade() ?? null;
       return verdict ? { upgrade: verdict } : {};
     })(),
   });
@@ -1066,7 +1120,7 @@ export function registerRoutes(
     return new ViewOnlyError(canvasId, snapshot ? await ownerName(snapshot.project) : undefined);
   };
 
-  const personal = new PersonalService(engine, store, desk, (id) => !!options.homes?.for(id));
+  const personal = new PersonalService(engine, store, desk, (id) => !!homes?.for(id));
   const sourceContexts = new WeakMap<FastifyRequest, SourceRequestContext>();
   const sourceCaps = new WeakMap<FastifyRequest, Capability>();
   const localOrigin = (req: FastifyRequest): string => new URL(`${isSecureRequest(req.headers, Boolean((req.raw.socket as { encrypted?: boolean }).encrypted)) ? "https" : "http"}://${req.headers.host}`).origin;
@@ -1080,7 +1134,7 @@ export function registerRoutes(
     const refused = refusals.refusingAttestation(badge?.attestations ?? []);
     if (refused) throw new RefusedError(refused);
     const down = refusals.of(canvasId); if (down) throw new TakenDownError(down);
-    const home = options.homes?.for(canvasId);
+    const home = homes?.for(canvasId);
     if (home) {
       if (context.expectedHome && normalizeHomeUrl(context.expectedHome) !== normalizeHomeUrl(home.homeUrl)) throw new PersonalError("the selected source home does not match its recorded authority");
       const policy = context.policy;
@@ -1093,7 +1147,7 @@ export function registerRoutes(
     return personal.direct(canvasId, badgeId, context, intent, lookup, actorId);
   };
   engine.setSourceGuard(async (id, badge, context, intent, actor) => {
-    if (options.homes?.for(id)) throw new PersonalError("source authority changed while this write waited; retry at its home");
+    if (homes?.for(id)) throw new PersonalError("source authority changed while this write waited; retry at its home");
     await checkSource(id, badge, context, intent, actor);
   });
 
@@ -1171,7 +1225,10 @@ export function registerRoutes(
       }
     }
 
+    const endedProxyBadge = !req.badge && !presented ? await attachProxyBadge(desk, engine, req, pathname, proxyAuth) : null;
+
     if (req.badge) {
+      req.badge = await refreshProxyBadge(desk, engine, req.badge, req, pathname, proxyAuth);
       await desk.touch(req.badge.badgeId, new Date().toISOString());
       /**
        * **A home with no operator says so, for the whole prefix** (operator
@@ -1188,7 +1245,7 @@ export function registerRoutes(
        * reachable.
        */
       if (pathname.startsWith(OPERATOR_API_PREFIX)) {
-        const absence = operatorAbsence(auth, operators);
+        const absence = operatorAbsence(auth, operators, proxyAuth);
         if (absence) return reply.status(400).send({ error: absence, code: NO_OPERATOR });
       }
       // The door's test, re-asked. One hook rather than a call in each
@@ -1236,11 +1293,11 @@ export function registerRoutes(
         if (refused) throw new RefusedError(refused);
         const sourceContext = sourceContexts.get(req);
         if (sourceContext) {
-          if (!options.homes?.for(canvasId) && sourceContext.expectedHome && normalizeHomeUrl(sourceContext.expectedHome) !== normalizeHomeUrl(localOrigin(req))) throw new PersonalError("the selected source home does not match this authority");
+          if (!homes?.for(canvasId) && sourceContext.expectedHome && normalizeHomeUrl(sourceContext.expectedHome) !== normalizeHomeUrl(localOrigin(req))) throw new PersonalError("the selected source home does not match this authority");
           const cap = await checkSource(canvasId, req.badge.badgeId, sourceContext, sourceIntent(req.method, pathname));
           if (cap) sourceCaps.set(req, cap);
           // The actual authoritative response is forwarded after parsing the body.
-          if (options.homes?.for(canvasId)) return;
+          if (homes?.for(canvasId)) return;
         }
         const recap = RECAP_HEAD_ROUTE.test(pathname);
         if (recap && await store.canvasLifecycle(canvasId) !== "live") throw new CanvasNotFoundError(canvasId);
@@ -1280,7 +1337,8 @@ export function registerRoutes(
     }
     // Public browsing needs no identity, but a supplied ended credential
     // still receives its own refusal instead of silently becoming anonymous.
-    if (isOpen(req.method, pathname) && !(pathname === PUBLIC_CANVASES_ROUTE && presented)) return;
+    if (isOpen(req.method, pathname) && !(pathname === PUBLIC_CANVASES_ROUTE && (presented || endedProxyBadge))) return;
+    if (endedProxyBadge) return sendEndedBadge(reply, endedProxyBadge);
     if (!presented) {
       return reply
         .status(401)
@@ -1301,12 +1359,7 @@ export function registerRoutes(
      * `bad-badge` as before.
      */
     const gone = await resolveEnded(desk, presented);
-    if (gone) {
-      const ended = endOf(gone);
-      return reply
-        .status(401)
-        .send({ error: ended.sentence, code: BADGE_ENDED, reason: ended.by, ended });
-    }
+    if (gone) return sendEndedBadge(reply, gone);
     return reply
       .status(401)
       .send({ error: `this home does not know that badge — ask the door for a new one (POST ${DOOR_ROUTE})`, code: "bad-badge" });
@@ -1340,7 +1393,7 @@ export function registerRoutes(
       const scoped = CANVAS_API_ROUTE.exec(pathname)?.[1] ?? /^\/api\/spaces\/[^/]+\/canvases\/([^/]+)$/.exec(pathname)?.[1];
       const canvasId = scoped ? decodeSegment(scoped) : (pathname === "/api/ops" || pathname.startsWith("/api/park/")) ? body?.canvasId ?? (body?.op?.type === "project.create" ? body.op.canvasId : undefined) : undefined;
       if (canvasId) {
-        if (!options.homes?.for(canvasId) && context.expectedHome && normalizeHomeUrl(context.expectedHome) !== normalizeHomeUrl(localOrigin(req))) throw new PersonalError("the selected source home does not match this authority");
+        if (!homes?.for(canvasId) && context.expectedHome && normalizeHomeUrl(context.expectedHome) !== normalizeHomeUrl(localOrigin(req))) throw new PersonalError("the selected source home does not match this authority");
         const intent = body?.op?.type === "project.create" ? "own" : sourceIntent(req.method, pathname);
         const actors = [body?.actor?.id, body?.actorId, (req.query as { actorId?: string }).actorId].filter((id) => id !== undefined);
         const cap = await checkSource(canvasId, req.badge.badgeId, context, intent);
@@ -1349,7 +1402,7 @@ export function registerRoutes(
           await checkSource(canvasId, req.badge.badgeId, context, intent, actor);
         }
         if (cap) sourceCaps.set(req, cap);
-        const home = options.homes?.for(canvasId);
+        const home = homes?.for(canvasId);
         // Source actor restrictions must finish before a capability check reads private state.
         // A remote source is checked by the authority receiving the original feature header.
         // Recap carries bounded metadata, not typed reducer state; its queued read must
@@ -1367,6 +1420,7 @@ export function registerRoutes(
           reply.status(response.status);
           for (const name of ["content-type", "content-length", "content-range", "accept-ranges", "content-security-policy", "x-content-type-options", "content-disposition"]) { const value = response.headers.get(name); if (value) reply.header(name, value); }
           reply.header("Cache-Control", "no-store");
+          if (await forwardedCallerGone(reply, response)) return reply;
           return reply.send(response.body ? Readable.fromWeb(response.body as import("node:stream/web").ReadableStream) : undefined);
         }
       }
@@ -1438,6 +1492,7 @@ export function registerRoutes(
     const carrier = ((req.body ?? {}) as DoorRequest).carrier ?? "bearer";
     const { record, token } = mintBadge(carrier === "cookie" ? "cookie" : "bearer");
     await desk.put(record);
+    await ensureProxyAttestation(desk, record, req.headers, proxyAuth);
     if (carrier === "cookie") {
       // The secret is NEVER in the body for the cookie carrier: the whole
       // value of HttpOnly is that page JavaScript cannot read the credential,
@@ -1593,14 +1648,14 @@ export function registerRoutes(
     if (typeof canvasId !== "string" || !canvasId) throw new PersonalError("a destination canvas id is required");
     const down = refusals.of(canvasId); if (down) throw new TakenDownError(down);
     await admit(req, canvasId);
-    return options.homes?.for(canvasId) ?? null;
+    return homes?.for(canvasId) ?? null;
   };
   app.get("/api/source-classification", async (req) => {
     const refused = refusedNet(req) ?? refusals.refusingAttestation(req.badge?.attestations ?? []);
     if (refused) throw new RefusedError(refused);
     const query = req.query as { canvasId?: string; expectedHome?: string };
     if (!query.canvasId || !query.expectedHome) throw new PersonalError("classification requires a source id and expected home");
-    const home = options.homes?.for(query.canvasId);
+    const home = homes?.for(query.canvasId);
     const expected = normalizeHomeUrl(query.expectedHome);
     if (expected !== normalizeHomeUrl(home?.homeUrl ?? localOrigin(req))) return { kind: "unavailable" };
     if (home) {
@@ -1618,7 +1673,7 @@ export function registerRoutes(
     let context: SourceRequestContext;
     try { context = { ...parseSourcePolicyHeader(JSON.stringify({ policy: body.policy, expectedHome: body.expectedHome })), ...(personalContext(req)?.signal ? { signal: personalContext(req)!.signal } : {}) }; }
     catch { throw new PersonalError("invalid source policy"); }
-    const home = options.homes?.for(body.canvasId);
+    const home = homes?.for(body.canvasId);
     if (normalizeHomeUrl(body.expectedHome) !== normalizeHomeUrl(home?.homeUrl ?? localOrigin(req))) throw new PersonalError("the selected source home does not match its recorded authority");
     const cap = await checkSource(body.canvasId, req.badge!.badgeId, context, context.policy.mode === "direct" ? context.policy.intent : "read", undefined, body.lookup);
     return { kind: cap ? "personal" : "ordinary", capability: cap ?? capabilityIn(req.badge!, body.canvasId) ?? "edit" };
@@ -1626,7 +1681,7 @@ export function registerRoutes(
   const rememberPersonalStatus = async <T extends import("@isocan/core").PersonalStatusResponse>(home: import("./home-link.ts").HomeConnection, answer: T): Promise<T> => {
     if (normalizeHomeUrl(answer.home) !== normalizeHomeUrl(home.homeUrl)) throw new PersonalError("personal status came from a different home");
     for (const source of [...(answer.source ? [answer.source] : []), ...answer.preserved]) {
-      if (!await options.homes!.mayDial(source.canvasId, home.homeUrl)) throw new PersonalError("personal source has a conflicting home assignment");
+      if (!await homes!.mayDial(source.canvasId, home.homeUrl)) throw new PersonalError("personal source has a conflicting home assignment");
       await desk.recordPersonalReplica(source.canvasId, home.homeUrl);
     }
     return answer;
@@ -1648,35 +1703,35 @@ export function registerRoutes(
   app.get("/api/projects/:id/personal", async (req) => {
     const { id } = req.params as { id: string };
     const actorId = await personalCaller(req, (req.query as { actorId?: string }).actorId);
-    const home = options.homes?.for(id);
+    const home = homes?.for(id);
     if (home) return home.personalRequest("GET", req.url, undefined, await actorNamed(actorId), personalContext(req));
     return { links: await personal.links(req.badge!.badgeId, actorId, id, localOrigin(req)) };
   });
   app.post("/api/projects/:id/personal/link", async (req) => {
     const { id } = req.params as { id: string }; const body = req.body as PersonalLinkRequest;
     const actorId = await personalCaller(req, body?.actorId);
-    const home = options.homes?.for(id);
+    const home = homes?.for(id);
     if (home) return home.personalRequest("POST", req.url, body, await actorNamed(actorId), personalContext(req));
     return personal.link(req.badge!.badgeId, id, body, localOrigin(req));
   });
   app.post("/api/projects/:id/personal/unlink", async (req) => {
     const { id } = req.params as { id: string }; const body = req.body as PersonalUnlinkRequest;
     const actorId = await personalCaller(req, body?.actorId);
-    const home = options.homes?.for(id);
+    const home = homes?.for(id);
     if (home) return home.personalRequest("POST", req.url, body, await actorNamed(actorId), personalContext(req));
     return personal.unlink(req.badge!.badgeId, id, body);
   });
   app.post("/api/projects/:id/personal/read", async (req) => {
     const { id } = req.params as { id: string }; const body = req.body as PersonalReadRequest;
     const actorId = await personalCaller(req, body?.actorId);
-    const home = options.homes?.for(id);
+    const home = homes?.for(id);
     if (home) return home.personalRequest("POST", req.url, body, await actorNamed(actorId), personalContext(req));
     return personal.read(req.badge!.badgeId, id, body, localOrigin(req), sourceContexts.get(req));
   });
   app.get("/api/personal/sources/:id/delegates", async (req) => {
     const { id } = req.params as { id: string };
     const actorId = await personalCaller(req, (req.query as { actorId?: string }).actorId);
-    const home = options.homes?.for(id);
+    const home = homes?.for(id);
     if (home) return home.personalRequest("GET", req.url, undefined, await actorNamed(actorId), personalContext(req));
     return { sourceCanvasId: id, delegates: await personal.delegates(req.badge!.badgeId, actorId, id) };
   });
@@ -1685,7 +1740,7 @@ export function registerRoutes(
     const body = req.body as { actorId?: string; allowed?: boolean };
     const actorId = await personalCaller(req, body?.actorId);
     if (typeof body.allowed !== "boolean") throw new PersonalError("allowed must be true or false");
-    const home = options.homes?.for(id);
+    const home = homes?.for(id);
     if (home) return home.personalRequest("PUT", req.url, body, await actorNamed(actorId), personalContext(req));
     return { delegation: await personal.delegate(req.badge!.badgeId, actorId, id, agentId, body.allowed) };
   });
@@ -1693,28 +1748,28 @@ export function registerRoutes(
   registerCanvasGroupContext(app, engine, store);
   app.get("/api/projects/:id/design/repairs", async (req) => {
     const { id } = req.params as { id: string };
-    const home = options.homes?.for(id);
+    const home = homes?.for(id);
     if (home) return home.personalRequest("GET", req.url, undefined, undefined, sourceContexts.get(req), typeof req.headers[CLIENT_FEATURES_HEADER] === "string" ? req.headers[CLIENT_FEATURES_HEADER] : "");
     if (!supportsDesignRepairs(req.headers[CLIENT_FEATURES_HEADER])) throw new DesignRepairClientError();
     return engine.designRepairs(id, localOrigin(req));
   });
   app.get("/api/projects/:id/design/decisions", async (req) => {
     const { id } = req.params as { id: string };
-    const home = options.homes?.for(id);
+    const home = homes?.for(id);
     if (home) return home.personalRequest("GET", req.url, undefined, undefined, sourceContexts.get(req), typeof req.headers[CLIENT_FEATURES_HEADER] === "string" ? req.headers[CLIENT_FEATURES_HEADER] : "");
     if (!supportsDesignDecisions(req.headers[CLIENT_FEATURES_HEADER])) throw new DesignDecisionClientError();
     return engine.designDecisions(id, localOrigin(req));
   });
   app.get("/api/projects/:id/design/requests", async (req) => {
     const { id } = req.params as { id: string };
-    const home = options.homes?.for(id);
+    const home = homes?.for(id);
     if (home) return home.personalRequest("GET", req.url, undefined, undefined, sourceContexts.get(req), typeof req.headers[CLIENT_FEATURES_HEADER] === "string" ? req.headers[CLIENT_FEATURES_HEADER] : "");
     if (!supportsDesignRequests(req.headers[CLIENT_FEATURES_HEADER])) throw new DesignRequestClientError();
     return engine.designRequests(id, localOrigin(req));
   });
   app.get("/api/projects/:id/questionnaire/actors", async (req) => {
     const { id } = req.params as { id: string };
-    const home = options.homes?.for(id);
+    const home = homes?.for(id);
     if (home) return home.personalRequest("GET", req.url, undefined, undefined, sourceContexts.get(req));
     return engine.designRespondents(id);
   });
@@ -1773,6 +1828,7 @@ export function registerRoutes(
         code: "bad-op",
       });
     }
+    const createHome = body.op?.type === "project.create" ? resolveCreateHome(app, req, workstation, body.home) : undefined;
     /**
      * **`spaceId` is a birth's space and nothing else** (roles phase 4),
      * refused beside anything but a create for `home`'s reason: request state
@@ -1899,7 +1955,7 @@ export function registerRoutes(
      * A canvas homed elsewhere is asked at its home, where the forward lands
      * on this same line.
      */
-    if (body.canvasId && body.op?.type === "comment.remove" && !options.homes?.for(body.canvasId)) {
+    if (body.canvasId && body.op?.type === "comment.remove" && !homes?.for(body.canvasId)) {
       const snapshot = await engine.getSnapshot(body.canvasId);
       const comment = snapshot.canvas.threads[body.op.threadId]?.comments.find((c) => c.id === (body.op as { commentId: string }).commentId);
       // A missing thread or comment is the reducer's refusal, with its code.
@@ -1926,7 +1982,7 @@ export function registerRoutes(
      * them.
      */
     const clickComment = body.op?.type === "thread.create" || body.op?.type === "thread.reply" ? body.op.comment.click : undefined;
-    if (body.canvasId && clickComment && !options.homes?.for(body.canvasId)) {
+    if (body.canvasId && clickComment && !homes?.for(body.canvasId)) {
       const kinds = await engine.actorKinds();
       if (kinds[resolveActor(await engine.actorJoins(), body.actor.id)] === "agent") {
         return reply.status(403).send({ error: "prototype clicks come from people — an agent reads them, it does not send them", code: "agent-click" });
@@ -1938,15 +1994,17 @@ export function registerRoutes(
     }
     let bornInto: Space | null = null;
     if (body.spaceId !== undefined && body.op?.type === "project.create") {
-      const bornAway = options.homes ? body.home !== undefined || options.homes.birth() !== null : false;
+      const bornAway = homes ? createHome !== undefined || homes.birth() !== null : false;
       if (!bornAway) {
         const owned = await ownedSpace(req, reply, body.spaceId, body.actor.id);
         if ("refused" in owned) return owned.refused;
         bornInto = owned.space;
       }
     }
+    const { home: _rawHome, ...restBody } = body as PostOpRequest & { actor: Actor };
     const entry = await engine.submit({
-      ...(body as PostOpRequest & { actor: Actor }),
+      ...restBody,
+      ...(createHome !== undefined ? { home: createHome } : {}),
       authoritativeHome: localOrigin(req),
       clientFeatures,
       badgeId: req.badge!.badgeId,
@@ -1972,11 +2030,11 @@ export function registerRoutes(
   });
 
   // `POST /api/judgment` and `POST /api/text`, the two routes that spend the home's keys — in `model-routes.ts`.
-  registerModelRoutes(app, { engine, options, refusals, admit, viewOnly, claimsOf: (badgeId) => desk.claimsOf(badgeId) });
+  registerModelRoutes(app, { engine, store, desk, workstation, options, refusals, admit, viewOnly, claimsOf: (badgeId) => desk.claimsOf(badgeId) });
   // `/api/keys`, the settings area's machine-local key routes — in `key-routes.ts`.
-  registerKeyRoutes(app, { home: rosterHomeOf(options), servesWorld: options.servesWorld, ...(options.keys ? { keys: options.keys } : {}) });
+  registerKeyRoutes(app, { workstation, servesWorld: options.servesWorld, ...(options.keys ? { keys: options.keys } : {}) });
   // `GET /models/<name>`, the local judge's model to this machine's own pages — in `model-files.ts`.
-  registerModelFileRoutes(app, { home: rosterHomeOf(options), servesWorld: options.servesWorld });
+  registerModelFileRoutes(app, { workstation, servesWorld: options.servesWorld });
 
   // ---- the actor registry: who a session key speaks as (#57) ----
 
@@ -2083,7 +2141,7 @@ export function registerRoutes(
     }
     // Anonymous first; then this machine's Drive token, if `isocan gdoc auth`
     // saved one here (stage 3). A hosted home has no token and says so.
-    const token = options.googleToken ? await options.googleToken() : null;
+    const token = workstation ? await workstation.googleToken() : null;
     try {
       const doc = await fetchGoogleDoc(id, token);
       return { id, source: doc.source, markdown: doc.markdown, title: doc.title, fetchedAt: doc.fetchedAt, via: doc.via };
@@ -2121,8 +2179,9 @@ export function registerRoutes(
     contentSigned: Boolean(options.contentSigning),
     // The loaded runtime modules — refused ones are not advertised; `isocan
     // module ls` is where a refusal is read.
-    modules: options.modulesHome
-      ? readRuntimeModules(options.modulesHome)
+    modules: workstation
+      ? workstation
+          .runtimeModules()
           .filter((m) => m.refused === null)
           .map((m) => m.manifest)
       : [],
@@ -2138,12 +2197,27 @@ export function registerRoutes(
    */
   app.get("/modules/:slug/*", async (req, reply) => {
     const { slug, "*": rest } = req.params as { slug: string; "*": string };
-    const file = options.modulesHome && /^[a-z0-9][a-z0-9._-]*$/.test(slug) ? moduleFile(options.modulesHome, slug, rest) : null;
+    const named = /^[a-z0-9][a-z0-9._-]*$/.test(slug);
+    const file = (workstation && named ? workstation.moduleFile(slug, rest) : null) ?? (named ? builtInAsset(slug, rest) : null);
     if (!file) return reply.status(404).send({ error: `not found: GET /modules/${slug}/${rest}` });
     reply.type(STATIC_TYPES[path.extname(file)] ?? "application/octet-stream");
     reply.header("Cache-Control", "no-cache");
     reply.header("X-Content-Type-Options", "nosniff");
     return reply.send(createReadStream(file));
+  });
+
+  /**
+   * **What has been contributed to a point, here** (critique phase 4). The
+   * browser registers a deferred module's record only once its half loads,
+   * so a point another module's data fills — critique's roster, filled by
+   * design-competition's nine packs — reads empty there. This process
+   * registered every module it runs (the CLI's two lists), so its registry is
+   * the one `isocan critic ls` reads, and the browser asks it rather than
+   * keeping a second copy. Data only, validated by the point's own rule.
+   */
+  app.get("/api/points/:point", async (req) => {
+    const { point } = req.params as { point: string };
+    return { point, contributions: contributions(point) };
   });
 
   // ---- slash commands: the work a message can ask for ----
@@ -2261,7 +2335,7 @@ export function registerRoutes(
     const canvases: PublicCanvasesResponse["canvases"] = [];
     const seen = new Set<string>();
     for (const grant of await desk.listedGrants()) {
-      if (!isListedGrant(grant) || seen.has(grant.canvasId) || (options.homes?.homeOf(grant.canvasId) ?? null) !== null) continue;
+      if (!isListedGrant(grant) || seen.has(grant.canvasId) || (homes?.homeOf(grant.canvasId) ?? null) !== null) continue;
       if (refusals.of(grant.canvasId) || await desk.personalSource(grant.canvasId) || await desk.personalReplica(grant.canvasId)) continue;
       const canvas = await store.canvasRecord(grant.canvasId);
       if (!canvas) continue;
@@ -2281,7 +2355,7 @@ export function registerRoutes(
     const mayDiscover = canvasDiscovery(req, { admittedOnly: reach === "admitted", shelf: true });
     const visible: Canvas[] = [];
     for (const canvas of await engine.listCanvases()) {
-      if (reach === "here" && (options.homes?.homeOf(canvas.id) ?? null) !== null) continue;
+      if (reach === "here" && (homes?.homeOf(canvas.id) ?? null) !== null) continue;
       if (await mayDiscover(canvas)) visible.push(canvas);
     }
     return visible;
@@ -2388,14 +2462,14 @@ export function registerRoutes(
      * reported: it is a record about nothing, and the question this route
      * answers is "who answers for the canvases here".
      */
-    const rows = options.homes?.assignments() ?? {};
+    const rows = homes?.assignments() ?? {};
     const canvases: Record<string, string | null> = {};
     const mayDiscover = canvasDiscovery(req, { shelf: true });
     for (const canvas of await store.listCanvases()) {
       if (await mayDiscover(canvas)) canvases[canvas.id] = rows[canvas.id] ?? null;
     }
     return {
-      birth: options.birthHome ?? null,
+      birth: workstation?.birthHome ?? null,
       canvases,
       /**
        * `reachable` is the HTTP half — whether the last poll of this home was
@@ -2405,7 +2479,7 @@ export function registerRoutes(
        * not a contradiction. Reporting only the first is what let a broken
        * canvas link look identical to a quiet canvas.
        */
-      links: (options.homes?.links() ?? []).map((link) => ({
+      links: (homes?.links() ?? []).map((link) => ({
         url: link.homeUrl,
         reachable: link.answering,
         canvases: link.canvasStates().filter((canvas) => onLocalShelf(req) || canvas.canvasId in canvases),
@@ -2447,7 +2521,7 @@ export function registerRoutes(
     // THIS canvas's home (phase 10.3): a grant is desk state and the row
     // that decides who may enter lives at the home that answers the door for
     // this canvas, which under many homes is a per-canvas question.
-    const home = options.homes?.for(id) ?? null;
+    const home = homes?.for(id) ?? null;
     if (home) return home.grants(id);
     await engine.getSnapshot(id); // 404 for unknown canvases, like every route here
     return grantsAnswer(await desk.grantsFor(id));
@@ -2471,7 +2545,7 @@ export function registerRoutes(
     const body = (req.body ?? {}) as Partial<SetPublicListingRequest>;
     if (typeof body.listed !== "boolean") return reply.status(400).send({ error: "listed must be true or false", code: "bad-listing" });
     const actorId = await actingActor(req, body.actorId);
-    const home = options.homes?.for(id) ?? null;
+    const home = homes?.for(id) ?? null;
     if (home) return home.setPublicListing(id, grantId, body.listed, await actorNamed(actorId));
     const snapshot = await engine.getSnapshot(id);
     if (!atLeast(await heldRung(desk, snapshot.project, req.badge!, actorId ?? null, await engine.actorJoins()), "own")) {
@@ -2535,7 +2609,7 @@ export function registerRoutes(
     // have accepted, on the strength of its own configuration. Same reason
     // `isocan share <email>` has no client-side "not yet". The actor rides up
     // with it, so the home asks `own` of the person and not of the machine.
-    const home = options.homes?.for(id) ?? null;
+    const home = homes?.for(id) ?? null;
     if (home) return home.createGrant(id, subject, capability, await actorNamed(actorId), bars);
     const snapshot = await engine.getSnapshot(id);
     const live = liveGrants(await desk.grantsFor(id)).find((g) => g.subject === subject);
@@ -2587,8 +2661,9 @@ export function registerRoutes(
     // produce would admit nobody while the dialog claimed the team was
     // invited. Its maker is not asked — handing a canvas owner the id is how
     // a group is lent, and what they learn of it is its name and size.
-    const groupId = groupIdOf(subject);
+    const groupId = groupIdOf(subject), panelItemId = panelItemIdOf(subject);
     if (groupId !== null && !(await liveGroup(groupId))) return groupNotFound(reply, groupId);
+    if (panelItemId !== null && !isPanelExtension(snapshot.canvas.items[panelItemId]!)) return reply.status(404).send({ error: `no panel ${panelItemId} on ${id}`, code: "unknown-panel" });
     const grant: Grant = bars
       ? barRow(id, subject, req.badge!.badgeId)
       : {
@@ -2908,7 +2983,7 @@ export function registerRoutes(
     const query = req.query as { actorId?: unknown; bar?: unknown };
     const actorId = await actingActor(req, query.actorId);
     const bar = query.bar === "1" || query.bar === "true";
-    const home = options.homes?.for(id) ?? null;
+    const home = homes?.for(id) ?? null;
     if (home) return home.revokeGrant(id, grantId, await actorNamed(actorId), bar);
     const snapshot = await engine.getSnapshot(id);
     // Read through this canvas's own rows, so a grant id belonging to another
@@ -2971,7 +3046,7 @@ export function registerRoutes(
     const onSpace = space ? liveGrants(await desk.grantsForSpace(space.id)) : [];
     const barred = [...after, ...onSpace].some((g) => isBar(g) && g.subject === mine.subject);
     const stillAdmittedBy =
-      mine.subject === LINK || barred
+      mine.subject === LINK || isPanelSubject(mine.subject) || barred
         ? undefined
         : onSpace.some((g) => g.subject === mine.subject && !isBar(g))
           ? ("space" as const)
@@ -2985,6 +3060,8 @@ export function registerRoutes(
       ...(stillAdmittedBy ? { stillAdmittedBy } : {}),
     } satisfies GrantResponse;
   });
+
+  registerPanelRoutes(app, { engine, store, desk, sourceMutation });
 
   /** One person's inbox. Remote entries and marks are read at their actual
    * home, never from an offline replica whose access may have been withdrawn. */
@@ -3020,13 +3097,17 @@ export function registerRoutes(
       return await collectInbox(canvases, async (canvas, signal): Promise<InboxResponse> => {
         const context = sourceContexts.get(req);
         if (context) await checkSource(canvas.id, req.badge!.badgeId, context, "read", undefined, only ? "entry" : "discovery");
-        const remote = options.homes?.for(canvas.id) ?? null;
+        const remote = homes?.for(canvas.id) ?? null;
         if (remote) {
           const bounded = AbortSignal.any([signal, AbortSignal.timeout(8000), ...(context?.signal ? [context.signal] : [])]);
-          const result = context
-            ? await remote.personalRequest<InboxResponse>("GET", `${INBOX_ROUTE}?${new URLSearchParams({ actorId: actor.id, canvasId: canvas.id, ...(label ? { label } : {}) })}`, undefined, actor, { ...context, signal: bounded })
-            : await remote.inbox(canvas.id, actor, label, bounded);
-          return { ...result, homes: { ...result.homes, [canvas.id]: options.homes!.homeOf(canvas.id) } };
+          const result = await (context
+            ? remote.personalRequest<InboxResponse>("GET", `${INBOX_ROUTE}?${new URLSearchParams({ actorId: actor.id, canvasId: canvas.id, ...(label ? { label } : {}) })}`, undefined, actor, { ...context, signal: bounded })
+            : remote.inbox(canvas.id, actor, label, bounded)
+          ).catch((err: unknown) => {
+            if (err instanceof HomeRefusedError && err.status === 404) throw new CanvasGoneAtHomeError(err.message);
+            throw err;
+          });
+          return { ...result, homes: { ...result.homes, [canvas.id]: homes!.homeOf(canvas.id) } };
         }
         const down = refusals.of(canvas.id);
         if (down) throw new TakenDownError(down);
@@ -3075,7 +3156,7 @@ export function registerRoutes(
     if (canvasId !== undefined && !actorId) {
       return reply.status(400).send({ error: "a canvas seen-read needs an actorId claimed by this badge", code: "bad-op" });
     }
-    const home = canvasId === undefined ? options.homes?.homeScoped() : options.homes?.for(canvasId);
+    const home = canvasId === undefined ? homes?.homeScoped() : homes?.for(canvasId);
     if (home) {
       const aborter = new AbortController();
       const cancel = () => { if (!reply.raw.writableEnded) aborter.abort(); };
@@ -3134,7 +3215,7 @@ export function registerRoutes(
         .send({ error: "`seq` is the canvas's oplog head you had in front of you", code: "bad-op" });
     }
     const actorId = await actingActor(req, body.actorId);
-    const home = options.homes?.for(canvasId) ?? null;
+    const home = homes?.for(canvasId) ?? null;
     if (home) return home.markSeen(canvasId, seq, await actorNamed(actorId));
     if (!actorId) {
       return reply.status(400).send({
@@ -3167,9 +3248,9 @@ export function registerRoutes(
   /** The spaces this badge may see, each with its canvases — the canvas
    * list joins these to `GET /api/projects`, which does not change. */
   app.get(SPACES_ROUTE, async (req, reply) => {
-    const stuck = refuseAmbiguousHome(reply, options.homes, "list spaces");
+    const stuck = refuseAmbiguousHome(reply, homes, "list spaces");
     if (stuck) return stuck;
-    const home = options.homes?.homeScoped() ?? null;
+    const home = homes?.homeScoped() ?? null;
     if (home) return home.spaces();
     // `spacesFor` is the bounded query; a bar on a space names the badge too,
     // and a space that only keeps you out is not one you may see.
@@ -3188,10 +3269,10 @@ export function registerRoutes(
     const refusal = spaceNameRefusal(body.name);
     if (refusal) return reply.status(400).send({ error: refusal, code: BAD_SPACE });
     const name = body.name!.trim();
-    const stuck = refuseAmbiguousHome(reply, options.homes, "make a space");
+    const stuck = refuseAmbiguousHome(reply, homes, "make a space");
     if (stuck) return stuck;
     const actorId = await actingActor(req, body.actorId);
-    const home = options.homes?.homeScoped() ?? null;
+    const home = homes?.homeScoped() ?? null;
     if (home) return home.createSpace(name, await actorNamed(actorId));
     if (!actorId) {
       return reply.status(400).send({
@@ -3229,10 +3310,10 @@ export function registerRoutes(
   app.delete(`${SPACES_ROUTE}/:id`, async (req, reply) => {
     const { id } = req.params as { id: string };
     const query = req.query as { actorId?: unknown };
-    const stuck = refuseAmbiguousHome(reply, options.homes, "delete a space");
+    const stuck = refuseAmbiguousHome(reply, homes, "delete a space");
     if (stuck) return stuck;
     const actorId = await actingActor(req, query.actorId);
-    const home = options.homes?.homeScoped() ?? null;
+    const home = homes?.homeScoped() ?? null;
     if (home) return home.deleteSpace(id, await actorNamed(actorId));
     const existing = await desk.space(id);
     if (!existing) return spaceNotFound(reply, id);
@@ -3263,14 +3344,14 @@ export function registerRoutes(
   app.put(`${SPACES_ROUTE}/:id/canvases/:canvasId`, async (req, reply) => {
     const { id, canvasId } = req.params as { id: string; canvasId: string };
     const body = (req.body ?? {}) as Partial<SpaceCanvasRequest>;
-    const stuck = refuseAmbiguousHome(reply, options.homes, "move a canvas into a space");
+    const stuck = refuseAmbiguousHome(reply, homes, "move a canvas into a space");
     if (stuck) return stuck;
     const actorId = await actingActor(req, body.actorId);
-    const home = options.homes?.homeScoped() ?? null;
+    const home = homes?.homeScoped() ?? null;
     if (home) return home.addToSpace(id, canvasId, await actorNamed(actorId));
     const owned = await ownedSpace(req, reply, id, actorId);
     if ("refused" in owned) return owned.refused;
-    const elsewhere = options.homes?.homeOf(canvasId) ?? null;
+    const elsewhere = homes?.homeOf(canvasId) ?? null;
     if (elsewhere !== null) {
       return reply.status(400).send({
         error:
@@ -3312,10 +3393,10 @@ export function registerRoutes(
   app.delete(`${SPACES_ROUTE}/:id/canvases/:canvasId`, async (req, reply) => {
     const { id, canvasId } = req.params as { id: string; canvasId: string };
     const query = req.query as { actorId?: unknown };
-    const stuck = refuseAmbiguousHome(reply, options.homes, "move a canvas out of a space");
+    const stuck = refuseAmbiguousHome(reply, homes, "move a canvas out of a space");
     if (stuck) return stuck;
     const actorId = await actingActor(req, query.actorId);
-    const home = options.homes?.homeScoped() ?? null;
+    const home = homes?.homeScoped() ?? null;
     if (home) return home.removeFromSpace(id, canvasId, await actorNamed(actorId));
     const owned = await ownedSpace(req, reply, id, actorId);
     if ("refused" in owned) return owned.refused;
@@ -3338,9 +3419,9 @@ export function registerRoutes(
 
   app.get(`${SPACES_ROUTE}/:id/grants`, async (req, reply) => {
     const { id } = req.params as { id: string };
-    const stuck = refuseAmbiguousHome(reply, options.homes, "read a space's grants");
+    const stuck = refuseAmbiguousHome(reply, homes, "read a space's grants");
     if (stuck) return stuck;
-    const home = options.homes?.homeScoped() ?? null;
+    const home = homes?.homeScoped() ?? null;
     if (home) return home.spaceGrants(id);
     const space = await visibleSpace(req, id);
     if (!space) return spaceNotFound(reply, id);
@@ -3363,18 +3444,14 @@ export function registerRoutes(
     const bars = body.bars === true;
     const subject = normalizeSubject(body.subject!);
     if (subject === LINK) {
-      return reply.status(400).send({
-        error:
-          "a space has no address, so it has no link row — set every canvas's link at once " +
-          "with `POST /api/spaces/:id/link` (`isocan share --space <name> --link …`)",
-        code: BAD_SPACE,
-      });
+      return reply.status(400).send({ error: "a space has no address, so it has no link row — set every canvas's link at once with `POST /api/spaces/:id/link` (`isocan share --space <name> --link …`)", code: BAD_SPACE });
     }
+    if (isPanelSubject(subject)) return reply.status(400).send({ error: "a panel lives on one canvas, so it has no space row", code: BAD_SPACE });
     const capability: Capability = body.capability ?? "edit";
-    const stuck = refuseAmbiguousHome(reply, options.homes, "share a space");
+    const stuck = refuseAmbiguousHome(reply, homes, "share a space");
     if (stuck) return stuck;
     const actorId = await actingActor(req, body.actorId);
-    const home = options.homes?.homeScoped() ?? null;
+    const home = homes?.homeScoped() ?? null;
     if (home) return home.createSpaceGrant(id, subject, capability, await actorNamed(actorId), bars);
     const owned = await ownedSpace(req, reply, id, actorId);
     if ("refused" in owned) return owned.refused;
@@ -3420,10 +3497,10 @@ export function registerRoutes(
     const { id, grantId } = req.params as { id: string; grantId: string };
     const query = req.query as { actorId?: unknown; bar?: unknown };
     const bar = query.bar === "1" || query.bar === "true";
-    const stuck = refuseAmbiguousHome(reply, options.homes, "revoke a space's grant");
+    const stuck = refuseAmbiguousHome(reply, homes, "revoke a space's grant");
     if (stuck) return stuck;
     const actorId = await actingActor(req, query.actorId);
-    const home = options.homes?.homeScoped() ?? null;
+    const home = homes?.homeScoped() ?? null;
     if (home) return home.revokeSpaceGrant(id, grantId, await actorNamed(actorId), bar);
     const owned = await ownedSpace(req, reply, id, actorId);
     if ("refused" in owned) return owned.refused;
@@ -3485,10 +3562,10 @@ export function registerRoutes(
         code: BAD_SPACE,
       });
     }
-    const stuck = refuseAmbiguousHome(reply, options.homes, "set a space's links");
+    const stuck = refuseAmbiguousHome(reply, homes, "set a space's links");
     if (stuck) return stuck;
     const actorId = await actingActor(req, body.actorId);
-    const home = options.homes?.homeScoped() ?? null;
+    const home = homes?.homeScoped() ?? null;
     if (home) return home.setSpaceLink(id, capability, await actorNamed(actorId));
     const owned = await ownedSpace(req, reply, id, actorId);
     if ("refused" in owned) return owned.refused;
@@ -3538,9 +3615,9 @@ export function registerRoutes(
    * list. A group somebody is merely in is not listed; they meet it as a
    * row's name and size on the canvases it opens. */
   app.get(GROUPS_ROUTE, async (req, reply) => {
-    const stuck = refuseAmbiguousHome(reply, options.homes, "list groups");
+    const stuck = refuseAmbiguousHome(reply, homes, "list groups");
     if (stuck) return stuck;
-    const home = options.homes?.homeScoped() ?? null;
+    const home = homes?.homeScoped() ?? null;
     if (home) return home.groups();
     const groups = (await desk.groupsFor(req.badge!)).map((group) => groupViewOf(group, true));
     return { groups } satisfies GroupsResponse;
@@ -3553,10 +3630,10 @@ export function registerRoutes(
     const refusal = groupNameRefusal(body.name);
     if (refusal) return reply.status(400).send({ error: refusal, code: BAD_GROUP });
     const name = body.name!.trim();
-    const stuck = refuseAmbiguousHome(reply, options.homes, "make a group");
+    const stuck = refuseAmbiguousHome(reply, homes, "make a group");
     if (stuck) return stuck;
     const actorId = await actingActor(req, body.actorId);
-    const home = options.homes?.homeScoped() ?? null;
+    const home = homes?.homeScoped() ?? null;
     if (home) return home.createGroup(name, await actorNamed(actorId));
     if (!actorId) {
       return reply.status(400).send({
@@ -3589,9 +3666,9 @@ export function registerRoutes(
    * naming it lets see it; not found for everybody else. */
   app.get(`${GROUPS_ROUTE}/:id`, async (req, reply) => {
     const { id } = req.params as { id: string };
-    const stuck = refuseAmbiguousHome(reply, options.homes, "read a group");
+    const stuck = refuseAmbiguousHome(reply, homes, "read a group");
     if (stuck) return stuck;
-    const home = options.homes?.homeScoped() ?? null;
+    const home = homes?.homeScoped() ?? null;
     if (home) return home.group(id);
     const seen = await visibleGroup(req, id);
     if (!seen) return groupNotFound(reply, id);
@@ -3612,10 +3689,10 @@ export function registerRoutes(
     const attribute = attributeParam(raw);
     const refusal = groupMemberRefusal(attribute);
     if (refusal) return reply.status(400).send({ error: refusal, code: BAD_GROUP });
-    const stuck = refuseAmbiguousHome(reply, options.homes, "add somebody to a group");
+    const stuck = refuseAmbiguousHome(reply, homes, "add somebody to a group");
     if (stuck) return stuck;
     const actorId = await actingActor(req, body.actorId);
-    const home = options.homes?.homeScoped() ?? null;
+    const home = homes?.homeScoped() ?? null;
     if (home) return home.addGroupMember(id, attribute, await actorNamed(actorId));
     const owned = await ownedGroup(req, reply, id, actorId);
     if ("refused" in owned) return owned.refused;
@@ -3636,10 +3713,10 @@ export function registerRoutes(
     const { id, attribute: raw } = req.params as { id: string; attribute: string };
     const query = req.query as { actorId?: unknown };
     const attribute = attributeParam(raw);
-    const stuck = refuseAmbiguousHome(reply, options.homes, "remove somebody from a group");
+    const stuck = refuseAmbiguousHome(reply, homes, "remove somebody from a group");
     if (stuck) return stuck;
     const actorId = await actingActor(req, query.actorId);
-    const home = options.homes?.homeScoped() ?? null;
+    const home = homes?.homeScoped() ?? null;
     if (home) return home.removeGroupMember(id, attribute, await actorNamed(actorId));
     const owned = await ownedGroup(req, reply, id, actorId);
     if ("refused" in owned) return owned.refused;
@@ -3659,10 +3736,10 @@ export function registerRoutes(
   app.delete(`${GROUPS_ROUTE}/:id`, async (req, reply) => {
     const { id } = req.params as { id: string };
     const query = req.query as { actorId?: unknown };
-    const stuck = refuseAmbiguousHome(reply, options.homes, "delete a group");
+    const stuck = refuseAmbiguousHome(reply, homes, "delete a group");
     if (stuck) return stuck;
     const actorId = await actingActor(req, query.actorId);
-    const home = options.homes?.homeScoped() ?? null;
+    const home = homes?.homeScoped() ?? null;
     if (home) return home.deleteGroup(id, await actorNamed(actorId));
     const existing = await desk.group(id);
     if (!existing) return groupNotFound(reply, id);
@@ -3718,9 +3795,9 @@ export function registerRoutes(
    * identity in common with anything, so nothing else is one of its surfaces.
    */
   app.get(BADGES_ROUTE, async (req, reply) => {
-    const stuck = refuseAmbiguousHome(reply, options.homes, "list your surfaces");
+    const stuck = refuseAmbiguousHome(reply, homes, "list your surfaces");
     if (stuck) return stuck;
-    const home = options.homes?.homeScoped() ?? null;
+    const home = homes?.homeScoped() ?? null;
     if (home) return home.badges();
     return { badges: await mySurfaces(desk, engine, req.badge!) } satisfies BadgesResponse;
   });
@@ -3736,9 +3813,9 @@ export function registerRoutes(
    */
   app.delete(`${BADGES_ROUTE}/:badgeId`, async (req, reply) => {
     const { badgeId } = req.params as { badgeId: string };
-    const stuck = refuseAmbiguousHome(reply, options.homes, "end a badge");
+    const stuck = refuseAmbiguousHome(reply, homes, "end a badge");
     if (stuck) return stuck;
-    const home = options.homes?.homeScoped() ?? null;
+    const home = homes?.homeScoped() ?? null;
     if (home) return home.killBadge(badgeId);
     const mine = await mySurfaces(desk, engine, req.badge!);
     const target = mine.find((row) => row.badgeId === badgeId);
@@ -3805,16 +3882,11 @@ export function registerRoutes(
     // home's desk. Its caller is a dialog a person opened on purpose, and it
     // already renders the refusal it is handed — so this arrives as a sentence
     // in the dialog rather than a broken page load.
-    const stuck = refuseAmbiguousHome(reply, options.homes, "ask what you have proved");
+    const stuck = refuseAmbiguousHome(reply, homes, "ask what you have proved");
     if (stuck) return stuck;
-    const home = options.homes?.homeScoped() ?? null;
+    const home = homes?.homeScoped() ?? null;
     if (home) return home.attestOffer();
-    return {
-      attesters,
-      auth,
-      attestations: req.badge!.attestations ?? [],
-      resumable: (await engine.resumable(req.badge!.badgeId)).map((row) => row.actor),
-    } satisfies AttestOffer;
+    return buildAttestOffer(engine, attesters, auth, req.badge!);
   });
 
   /**
@@ -3837,9 +3909,9 @@ export function registerRoutes(
    * never read it, and nobody could say why.
    */
   app.post(ATTEST_ROUTE, async (req, reply) => {
-    const stuck = refuseAmbiguousHome(reply, options.homes, "write an attestation");
+    const stuck = refuseAmbiguousHome(reply, homes, "write an attestation");
     if (stuck) return stuck;
-    const home = options.homes?.homeScoped() ?? null;
+    const home = homes?.homeScoped() ?? null;
     if (home) return home.attest((req.body ?? {}) as AttestRequest);
     if (!auth) {
       return reply.status(400).send({
@@ -3936,18 +4008,8 @@ export function registerRoutes(
     if (!canvasId) {
       return reply.status(400).send({ error: "canvasId is required", code: "bad-request" });
     }
-    const named = typeof body.home === "string" && body.home.trim() ? body.home.trim() : null;
-    const address = named ?? options.birthHome ?? null;
-    if (!address || !options.homes) {
-      return reply.status(409).send({
-        error:
-          "no home was named and this daemon has no birth default, so there is nowhere to " +
-          "fetch a canvas from. Say which home (the canvas's marker carries the address), " +
-          "or `isocan home <url>` to set where canvases born here go.",
-        code: "not-a-replica",
-      });
-    }
-    const home = options.homes.linkFor(address);
+    const address = resolveJoinHome(app, req, workstation, body.home);
+    const home = workstation!.homes.linkFor(address);
     let canvas: Canvas;
     try {
       const context = sourceContexts.get(req);
@@ -3958,7 +4020,7 @@ export function registerRoutes(
       // A link opened for a join that failed has nothing to do and nobody to
       // answer; leaving it polling would be a socket and a timer per typo'd
       // address, forever.
-      await options.homes.dropIfUnused(address);
+      await workstation!.homes.dropIfUnused(address);
       throw err;
     }
     // The row is written only once the home has said yes. A join that the door
@@ -3966,9 +4028,12 @@ export function registerRoutes(
     // this machine would send every later write to a 403, and the CLI would
     // have to un-write it — which is the CLI writing `homes.json`, which is
     // exactly what ruling 1 forbids.
-    await options.homes.bind(canvasId, address);
+    await workstation!.homes.bind(canvasId, address);
     return { canvas } satisfies JoinCanvasResponse;
   });
+
+  // In `forget-routes.ts`; it reads the home links and the local door only.
+  registerForgetRoutes(app, { engine, options, admit });
 
   app.get("/api/projects/:id/canvas", async (req) => {
     const { id } = req.params as { id: string };
@@ -4133,7 +4198,7 @@ export function registerRoutes(
           continue;
         }
         const context = sourceContexts.get(req);
-        const remote = options.homes?.for(canvas.id);
+        const remote = homes?.for(canvas.id);
         if (context && remote) {
           const actor = context.policy.mode === "direct" ? await actorNamed(context.policy.actorId) : undefined;
           const result = await remote.personalRequest<import("@isocan/core").WatchLogResponse>("POST", "/api/oplog/watch", { ...body, only: [canvas.id], waitMs: 0 }, actor, context, typeof req.headers[CLIENT_FEATURES_HEADER] === "string" ? req.headers[CLIENT_FEATURES_HEADER] : "");
@@ -4368,7 +4433,7 @@ export function registerRoutes(
     const body = (req.body ?? {}) as { canvasId?: string };
     const canvasId = body.canvasId ?? "";
     const released = rc.release(canvasId, req.badge!.badgeId);
-    const home = options.homes?.for(canvasId) ?? null;
+    const home = homes?.for(canvasId) ?? null;
     if (home) await home.rcRelease(canvasId).catch(() => {});
     return { ok: true, released };
   });
@@ -4391,7 +4456,7 @@ export function registerRoutes(
    */
   app.get("/api/projects/:id/rc", async (req) => {
     const { id } = req.params as { id: string };
-    const home = options.homes?.for(id) ?? null;
+    const home = homes?.for(id) ?? null;
     if (!home) return rc.answering(id);
     const local = rc.answeringLocal(id);
     const at = await home.rcAnswering(id).catch(() => null);
@@ -4446,7 +4511,7 @@ export function registerRoutes(
       // elsewhere, the rc may be holding AT the home on a badge this daemon
       // never sees (issue #306). The home answers the ask as if it had been
       // posted there, refusals included, verbatim.
-      const home = options.homes?.for(id) ?? null;
+      const home = homes?.for(id) ?? null;
       if (home) return home.rcAsk(id, { name, from: body.from, ...template });
       const owners = rc.answering(id).owners;
       if (owners.length > 0) {
@@ -4599,7 +4664,7 @@ export function registerRoutes(
     await engine.getSnapshot(id); // 404 for unknown canvases, as the HEAD
     const held = await store.heldBlobs(id, hashes);
     let missing = [...new Set(hashes.filter((h) => !held.has(h)))];
-    const blobHome = options.homes?.for(id) ?? null;
+    const blobHome = homes?.for(id) ?? null;
     if (missing.length > 0 && blobHome) {
       const upstream = await blobHome.hasBlobs(id, missing);
       if (missing.some((h) => (upstream.get(h) ?? null) === null)) {
@@ -4628,7 +4693,9 @@ export function registerRoutes(
     if (typeof body.to !== "string" || body.to.trim() === "") {
       return { error: "teleport needs a home to send it to (`--to <url>`)", code: "bad-op" };
     }
-    return engine.teleport(id, body.to.trim(), { dryRun: body.dryRun === true }, sourceContexts.get(req), req.badge!.badgeId);
+    const to = body.to.trim();
+    if (isRequestSelfAddress(app, req, to)) throw new SelfLinkError(to);
+    return engine.teleport(id, to, { dryRun: body.dryRun === true }, sourceContexts.get(req), req.badge!.badgeId);
   });
 
   /**
@@ -4888,7 +4955,7 @@ export function registerRoutes(
     reply: { status: (code: number) => { send: (body: unknown) => unknown } },
   ): Promise<string[] | null> => {
     const local = req.ip === "127.0.0.1" || req.ip === "::1" || req.ip === "::ffff:127.0.0.1";
-    if (!loopbackBound(app) || !local || (options.homes?.homeOf(canvasId) ?? null) !== null) {
+    if (!workstation || !loopbackBound(app) || !local || (homes?.homeOf(canvasId) ?? null) !== null) {
       reply.status(404).send({
         error:
           "this canvas's files live with its home daemon, on its owner's machine — " +
@@ -4897,7 +4964,7 @@ export function registerRoutes(
       });
       return null;
     }
-    const dirs = await boundDirs(rosterHomeOf(options), canvasId);
+    const dirs = await workstation.boundDirs(canvasId);
     if (dirs.length === 0) {
       reply.status(404).send({
         // The fact, and only the fact. It used to append "(isocan use
@@ -4939,14 +5006,14 @@ export function registerRoutes(
     const { id } = req.params as { id: string };
     await engine.getSnapshot(id);
     const local = req.ip === "127.0.0.1" || req.ip === "::1" || req.ip === "::ffff:127.0.0.1";
-    if (!loopbackBound(app) || !local || (options.homes?.homeOf(id) ?? null) !== null) {
+    if (!workstation || !loopbackBound(app) || !local || (homes?.homeOf(id) ?? null) !== null) {
       return reply.status(404).send({
         error: "directories can only be browsed on the machine this canvas lives on",
         code: "no-directory",
       });
     }
     const at = (req.query as { at?: string }).at ?? null;
-    const listing = await pickList(rosterHomeOf(options), at);
+    const listing = await workstation.pickList(at);
     // One sentence for every refusal here, unlike the bind route's: this one
     // enumerates, so "which rule refused" would describe the shape of a disk
     // the caller cannot see. Absent, outside the jail, a symlink, a file —
@@ -4963,7 +5030,7 @@ export function registerRoutes(
     // Same gate as the tree, and for the same reason: this is the owner's own
     // machine speaking to itself about its own disk.
     const local = req.ip === "127.0.0.1" || req.ip === "::1" || req.ip === "::ffff:127.0.0.1";
-    if (!loopbackBound(app) || !local || (options.homes?.homeOf(id) ?? null) !== null) {
+    if (!workstation || !loopbackBound(app) || !local || (homes?.homeOf(id) ?? null) !== null) {
       return reply.status(404).send({
         error:
           "a directory can only be bound on the machine this canvas lives on, and only locally",
@@ -4974,7 +5041,6 @@ export function registerRoutes(
     if (typeof asked !== "string" || asked.trim() === "") {
       return reply.status(400).send({ error: "which directory? give a path", code: "bad-op" });
     }
-    const home = rosterHomeOf(options);
     // `~` is what a person types; nothing else expands it for them here.
     const typed = asked.trim();
     const wanted = path.resolve(
@@ -4997,7 +5063,7 @@ export function registerRoutes(
     // The git toplevel when there is one, exactly as `isocan use` chooses it:
     // the canvas is about the project rather than the checkout, so a marker
     // resolves the same from every subdirectory and every worktree.
-    const root = await bindableRoot(wanted, home);
+    const root = await workstation.bindableRoot(wanted);
     if (!root) {
       return reply.status(400).send({
         error:
@@ -5017,7 +5083,7 @@ export function registerRoutes(
         code: "bound-elsewhere",
       });
     }
-    const livesAt = options.homes?.homeOf(id) ?? null;
+    const livesAt = homes?.homeOf(id) ?? null;
     const canvas = (await engine.getSnapshot(id)).project;
     const file = existing
       ? markerFile(root)
@@ -5026,7 +5092,7 @@ export function registerRoutes(
           title: canvas.title,
           ...(livesAt ? { home: livesAt } : {}),
         });
-    await recordDir(home, root, id);
+    await workstation.recordDir(root, id);
     return { root, marker: file, adopted: Boolean(existing) };
   });
 
@@ -5126,8 +5192,8 @@ export function registerRoutes(
     const snapshot = await engine.getSnapshot(id);
     const local = req.ip === "127.0.0.1" || req.ip === "::1" || req.ip === "::ffff:127.0.0.1";
     const bound =
-      loopbackBound(app) && local && (options.homes?.homeOf(id) ?? null) === null
-        ? await boundDirs(rosterHomeOf(options), id)
+      workstation && loopbackBound(app) && local && (homes?.homeOf(id) ?? null) === null
+        ? await workstation.boundDirs(id)
         : [];
     const hashOf = (data: Buffer) => createHash("sha256").update(data).digest("hex");
     const onDisk: Record<string, string> = {};
@@ -5234,7 +5300,7 @@ export function registerRoutes(
    */
   registerContentRoutes(
     app,
-    { engine, store, homes: options.homes ?? null },
+    { engine, store, homes: homes ?? null },
     {
       appCsp: "sandbox allow-scripts",
       // Hosted: the same registration answers for the content origin too,
@@ -5522,7 +5588,19 @@ function registerPages(
   },
 ): void {
   const dist = packagePath("packages/web/dist");
-  const built = existsSync(path.join(dist, "index.html"));
+  const indexFile = path.join(dist, "index.html");
+  const built = existsSync(indexFile);
+  /**
+   * When an authenticating reverse proxy stands in front of this home
+   * (`options.proxyAuth`), stamp `data-sso="true"` on the root element of
+   * `index.html` at serve time so the web app knows on first paint that the
+   * visitor's identity is already attested — without compiling a separate
+   * bundle per home.
+   */
+  const ssoShell =
+    built && options.proxyAuth
+      ? readFileSync(indexFile, "utf8").replace('<html lang="en">', '<html lang="en" data-sso="true">')
+      : null;
 
   /**
    * Is this daemon a PURE replica — a birth default set, and not one canvas of
@@ -5535,14 +5613,15 @@ function registerPages(
    * somebody restarted, which is the shape of bug this codebase calls
    * cheerful.
    */
+  const homes = options.workstation?.homes ?? null, birthHome = options.workstation?.birthHome ?? null;
   const pureReplica = async (): Promise<boolean> => {
     // No birth default: this daemon is somebody's home by definition, and the
     // question is over before it costs anything. **This is also what keeps the
     // listing below off the hosted home's page path** — a hosted home has no
     // birth default, so it returns here and never reads its canvas list to
     // serve a page.
-    if (!options.birthHome) return false;
-    const rows = options.homes?.assignments() ?? {};
+    if (!birthHome) return false;
+    const rows = homes?.assignments() ?? {};
     /**
      * **Absent and `null` are the same answer, and this line used to disagree
      * with the rest of the codebase about that.**
@@ -5578,13 +5657,13 @@ function registerPages(
    */
   const elsewhere = async (pathname: string): Promise<string | null> => {
     const canvasId = canvasIdIn(pathname);
-    if (canvasId === null) return (await pureReplica()) ? (options.birthHome ?? null) : null;
-    const home = options.homes?.homeOf(canvasId) ?? null;
+    if (canvasId === null) return (await pureReplica()) ? birthHome : null;
+    const home = homes?.homeOf(canvasId) ?? null;
     if (home !== null) return home;
     // No row: this canvas is this daemon's — unless this daemon serves no
     // pages at all, in which case there is nothing here to open and the birth
     // default is the honest place to send a person.
-    return (await pureReplica()) ? (options.birthHome ?? null) : null;
+    return (await pureReplica()) ? birthHome : null;
   };
 
   const send = (reply: FastifyReply, file: string) => {
@@ -5609,6 +5688,11 @@ function registerPages(
     // The judge's Worker takes its Content-Security-Policy from this response (local-judge phase 0).
     const policy = judgeWorkerPolicy(file);
     if (policy) reply.header("Content-Security-Policy", policy);
+    else if (file === indexFile && options.contentBase) {
+      // Extensions phase 4: the served app page names the content origin in
+      // `frame-src` so a panel frame (and an item frame) may load from there.
+      reply.header("Content-Security-Policy", `frame-src 'self' ${options.contentBase} https: http: blob: data:`);
+    }
     /**
      * **What may be remembered, and what must be asked for again.**
      *
@@ -5658,6 +5742,7 @@ function registerPages(
           ? "public, max-age=86400"
           : "no-cache",
     );
+    if (ssoShell !== null && file === indexFile) return reply.send(ssoShell);
     return reply.send(createReadStream(file));
   };
 
@@ -5719,7 +5804,7 @@ function registerPages(
     // refills. The door, whose caller asked for the CREDENTIAL and can act on
     // being told to wait, answers 429 instead. Same accounting, two refusals,
     // because they are two different asks.
-    if (!req.badge) {
+    if (!req.badge && !attestationFromProxy(req.headers, options.proxyAuth ?? null)) {
       // A refused network gets the page and no badge (operator phase 6), the
       // same softest refusal a metered knock gets: the badge-less browser
       // recovers through the door, which answers 403 with the sentence.
@@ -5729,6 +5814,7 @@ function registerPages(
       } else {
         const { record, token } = mintBadge("cookie");
         await desk.put(record);
+        await ensureProxyAttestation(desk, record, req.headers, options.proxyAuth ?? null);
         const secure = isSecureRequest(req.headers, Boolean((req.raw.socket as { encrypted?: boolean }).encrypted));
         // A canvas opened in an agent manager's pane arrives HERE first, and
         // this is the one request that can still tell it is a frame (#220).

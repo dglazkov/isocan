@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { envKeyFor, isKeyProvider, KEY_PROVIDERS, keyRows, KEYS_AGENTS_ROUTE, KEYS_NOT_HERE, KEYS_ROUTE, KEYS_SHARING_ROUTE, lastFour, type KeyEnv, type KeyProvider, type KeysListing } from "@isocan/core/keys";
 import { checkKey, KeyFileRefused, keysFile, readKeyFile, removeKey, resolveKeyAsync, setKeyAgents, setKeySharing, writeKey, type KeyFileContents } from "@isocan/core/keystore";
 import { loopbackBound } from "./route-helpers.ts";
+import type { Workstation } from "./workstation.ts";
 
 /**
  * **The settings area's hands: model keys, over HTTP, to this machine only**
@@ -49,8 +50,8 @@ export interface KeyRouteOptions {
 }
 
 interface KeyRouteScope {
-  /** The home whose `keys.json` this daemon reads — its own, as the judge's is. */
-  home: string;
+  /** The workstation whose `keys.json` this daemon reads — null on a hosted home. */
+  workstation: Workstation | null | undefined;
   /** What the bind says (`RouteOptions.servesWorld`): a daemon serving the world has no key routes. */
   servesWorld: boolean | undefined;
   keys?: KeyRouteOptions;
@@ -81,12 +82,12 @@ const header = (raw: string | string[] | undefined): string | undefined => (Arra
 
 /** The keys routes, in a scope of their own, on `app`. */
 export function registerKeyRoutes(app: FastifyInstance, scope: KeyRouteScope): void {
-  const { home } = scope;
+  const keysHome = (): string => scope.workstation!.keysHome;
   const env = (): KeyEnv => scope.keys?.env ?? process.env;
 
   /** Refuse anything that is not this machine's own page or terminal; true when it may go on. */
   const gate = (req: FastifyRequest, reply: FastifyReply): boolean => {
-    if (scope.servesWorld === true || !loopbackBound(app) || !LOOPBACK_PEERS.has(req.ip)) {
+    if (!scope.workstation || scope.servesWorld === true || !loopbackBound(app) || !LOOPBACK_PEERS.has(req.ip)) {
       reply.status(404).send({
         error: "model keys live on the machine that spends them — this home's keys are set by whoever runs it, and are not served here",
         code: KEYS_NOT_HERE,
@@ -117,7 +118,7 @@ export function registerKeyRoutes(app: FastifyInstance, scope: KeyRouteScope): v
   /** The stored file, or the refusal it earned (a loose mode, unparseable JSON) — in words that never quote it. */
   const stored = async (): Promise<KeyFileContents & { refused?: string }> => {
     try {
-      return await readKeyFile(home);
+      return await readKeyFile(keysHome());
     } catch (err) {
       return { keys: {}, share: false, agents: false, refused: (err as Error).message };
     }
@@ -125,7 +126,7 @@ export function registerKeyRoutes(app: FastifyInstance, scope: KeyRouteScope): v
 
   const rowsNow = async (): Promise<KeysListing> => {
     const { keys, share, agents, refused } = await stored();
-    return { file: keysFile(home), ...(refused ? { refused } : {}), share, agents, keys: keyRows(keys, env()) };
+    return { file: keysFile(keysHome()), ...(refused ? { refused } : {}), share, agents, keys: keyRows(keys, env()) };
   };
 
   void app.register(async (keys) => {
@@ -153,7 +154,7 @@ export function registerKeyRoutes(app: FastifyInstance, scope: KeyRouteScope): v
       const share = (req.body as { share?: unknown } | undefined)?.share;
       if (typeof share !== "boolean") return reply.status(400).send({ error: 'send { "share": true } or { "share": false }', code: "bad-share" });
       try {
-        await setKeySharing(home, share);
+        await setKeySharing(keysHome(), share);
       } catch (err) {
         const refused = err instanceof KeyFileRefused;
         return reply.status(refused ? 409 : 500).send({ error: (err as Error).message, code: refused ? "keys-file-refused" : "keys-write-failed" });
@@ -170,7 +171,7 @@ export function registerKeyRoutes(app: FastifyInstance, scope: KeyRouteScope): v
       const agents = (req.body as { agents?: unknown } | undefined)?.agents;
       if (typeof agents !== "boolean") return reply.status(400).send({ error: 'send { "agents": true } or { "agents": false }', code: "bad-agents" });
       try {
-        await setKeyAgents(home, agents);
+        await setKeyAgents(keysHome(), agents);
       } catch (err) {
         const refused = err instanceof KeyFileRefused;
         return reply.status(refused ? 409 : 500).send({ error: (err as Error).message, code: refused ? "keys-file-refused" : "keys-write-failed" });
@@ -189,7 +190,7 @@ export function registerKeyRoutes(app: FastifyInstance, scope: KeyRouteScope): v
       if (/\s/.test(key)) return reply.status(400).send({ error: `a ${provider} key has no spaces or line breaks in it — nothing was stored`, code: "bad-key" });
       const model = typeof body?.model === "string" ? body.model : undefined;
       try {
-        await writeKey(home, provider, key, model);
+        await writeKey(keysHome(), provider, key, model);
       } catch (err) {
         // `KeyFileRefused` names the file and its mode; nothing in writeKey's errors carries the key.
         const refused = err instanceof KeyFileRefused;
@@ -205,7 +206,7 @@ export function registerKeyRoutes(app: FastifyInstance, scope: KeyRouteScope): v
       const provider = providerIn(req, reply);
       if (!provider) return reply;
       try {
-        return { provider, removed: await removeKey(home, provider) };
+        return { provider, removed: await removeKey(keysHome(), provider) };
       } catch (err) {
         const refused = err instanceof KeyFileRefused;
         return reply.status(refused ? 409 : 500).send({ error: (err as Error).message, code: refused ? "keys-file-refused" : "keys-write-failed" });
@@ -218,7 +219,7 @@ export function registerKeyRoutes(app: FastifyInstance, scope: KeyRouteScope): v
       if (!provider) return reply;
       let found;
       try {
-        found = await resolveKeyAsync(provider, { env: env(), home });
+        found = await resolveKeyAsync(provider, { env: env(), home: keysHome() });
       } catch (err) {
         return reply.status(409).send({ error: (err as Error).message, code: "keys-file-refused" });
       }

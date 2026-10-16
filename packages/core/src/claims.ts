@@ -150,7 +150,19 @@ export const PERSON_HARNESSES: ReadonlySet<string> = new Set(["web", "home", "cl
  * is neither, and reads as not an agent.
  */
 export const isAgentHarness = (harness: string | null | undefined): boolean =>
-  harness !== null && harness !== undefined && harness !== "" && !PERSON_HARNESSES.has(harness.toLowerCase());
+  harness !== null && harness !== undefined && harness !== "" && !PERSON_HARNESSES.has(harness.toLowerCase()) &&
+  // **A relay is not a kind** (14 Oct 2026). `replica:` is the key a daemon
+  // claims under when it carries its person up to a home: transport custody,
+  // not a harness. `bindName` stopped recording it on 14 Sep, and the file
+  // store repaired the rows it had already written, but a hosted home's cloud
+  // store never did — so a person announced by their own laptop before then
+  // still read as an agent there, and folding their browser into that id
+  // turned the browser into one too ("personal canvases belong to people").
+  harness.toLowerCase() !== "replica";
+
+/** Is this harness a person's own surface? */
+const isPersonHarness = (harness: string | null | undefined): boolean =>
+  typeof harness === "string" && PERSON_HARNESSES.has(harness.toLowerCase());
 
 /** Actor id → "agent", for every actor whose last claim came from a harness
  *  that is not a person's. People are absent rather than "person", so a
@@ -164,8 +176,17 @@ export type ActorKinds = Record<string, "agent">;
  */
 export function actorKinds(registry: ActorRegistry): ActorKinds {
   const kinds: ActorKinds = {};
+  // **People win a fold** (14 Oct 2026). A join says two ids are one person,
+  // so when any id folded into an actor last claimed from a person's surface,
+  // the actor is a person — an agent's old id folded into you does not make
+  // you an agent. Only an actor every one of whose ids is an agent's is one.
+  const people = new Set<string>();
   for (const [id, harness] of Object.entries(registry.harnesses ?? {})) {
-    if (isAgentHarness(harness)) kinds[resolveActor(registry.joined, id)] = "agent";
+    if (isPersonHarness(harness)) people.add(resolveActor(registry.joined, id));
+  }
+  for (const [id, harness] of Object.entries(registry.harnesses ?? {})) {
+    const into = resolveActor(registry.joined, id);
+    if (isAgentHarness(harness) && !people.has(into)) kinds[into] = "agent";
   }
   return kinds;
 }
@@ -540,7 +561,13 @@ export function bindName(
   const harness = harnessOf(sessionKey);
   // A replica claims transport custody. It does not identify the person or
   // harness behind that transport and must not overwrite an actual claim.
-  const withHarness: ActorRegistry = harness && harness.toLowerCase() !== "replica"
+  // **A person stays a person** (14 Oct 2026): an agent session that resumes
+  // somebody's actor (`isocan identity --as` from inside a coding harness)
+  // speaks as them, and does not turn them into an agent. A person's surface
+  // still overwrites an agent's row, which is how a misread actor recovers:
+  // claim yourself from a browser or your own terminal.
+  const keepsPerson = isPersonHarness(registry.harnesses?.[actor.id]) && isAgentHarness(harness);
+  const withHarness: ActorRegistry = harness && harness.toLowerCase() !== "replica" && !keepsPerson
     ? { ...registry, harnesses: { ...(registry.harnesses ?? {}), [actor.id]: harness } }
     : registry;
   const current = registry.names[actor.id];
@@ -558,15 +585,36 @@ export function bindName(
  * pass mints a badge carrying a named claim — "Jordan's tab and her daemon"),
  * so "one actor, one holder" was never going to survive, and the narrower
  * rule is already the shape the pass needs.
+ *
+ * **The machine's person is switched, never dropped** (15 Oct 2026). A claim
+ * that re-points the `home:` key at a DIFFERENT actor — `isocan identity
+ * --home --as <id>`, making a pass-admitted person this machine's default —
+ * keeps the person it displaced as a keyless row, the same shape a pass
+ * hands over (`bindHandoff`). The badge could speak as them a moment ago and
+ * nobody asked it to stop; dropping the row would make the switch one-way,
+ * because coming back is `as`, and `as` without a row on this badge is
+ * refused the moment any other surface still speaks as them. Only the home
+ * key: a coding harness's key re-pointed by `--session --as` still leaves the
+ * abandoned actor a stranger, as above.
  */
 export function bindClaim(
   claims: readonly ActorClaim[],
   envelope: { actor: Actor; ts: string; op: ActorClaimOp },
 ): ActorClaim[] {
   const { actor, ts, op } = envelope;
-  const kept = claims.filter(
-    (row) => row.actorId !== actor.id && row.sessionKey !== op.sessionKey,
-  );
+  const switchesPerson = harnessOf(op.sessionKey) === "home";
+  const kept: ActorClaim[] = [];
+  for (const row of claims) {
+    if (row.actorId === actor.id) continue;
+    if (row.sessionKey !== op.sessionKey) kept.push(row);
+    else if (switchesPerson) {
+      kept.push({
+        actorId: row.actorId,
+        boundAt: row.boundAt,
+        ...(row.canvasId !== undefined ? { canvasId: row.canvasId } : {}),
+      });
+    }
+  }
   kept.push({
     actorId: actor.id,
     boundAt: ts,
@@ -629,8 +677,13 @@ export function bindHandoff(
  * the author", actor-scoped undo — become authorization the moment an actor
  * means something, with the isomorphism contract untouched.
  */
-export function claimsActor(claims: readonly ActorClaim[], actorId: string): boolean {
-  return claims.some((row) => row.actorId === actorId);
+export function claimsActor(
+  claims: readonly ActorClaim[],
+  actorId: string,
+  joined?: ActorJoins,
+): boolean {
+  const target = resolveActor(joined, actorId);
+  return claims.some((row) => resolveActor(joined, row.actorId) === target);
 }
 
 /** The refusal, in one voice wherever the check runs. The honest client's
@@ -660,9 +713,15 @@ export function applyActorColor(
   if (op.color !== null && !isIdentityColor(op.color)) {
     throw new OpValidationError("bad-op", `not a color: ${op.color}`);
   }
+  // A surface still holding a folded actor id (`from -> into`) speaks for the
+  // person it was folded into (`actorColors` reads `resolveActor`), so writing
+  // under `op.actorId` left the person's row untouched and the old colour came
+  // back on reload.
+  const actorId = resolveActor(registry.joined, op.actorId);
   const colors = { ...registry.colors };
-  if (op.color === null) delete colors[op.actorId];
-  else colors[op.actorId] = op.color;
+  if (actorId !== op.actorId) delete colors[op.actorId];
+  if (op.color === null) delete colors[actorId];
+  else colors[actorId] = op.color;
   return { ...registry, colors };
 }
 
@@ -679,9 +738,15 @@ export function applyActorMark(
   if (op.mark !== null && !isFaceMark(op.mark)) {
     throw new OpValidationError("bad-op", `not a single emoji: ${JSON.stringify(op.mark)}`);
   }
+  // Resolve through `joined` before writing, because `actorMarks` reads
+  // `marks[resolveActor(joined, from)]`: setting a mark from a folded surface
+  // must update the person's mark rather than writing a shadowed row under the
+  // old id that `actorMarks` overwrites on the next reload.
+  const actorId = resolveActor(registry.joined, op.actorId);
   const marks = { ...(registry.marks ?? {}) };
-  if (op.mark === null) delete marks[op.actorId];
-  else marks[op.actorId] = op.mark;
+  if (actorId !== op.actorId) delete marks[op.actorId];
+  if (op.mark === null) delete marks[actorId];
+  else marks[actorId] = op.mark;
   return { ...registry, marks };
 }
 
@@ -782,9 +847,75 @@ export function notBothActors(from: string, into: string, missing: string): OpVa
   );
 }
 
+/**
+ * **A fold never makes a person an agent** (14 Oct 2026). `isocan identity
+ * --join` folds into whoever the command speaks as, and inside a coding
+ * harness that is the agent's session — so an agent asked to "merge my
+ * identities" folded its person into itself, and the person's every surface
+ * became the agent. Refused at the home before the join is logged (never on
+ * replay: a fold already in a log is history), with the way round in the
+ * words. Null when the fold is fine.
+ */
+export function personIntoAgent(registry: ActorRegistry, op: ActorJoinOp): OpValidationError | null {
+  const kinds = actorKinds(registry);
+  const from = resolveActor(registry.joined, op.from);
+  const into = resolveActor(registry.joined, op.into);
+  const person = Object.entries(registry.harnesses ?? {}).some(
+    ([id, harness]) => resolveActor(registry.joined, id) === from && isPersonHarness(harness),
+  );
+  if (!person || kinds[into] !== "agent") return null;
+  const name = (id: string) => registry.names[id]?.name ?? id;
+  return new OpValidationError(
+    "bad-join",
+    `${name(from)} is a person and ${name(into)} is an agent — folding the person into the agent would ` +
+      `make every surface of ${name(from)} the agent. Fold the other way, from ${name(from)}'s own surface: ` +
+      `the web app's identity menu, or \`isocan identity --home --join ${op.into}\` in their own terminal.`,
+  );
+}
+
+/**
+ * **The refusal for an agent opening a personal canvas** — one sentence for
+ * the bench panel, `isocan bench` and `isocan personal`, since all three show
+ * what the home said. It names who the home thinks is asking, and how to ask
+ * as the person instead.
+ */
+export function personRequired(name: string): string {
+  return (
+    `${name} is recorded at this home as an agent, and a personal canvas belongs to a person. ` +
+    "Switch to your own person — your face's menu in the web app, or `isocan identity --home` in " +
+    "your own terminal — and open your bench as them."
+  );
+}
+
 /** The actors folded into others, old id → new id — the wire shape. */
 export function actorJoins(registry: ActorRegistry): ActorJoins {
   return { ...(registry.joined ?? {}) };
+}
+
+/**
+ * **A home's folds, taken by a replica** — the joins a home sends on every
+ * snapshot, resume and roster, added to the ones this machine holds. The
+ * merged map, or null when nothing arriving is new, so a caller on the roster
+ * path (every cursor beat) writes nothing.
+ *
+ * Additive and first-recorded-wins, because a join is forever: a fold this
+ * machine already holds is never moved by a home saying otherwise. A fold into
+ * itself, or one that would close a loop with what is held, is skipped rather
+ * than refused, since the message carrying it is about everything else too.
+ * The badge check is the home's (`applyActorJoin`'s caller), and it is not
+ * repeated here: the home is the desk that saw both claims, and a replica
+ * already takes names from it on the same terms.
+ */
+export function mergeJoins(held: ActorJoins | undefined, arriving: ActorJoins | undefined): ActorJoins | null {
+  const merged: ActorJoins = { ...(held ?? {}) };
+  let changed = false;
+  for (const [from, into] of Object.entries(arriving ?? {})) {
+    if (merged[from] !== undefined || from === into) continue;
+    if (resolveActor(merged, into) === from) continue;
+    merged[from] = into;
+    changed = true;
+  }
+  return changed ? merged : null;
 }
 
 /** The mark every actor wears, keyed by actor id — the wire shape. A folded

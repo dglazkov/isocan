@@ -256,7 +256,7 @@ describe("a slow home does not stall the writer", () => {
       mimeType: "text/html",
       filename: "slow.html",
     });
-    expect(replica.homes.for(CANVAS), "the canvas must be a replica here").not.toBeNull();
+    expect(replica.homes!.for(CANVAS), "the canvas must be a replica here").not.toBeNull();
     // Held at the HOME, so the test does not care how the replica asks.
     const { asked, release } = tapHome(home).hold();
     const check = replica.engine.reconcileBlobs(CANVAS, { push: false });

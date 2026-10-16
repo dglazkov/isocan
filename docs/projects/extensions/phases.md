@@ -4,12 +4,15 @@
 phase ends with **Trajectory**: only what the phase discovered that changes the
 project's course. A phase that went as planned leaves it empty.
 
-**Where we are: phases 1, 2 and 3 are CLOSED — tools on 6 Sep 2026, the panel
-manifest on 18 Sep. A panel is an item with `role=panel` whose `src` names a
-page item on the same canvas; `readPanelExtension` answers with a panel or a
-sentence naming the field, `isocan panel list/add` prints derived capabilities
-and adds nothing without `--yes`, and nothing renders yet, on purpose. Phase 4
-is next: the frame on the content origin.**
+**Where we are: phases 1, 2, 3, 4 and 5 are CLOSED — tools on 6 Sep 2026, the
+panel manifest on 18 Sep, the frame on the content origin on 14 Oct, and the
+extension actor on 15 Oct. A panel is an item with `role=panel` whose `src`
+names a page item on the same canvas; `readPanelExtension` answers with a panel
+or a sentence naming the field, `isocan panel list/add` prints derived
+capabilities and adds nothing without `--yes`, the left dock renders it as a
+sandboxed frame on `contentBase()`, and each panel gets its own actor (`ext_…`)
+and `panel:<itemId>` grant on the identity desk. Phase 6 is next: the narrow
+door.**
 
 Phases 3, 4 and 6 are the design's stage 5 (hosted panels) cut into the three
 acts it turned out to be, and phase 5 is the design's stage 4 (extension
@@ -138,7 +141,7 @@ and `npm run typecheck` whole.
 
 ## Phase 4 — The frame on the content origin
 
-**Status: NOT STARTED.**
+**Status: CLOSED** (2026-10-14).
 
 **Outcome:** a panel renders in a dock slot as a sandboxed iframe whose `src` is
 the content base plus the blob the manifest names — never the app origin, and
@@ -161,9 +164,22 @@ unavailable sentence. `CONTENT_CSP` is unchanged — asserted, because this phas
 must not open the exfiltration channel that stage 3 of the content origin closed
 by measurement. `npm test`, `npm run typecheck`, and the bundle budget.
 
+**Trajectory:**
+
+- **2026-10-14** — Closed Phase 3's two open items together with the frame:
+  `Panel` in `packages/web/src/lib/panels.ts` widens to `BuiltinPanel | \`panel:\${string}\``
+  and `DockState` gains `extensionPanelOpen` so `railIsOpen`, `dockEdges`, and
+  `railpan` treat a canvas panel as a first-class dock occupant. Multiple
+  canvas panels are selectable from `RailStrip`, the `···` drawer, ⌘K, and the
+  panel header tabs. `panelFrame` in `packages/web/src/lib/frame.ts` builds the
+  iframe `src` exclusively on `contentBase()` and returns `null` when no
+  content origin is standing. `EXTENSION_COLORS` and `extensionColor` in
+  `packages/core/src/extensions.ts` give panels a mineral palette disjoint from
+  `IDENTITY_COLORS`.
+
 ## Phase 5 — The extension actor
 
-**Status: NOT STARTED.**
+**Status: CLOSED** (2026-10-15).
 
 **Outcome:** the design's stage 4, and it lands here rather than third because
 here is where it first has a subject. A panel gets its own actor and a grant,
@@ -182,6 +198,19 @@ not revert the person's. Revoking the panel's grant expels it — its next ask i
 refused at the door, not merely unsent — asserted through the existing door
 test rather than a new one. Presence carries the panel while it works.
 `npm test` and `npm run typecheck` whole.
+
+**Trajectory:**
+
+- **2026-10-15** — `panelActor` (`ext_<suffix>`) and `panelSubject`
+  (`panel:<itemId>`) in `packages/core/src/extensions.ts` and
+  `packages/core/src/grants.ts` point the identity desk at a panel item without
+  a new table. `subjectAdmits` in `packages/server/src/grants.ts` admits a
+  panel-attested badge only through its `panel:<itemId>` grant and never through
+  the canvas's ambient `link` row, so revoking the panel's grant expels its
+  badge through `sweepCanvas` and the existing `admittingGrant` door test while
+  leaving the link live for people. `actorColor` in `packages/core/src/identity.ts`
+  maps `ext_…` ids directly to `extensionColor`, so presence and activity never
+  dress a panel in a person's `IDENTITY_COLORS`.
 
 ## Phase 6 — The narrow door
 

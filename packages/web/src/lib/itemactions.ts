@@ -1,5 +1,5 @@
 import type { Actor } from "@isocan/core";
-import { itemUrl } from "@isocan/core";
+import { itemUrl, proposalMarked } from "@isocan/core";
 import { readBlob } from "./api.ts";
 import { sendEchoedResult, useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -38,6 +38,13 @@ export async function deleteItems(
   ids: string[],
 ): Promise<void> {
   if (ids.length === 0) return;
+  // A proposal's delete also asks its author what it taught
+  // (`proposalDelete.ts`, fetched on that delete and never before).
+  const items = useCanvasStore.getState().canvas?.items;
+  if (ids.some((id) => items?.[id] && proposalMarked(items[id]!))) {
+    const { deleteProposals } = await import("./proposalDelete.ts");
+    return deleteProposals(canvasId, actor, ids);
+  }
   const result = await sendEchoedResult(
     canvasId,
     actor,
@@ -119,3 +126,13 @@ export async function downloadItem(
 
 /** Paste, as the menu's door to it — the same act ⌘V performs. */
 export { pasteInto } from "./clipboard.ts";
+
+/** **Explain this item** (proactive-agent phase 4): the panel loads on the ask — the menu's and ⌘K's one door to it. */
+export function explainItem(canvasId: string, actor: Actor, itemId: string): void {
+  void import("../components/ExplainPanel.tsx").then((m) => m.openExplain({ canvasId, actor, itemId }));
+}
+
+/** **Walk it as someone else** (proactive-agent phase 9): the panel loads on the ask — the menu's and ⌘K's one door to it. */
+export function walkItem(canvasId: string, actor: Actor, itemId: string): void {
+  void import("../components/WalkPanel.tsx").then((m) => m.openWalk({ canvasId, actor, itemId }));
+}

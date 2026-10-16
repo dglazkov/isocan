@@ -80,7 +80,7 @@ describe("a design competition, from the terminal", () => {
 
     // Scene 0 — the line-up.
     const roster = await json(["competition", "fighters", "--canvas", C]);
-    expect(roster.map((f: { id: string }) => f.id)).toEqual(["ive", "frog", "ideo", "kare", "rams", "victor", "duarte", "linear", "tufte"]);
+    expect(roster.map((f: { id: string }) => f.id)).toEqual(["ive", "frog", "ideo", "kare", "rams", "victor", "duarte", "linear", "tufte", "field", "vignelli", "signals"]);
     await refused(["competition", "new", "a checkout", "--fighters", "kare,rams", "--mode", "blind", "--canvas", C], /desks/);
     await refused(["competition", "new", "a checkout", "--fighters", "kare", "--canvas", C], /two to four/);
 
@@ -118,7 +118,9 @@ describe("a design competition, from the terminal", () => {
     expect(Object.keys(cast.fighters)).toEqual(["kare", "rams", "linear"]);
     const dir = path.join(home, "templates", "design-competition.fighter", C, "road-signs");
     expect(await fs.readFile(path.join(dir, "AGENTS.md"), "utf8")).toMatch(/You are Road Signs[\s\S]*not the person/);
+    expect(existsSync(path.join(dir, "SOUL.md"))).toBe(true);
     expect(existsSync(path.join(dir, "DESIGN.md"))).toBe(true);
+    expect(existsSync(path.join(dir, "corpus/specimen.html"))).toBe(true);
     const status = await json(["competition", "status", "--canvas", C]);
     expect(status.phase).toBe("building");
 

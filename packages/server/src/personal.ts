@@ -3,7 +3,7 @@ import {
   atLeast, resolveActor, newCanvasId, newOpId, newItemId, newVersionId,
   contextSheet, contextSheetSpot, CONTEXT_SHEET_SIZE, preparedGroupCreation,
   personalCanvasItemOf, personalContributions, personalMemoryLinks, canvasIdOf, sourceOf,
-  normalizeHomeUrl, parseCanvasAddress,
+  normalizeHomeUrl, parseCanvasAddress, personRequired,
   type Actor, type Capability, type CanvasSnapshotResponse, type PersonalStatusResponse,
   type PersonalEnsureResponse, type PersonalLinkRequest, type PersonalUnlinkRequest,
   type PersonalLinkResponse, type PersonalUnlinkResponse, type PersonalLinkStatus,
@@ -48,7 +48,7 @@ export class PersonalService {
   async status(badgeId: string, actorId: string, home: string): Promise<PersonalStatusResponse> {
     const { actor, aliases } = await this.caller(badgeId, actorId);
     const binding = await this.desk.personalBinding([actor.id, ...aliases]);
-    if (!binding && (await this.engine.actorKinds())[actor.id] === "agent") throw new PersonalError("personal canvases belong to people; select your person", "personal-person-required");
+    if (!binding && (await this.engine.actorKinds())[actor.id] === "agent") throw new PersonalError(personRequired(actor.name), "personal-person-required");
     return { home, owner: actor,
       source: binding ? { canvasId: binding.source.canvasId, state: await this.state(binding.source) } : null,
       preserved: binding ? await Promise.all(binding.preserved.map(async (source) => ({ canvasId: source.canvasId, state: await this.state(source) }))) : [] };
@@ -58,7 +58,7 @@ export class PersonalService {
     return this.engine.personalWrite(async (writer) => {
       const { actor, aliases } = await this.caller(badgeId, actorId);
       const existing = await this.desk.personalBinding([actor.id, ...aliases]);
-      if (!existing && (await this.engine.actorKinds())[actor.id] === "agent") throw new PersonalError("personal canvases belong to people; select your person", "personal-person-required");
+      if (!existing && (await this.engine.actorKinds())[actor.id] === "agent") throw new PersonalError(personRequired(actor.name), "personal-person-required");
       const binding = await this.desk.reservePersonal({ ownerId: actor.id, aliases, canvasId: newCanvasId(), birthOpId: newOpId(), at: new Date().toISOString() });
       const created = await writer.birth(binding.source, actor, badgeId);
       if (await this.state(binding.source) === "live") await this.desk.admit(badgeId, binding.source.canvasId, { root: "created" }, "own");

@@ -378,14 +378,14 @@ it("seen --mark reaches each addressed home before the CLI inbox reads it on a m
       });
       expect(wrote.status).toBe(200);
     }
-    await laptop.homes.linkFor(secondBase).join(secondId);
+    await laptop.homes!.linkFor(secondBase).join(secondId);
     const deadline = Date.now() + 5000;
     while (!(await laptop.engine.listCanvases()).some((canvas) => canvas.id === secondId)) {
       if (Date.now() > deadline) throw new Error("second inbox home did not replicate");
       await new Promise((resolve) => setTimeout(resolve, 20));
     }
-    expect(laptop.homes.homeOf(firstId)).toBe(homeBase);
-    expect(laptop.homes.homeOf(secondId)).toBe(secondBase);
+    expect(laptop.homes!.homeOf(firstId)).toBe(homeBase);
+    expect(laptop.homes!.homeOf(secondId)).toBe(secondBase);
     const unread = await cli("inbox", "--new", "--mentions", "--json");
     expect(unread.code, unread.stderr).toBe(0);
     expect(JSON.parse(unread.stdout)).toHaveLength(2);

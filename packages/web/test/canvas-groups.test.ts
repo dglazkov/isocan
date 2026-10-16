@@ -502,8 +502,8 @@ describe("canvas group membership through the real web write path", () => {
     expect(action(menu, "Enter group")).toBeDefined();
     expect(action(menu, "Select contents")).toBeDefined();
     expect(action(menu, "Open brief")).toBeDefined();
-    expect(action(menu, "Open full screen")).toBeUndefined();
-    expect(action(itemMenu([state.canvas.items.itm_b!], ctx), "Open full screen")).toBeDefined();
+    expect(action(menu, "View")).toBeUndefined();
+    expect(action(itemMenu([state.canvas.items.itm_b!], ctx), "View")).toBeDefined();
     expect(actions(canvasMenu(ctx)).some((entry) => entry.label === "New group")).toBe(false);
   });
 });

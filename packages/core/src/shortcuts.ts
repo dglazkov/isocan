@@ -97,7 +97,8 @@ export const SHORTCUTS: Shortcut[] = [
   },
   { keys: ["Scroll a selected item"], does: "Its content moves, not the canvas", group: "Items", note: "Only the wheel is handed over, so a drag still moves it. A page in a frame has to be entered first" },
   { keys: ["Double-click an item"], does: "Step inside it: scroll it, click its links", group: "Items", note: "Inline, without leaving the canvas. Enter gives it the whole screen instead" },
-  { keys: ["Enter"], does: "Open the selection full screen", group: "Items", note: "On a group, enter its scope instead. Otherwise the address bar holds the screen you are on; Esc returns to the canvas" },
+  { keys: ["Enter"], does: "View the selection", group: "Items", note: "On a group, enter its scope instead. Otherwise opens View Focus (/i/:item); Esc returns to the canvas" },
+  { keys: ["E"], does: "Edit the selection", group: "Items", note: "Open Edit Focus for the selected item; Esc returns to the canvas" },
   { keys: ["⌥-click"], does: "Reach the item underneath", group: "Items" },
   { keys: ["Drag a box"], does: "Select several", group: "Items" },
 

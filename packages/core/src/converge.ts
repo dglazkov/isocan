@@ -2,6 +2,10 @@ import type { CanvasContents, Item, ItemVersion } from "./model.ts";
 import { childrenOf, parentOf } from "./lineage.ts";
 import type { MetaPatch, Operation } from "./ops.ts";
 import { copyPreferencePatch } from "./preference.ts";
+import { PROPOSAL_PROP, proposalMarked } from "./proposal.ts";
+
+/** `goodnight.ts`'s `PROMISE_TAKE_PROP`, spelled here for the same reason as the stance below: a failed promise that still shows the take it would have made. */
+const PROMISE_TAKE_PROP = "promiseTake";
 
 /** `copy-variants.ts`'s `COPY_STANCE_PROP`, spelled here so core's barrel never imports the lazy copy-variants chunk. */
 const COPY_STANCE_PROP = "copyStance";
@@ -76,6 +80,15 @@ export function convergePlan(
   const chosen = canvas.items[chosenId];
   if (!chosen) return { refused: `no item ${chosenId} on this canvas` };
 
+  // A night's promise is kept only once it holds something (proactive-agent
+  // phase 2): an empty frame, or a failure with no take, would fold a
+  // placeholder into the person's work.
+  const state = chosen.properties[PROPOSAL_PROP];
+  if (state === "promised") return { refused: `"${chosen.title}" is a promised frame, still empty — there is nothing in it to keep yet` };
+  if (state === "failed" && !chosen.properties[PROMISE_TAKE_PROP]) {
+    return { refused: `"${chosen.title}" is a promise that did not work, with no take to show — delete it, or ask for another try` };
+  }
+
   const parentId = parentOf(chosen);
   if (parentId === null) {
     return {
@@ -98,7 +111,11 @@ export function convergePlan(
   // command says was made from this source.
   const siblings = childrenOf(canvas, parentId);
   const family = siblings.map((item: Item) => item.id);
-  const trash = family.includes(chosenId) ? family : [chosenId, ...family];
+  // A proposal is Kept alone (proactive-agent §3): it folds in and goes, and
+  // every other child of the source — another agent's proposal, the person's
+  // own variations — stays where it is. A proposal is not one of a set of
+  // takes the person chose between; it is one note somebody left.
+  const trash = proposalMarked(chosen) ? [chosenId] : family.includes(chosenId) ? family : [chosenId, ...family];
 
   const stance = chosen.properties[COPY_STANCE_PROP]?.trim();
   const losingCopy = stance ? siblings.filter((s) => s.id !== chosenId && Boolean(s.properties[COPY_STANCE_PROP]?.trim())) : [];

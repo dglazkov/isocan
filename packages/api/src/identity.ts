@@ -3,8 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import readline from "node:readline/promises";
 import type { Actor, ActorBindingRecord, ActorClaimOp } from "@isocan/core";
-import { elapsedLabel } from "@isocan/core";
-import { adoptIdentity as adoptStoredIdentity, paths, writeIdentityName } from "@isocan/server";
+import { BADGE_ENDED, elapsedLabel } from "@isocan/core";
+import { adoptIdentity as adoptStoredIdentity, paths, writeIdentityActor, writeIdentityName } from "@isocan/server";
 import { ApiError } from "./routes.ts";
 import type { DaemonClient } from "./client.ts";
 import { harnessSessions, harnessVarsFor } from "./harness.ts";
@@ -160,6 +160,7 @@ export async function findSessionIdentity(
   const newest = [...bindings].sort((a, b) => b.boundAt.localeCompare(a.boundAt))[0];
   if (!newest) return null;
   const harness = present.find((s) => s.key === newest.key)?.harness ?? "unknown";
+  client.useSessionKey(!isBadgeUpstream() && harness.toLowerCase() !== "agent" ? newest.key : null);
   return { actor: newest.actor, harness, key: newest.key };
 }
 
@@ -208,6 +209,7 @@ export async function claimSessionIdentity(
     );
   }
   await client.ensureDaemon();
+  client.useSessionKey(null);
   const bindings = await legacyTolerant(client.actorBindings(present.map((s) => s.key)));
   if (!bindings) {
     throw new Error(
@@ -227,6 +229,9 @@ export async function claimSessionIdentity(
     ...(options.canvasId !== undefined ? { canvasId: options.canvasId } : {}),
   };
   const { envelope } = await client.claimActor(op);
+  if (!isBadgeUpstream() && options.as === undefined && session.harness.toLowerCase() !== "agent") {
+    client.useSessionKey(session.key);
+  }
   return { actor: envelope.actor, harness: session.harness };
 }
 
@@ -362,11 +367,12 @@ export async function resolveIdentity(
 ): Promise<ResolvedIdentity | null> {
   const upstream = resolveUpstreamIdentity();
   if (upstream) {
+    client.useSessionKey(null);
     client.reclaimWith(() => reclaimIdentity(client, upstream));
     return upstream;
   }
   const session = await findSessionIdentity(client, home);
-  const resolved: ResolvedIdentity | null = session
+  let resolved: ResolvedIdentity | null = session
     ? {
         actor: session.actor,
         source: "session",
@@ -384,6 +390,24 @@ export async function resolveIdentity(
             } as const)
           : null,
       );
+  if (!session) client.useSessionKey(null);
+  if (!resolved && (await harnessSessions(home)).length === 0) {
+    const bindings = await legacyTolerant(client.actorBindings([HOME_CLAIM_KEY])).catch((err) => {
+      if (err instanceof ApiError && err.code === BADGE_ENDED && err.reason === "operator") {
+        throw err;
+      }
+      return null;
+    });
+    const homeBound = bindings?.[0];
+    if (homeBound) {
+      resolved = {
+        actor: homeBound.actor,
+        source: "home",
+        file: paths.actorsFile(home),
+        key: HOME_CLAIM_KEY,
+      };
+    }
+  }
   // Knowing who you are is knowing how to prove it: every caller that
   // resolves an identity gets the recovery wired, so no command has to
   // remember to. Registration only — nothing is sent until the home asks.
@@ -419,6 +443,7 @@ export async function resolveExplicitIdentity(
 ): Promise<ResolvedIdentity | null> {
   const harness = identity.harness ?? "isocan";
   const key = `${harness}:${identity.session}`;
+  client.useSessionKey(!isBadgeUpstream() && harness.toLowerCase() !== "agent" ? key : null);
   await client.ensureDaemon();
   const bindings = await legacyTolerant(client.actorBindings([key]));
   const bound = bindings?.[0];
@@ -497,6 +522,42 @@ export async function adoptIdentity(
   actor: Actor,
 ): Promise<{ actor: Actor; adopted: boolean }> {
   return adoptStoredIdentity(home, actor);
+}
+
+/**
+ * **Make an actor this machine already speaks for its person** — `isocan
+ * identity --home --as <actor id>`.
+ *
+ * `isocan setup <pass>` on a machine that already has a person hands the
+ * pass's actor to the badge and leaves the default alone (`adoptIdentity`
+ * refuses to overwrite), so the badge holds both and the CLI keeps speaking
+ * as the first. This is the switch: re-point the home claim at the named
+ * actor, then write the identity file from what the home answered (the
+ * registry's name, not one asserted here). Nothing is folded and nobody is
+ * renamed — the displaced person stays on the badge (`bindClaim` keeps a
+ * home-key row it displaces), so the same command with their id switches back.
+ *
+ * The home decides whether this badge may be them: the claim is `as`, judged
+ * at the single writer, and refused (`not-your-actor`, `name-taken`,
+ * `unknown-actor`) for an actor the badge was never handed. The file is
+ * written only after the home said yes. Same path through a local daemon and
+ * in direct mode: either way the client's badge is the one holding the
+ * handed-over row.
+ */
+export async function becomeHomePerson(
+  client: DaemonClient,
+  home: string,
+  actorId: string,
+): Promise<{ actor: Actor; previous: Actor | null }> {
+  await client.ensureDaemon();
+  client.useSessionKey(null);
+  const { envelope } = await client.claimActor({
+    type: "actor.claim",
+    sessionKey: HOME_CLAIM_KEY,
+    as: actorId,
+  });
+  const previous = await writeIdentityActor(home, envelope.actor);
+  return { actor: envelope.actor, previous };
 }
 
 /** Rename in place — the actor id is the stable key, so your history stays

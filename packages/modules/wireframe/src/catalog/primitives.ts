@@ -50,11 +50,13 @@ export const PRIMITIVES: Component[] = [
     id: "image", kind: "primitive", category: "display", namedBy: 10, h: 180,
     props: { kind: choice(["photo", "illustration", "logo"]), ratio: choice(["1:1", "4:3", "16:9", "3:4"], "4:3"), caption: yn() },
     draw: ({ props, fill }) => {
-      const logo = str(props, "kind") === "logo";
+      const kind = str(props, "kind");
+      const logo = kind === "logo";
       const r = logo ? "1/1" : ratio(str(props, "ratio"));
-      const cls = logo ? "sm" : str(props, "kind") === "illustration" ? "illustration" : "";
+      const cls = logo ? "sm" : kind === "illustration" ? "illustration" : "";
+      const wireCls = logo ? "sm pat-crosshatch" : kind === "illustration" ? "illustration pat-dotted" : "";
       const caption = flag(props, "caption") ? (fill?.lines?.[0] !== undefined ? tx(fill.lines[0], "meta cap-t") : bar(40, "cap")) : "";
-      return `<div class="${logo ? "logo" : ""}">${fill?.motif ? pic(fill.motif, r, cls) : img(r, logo ? "sm" : "")}${caption}</div>`;
+      return `<div class="${logo ? "logo" : ""}">${fill?.motif ? pic(fill.motif, r, cls) : img(r, wireCls)}${caption}</div>`;
     },
   },
   {

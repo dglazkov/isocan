@@ -97,6 +97,39 @@ describe("concurrent blob uploads", () => {
   });
 });
 
+/**
+ * **A name is not a type, and the type a hash was first filed under must not
+ * outlive the name that set it** (lessons.md #122, 14 Oct 2026). Thirteen slides
+ * uploaded from extensionless files were filed `application/octet-stream`;
+ * re-saving the same bytes as `.html` made versions that said `text/html`,
+ * but this route kept answering octet-stream under `nosniff`, and full screen
+ * rendered blank. The store-level rule (and the two-specific-types half) is
+ * `test/conformance/store-conformance.ts`; this is the route a frame loads.
+ */
+describe("a blob first filed as octet-stream", () => {
+  const send = async (contentType: string, filename: string, body: string) => {
+    const res = await fetch(`${base}/api/projects/prj_1/blobs`, {
+      method: "POST",
+      headers: { "Content-Type": contentType, "X-Isocan-Filename": filename, ...badge.headers },
+      body,
+    });
+    expect(res.status).toBe(200);
+    return (await res.json()) as { blobHash: string; mimeType: string };
+  };
+  const servedType = async (hash: string) =>
+    (await fetch(`${base}/api/projects/prj_1/blobs/${hash}`, { headers: badge.headers })).headers.get("content-type");
+
+  it("is served as the specific type the same bytes arrive with next", async () => {
+    const page = "<!doctype html><h1>Acme</h1>";
+    const first = await send("application/octet-stream", "itm_slide", page);
+    expect(await servedType(first.blobHash)).toBe("application/octet-stream");
+    const again = await send("text/html", "01-title.html", page);
+    expect(again.blobHash).toBe(first.blobHash);
+    expect(again.mimeType).toBe("text/html");
+    expect(await servedType(first.blobHash)).toMatch(/^text\/html/);
+  });
+});
+
 describe("the blob route honors Range", () => {
   /**
    * The map has said "Downloads stream through the daemon (Range honored)"

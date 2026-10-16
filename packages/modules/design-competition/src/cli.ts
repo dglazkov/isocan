@@ -762,7 +762,10 @@ async function prepareFighter(args: Readonly<Record<string, string>>, into: stri
     "",
     ...pack.moves.map((m) => `- ${m}`),
     "",
-    "`DESIGN.md` beside this file is your design system — the same one is on the canvas, scoped to your lane. Build against it: `isocan design --css --in \"" + lane + "\"` prints its tokens. `critique.md` is how you judge a rival; `references.md` is what you study.",
+    "`SOUL.md` is your persona, temperament, opening ritual, and instant disqualifiers — read it first so your design and critique sound unmistakably like this school of design.",
+    "`DESIGN.md` beside this file is your design system — the same one is on the canvas, scoped to your lane. Build against it: `isocan design --css --in \"" + lane + "\"` prints its tokens.",
+    "`corpus/specimen.html` is a working HTML+CSS specimen showing your exact visual structure, typography, and component idiom — study its structure before writing HTML.",
+    "`critique.md` is how you judge a rival; `references.md` is what you study.",
     "",
     "## The rules of the bout",
     "",
@@ -777,7 +780,8 @@ async function prepareFighter(args: Readonly<Record<string, string>>, into: stri
   ].join("\n");
   await fs.writeFile(path.join(into, "AGENTS.md"), agents);
   await fs.writeFile(path.join(into, "CLAUDE.md"), agents);
-  for (const file of ["DESIGN.md", "critique.md", "references.md"] as const) {
+  await fs.mkdir(path.join(into, "corpus"), { recursive: true });
+  for (const file of ["SOUL.md", "DESIGN.md", "critique.md", "references.md", "corpus/specimen.html"] as const) {
     await fs.writeFile(path.join(into, file), packText(fighter, file));
   }
 }

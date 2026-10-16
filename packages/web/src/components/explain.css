@@ -1,0 +1,18 @@
+/* Explain this item (ExplainPanel.tsx): a panel beside the live canvas, on
+   the right under the top bar, so the canvas and the selection stay put.
+   Its measures are the morning panel's (morning.css), restated here so this
+   chunk carries one sheet of its own. */
+.explain-panel {
+  position: fixed; top: 64px; right: 16px; z-index: var(--z-float);
+  width: min(360px, calc(100% - 32px)); max-height: calc(100% - 200px); overflow-y: auto;
+  padding: 12px; font-size: 12.5px; line-height: 1.45;
+  background: var(--card); color: var(--ink);
+  border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-pop);
+}
+.explain-panel h3 { margin: 0 24px 8px 0; font-size: 13px; }
+.explain-panel h4 { margin: 12px 0 4px; font-size: 11px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.explain-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--line); }
+.explain-list { margin: 0; padding-left: 18px; }
+.explain-cannot, .explain-empty { margin: 8px 0 0; font-size: 11px; color: var(--ink-muted); }
+.explain-close { position: absolute; top: 8px; right: 8px; border: none; background: none; color: var(--ink-muted); font: inherit; cursor: pointer; }
+.explain-link { min-width: 0; min-height: 0; padding: 0; border: none; border-radius: 0; background: none; color: var(--accent-text); font: inherit; font-size: 11px; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }

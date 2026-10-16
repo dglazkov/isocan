@@ -1,10 +1,14 @@
 import "./artifact-stage.css";
+import "./focus.css";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import type { Actor } from "@isocan/core";
-import type { Backing } from "@isocan/core";
-import { automaticCanvasTarget, sourceOf, backingOf, deckStep, editableText, isDesignSystem, isTextItem, sourceFaceOf, visualFaceOf, shortcut } from "@isocan/core";
-import { homeAnswered, writeItem } from "../lib/api.ts";
+import type { Actor, Backing, FocusFacts } from "@isocan/core";
+import { activeFaceIdOf, automaticCanvasTarget, availableFacesOf, faceLabel, hasDistinctVisualFace, sourceOf, backingOf, deckStep, editableText, isDesignSystem, isTextItem, nodeCapabilitiesFor, sourceFaceOf, visualFaceOf, warmFacesOf, shortcut, type ItemFaceId } from "@isocan/core";
+import { homeAnswered, readBlobText, writeItem } from "../lib/api.ts";
 import { loadBacking, useCanvasStore } from "../stores/canvasStore.ts";
+import { useUiStore } from "../stores/uiStore.ts";
+import { useFocusStore } from "../stores/focusStore.ts";
+import { useWebHost } from "../lib/modulehost.ts";
+import { resolveNodeFocus } from "../lib/focusRegistry.ts";
 import { VersionContent } from "./ItemView.tsx";
 import { CanvasPreviewBoundary } from "./CanvasPreviewBoundary.tsx";
 import { TextEditFrame } from "./TextEditFrame.tsx";
@@ -213,9 +217,9 @@ function OrdinaryArtifactStage({
   // and only offered on the SAVED preview: with the editor open, the buffer
   // is the source of truth and two pens on one file is a conflict machine.
   const [textEditing, setTextEditing] = useState(false);
-  const [previewFace, setPreviewFace] = useState<"visual" | "source">("visual");
+  const [previewFace, setPreviewFace] = useState<ItemFaceId | null>(null);
   useEffect(() => {
-    setPreviewFace("visual");
+    setPreviewFace(null);
   }, [itemId]);
   /**
    * **Every hook above the early returns**, and this one taught the rule the
@@ -227,6 +231,11 @@ function OrdinaryArtifactStage({
    * lands, and React counts a different number. A blank page and error #310.
    */
   const disk = useCanvasStore((s) => s.backing);
+  useUiStore((s) => s.modulesGeneration);
+  const host = useWebHost(canvasId, actor);
+  const subtarget = useFocusStore((s) => s.subtarget);
+  const setSubtarget = useFocusStore((s) => s.setSubtarget);
+  const askAgent = useFocusStore((s) => s.askAgent);
 
   if (!item) {
     return (
@@ -239,7 +248,28 @@ function OrdinaryArtifactStage({
   }
 
   const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0]!;
-  const hasVisual = current.visual !== undefined;
+  const caps = nodeCapabilitiesFor(item, current);
+  const focusFacet = resolveNodeFocus(item, current);
+  const focusFacts: FocusFacts | null = canvas
+    ? {
+        canvasId,
+        canvas,
+        item,
+        version: current,
+        actor,
+        canEdit,
+        capabilities: caps,
+        host,
+        readText: () => readBlobText(canvasId, current.blobHash),
+        subtarget,
+        setSubtarget,
+        askAgent,
+      }
+    : null;
+  const hasVisual = hasDistinctVisualFace(current);
+  const availableFaces = availableFacesOf(current);
+  const defaultFace = activeFaceIdOf(item, current, canvas);
+  const activeFace: ItemFaceId = previewFace && availableFaces.includes(previewFace) ? previewFace : defaultFace;
   const editable = editableText(current.mimeType) && canEdit && !current.designRecord;
   // Not a hook — a derivation, so it may live where it is used.
   const backing = backingOf(item, disk.bound, (path) => disk.onDisk[path] ?? null);
@@ -247,6 +277,17 @@ function OrdinaryArtifactStage({
   const fold = (which: keyof Panes) => {
     const next = { ...panes, [which]: !panes[which] };
     if (!next.preview && !next.edit) return; // unreachable: the sole pane has no fold control
+    setPanes(next);
+    writePanes(surface, next);
+  };
+
+  const setFileMode = (mode: "studio" | "code" | "split") => {
+    const next: Panes =
+      mode === "studio"
+        ? { preview: true, edit: false }
+        : mode === "code"
+          ? { preview: false, edit: true }
+          : { preview: true, edit: true };
     setPanes(next);
     writePanes(surface, next);
   };
@@ -268,7 +309,8 @@ function OrdinaryArtifactStage({
           .filter((hash): hash is string => Boolean(hash))
       : [];
 
-  const face = hasVisual && previewFace === "source" ? sourceFaceOf(current) : visualFaceOf(current);
+  const face = activeFace === "source" ? sourceFaceOf(current) : visualFaceOf(current, activeFace);
+  const warm = [...neighbours, ...warmFacesOf(current, face.blobHash)];
   const saved = (
     <VersionContent
       canvasOf={item.properties.canvas ?? null}
@@ -285,14 +327,52 @@ function OrdinaryArtifactStage({
       designSystem={isDesignSystem(item)}
       textNode={isTextItem(item)}
       reloadToken={0}
-      warm={neighbours}
+      warm={warm}
     />
   );
+
+  if (surface === "fullscreen" && focusFacet?.view && focusFacts) {
+    const FocusView = focusFacet.view;
+    return (
+      <div className="artifact-stage" data-focus-view={focusFacet.id}>
+        <Suspense fallback={<div className="page-note">Loading view…</div>}>
+          <FocusView {...focusFacts} />
+        </Suspense>
+      </div>
+    );
+  }
+
+  if (surface === "workbench" && !caps.file) {
+    if (caps.edit && canEdit && focusFacet?.edit && focusFacts) {
+      const FocusEdit = focusFacet.edit;
+      return (
+        <div className="artifact-stage" data-focus-edit={focusFacet.id} data-focus-file="false">
+          <Suspense fallback={<div className="page-note">Loading studio…</div>}>
+            <FocusEdit {...focusFacts} />
+          </Suspense>
+        </div>
+      );
+    }
+    if (caps.edit && canEdit) {
+      return (
+        <div className="artifact-stage focus-nonfile-studio" data-focus-file="false">
+          <div className="focus-nonfile-studio-bar">
+            <span>
+              <b>{item.title}</b> · Studio
+            </span>
+            <span>v{item.versions.length}</span>
+          </div>
+          <div className="focus-nonfile-studio-body">{saved}</div>
+        </div>
+      );
+    }
+    return <div className="artifact-stage">{saved}</div>;
+  }
 
   // Not editable: one pane, no headers, no folds — a png has no editor to
   // put away, so it gets the whole stage without ceremony. Non-local environments
   // (!disk.bound) also disallow editing dual-face artifacts entirely.
-  if (!editable || (hasVisual && !disk.bound)) return <div className="artifact-stage">{saved}</div>;
+  if (!editable || !caps.file || (hasVisual && !disk.bound)) return <div className="artifact-stage">{saved}</div>;
 
   const showDraft = panes.edit && draft !== null && current.mimeType === "text/html";
   /**
@@ -425,21 +505,45 @@ function OrdinaryArtifactStage({
                         : ` — v${item.versions.length}`}
                     </i>
                   </span>
-                  {hasVisual && (
+                  {availableFaces.length >= 2 && (
                     <div className="stage-toggle-group" role="group" aria-label="Preview face">
+                      {availableFaces.map((faceId) => (
+                        <button
+                          key={faceId}
+                          type="button"
+                          className={`stage-toggle-btn${activeFace === faceId ? " active" : ""}`}
+                          onClick={() => setPreviewFace(faceId)}
+                        >
+                          {faceLabel(faceId)}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {surface !== "fullscreen" && caps.file && (
+                    <div className="focus-file-mode-group" role="group" aria-label="File edit layout">
                       <button
                         type="button"
-                        className={`stage-toggle-btn${previewFace === "visual" ? " active" : ""}`}
-                        onClick={() => setPreviewFace("visual")}
+                        className={`focus-file-mode-btn${panes.preview && !panes.edit ? " active" : ""}`}
+                        onClick={() => setFileMode("studio")}
+                        title="Studio only"
                       >
-                        {current.mimeType === "text/markdown" ? "Visualizer" : "Visual"}
+                        Studio
                       </button>
                       <button
                         type="button"
-                        className={`stage-toggle-btn${previewFace === "source" ? " active" : ""}`}
-                        onClick={() => setPreviewFace("source")}
+                        className={`focus-file-mode-btn${!panes.preview && panes.edit ? " active" : ""}`}
+                        onClick={() => setFileMode("code")}
+                        title="Code only"
                       >
-                        {current.mimeType === "text/markdown" ? "Markdown" : "Source"}
+                        Code
+                      </button>
+                      <button
+                        type="button"
+                        className={`focus-file-mode-btn${panes.preview && panes.edit ? " active" : ""}`}
+                        onClick={() => setFileMode("split")}
+                        title="Studio + Code split"
+                      >
+                        Split
                       </button>
                     </div>
                   )}
@@ -509,6 +613,10 @@ function OrdinaryArtifactStage({
                       srcDoc={draft ?? ""}
                       title={`draft of ${current.filename}`}
                     />
+                  ) : surface === "workbench" && focusFacet?.edit && focusFacts ? (
+                    <Suspense fallback={<div className="page-note">Loading studio…</div>}>
+                      <focusFacet.edit {...focusFacts} />
+                    </Suspense>
                   ) : (
                     saved
                   )}

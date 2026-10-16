@@ -213,10 +213,10 @@ export async function setKeyAgents(home: string, agents: boolean): Promise<strin
   return writeAll(home, { ...all, agents });
 }
 
-/** Where to look: the environment and the home. Both default to this process's. */
+/** Where to look: the environment and the home. Both default to this process's; `home: null` resolves from the environment alone and never reads disk. */
 export interface ResolveOptions {
   env?: KeyEnv;
-  home?: string;
+  home?: string | null | undefined;
 }
 
 function fromFile(entry: StoredKey | undefined): ResolvedKey | undefined {
@@ -233,6 +233,7 @@ export function resolveKey(provider: KeyProvider, opts: ResolveOptions = {}): Re
   const env = opts.env ?? process.env;
   const fromEnv = envKeyFor(provider, env);
   if (fromEnv) return { key: fromEnv.key, source: "env", variable: fromEnv.variable };
+  if (opts.home === null) return undefined;
   return fromFile(readKeysSync(opts.home ?? defaultKeysHome(env))[provider]);
 }
 
@@ -241,13 +242,14 @@ export async function resolveKeyAsync(provider: KeyProvider, opts: ResolveOption
   const env = opts.env ?? process.env;
   const fromEnv = envKeyFor(provider, env);
   if (fromEnv) return { key: fromEnv.key, source: "env", variable: fromEnv.variable };
+  if (opts.home === null) return undefined;
   return fromFile((await readKeys(opts.home ?? defaultKeysHome(env)))[provider]);
 }
 
 /** The text model's key, provider and model — `chooseTextKey` over this machine's file. */
 export function resolveTextKey(opts: ResolveOptions = {}): ResolvedTextKey | undefined {
   const env = opts.env ?? process.env;
-  if (env.ISOCAN_TEXT_API_KEY?.trim()) return chooseTextKey(env, () => undefined);
+  if (env.ISOCAN_TEXT_API_KEY?.trim() || opts.home === null) return chooseTextKey(env, () => undefined);
   const stored = readKeysSync(opts.home ?? defaultKeysHome(env));
   return chooseTextKey(env, (provider) => stored[provider]);
 }

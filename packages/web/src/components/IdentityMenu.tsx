@@ -1,5 +1,5 @@
-import { faceMark } from "@isocan/core";
-import { lazy, type ReactNode, Suspense, useRef, useState } from "react";
+import { attestedEmail, faceMark } from "@isocan/core";
+import { lazy, type ReactNode, Suspense, useEffect, useRef, useState } from "react";
 import type { Actor } from "@isocan/core";
 import {
   adoptIdentity,
@@ -8,6 +8,7 @@ import {
   renameIdentity,
   signOut,
 } from "../lib/identity.ts";
+import { isSsoHome } from "../lib/faces.ts";
 import { IDENTITY_COLORS, actorColorIn, loadActorColors, useActorColors } from "../lib/colors.ts";
 import { faceMarkClass, faceMarkStyle } from "../lib/face.ts";
 import { setActorColor, setActorMark } from "../lib/identitycolor.ts";
@@ -16,6 +17,9 @@ import { refreshActorMarks, useActorMarks } from "../lib/marks.ts";
 import { type ThemePref, useTheme } from "../lib/theme.ts";
 import { DISPLAY_SWITCHES, HIDEABLE, showAllChrome } from "../lib/hideable.ts";
 import { EXPERIMENTS } from "../lib/experiments.ts";
+import type { TextPictures } from "@isocan/core/text";
+import { fetchTextPictures } from "../lib/api.ts";
+import { actorNameIn, useActorNames } from "../lib/names.ts";
 import { loadExperiments } from "../modules.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { EmojiPicker } from "./EmojiPicker.tsx";
@@ -122,7 +126,13 @@ export function IdentityMenu({
   const mine = marks[actor.id] ?? null;
   const [picking, setPicking] = useState(false);
   const markButton = useRef<HTMLButtonElement>(null);
-  const [name, setName] = useState(actor.name);
+  /** What everybody else sees you called: the registry, not the name this
+   * browser stored when it signed in. A rename made elsewhere (the terminal,
+   * another browser, a fold) left the stored one behind, and the field opened
+   * on a name the hover card above it no longer showed. */
+  const current = actorNameIn(useActorNames(), actor);
+  const [name, setName] = useState(current);
+  useEffect(() => setName(current), [current]);
   const [others, setOthers] = useState(() =>
     knownIdentities().filter((known) => known.id !== actor.id),
   );
@@ -141,7 +151,9 @@ export function IdentityMenu({
   // The same gate every control of this project stands behind: the refusal's
   // "Prove your address" is drawn only where the home can verify an email.
   const offer = useAttestOffer();
-  const canProve = offer !== null && canVerifyEmail(offer);
+  const sso = isSsoHome();
+  const ssoEmail = sso && offer ? attestedEmail(offer.attestations) : null;
+  const canProve = !sso && offer !== null && canVerifyEmail(offer);
   const themePref = useTheme((s) => s.pref);
   const setThemePref = useTheme((s) => s.setPref);
   const hiddenChrome = useUiStore((s) => s.hiddenChrome);
@@ -165,16 +177,35 @@ export function IdentityMenu({
   const setChromeHidden = useUiStore((s) => s.setChromeHidden);
   const experiments = useUiStore((s) => s.experiments);
   const setExperiment = useUiStore((s) => s.setExperiment);
+  /**
+   * Whether the home's text model looks at pictures, asked only while a row
+   * that needs it could show (Semantic Zoom's "look at pictures", design
+   * §11): with a model that takes none the row says so and stays off. Null
+   * until the home answers; an unanswered ask reads as "not here".
+   */
+  const askPictures = EXPERIMENTS.some((entry) => entry.needsPictures && (!entry.under || experiments.includes(entry.under)));
+  const [pictures, setPictures] = useState<TextPictures | null>(null);
+  useEffect(() => {
+    if (!askPictures) return;
+    let live = true;
+    fetchTextPictures().then(
+      (answer) => live && setPictures(answer),
+      () => live && setPictures({ pictures: false, why: "This home did not say whether its text model takes pictures, so this stays off." }),
+    );
+    return () => {
+      live = false;
+    };
+  }, [askPictures]);
   const trimmed = name.trim();
   /**
    * **Is there a rename to do?** — the same question the submit handler
-   * already asks before it does anything (`!trimmed || trimmed === actor.name`
+   * already asks before it does anything (`!trimmed || trimmed === current`
    * closes without sending). The button was live for both answers, so it went
    * blue and pressable over a name nobody had touched, and pressing it just
    * shut the menu. A control that offers an act it will not perform teaches
    * people not to believe the next one.
    */
-  const renames = trimmed !== "" && trimmed !== actor.name;
+  const renames = trimmed !== "" && trimmed !== current;
 
   /** Send a claim; `name` is what the person asked to be called, for the
    * refusal to name. */
@@ -284,9 +315,12 @@ export function IdentityMenu({
             onClose={() => setPicking(false)}
             onPick={(emoji) => {
               setPicking(false);
+              setError(null);
               /* Picking the one you wear takes it back — the same gesture
                  both ways, which is why the picker shows it pressed. */
-              void setActorMark(actor, emoji === mine ? null : emoji);
+              setActorMark(actor, emoji === mine ? null : emoji).catch((err: unknown) =>
+                setError(refusalFor(err, trimmed)),
+              );
             }}
           />
         )}
@@ -313,6 +347,7 @@ export function IdentityMenu({
           Rename
         </button>
       </form>
+      {ssoEmail && <div className="share-link-note">{ssoEmail}</div>}
       {error && <RefusalNote refusal={error} onProve={canProve ? () => setVerify(true) : null} />}
       {others.length > 0 && (
         <>
@@ -337,16 +372,16 @@ export function IdentityMenu({
                 {claimed?.has(other.id) && folding !== other.id && (
                   <button
                     className="btn identity-fold"
-                    title={`Make ${other.name} the same person as ${actor.name}, everywhere`}
+                    title={`Make ${other.name} the same person as ${current}, everywhere`}
                     onClick={() => setFolding(other.id)}
                   >
-                    Fold into {actor.name}
+                    Fold into {current}
                   </button>
                 )}
                 {claimed?.has(other.id) && folding === other.id && (
                   <div className="identity-fold-arm">
                     <span>
-                      Everything written as {other.name} becomes {actor.name}&rsquo;s. This cannot
+                      Everything written as {other.name} becomes {current}&rsquo;s. This cannot
                       be undone.
                     </span>
                     <button
@@ -391,23 +426,27 @@ export function IdentityMenu({
         * the cloud, the order a person meets them, and both behind the canvas
         * guard because a pass names exactly one canvas.
         */}
-      <div className="identity-menu-head">You</div>
-      <div className="identity-actions">
-        <Action
-          icon={<AddressMark />}
-          label="Prove your address…"
-          note="So your other machines can be you, and so somebody can invite you by email."
-          title="Prove an email address — so your other machines can be you, and so somebody can invite you by email"
-          onClick={() => setVerify(true)}
-        />
-        <Action
-          icon={<SurfacesMark />}
-          label="Your surfaces…"
-          note="Every browser and machine that is you; end one from here."
-          title="Every surface that carries your identity — and end one that should not"
-          onClick={() => setSurfaces(true)}
-        />
-      </div>
+      {!sso && (
+        <>
+          <div className="identity-menu-head">You</div>
+          <div className="identity-actions">
+            <Action
+              icon={<AddressMark />}
+              label="Prove your address…"
+              note="So your other machines can be you, and so somebody can invite you by email."
+              title="Prove an email address — so your other machines can be you, and so somebody can invite you by email"
+              onClick={() => setVerify(true)}
+            />
+            <Action
+              icon={<SurfacesMark />}
+              label="Your surfaces…"
+              note="Every browser and machine that is you; end one from here."
+              title="Every surface that carries your identity — and end one that should not"
+              onClick={() => setSurfaces(true)}
+            />
+          </div>
+        </>
+      )}
       <div className="identity-menu-head">Your agents</div>
       <div className="identity-actions">
         <Action
@@ -553,33 +592,40 @@ export function IdentityMenu({
         <>
           <div className="identity-menu-head">Experiments</div>
           <div className="chrome-list" role="group" aria-label="Experiments you can turn on">
-            {EXPERIMENTS.map((entry) => (
-              <label key={entry.id} className="chrome-row">
-                <input
-                  type="checkbox"
-                  checked={experiments.includes(entry.id)}
-                  onChange={(e) => {
-                    setExperiment(entry.id, e.target.checked);
-                    void loadExperiments();
-                  }}
-                />
-                <span className="chrome-name">{entry.name}</span>
-                <span className="chrome-where">{entry.what}</span>
-              </label>
-            ))}
+            {EXPERIMENTS.filter((entry) => !entry.under || experiments.includes(entry.under)).map((entry) => {
+              // A row that needs pictures, at a home whose model takes none (or has not said yet), is off and says why.
+              const refused = entry.needsPictures && !pictures?.pictures;
+              return (
+                <label key={entry.id} className="chrome-row">
+                  <input
+                    type="checkbox"
+                    checked={!refused && experiments.includes(entry.id)}
+                    disabled={refused}
+                    onChange={(e) => {
+                      setExperiment(entry.id, e.target.checked);
+                      void loadExperiments();
+                    }}
+                  />
+                  <span className="chrome-name">{entry.name}</span>
+                  <span className="chrome-where">{entry.what}{refused && pictures?.why ? ` ${pictures.why}` : ""}</span>
+                </label>
+              );
+            })}
           </div>
         </>
       )}
-      <button
-        className="btn identity-leave"
-        onClick={() => {
-          signOut();
-          onIdentity(null);
-          onClose(); // don't leave the menu hanging open behind the door
-        }}
-      >
-        Leave — enter as someone else
-      </button>
+      {!sso && (
+        <button
+          className="btn identity-leave"
+          onClick={() => {
+            signOut();
+            onIdentity(null);
+            onClose(); // don't leave the menu hanging open behind the door
+          }}
+        >
+          Leave — enter as someone else
+        </button>
+      )}
     </div>
   );
 }

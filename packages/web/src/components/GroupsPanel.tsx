@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Actor, GroupView, SweepReport } from "@isocan/core";
 import { grantSubjectOf } from "@isocan/core";
-import { addGroupMember, createGroup, deleteGroup, listGroups, removeGroupMember } from "../lib/api.ts";
+import { addGroupMember, createGroup, deleteGroup, listGroups, removeGroupMember } from "../lib/api-access.ts";
 
 /**
  * **Groups** (roles design, "The group"): a named set of people access is

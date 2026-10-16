@@ -3,9 +3,14 @@ export const designWorkflowProcedure = `Design work on this canvas
 
 Read this plan before starting or continuing a request for a designed screen,
 HTML node or connected application. Identify create, extend or refine from what
-the person wants. A precise edit or archive import follows ordinary editing or
-import; it does not begin a new interview. User scope takes precedence, including
-wireframe-only, exploration-only, speed and delegated judgment.
+the person wants. When the person asks for a wireframe, low-fidelity layout or
+multi-screen flow sketch, run isocan wire "<request>" (see isocan --agent-help
+wire) to compose catalog wireframes, variations and a clickable prototype rather
+than hand-authoring wireframe HTML here; isocan wire layer steps fidelity up
+from wire to system, lofi or hifi. A precise edit or archive import follows
+ordinary editing or import; it does not begin a new interview. User scope takes
+precedence, including wireframe-only, exploration-only, speed and delegated
+judgment.
 
 1. Read the request and its inputs.
 Use design workflow and design brief to find existing work by request, source

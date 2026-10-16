@@ -1,5 +1,5 @@
-import type { Actor, ActorClaimOp } from "@isocan/core";
-import { newId } from "@isocan/core";
+import type { Actor, ActorClaimOp, AttestOffer } from "@isocan/core";
+import { attestedEmailLocalPart, newId } from "@isocan/core";
 import { claimActor, sendOp } from "./api.ts";
 
 const KEY = "isocan.identity";
@@ -91,6 +91,48 @@ export async function adoptIdentity(actor: Actor): Promise<Actor> {
 }
 
 /**
+ * Auto-enter on an SSO home from the badge's current attestation offer:
+ * - If the presenting badge already binds a `home:person` actor (`offer.bound`),
+ *   adopt it directly in `localStorage` with `key: "home:person"` without
+ *   issuing a redundant `actor.claim`.
+ * - If exactly one actor is resumable on that address, resume it (`adoptIdentity`).
+ * - If multiple personas exist (`resumable.length > 1`) and exactly one matches
+ *   the attested email's local-part, resume that primary persona.
+ * - If no actor exists yet on that address, claim the email's local-part (`enterAs`).
+ * - Otherwise (ambiguous personas or a refused `name-taken` claim), return null
+ *   so the identity dialog lets the person choose.
+ */
+export async function enterFromAttestOffer(
+  offer: AttestOffer | null,
+  actions: { adopt?: (actor: Actor) => Promise<Actor>; enter?: (name: string) => Promise<Actor> } = {},
+): Promise<Actor | null> {
+  if (!offer || !offer.attesters.includes("email")) return null;
+  if (offer.bound) {
+    return become({ id: offer.bound.id, name: offer.bound.name, key: "home:person" });
+  }
+  const adopt = actions.adopt ?? adoptIdentity;
+  const enter = actions.enter ?? enterAs;
+  const local = attestedEmailLocalPart(offer.attestations);
+  try {
+    if (offer.resumable.length === 1) {
+      return await adopt(offer.resumable[0]!);
+    }
+    if (offer.resumable.length > 1 && local) {
+      const matched = offer.resumable.filter((actor) => sameName(actor.name, local));
+      if (matched.length === 1) {
+        return await adopt(matched[0]!);
+      }
+    }
+    if (offer.resumable.length === 0 && local) {
+      return await enter(local);
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+/**
  * **Fold one persona into another** (`actor.join`, multi-identity phase 5) —
  * journey 6's last step. The same op the CLI's `identity --join` sends,
  * home-scoped like a colour: the registry records that `from` is `into` now,
@@ -165,6 +207,23 @@ export async function reclaimIdentity(): Promise<void> {
  */
 export function adoptHandedIdentity(actor: Actor): Actor {
   return become({ id: actor.id, name: actor.name });
+}
+
+/**
+ * **The stored copy catches up with the registry.** The name this browser
+ * wrote at sign-in is memory; when the registry says otherwise (a rename from
+ * the terminal, another browser, a fold), the registry wins and this copy is
+ * refreshed — the current identity and its roster row, key kept, so the next
+ * boot paints the right name before any registry has arrived. Touches nothing
+ * when this browser is not `id`.
+ */
+export function rememberName(id: string, name: string): void {
+  const current = parsePersona(read(KEY));
+  if (current && current.id === id && current.name !== name) write(KEY, { ...current, name });
+  const roster = personas();
+  if (roster.some((p) => p.id === id && p.name !== name)) {
+    write(ROSTER_KEY, roster.map((p) => (p.id === id ? { ...p, name } : p)));
+  }
 }
 
 /**

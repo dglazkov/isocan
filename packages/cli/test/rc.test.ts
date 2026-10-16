@@ -472,6 +472,56 @@ describe("the web doors' mechanics (phase 2.5)", () => {
     await done;
   }, 30_000);
 
+  it("a critic asked from the web: its card in pieces, its budget and colour applied here, and a second ask refreshes it (critique phase 4)", async () => {
+    const rc = spawnCli(["rc"]);
+    let out = "";
+    rc.stdout!.setEncoding("utf8");
+    rc.stdout!.on("data", (chunk) => (out += chunk));
+    const done = new Promise<void>((resolve) => rc.on("close", () => resolve()));
+    await until(async () => out, (o) => o.includes("answering on"), "the rc to come up");
+    const parked = () => until(async () => {
+      const response = await fetch(`${base}/api/projects/prj_1/rc`, { headers: badge.headers });
+      return response.json() as Promise<{ parked?: boolean }>;
+    }, (state) => state.parked === true, "the rc's live park");
+    const { auth } = JSON.parse(await fs.readFile(path.join(home, "identity.json"), "utf8")) as {
+      auth: Record<string, { badgeId: string; secret: string }>;
+    };
+    const [mine] = Object.values(auth);
+    const asOwner = (body: unknown): Promise<any> =>
+      fetch(`${base}/api/projects/prj_1/agents/ask`, {
+        method: "POST",
+        headers: { [CLIENT_FEATURES_HEADER]: CANVAS_GROUPS_FEATURE, "Content-Type": "application/json", Authorization: `Bearer ${formatBadgeToken(mine!.badgeId, mine!.secret)}` },
+        body: JSON.stringify(body),
+      }).then((r) => r.json());
+    // A synthetic critic card, longer than one ask string, sent the way the
+    // browser sends it: in pieces of at most 500 (`enrolArgs`).
+    const card = (first: string) => [
+      "---", "name: quiet-hands", "description: A critic.", "critic: true", "agentName: Quiet Hands",
+      "credit: original; not affiliated with anyone", 'color: "#112233"', "budget:", "  usd per run: 0.25", "  turns per run: 3", "---", "",
+      "# Quiet Hands", "", `1. ${first}`, "2. What could go?", "3. Is it calm?", "", "## What it looks for first", "", "Acme ".repeat(120), "", "## How it ranks", "",
+    ].join("\n");
+    const pieces = (text: string) => Object.fromEntries((text.match(/[\s\S]{1,500}/g) ?? []).map((p, i) => [i === 0 ? "card" : `card-${i + 1}`, p]));
+    await parked();
+    const asked = await asOwner({ name: "Quiet Hands", from: nico, template: "critique.critic", args: { canvas: "prj_1", "card-item": "itm_card", ...pieces(card("Is it one thing?")) } });
+    expect(asked.ok, JSON.stringify(asked)).toBe(true);
+    await until(rcRows, (r) => r.some((row) => row.name === "Quiet Hands"), "the critic's enrolment");
+    const row = (await rcRows()).find((r) => r.name === "Quiet Hands")!;
+    expect(row.budget).toEqual({ usdPerRun: 0.25, turnsPerRun: 3 });
+    expect(await fs.readFile(path.join(row.cwd, "AGENTS.md"), "utf8")).toContain("1. Is it one thing?");
+    await until(async () => (await (await fetch(`${base}/api/colors`, { headers: badge.headers })).json()) as Record<string, string>, (c) => c[row.actorId] === "#112233", "the card's colour on the critic's face");
+
+    // Asked again with an edited card: the same agent, its brief rewritten, no second enrolment.
+    await parked();
+    await asOwner({ name: "Quiet Hands", from: nico, template: "critique.critic", args: { canvas: "prj_1", "card-item": "itm_card", ...pieces(card("Could someone queuing do this one-handed?")) } });
+    await until(async () => out, (o) => o.includes("Quiet Hands stands here already"), "the refresh narrated");
+    expect(await fs.readFile(path.join(row.cwd, "AGENTS.md"), "utf8")).toContain("1. Could someone queuing do this one-handed?");
+    expect((await rcRows()).filter((r) => r.name === "Quiet Hands")).toHaveLength(1);
+    expect(Object.values(await snapshotAgents()).filter((a) => a.actor.name === "Quiet Hands")).toHaveLength(1);
+
+    rc.kill("SIGINT");
+    await done;
+  }, 30_000);
+
   it("refuses at the door an ask whose template is not an id and strings", async () => {
     const res = await fetch(`${base}/api/projects/prj_1/agents/ask`, {
       method: "POST",

@@ -86,6 +86,18 @@ isocan identity --home --name "Paul"
 
 The `--home` flag identifies you as the owner of the machine.
 
+If this machine already has a person and `isocan setup <pass>` admitted you
+as someone else ("admitted but not made default"), make that actor the
+machine's person instead of naming a new one:
+
+```sh
+isocan identity --home --as <actorId>
+```
+
+It folds nothing and is reversible — the confirmation names the previous
+person, and `--home --as <their id>` switches back. The home refuses an actor
+this machine's badge was never handed.
+
 **Note:** Without `--home`, the command tries to identify the *agent* running
 it and fails if no agent is configured. Inside a Claude Code or Codex session,
 `--session` is implied. In that case, running `isocan identity` in an unbound
@@ -312,9 +324,10 @@ scrolled into view, ⌘Enter that appeared to add nothing, a panel header
 collapsed to `display: block`, and a reducer that stopped stamping the canvas —
 **that last mutation passed all 2,300 tests.**
 
-`node scripts/journeys.mjs` is the answer: it boots its own daemon on its own
-port in its own temp home, drives the built app through a headless browser, and
-walks the journeys a person actually takes. `.agents/personas/journeys.md` owns
+`node scripts/journeys.mjs` is the answer: for each journey it boots a daemon
+on its own port in its own temp home, with a browser of its own, drives the
+built app through that headless browser, and walks the journeys a person
+actually takes. `.agents/personas/journeys.md` owns
 it, and `journeys.yml` walks it weekly rather than per push — ninety seconds
 against a suite that answers in one, for a class of bug that does not need
 catching within the minute.

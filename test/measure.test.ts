@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error — a .mjs script with no types, imported for its reading on
 // purpose: `op-types` and the isomorphism audit must mean one thing by
@@ -268,4 +268,80 @@ describe("the op vocabulary is the Operation union, and nothing beside it", () =
     expect(members).not.toContain(null);
     expect(operations()).toHaveLength(members.length);
   });
+});
+
+/**
+ * **A reading nobody has taken is a third answer** (Semantic Zoom phase 5).
+ *
+ * `summary-unfaithful` reads what a model-judged eval recorded, and before the
+ * first eval there is nothing to read. Printing 0 would say the summaries are
+ * faithful; failing would read as a broken instrument on every push and every
+ * night until somebody spent money. So it prints `no reading yet` and exits
+ * `NO_READING`, and every reader of goals shows that as neither held nor
+ * missed — but only when BOTH the code and the line are there, so a crash
+ * that happens to exit 3 is still broken.
+ */
+describe("a reading nobody has taken yet", () => {
+  it("is told apart from a broken instrument only by its code AND its line", async () => {
+    // @ts-expect-error — a .mjs helper with no types.
+    const { unreadOf, NO_READING } = await import("../scripts/lib/reading.mjs");
+    expect(unreadOf({ status: NO_READING, stdout: "no reading yet: never judged\n" })).toBe("no reading yet: never judged");
+    expect(unreadOf({ status: NO_READING, stdout: "TypeError: boom" })).toBeNull();
+    expect(unreadOf({ status: 1, stdout: "no reading yet: never judged" })).toBeNull();
+    expect(unreadOf(new Error("spawn failed"))).toBeNull();
+  });
+
+  it("is what `summary-unfaithful` says until the eval has run, and a number after", () => {
+    const evalFile = fileURLToPath(new URL("../docs/projects/semantic-zoom/bench/eval.json", import.meta.url));
+    let out = "";
+    let status = 0;
+    try {
+      out = execFileSync("node", [measure, "summary-unfaithful"], { cwd: repo, encoding: "utf8", timeout: 60_000 });
+    } catch (err) {
+      const e = err as { status: number; stdout: string };
+      status = e.status;
+      out = e.stdout;
+    }
+    if (existsSync(evalFile)) {
+      expect(status).toBe(0);
+      expect(out.trim()).toMatch(/^\d+$/);
+    } else {
+      expect(status).toBe(3);
+      expect(out).toMatch(/^no reading yet: /);
+    }
+  });
+
+  // Proactive-agent phase 11: the second reading a model judges, and a rate —
+  // 0% would say every proposal is unwelcome, which nobody has checked.
+  it("is what `proposal-keep-rate` says until the night is judged, and a whole percent after", () => {
+    const judgeFile = fileURLToPath(new URL("../docs/projects/proactive-agent/bench/judge.json", import.meta.url));
+    let out = "";
+    let status = 0;
+    try {
+      out = execFileSync("node", [measure, "proposal-keep-rate"], { cwd: repo, encoding: "utf8", timeout: 60_000 });
+    } catch (err) {
+      const e = err as { status: number; stdout: string };
+      status = e.status;
+      out = e.stdout;
+    }
+    if (existsSync(judgeFile)) {
+      expect(status).toBe(0);
+      expect(out.trim()).toMatch(/^\d+$/);
+      expect(Number(out.trim())).toBeLessThanOrEqual(100);
+    } else {
+      expect(status).toBe(3);
+      expect(out).toMatch(/^no reading yet: /);
+    }
+  });
+
+  it.each(["scripts/ratchet.mjs", "scripts/persona-run.mjs", "scripts/canvas-board.mjs"])(
+    "%s reads it as unread, and never as a miss",
+    (file) => {
+      const src = readFileSync(fileURLToPath(new URL(`../${file}`, import.meta.url)), "utf8");
+      expect(src).toContain("unreadOf(err)");
+      // Where a reader decides a miss, an unread goal is excluded first, or
+      // `met(goal, undefined)` is false and "no reading" becomes "missed".
+      for (const m of src.matchAll(/!r\.broken && !met\(/g)) expect.fail(`${file}: a miss decided without excluding unread, at ${m.index}`);
+    },
+  );
 });

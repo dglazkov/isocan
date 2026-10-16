@@ -95,12 +95,14 @@ describe("a panel in the dock", () => {
     const shown = await json("panel", "add", file);
     expect(shown.added).toBe(false);
     expect(shown.can.join("\n"), "the capability list is derived and shown").toContain("review.html");
-    expect(shown.can.join("\n"), "and honest about the phase it is in").toContain("cannot run yet");
+    expect(shown.can.join("\n"), "and honest about the phase it is in").toContain("cannot read what is selected yet");
     expect(await json("panel", "list"), "nothing was added").toEqual([]);
 
     const added = await json("panel", "add", file, "--yes");
     expect(added.added).toBe(true);
     expect(added.title).toBe("Acme Review");
+    expect(added.actor).toEqual({ id: `ext_${added.itemId.slice(4)}`, name: "Acme Review" });
+    expect(added.grantId).toMatch(/^gnt_/);
     // Resolved to the page on this canvas, not to anything the manifest said.
     expect(added.bytes.itemId).toBeTruthy();
 
@@ -115,7 +117,37 @@ describe("a panel in the dock", () => {
     expect(listed).toHaveLength(1);
     expect(listed[0].src).toBe("review.html");
     expect(listed[0].side).toBe("left");
+    expect(listed[0].actor).toEqual(added.actor);
     expect(listed[0].can.join("\n")).toContain("cannot send an operation");
+
+    // Phase 5: a panel's write is attributed to the panel's actor and not to
+    // the person watching it, and `isocan activity <extension>` lists those ops.
+    const [board] = await daemon.engine.listCanvases();
+    const panelBadges = await daemon.desk.badgesAttesting(`panel:${added.itemId}`);
+    expect(panelBadges).toHaveLength(1);
+    await daemon.engine.submit({
+      canvasId: board!.id,
+      actor: added.actor,
+      badgeId: panelBadges[0]!.badgeId,
+      op: {
+        type: "thread.create",
+        threadId: "thr_panel_note",
+        x: 20,
+        y: 20,
+        anchorItemId: added.bytes.itemId,
+        comment: { id: "cmt_panel_note", body: "headings checked" },
+      },
+    });
+    const byTitle = await json("activity", "Acme Review");
+    expect(byTitle).toEqual([
+      expect.objectContaining({
+        who: "Acme Review",
+        kind: "said",
+        itemId: added.bytes.itemId,
+        subject: "review.html",
+        body: "headings checked",
+      }),
+    ]);
 
     // Removal has no verb of its own: it is an item, so `rm` takes it out of
     // the dock and the trash gives it back.

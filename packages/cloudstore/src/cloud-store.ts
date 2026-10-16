@@ -11,6 +11,7 @@ import type {
   SlashCommand,
   UploadTicket,
 } from "@isocan/core";
+import type { SummaryEntry } from "@isocan/core/semantic-zoom";
 import {
   applyActorColor,
   applyActorJoin,
@@ -20,6 +21,7 @@ import {
   COMMAND_NAME,
   emptyCanvas,
   extensionFor,
+  healedBlobType,
   OplogFencedError,
   OpValidationError,
   parseCommandFile,
@@ -48,6 +50,8 @@ import {
   opsCollection,
   padSeq,
   snapshotKey,
+  summaryObjectKey,
+  summaryPrefix,
 } from "./naming.ts";
 import { hostedPurgeHorizons } from "./purge-horizons.ts";
 
@@ -632,6 +636,20 @@ export class CloudStore implements Store {
     }
   }
 
+  /**
+   * The newest `actors/{seq}` document, by Firestore's single-field index on
+   * `seq` — one small document read, same as `tipSeq(canvasId)`. Falls back to
+   * `ACTORS_SNAPSHOT.lastSeq` when the log collection is empty.
+   */
+  async tipActorsSeq(): Promise<number> {
+    const newest = await this.db.collection(ACTORS).orderBy("seq", "desc").limit(1).get();
+    if (!newest.empty) {
+      return (newest.docs[0]!.data()["seq"] as number | undefined) ?? 0;
+    }
+    const snapshot = await this.db.doc(ACTORS_SNAPSHOT).get();
+    return (snapshot.data()?.["lastSeq"] as number | undefined) ?? 0;
+  }
+
   // ---- blobs ----
 
   async putBlob(
@@ -644,7 +662,7 @@ export class CloudStore implements Store {
     const existing = await ref.get();
     if (existing.exists) {
       const found = existing.data() as BlobMeta;
-      return { blobHash, size: found.size, mimeType: found.mimeType };
+      return { blobHash, size: found.size, mimeType: await this.healBlobType(ref, found, meta) };
     }
     const file = `${blobHash}.${extensionFor(meta.filename, meta.mimeType)}`;
     await this.objects.put(blobKey(id, file), data, { contentType: meta.mimeType });
@@ -663,9 +681,26 @@ export class CloudStore implements Store {
       // construction, so there is nothing to reconcile.
       if ((err as { code?: number }).code !== ALREADY_EXISTS) throw err;
       const found = (await ref.get()).data() as BlobMeta;
-      return { blobHash, size: found.size, mimeType: found.mimeType };
+      return { blobHash, size: found.size, mimeType: await this.healBlobType(ref, found, meta) };
     }
     return { blobHash, size: data.length, mimeType: meta.mimeType };
+  }
+
+  /**
+   * The same bytes again: heal the recorded type when it said nothing and this
+   * upload says something (`healedBlobType` — two specific types keep the
+   * first). The stored object keeps the key it was written under. Answers the
+   * type the record now holds.
+   */
+  private async healBlobType(
+    ref: ReturnType<CollectionReference["doc"]>,
+    found: BlobMeta,
+    meta: { mimeType: string; filename: string },
+  ): Promise<string> {
+    const healed = healedBlobType(found.mimeType, meta.mimeType);
+    if (!healed) return found.mimeType;
+    await ref.update({ mimeType: healed, filename: meta.filename });
+    return healed;
   }
 
   async blobMeta(id: string, blobHash: string): Promise<BlobMeta | null> {
@@ -733,7 +768,7 @@ export class CloudStore implements Store {
     } catch (err) {
       if ((err as { code?: number }).code !== ALREADY_EXISTS) throw err;
       const found = (await ref.get()).data() as BlobMeta;
-      return { blobHash: request.blobHash, size: found.size, mimeType: found.mimeType };
+      return { blobHash: request.blobHash, size: found.size, mimeType: await this.healBlobType(ref, found, request) };
     }
     return { blobHash: request.blobHash, size: stat.size, mimeType: request.mimeType };
   }
@@ -845,6 +880,45 @@ export class CloudStore implements Store {
       .split("\n")
       .filter((line) => line.trim().length > 0)
       .map((line) => JSON.parse(line) as LogEntry);
+  }
+
+  // ---- semantic zoom summaries ----
+
+  async listSummaries(id: string): Promise<Array<{ entry: SummaryEntry; touched: number }>> {
+    const prefix = summaryPrefix(id);
+    const objectKeys = await this.objects.list(prefix);
+    const rows: Array<{ entry: SummaryEntry; touched: number }> = [];
+    for (const objectKey of objectKeys) {
+      if (!objectKey.startsWith(prefix) || !objectKey.endsWith(".json")) continue;
+      const key = objectKey.slice(prefix.length, -5);
+      if (!SUMMARY_KEY.test(key)) continue;
+      const [raw, stat] = await Promise.all([
+        this.objects.readAll(objectKey),
+        this.objects.stat(objectKey),
+      ]);
+      const entry = parseSummaryBuffer(raw);
+      if (entry) rows.push({ entry, touched: stat?.updated.getTime() ?? 0 });
+    }
+    return rows;
+  }
+
+  async getSummary(id: string, key: string): Promise<SummaryEntry | null> {
+    if (!SUMMARY_KEY.test(key)) return null;
+    return parseSummaryBuffer(await this.objects.readAll(summaryObjectKey(id, key)));
+  }
+
+  async putSummary(id: string, entry: SummaryEntry): Promise<void> {
+    if (!SUMMARY_KEY.test(entry.key)) throw new Error(`invalid summary key: ${entry.key}`);
+    await this.objects.put(
+      summaryObjectKey(id, entry.key),
+      Buffer.from(JSON.stringify(entry), "utf8"),
+      { contentType: "application/json" },
+    );
+  }
+
+  async deleteSummary(id: string, key: string): Promise<void> {
+    if (!SUMMARY_KEY.test(key)) return;
+    await this.objects.delete(summaryObjectKey(id, key));
   }
 
   // ---- internals ----
@@ -990,6 +1064,18 @@ export function actorsFromDocument(
     colors: (saved.colors as ActorRegistry["colors"]) ?? {},
   };
   return { registry, lastSeq: (data?.["lastSeq"] as number | undefined) ?? 0 };
+}
+
+const SUMMARY_KEY = /^[0-9a-f]{64}$/;
+
+function parseSummaryBuffer(raw: Buffer | null): SummaryEntry | null {
+  if (!raw) return null;
+  try {
+    const entry = JSON.parse(raw.toString("utf8")) as SummaryEntry;
+    return entry && typeof entry.key === "string" && Array.isArray(entry.sourceIds) ? entry : null;
+  } catch {
+    return null;
+  }
 }
 
 function* chunks<T>(items: readonly T[], size: number): Generator<T[]> {

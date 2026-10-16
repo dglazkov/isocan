@@ -30,8 +30,10 @@ export interface MenuAction {
    *  the accelerator is looked up rather than written. */
   shortcutFor?: string;
   run: () => void;
-  /** Offered but not available right now — shown, dimmed, so the menu's shape
-   *  does not change under the pointer between one open and the next. */
+  /** Offered but not available right now — shown, dimmed, where seeing it is
+   *  the hint (Paste with nothing copied). A row that cannot apply to what was
+   *  right-clicked is left out instead (`itemMenu`, 14 Oct 2026): a third of a
+   *  menu in grey teaches people to stop reading it. */
   disabled?: boolean;
   danger?: boolean;
   /** This entry changes the canvas. On the read-only canvas (roles phase 1)

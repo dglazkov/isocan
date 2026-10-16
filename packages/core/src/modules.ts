@@ -1,5 +1,6 @@
 import type { ContextPiece } from "./context.ts";
-import type { Canvas, CanvasContents, Item } from "./model.ts";
+import type { Actor, Canvas, CanvasContents, CommentThread, Item, ItemVersion } from "./model.ts";
+import type { NodeCapabilities } from "./capabilities.ts";
 import type { Operation } from "./ops.ts";
 import type { JudgmentRequest } from "./judgment.ts";
 import type { TextRequest } from "./text.ts";
@@ -31,6 +32,19 @@ import { inCanvasScope } from "./canvas-scope.ts";
 export interface ModuleEdge {
   from: Item;
   to: Item;
+}
+
+/**
+ * **A flow a module plays** (proactive-agent phase 9, design §11: "a walk
+ * follows a real path"): the screens one item stands for — a wireframe
+ * prototype's kept screens — the one it opens on, and where each screen's
+ * hotspots go. Item ids. Core walks it (`walk.ts`, `walkFlow`); the module
+ * only says what its own file means.
+ */
+export interface WalkGraph {
+  start: string;
+  screens: readonly string[];
+  links: readonly { from: string; to: string }[];
 }
 
 /**
@@ -119,6 +133,8 @@ export interface CoreModule {
   groupIdentityProperties?: readonly string[];
   contextPieces?: (canvas: CanvasContents) => ContextPiece[];
   edges?: (canvas: CanvasContents) => ModuleEdge[];
+  /** The flow an item of this module's plays, read from its file — or null when it is not one (a walk's path; `WalkGraph`). */
+  walkFlow?: (item: Item, html: string) => WalkGraph | null;
   kinds?: readonly ModuleKind[];
   /** Marks on items, each a property — drawn on the item, toggled from its menu and a key. */
   marks?: readonly ModuleMark[];
@@ -163,6 +179,12 @@ export interface CoreModule {
    * another area names it here, and the same lens draws the same curtain.
    */
   rounds?: (canvas: CanvasContents) => readonly VoteRound[];
+  /**
+   * **Node capability overrides** (`docs/projects/node-focus/design.md`).
+   * A module whose items have rich View/Edit focus studios or interactive card
+   * interiors can refine `{ view, edit, enter, file }` for items it claims.
+   */
+  capabilities?: (item: Item, version: ItemVersion) => Partial<NodeCapabilities> | null | undefined;
 }
 
 /**
@@ -385,6 +407,30 @@ export function moduleKindOf(mime: string): ModuleKind | null {
   return moduleKinds().find((k) => k.mimes.includes(mime)) ?? null;
 }
 
+let cachedCapabilityModulesVersion = -1;
+let cachedCapabilityModules: CoreModule[] = [];
+
+/**
+ * Capability overrides contributed by loaded modules for an item and version,
+ * merged in module registration order. Null when no loaded module refines it.
+ */
+export function moduleCapabilitiesFor(item: Item, version: ItemVersion): Partial<NodeCapabilities> | null {
+  if (cachedCapabilityModulesVersion !== registryVersion) {
+    cachedCapabilityModules = [];
+    for (const m of REGISTRY.values()) {
+      if (m.capabilities) cachedCapabilityModules.push(m);
+    }
+    cachedCapabilityModulesVersion = registryVersion;
+  }
+  if (cachedCapabilityModules.length === 0) return null;
+  let merged: Partial<NodeCapabilities> | null = null;
+  for (const m of cachedCapabilityModules) {
+    const patch = m.capabilities!(item, version);
+    if (patch) merged = { ...(merged ?? {}), ...patch };
+  }
+  return merged;
+}
+
 /**
  * **What a module's components are handed to CHANGE anything** (9 Sep 2026).
  *
@@ -519,6 +565,15 @@ export interface WebHost {
    */
   runCommand: (text: string) => Promise<"local" | "posted">;
   /**
+   * **Who leads here, for this viewer** (proposed: `host`; proactive-agent
+   * phase 8) — the night watch's reading (`nightLead`, `nightAnswerable`):
+   * the agent the canvas names with `proactive=`, else its first standing
+   * agent, and why it cannot answer this viewer (null when it can). A module
+   * that asks the lead — the critique module's room — addresses one agent,
+   * not every parked one. Absent on an older host: say nothing leads.
+   */
+  lead?: () => Promise<{ lead: { id: string; name: string } | null; cannot: string | null }>;
+  /**
    * **Take back this viewer's last change** (proposed: `host`, voice-agent
    * phase 7, 30 Sep 2026) — exactly what ⌘Z does: the home's actor-scoped
    * undo for the actor `send` writes as. No new operation and no inverse
@@ -543,6 +598,15 @@ export interface EnrolAsk {
   /** A template id a module on the rc's machine registered: `design-competition.fighter`. */
   template?: string;
   args?: Readonly<Record<string, string>>;
+  /**
+   * **Ring for an agent that already stands** (module API 0.2.10). Without it
+   * a name already enrolled resolves at once and nothing is asked. With it and
+   * a `template`, the ask still goes, and the rc that answers for the agent
+   * writes its directory afresh from the template — no op, so nothing lands
+   * to wait for, and this resolves once the ask is delivered. What `reuse`
+   * does for `CliHost.enrol`, asked from the canvas.
+   */
+  reuse?: boolean;
 }
 
 /** A template id: `<module>.<name>`, lowercase, the shape a property key has. */
@@ -771,7 +835,22 @@ export interface RendererFacts {
 export interface ModuleRenderer<R> {
   /** The mimes this draws — the same list the module's kind claims. */
   mimes: readonly string[];
+  /**
+   * **Only items carrying this property** (module API 0.2.8, critique phase
+   * 0). A critic is an ordinary markdown item, so claiming `text/markdown`
+   * outright would take every note on every canvas; naming the property that
+   * marks it claims those items and leaves the rest to the built-in chain.
+   * Data, like `marks` and `spotlights`: the shell tests the property.
+   */
+  property?: string;
   component: R;
+}
+
+/** Does this renderer claim this version of this item? The one test, so the
+ *  card and its compact face cannot disagree about who draws it. */
+export function rendererClaims(renderer: { mimes: readonly string[]; property?: string }, mimeType: string, item?: Pick<Item, "properties"> | null): boolean {
+  if (!renderer.mimes.includes(mimeType)) return false;
+  return renderer.property === undefined || item?.properties?.[renderer.property] !== undefined;
 }
 
 /**
@@ -1021,10 +1100,58 @@ interface ModuleOverlay<O> {
 }
 
 /**
+ * **A sub-part of a focused node** (`docs/projects/node-focus/design.md` §5–6):
+ * a wireframe slot (`main.pricing-cards`), a design-system token
+ * (`colors.primary`), a DOM element on a screen, or a region on an image.
+ * Carried as a removable pill in the Node-Anchored Chat composer so an agent
+ * makes surgical edits rather than rewriting the whole artifact.
+ */
+export interface FocusSubtarget {
+  kind: string;
+  id: string;
+  label: string;
+  metadata?: Readonly<Record<string, unknown>> | undefined;
+}
+
+/**
+ * **What a node focus facet (`ModuleFocus.view` / `ModuleFocus.edit`) is handed**
+ * (`docs/projects/node-focus/design.md` §5).
+ */
+export interface FocusFacts {
+  canvasId: string;
+  canvas: CanvasContents;
+  item: Item;
+  version: ItemVersion;
+  actor: Actor;
+  canEdit: boolean;
+  capabilities: NodeCapabilities;
+  host: WebHost;
+  readText: () => Promise<string>;
+  subtarget: FocusSubtarget | null;
+  setSubtarget: (subtarget: FocusSubtarget | null) => void;
+  askAgent: (seedPrompt?: string) => void;
+}
+
+/**
+ * **A kind-aware View / Edit focus studio contributed by a module or built-in
+ * kind** (`docs/projects/node-focus/design.md` §5). Generic over the view and
+ * edit component types so `@isocan/core` stays free of React.
+ */
+export interface ModuleFocus<V = unknown, E = unknown> {
+  id: string;
+  matches: (item: Item, version: ItemVersion) => boolean;
+  priority?: number | undefined;
+  capabilities?: ((item: Item, version: ItemVersion) => Partial<NodeCapabilities>) | undefined;
+  view?: V | undefined;
+  edit?: E | undefined;
+  agentPrompts?: readonly { label: string; prompt: string }[] | undefined;
+}
+
+/**
  * The browser half of a module: its `CoreModule` plus the pieces only the web app mounts.
  * Generic in each component type so core never imports React.
  */
-export interface WebModule<C, R = never, I = never, P = never, O = never, D = never, W = never, X = never> {
+export interface WebModule<C, R = never, I = never, P = never, O = never, D = never, W = never, X = never, F = never> {
   core: CoreModule;
   /** Drawn inside `.world`, under the items, in world units. */
   underlays?: readonly C[];
@@ -1051,6 +1178,8 @@ export interface WebModule<C, R = never, I = never, P = never, O = never, D = ne
   dialogs?: readonly ModuleDialog<D>[];
   /** **Rows in an item's right-click menu** — only once the module's lazy half is loaded (`ModuleMenuFacts`). */
   menu?: (facts: ModuleMenuFacts) => readonly ModuleMenuRow[];
+  /** **Buttons under one comment in a thread** (module API 0.2.10) — the item menu's rows, under a comment instead (`ModuleCommentFacts`). */
+  comments?: (facts: ModuleCommentFacts) => readonly ModuleMenuRow[];
   /**
    * **Who writes the words of a screen this module draws** (copy-edit
    * phases 1–2, module API 0.2.5) — `WebCopyWriter`. A screen whose copy deck
@@ -1058,6 +1187,11 @@ export interface WebModule<C, R = never, I = never, P = never, O = never, D = ne
    * Read only once the lazy half is loaded.
    */
   copy?: WebCopyWriter;
+  /**
+   * **View (`/i/:itemId`) and Edit (`/w/:itemId`) focus studios**
+   * (`docs/projects/node-focus/design.md` §5).
+   */
+  focus?: readonly ModuleFocus<F, F>[];
 }
 
 /**
@@ -1144,6 +1278,23 @@ export interface WebFlowVoice {
 export interface ModuleMenuFacts {
   canvas: CanvasContents;
   items: readonly Item[];
+  open: (dialog: string, args: string) => void;
+}
+
+/**
+ * **What a module's comment buttons are handed** (critique phase 4, module
+ * API 0.2.10: the posted read's *Build both*). One comment, its thread and
+ * the canvas, and the same one door the item menu has — `open`, the module's
+ * own dialog with the words a command would have typed — so a button under a
+ * comment runs what the dialog runs and never grows a path of its own. Asked
+ * only of a module whose half is loaded. Only a row's `label` and `run` are
+ * read here — a separator, a tick, a submenu or `disabled` is not drawn — so
+ * a button that cannot act now is left out rather than greyed.
+ */
+export interface ModuleCommentFacts {
+  canvas: CanvasContents;
+  thread: CommentThread;
+  comment: CommentThread["comments"][number];
   open: (dialog: string, args: string) => void;
 }
 
@@ -1259,8 +1410,28 @@ export function isDataOnly(manifest: ModuleManifest): boolean {
  * optional `choice` `{ stance, against }` so *Choose a voice…* records the
  * winning stance and losing stances in the same op group (copy-edit phase 6).
  * A module built for `^0.2.6` still loads.
+ *
+ * **0.2.7 → 0.2.8 on 14 Oct 2026**, an addition: `ModuleRenderer.property`,
+ * so a renderer can claim only the items of a mime that carry a property —
+ * critique's critic cards are markdown, and every other markdown item stays
+ * the built-in chain's. Optional and provided: a module built for `^0.2.7`
+ * still loads.
+ *
+ * **0.2.8 → 0.2.9 on 14 Oct 2026**, an addition: `EnrolRequest.budget` and
+ * `EnrolRequest.reuse` (under the existing `templates` proposal), and the
+ * `reused` flag in `host.enrol`'s answer — critique's critics are enrolled
+ * once per canvas, refreshed from their card each time they are asked, and
+ * bounded per run. Optional fields a module passes and a member it is
+ * handed: a module built for `^0.2.8` still loads.
+ *
+ * **0.2.9 → 0.2.10 on 14 Oct 2026**, an addition (critique phase 4):
+ * `WebModule.comments`, buttons a module MAY put under a comment, which open
+ * its own dialogs; `EnrolAsk.reuse`, so the web can ring for an agent that
+ * already stands; and a template's `prepare` may answer with the agent's
+ * `budget` and `color`, which the rc applies when it enrols from a web ask.
+ * Optional, provided or passed: a module built for `^0.2.9` still loads.
  */
-export const MODULE_API_VERSION = "0.2.7";
+export const MODULE_API_VERSION = "0.2.10";
 
 /**
  * **The parts of the API we intend to change**, named so a module can say it

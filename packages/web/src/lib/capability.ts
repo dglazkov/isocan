@@ -89,7 +89,7 @@ export const HIDDEN_WRITES: readonly { what: string; file: string; gate: string 
   },
   {
     what: "the comment composer — a reply",
-    file: "components/CommentLayer.tsx",
+    file: "components/CommentPopovers.tsx",
     gate: "{canEdit && (\n        <form",
   },
   {

@@ -47,5 +47,22 @@ describe("the 1,000-item canvas mounts shells before document previews", () => {
     expect(html).not.toContain("item-standby");
     expect(item.versions[0]!.mimeType).toBe(sourceMime);
   });
+  it("suppresses kind-mark on zoomed-out HTML screens while keeping offscreen screens in standby", () => {
+    const actor = { id: "usr_acme", name: "Acme" };
+    const stamp = { createdAt: "2026-09-12T00:00:00Z", createdBy: actor, updatedAt: "2026-09-12T00:00:00Z", updatedBy: actor };
+    // 40×30 at scale 1 is below MIN_CHROME_WIDTH/HEIGHT (56×40), so roomy is false.
+    const item: Item = { id: "itm_acme_screen", title: "Acme screen", description: "", x: 0, y: 0, width: 40, height: 30, properties: {}, currentVersionId: "ver_acme", versions: [{ id: "ver_acme", blobHash: "hash_acme_html", mimeType: "text/html", filename: "acme.html", size: 1, ...stamp }], ...stamp };
+    const originalError = console.error;
+    const errors = vi.spyOn(console, "error").mockImplementation((message, ...args) => {
+      if (String(message).startsWith("Warning: useLayoutEffect does nothing on the server")) return;
+      originalError(message, ...args);
+    });
+    let html: string;
+    try { html = renderToStaticMarkup(h(MemoryRouter, null, h(ItemView, { item, canvasId: "prj_acme", actor }))); }
+    finally { errors.mockRestore(); }
+    expect(html).toContain("item-standby");
+    expect(html).not.toContain("kind-mark");
+    expect(html).not.toContain("<iframe");
+  });
 
 });

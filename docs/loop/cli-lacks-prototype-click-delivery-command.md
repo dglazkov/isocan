@@ -3,7 +3,7 @@ title: CLI lacks prototype click delivery command
 loop:
   - 27a4a5ca-3cc0-467b-bec0-dcb95a086f37
 loop_rank: P2
-loop_state: ACTIVE
+loop_state: DISMISSED
 loop_goal: pg_v67IPPn4
 decision: declined
 rank: never

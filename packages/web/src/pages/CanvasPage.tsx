@@ -16,6 +16,7 @@ import {
   anchorOffset,
   itemPath,
   moduleMarks,
+  nodeCapabilitiesFor,
   workbenchItemPath,
   workbenchPath,
 } from "@isocan/core";
@@ -63,6 +64,8 @@ const FullScreen = lazy(() => import("../components/FullScreen.tsx").then((m) =>
 const DeckPrint = lazy(() => import("../components/DeckPrint.tsx").then((m) => ({ default: m.DeckPrint })));
 const ModulePage = lazy(() => import("../components/ModulePage.tsx").then((m) => ({ default: m.ModulePage })));
 const ModuleOverlays = lazy(() => import("../components/ModuleOverlays.tsx").then((m) => ({ default: m.ModuleOverlays })));
+/** Semantic Zoom (an experiment): loaded only for a person who turned it on. */
+const SemanticZoom = lazy(() => import("../components/SemanticZoom.tsx"));
 /** Workspace composition is paid for only when someone opens a workspace. */
 const ModuleWorkspaceView = lazy(() =>
   import("../components/ModuleWorkspace.tsx").then((m) => ({ default: m.ModuleWorkspaceView })),
@@ -80,6 +83,8 @@ import type { PhoneVisit } from "../components/PhoneFace.tsx";
  *  is needed to paint the Chat, only to move it. */
 const ChatPlace = lazy(() => import("../components/ChatBar.tsx"));
 const PhoneFace = lazy(() => import("../components/PhoneFace.tsx").then((m) => ({ default: m.PhoneFace })));
+const AwayPanel = lazy(() => import("../components/VisitDigest.tsx").then((m) => ({ default: m.AwayPanel })));
+const StuckCard = lazy(() => import("../components/StuckCard.tsx"));
 const CanvasTools = lazy(() => import("../components/CanvasTools.tsx").then((m) => ({ default: m.CanvasTools })));
 /** Asked for by a keystroke and unmounted when closed, so it need not be in
  *  the bytes a first visit downloads. */
@@ -108,6 +113,7 @@ import { FilesPanel } from "../components/LazyFilesPanel.tsx";
 import { AgentTray } from "../components/LazyAgentTray.tsx";
 import { ContextPanel } from "../components/LazyContextPanel.tsx";
 import { PersonasPanel } from "../components/LazyPersonasPanel.tsx";
+import { ExtensionPanel } from "../components/LazyExtensionPanel.tsx";
 import { ReactionBar, restoreReactionBar } from "../components/ReactionBar.tsx";
 import { CommentToasts } from "../components/CommentToasts.tsx";
 import { OfflineBar } from "../components/OfflineBar.tsx";
@@ -279,6 +285,16 @@ function CanvasSurface({
      top controls is the colour of what it is washing. Null on a canvas with
      no ground, where the stylesheet's `--ground` fallback is right. */
   const fadeTone = useCanvasStore((s) => groundTone(s.record ?? null));
+  /* Stuck (proactive-agent phase 7): the card loads only while this person has said something in the last
+     fifteen minutes (core's STUCK_WINDOW_MS, restated so the entry chunk does not carry the module). */
+  const recentlyAsked = useCanvasStore((s) => {
+    if (!s.canvas) return false;
+    const since = new Date(Date.now() - 15 * 60_000).toISOString();
+    return Object.values(s.canvas.threads).some((t) => {
+      for (let i = t.comments.length - 1; i >= 0 && t.comments[i]!.createdAt >= since; i--) if (t.comments[i]!.author.id === actor.id) return true;
+      return false;
+    });
+  });
   const navigate = useNavigate();
   const panelResizing = useUiStore((s) => s.panelResizing);
   const historyOpen = useUiStore((s) => s.historyOpen);
@@ -287,7 +303,7 @@ function CanvasSurface({
   const helpOpen = useUiStore((s) => s.helpOpen);
   const setHistoryOpen = useUiStore((s) => s.setHistoryOpen);
   const moduleDialogOpen = useUiStore((s) => s.moduleDialog !== null);
-  useUiStore((s) => s.experiments);
+  const semanticZoom = useUiStore((s) => s.experiments).includes("semantic.zoom");
   const moduleOverlaysVisible = modules().some((module) => module.overlays?.length);
   const groupDialogOpen = useUiStore((s) => s.groupDialog !== null);
   // The canvas's own title, for the tab. Subscribed separately from the
@@ -321,6 +337,15 @@ function CanvasSurface({
     phoneVisit.current = { tab: wbItemId ? "Canvas" : "Chat", itemId: wbItemId ?? null, plan: false };
   }
   const [priorVisit, setPriorVisit] = useState<PriorVisit | null>(null);
+  /* The goodnight note whose morning review this arrival owes, or null. A
+     review is owed to an arrival, so it is decided once, as the prior visit
+     lands, from the canvas and the clock of that moment (`reviewOwed`), and
+     both faces take it from here. Decided later, the tab the goodnight was
+     said in mounted the review mid-night and closed the note under the lead's
+     feet: on desktop at a re-render (proactive-morning, 15 Oct 2026), on the
+     phone at every switch back to Chat. Only a canvas where a note stands
+     loads the chunk that decides. */
+  const [morning, setMorning] = useState<string | null>(null);
   const arrived = canvasTitle !== null;
   const { search } = useLocation();
   const requestedThread = new URLSearchParams(search).get(THREAD_QUERY);
@@ -335,7 +360,16 @@ function CanvasSurface({
     // `lib/seen.ts`, where the reason is a bug a browser found.
     let live = true;
     setPriorVisit(null);
-    void noteVisit(canvasId, useCanvasStore.getState().lastSeq, actor.id).then((prior) => { if (live) setPriorVisit(prior); });
+    setMorning(null);
+    void noteVisit(canvasId, useCanvasStore.getState().lastSeq, actor.id).then((prior) => {
+      if (!live) return;
+      setPriorVisit(prior);
+      const { canvas, actorJoins } = useCanvasStore.getState();
+      const at = Date.now();
+      if (canvas && Object.values(canvas.items).some((i) => i.properties.handoff)) {
+        void import("../components/VisitDigest.tsx").then((m) => { if (live) setMorning(m.reviewOwed(canvas, prior, at, actorJoins)); });
+      }
+    });
     // Pets follow (pets phase 2): the same once-per-arrival moment, lazily —
     // `lib/pets.ts`, reached through the join chunk, decides in core whether
     // anybody comes.
@@ -857,13 +891,26 @@ function CanvasSurface({
           ui.setRenaming(ids[0]!);
         }
       } else if (e.key === "Enter" && ui.selectedItemIds.length === 1) {
-        // Enter opens the selection full screen. It is a NAVIGATION, not a
-        // mode flag: the address bar ends up holding the screen you are
-        // looking at, so Back leaves it and the link is sendable.
-        e.preventDefault();
+        // Enter opens the selection full screen (View Focus). It is a
+        // NAVIGATION, not a mode flag: the address bar ends up holding the
+        // screen you are looking at, so Back leaves it and the link is sendable.
         const chosen = useCanvasStore.getState().canvas?.items[ui.selectedItemIds[0]!];
-        if (chosen && isGroupItem(chosen)) enterCanvasGroup(chosen.id);
-        else navigate(itemPath(canvasId!, ui.selectedItemIds[0]!));
+        if (chosen && isGroupItem(chosen)) {
+          e.preventDefault();
+          enterCanvasGroup(chosen.id);
+        } else if (chosen && nodeCapabilitiesFor(chosen).view) {
+          e.preventDefault();
+          navigate(itemPath(canvasId!, chosen.id));
+        }
+      } else if (e.key.toLowerCase() === "e" && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
+        // E opens the selection in Edit Focus (/w/:itemId) when its capabilities
+        // and the viewer's permissions allow editing.
+        const one = ui.selectedItemIds.length === 1 ? ui.selectedItemIds[0]! : null;
+        const chosen = one ? useCanvasStore.getState().canvas?.items[one] : undefined;
+        if (chosen && canEditNow() && nodeCapabilitiesFor(chosen).edit) {
+          e.preventDefault();
+          navigate(workbenchItemPath(canvasId!, chosen.id));
+        }
       } else if (e.key.toLowerCase() === "w" && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
         // W flips to the workbench — the agent room. A navigation for Enter's
         // reason, and it carries a single selection along as the stage's
@@ -1181,6 +1228,7 @@ function CanvasSurface({
           canvas and below the app's own chrome, so a module can add to the
           screen without covering the controls the app promises. */}
       {moduleOverlaysVisible && <Suspense fallback={null}><ModuleOverlays canvasId={canvasId!} actor={actor} /></Suspense>}
+      {semanticZoom && <Suspense fallback={null}><SemanticZoom canvasId={canvasId!} /></Suspense>}
       {/* A module's popup, opened by a command or a palette entry and
           never by itself (proposed: `dialogs`). */}
       {moduleDialogOpen && <Suspense fallback={null}><ModuleDialogs canvasId={canvasId!} actor={actor} /></Suspense>}
@@ -1190,6 +1238,7 @@ function CanvasSurface({
       {/* The sprint's clock, when the Chat says one is running — derived,
           like `isocan sprint`; sits under the banners when one is up. */}
       <SprintChip lowered={Boolean(outdated) || Boolean(followedLabel)} canvasId={canvasId!} actor={actor} />
+      {!phone && recentlyAsked && <Suspense fallback={null}><StuckCard canvasId={canvasId!} actor={actor} /></Suspense>}
       {outdated && (
         <button className="follow-banner update-banner" onClick={() => location.reload()}>
           isocan updated — reload to catch up
@@ -1216,6 +1265,7 @@ function CanvasSurface({
       <AgentTray canvasId={canvasId} actor={actor} />
       <ContextPanel canvasId={canvasId} actor={actor} />
       <PersonasPanel canvasId={canvasId} actor={actor} />
+      <ExtensionPanel canvasId={canvasId} />
       <CommentToasts />
       {/* Offline, refusals, and anything that could not be done at all
           (phase 10). Above the panels for the reason `ArrivalNotice` is:
@@ -1241,7 +1291,9 @@ function CanvasSurface({
         </Suspense>
       )}
       <OwnCursor actor={actor} />
-      {phone && <Suspense><PhoneFace key={`${canvasId}:${actor.id}`} canvasId={canvasId} actor={actor} visit={phoneVisit} prior={priorVisit?.canvasId === canvasId && priorVisit.actorId === actor.id ? priorVisit : null} /></Suspense>}
+      {/* The morning review on desktop: only where this arrival owes one. */}
+      {!phone && priorVisit?.canvasId === canvasId && morning && <Suspense><AwayPanel key={canvasId} prior={priorVisit} actor={actor} morning={morning} /></Suspense>}
+      {phone && <Suspense><PhoneFace key={`${canvasId}:${actor.id}`} canvasId={canvasId} actor={actor} visit={phoneVisit} prior={priorVisit?.canvasId === canvasId && priorVisit.actorId === actor.id ? priorVisit : null} morning={priorVisit?.canvasId === canvasId && priorVisit.actorId === actor.id ? morning : null} /></Suspense>}
       {/* Last, so it covers the panels and the toolbar: full screen means the
           screen. Driven by the route rather than by state — see
           FullScreen.tsx for why that distinction is the whole design. */}

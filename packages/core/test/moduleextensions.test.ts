@@ -16,6 +16,7 @@ import {
   refusedContributions,
   registerModule,
   registerModuleBase,
+  rendererClaims,
   roundRunning,
   roundsOn,
   rulesOf,
@@ -191,6 +192,17 @@ describe("what crosses from a canvas to a machine: a template id and some string
     expect(askTemplate({ template: "a.b", args: { pack: { nested: true } } })).toHaveProperty("error");
     expect(askTemplate({ template: "a.b", args: { "../x": "y" } })).toHaveProperty("error");
     expect(askTemplate({ template: "a.b", args: { k: "x".repeat(513) } })).toHaveProperty("error");
+  });
+});
+
+describe("a renderer that claims a mime only where a property marks the item", () => {
+  it("leaves every other item of the mime to the built-in chain", () => {
+    const critic = { mimes: ["text/markdown"], property: "acme.mark" };
+    expect(rendererClaims(critic, "text/markdown", { properties: { "acme.mark": "x" } })).toBe(true);
+    expect(rendererClaims(critic, "text/markdown", { properties: {} })).toBe(false);
+    expect(rendererClaims(critic, "text/markdown", null)).toBe(false);
+    expect(rendererClaims(critic, "text/html", { properties: { "acme.mark": "x" } })).toBe(false);
+    expect(rendererClaims({ mimes: ["text/vnd.acme"] }, "text/vnd.acme")).toBe(true);
   });
 });
 

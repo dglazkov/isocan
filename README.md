@@ -374,6 +374,105 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   source and chosen from there. `isocan diff <item> [from] [to]` prints the
   same summary (`--source` for a variation, `--json` for the structure).
   Comparing never writes anything.
+- **Proposals, beside your work rather than over it**: an agent with an idea
+  about something you made runs `isocan propose <item> <file> --cites
+  comment:<id> --why "…"`, and a copy hangs beneath your item in a dashed
+  outline, joined to it, with an ochre chip saying what prompted it and a
+  short why whose design terms are dotted-underlined and defined on hover.
+  **Keep** makes it the next version of your item (one ⌘Z), **Compare** opens
+  the side-by-side, **Delete** (⌫) trashes it and asks its author — in a
+  comment, with your optional reason — what it should learn, which it writes
+  as one line in **What your deletes taught**, a note pinned into every
+  agent's context (`isocan taste`). A proposal must cite a trigger, and one
+  agent keeps at most five open on a canvas.
+- **Goodnight: agree the night's work, then leave**: type `/goodnight` in the
+  Chat (`isocan goodnight` in a terminal) and the canvas's lead agent — the
+  one named by `proactive=<name>` on the canvas, else its standing agent —
+  opens with what you settled today, what is left open and a few things it
+  could try. Steer it in the Chat; press **That's the plan** and it writes a
+  note (settled, left open, a ticked *Tonight I will* list with budgets,
+  *will not touch*, ready by) with an empty dashed frame under each item a
+  line concerns. Untick a line and its frame goes. Overnight it fills each
+  frame, or says plainly why one failed; it edits an original only when you
+  named it in the conversation, never what you settled today or the design
+  system, and never an item someone else's goodnight named. When nothing can
+  answer, the note says so and promises nothing.
+- **The morning review**: come back after your own `/goodnight` and the
+  "While you were away" panel — on desktop as on the phone — leads with the
+  lead agent's brief: one plain line if the night failed or made nothing,
+  then at most five proposals, the surest first, each with its why (a
+  promise that did not work says why), then what it **left alone** and why,
+  then every original it changed because you named it, with the version
+  before one click away. `isocan goodnight review` prints the same. Seeing
+  it closes the night's note; the five never grow with time away.
+- **Explain this item**: choose **Explain** from an item's menu (or ⌘K) and
+  a panel beside the canvas says how it got here — the few versions that
+  mattered, who made each and the reason given at the time (the comment
+  that made it, the variation chosen and its own comment), the roads not
+  taken (variations in the trash, deleted proposals, options not adopted),
+  what moved around it since (a newer DESIGN.md, its relatives), and phrases
+  typed about it beside how a designer would say them. Plain, Designer or
+  Deep dive. **Critique** asks the canvas's lead agent for what is working, a
+  risk and one thing to try, which arrives as a proposal beneath it; **Copy
+  as rationale** puts the explanation on the canvas as a note. Nothing else
+  writes. `isocan explain <item> [--depth …]` prints the same story.
+- **The brief, as a card**: a design request's brief draws on the canvas as
+  six lines — Making, For, Should feel, Never, Constraints, Right now. What
+  you said is ruled solid; what an agent inferred is ruled in pencil, with
+  **Right** and **Wrong** beside it, and Right now is read off what you are
+  doing (exploring, refining, shipping) until you say otherwise. Proposals
+  name the line they answer (`cites · For`). Editing a line changes nothing
+  on the canvas: every screen is re-read into *assumed the old line*, *still
+  holds* and *matters more now*, and the lead agent asks one clarifying
+  question. `isocan design card` prints and edits the same card.
+- **Stuck, said out loud**: when three takes in a row at one item have
+  missed — set aside, undone or deleted, or asked for again at once or in
+  fewer words — your next ask gets a question instead of a fourth take. The
+  agent says it has been guessing, what it noticed in what you kept and
+  undid, and asks four now-or-instead pairs (density, brand expression,
+  layout, tone of voice) with its own guess highlighted; or **Show me
+  extremes**, or **Name a product that gets it right**. With nothing to
+  answer, the card still says what it saw and that the question waits.
+  `isocan stuck [item]` prints the same.
+- **Critics in the room**: switch on lenses — *The Reductionist*, *The Brand
+  Voice*, or one you describe in a line, after work you admire, never a
+  person — each with *how loud* (blockers only, studio crit, everything) and
+  *when* (when you pause, before you share, only when asked). The lead agent
+  wears them over a screen: pins land in each critic's colour, and the read
+  of the room says where they **agree**, where they **split** — never
+  averaged, with **Build both** making two proposals — and any **blocker**.
+  Critics never edit. `isocan critic add|new|set|ls` and `isocan critique
+  <item> [--as …]`; in the app, *Critics in the room* behind Settings →
+  Experiments → Critique.
+- **A desk check before you share**: `isocan share` and `isocan present`
+  first read the screens as a reviewer would — the design audit, contrast,
+  the words against the Voice, wires behind the design system, stale
+  receipts — and ask the critics set to *before I share*. It reports; it
+  never blocks. `isocan share --check` runs it alone.
+- **Walk it as someone else**: pick a flow — a group of screens, a wire
+  prototype, or one screen — say the task, and walk it one-handed on a phone,
+  with low vision, with a screen reader, as a first-time visitor, or as
+  someone you describe in a line (a situation and a constraint, never who
+  they are). A lane per walker draws the screens as they meet them: the
+  thumb's reach over each phone screen, the screen blurred and washed out for
+  low vision with the failing words shown as they see them beside the fix,
+  the reading order for a screen reader. What the screens' code can say is
+  measured; the lead agent walks the task, pins each stumble where it
+  happens, ends each lane (made it, stumbled, gave up), and where several
+  stumble on one screen, names it and proposes one fix. **They are
+  simulations, and say so: they do not replace testing with people.** From an
+  item's menu, or `isocan walk <flow> --task "…" [--as …]`.
+- **Say it like a designer**: type "make the header pop more, it feels
+  cramped" in the Chat and only *pop* and *cramped* are underlined, each with
+  the three ways an agent could read it (contrast, scale, colour; spacing,
+  density, size) and the sentence a designer would say. Tab takes that
+  sentence; Enter sends your own words, unchanged — both are fine, and a
+  reading you pick travels with the message so the agent need not guess.
+  Ordinary asks get no underline at all. `/vocabulary` shows the design
+  words you now use, the ones you have seen and not used, and your own words
+  the agent has learned, with *when I am vague* (offers fade as your asks
+  sharpen; always; never). Nothing is graded. `isocan words read "<sentence>"`
+  prints the same readings.
 - **A screen's words as data**: `isocan words <item>` prints its copy deck,
   every string in reading order with a role (heading, button, placeholder,
   error…) and an address. `--apply` takes the deck back with a `to` beside
@@ -419,6 +518,11 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   `isocan agent mark <name> 🐕`. Both are `actor.setMark`; the home lets you
   mark an agent only when one of your own surfaces holds it, read through
   joined identities. Anybody else's click is told whose choice it is.
+- **Whose machine this is**: `isocan identity --home --as <actorId>` makes an
+  actor this machine's badge already speaks for — one a pass admitted
+  alongside the existing person — the machine's person, direct mode included.
+  Nothing is folded, the home refuses an actor the badge was never handed,
+  and the same command with the previous id switches back.
 - **Snapping**: dragging an item shows alignment guides — a line for every
   edge or center it has settled onto — and the item lands exactly on them. The
   pull is measured in screen pixels, so it feels the same at any zoom, and
@@ -580,6 +684,25 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   Bring-your-own packs, remix, rematch and standings are available; blind
   bouts remain deferred. [The phase record](docs/projects/design-competition/phases.md)
   names the real-fighter, human and hosted walks still owed.
+- **Critics** (experiment): a critic is a persona card on the canvas — a
+  principle's name, a credit line, a colour and three questions. `isocan critic
+  add inevitable` seeds one from a design pack, `critic new "<name>"` writes
+  your own, and `isocan edit` changes what it asks. `isocan critique <screen>
+  --by inevitable` asks one on your parked `isocan rc`: it pins typed notes
+  (*working*, *risk*, *blocker*, each naming its question) at points on the
+  screen with `critique note`, changes nothing, and stops at its card's
+  budget ([the walk](docs/projects/critique/phases.md)). "Changes nothing" is
+  the home's rule, not the prompt's: an asked critic is capped at notes on
+  that canvas, and an edit from it is refused `beyond-ceiling` until you run
+  `isocan critic release`. Ask two at once (`--by inevitable,frog`, or
+  `/critique #Checkout with Inevitable and Form Follows Emotion` in the Chat):
+  each works alone in one thread, and when both are done `isocan critique
+  read` folds their notes into where they agree, where they split and what
+  blocks; `critique both` asks an agent to build a split both ways, as two
+  variations each citing the note it answers. In the browser the same doors
+  are **Critics** in the palette (the roster, add, write, release), a screen's
+  *Critique with…*, and *Post the read…* and *Build both…* under the request
+  thread's comments — each sending what the verb sends.
 - **MCP collaboration**: `isocan mcp` exposes sixteen tools plus current canvas
   and layered Context resources. Read items, frozen request bytes and context;
   claim an explicit durable agent session, create or edit items, post or reply
@@ -1060,10 +1183,13 @@ isocan bench [add <name> [--actor <id>] [--harness <n>] [--model <id>]
                                    # be parked, no turn starts, no other
                                    # canvas changes.
 isocan canvas create|list [--all]|show|edit|delete
+isocan canvas forget <canvas>     # drop this machine's copy of a canvas its
+                                  # home no longer has (recoverable)
 isocan use <canvas> [--home]      # bind this dir to a canvas (--home: fallback)
 isocan add <file> [--at x,y | --anchor <item>] [--title] [-d] [--prop k=v]
 isocan ls · show <item> · mv <item> <x> <y> · set <item> […] · rm · restore
 isocan edit <item> [<file>]        # new version from a file or $EDITOR
+isocan edit <item> <file> --if-version <ver>   # only if nobody changed it first: exit 4 and nothing written otherwise
 isocan versions <item> · version promote <item> <version>
 isocan version prune <items...> --keep N --force   # bound a stack a generator
                                        # keeps growing (--all: every item; not undoable)
@@ -1147,6 +1273,7 @@ isocan panel list|add [--yes]          # panels this canvas puts in its dock
 #   the manifest is read, and refused, before there is a frame. `add` prints
 #   what it may do, and adds nothing until --yes.
 isocan format [--dry-run]              # tidy the canvas: rows, children, references
+isocan tidy <items...>                 # line those up where they are: nothing re-dealt
 isocan merge <drawings...>             # several drawings into one, exactly
 isocan shortcuts                       # every key the canvas answers to
 isocan wait [--timeout s] [--all-ops]  # park; wake on a comment for you on
@@ -1334,6 +1461,28 @@ this repo does.
 `isocan serve` on a rented VM is a complete home: the same daemon, the same
 code, reachable by anyone you point at it.
 
+When a home sits behind an authenticating reverse proxy (OAuth2 Proxy, Envoy,
+Caddy `forward_auth`, Tailscale, Cloudflare Access) that strips untrusted
+client headers and injects the verified user's email,
+`ISOCAN_PROXY_EMAIL_HEADER` (for example `x-forwarded-email`) lets the home
+derive each person's badge and identity directly from that header without a
+separate `/api/door` knock. On a CLI machine that needs a credential helper or
+forward proxy to reach that home, configure `homeAuth` in
+`~/.isocan/config.json` (or `ISOCAN_HOME_AUTH` / `ISOCAN_AUTH_HEADER_COMMAND`):
+
+```json
+{
+  "home": "https://canvas.acme.test",
+  "homeAuth": {
+    "https://canvas.acme.test": {
+      "authHeaderCommand": ["acme-auth-helper", "--header", "https://canvas.acme.test"],
+      "httpProxy": "http://127.0.0.1:3128",
+      "ttlSeconds": 300
+    }
+  }
+}
+```
+
 ## Updating
 
 ```sh
@@ -1470,14 +1619,14 @@ five minutes away, *stepped away* on a deliberate stop. Off by default. The
 lines are records, so they summon nobody, and no agent answers another's
 hello.
 
-### Jetski plugin and model-pinned agents
+### Antigravity plugin and model-pinned agents
 
-[`plugins/jetski/`](plugins/jetski/) is isocan as a Jetski plugin: the canvas
-your workspace is bound to, in a pane beside the Jetski chat. Every part of it
+[`plugins/antigravity/`](plugins/antigravity/) is isocan as an Antigravity plugin: the canvas
+your workspace is bound to, in a pane beside the Antigravity chat. Every part of it
 is an `isocan` command, so the plugin can do nothing the CLI cannot. The
-`#release` install carries it alongside the CLI: `isocan setup --jetski` (or
-`node scripts/install-jetski-plugin.mjs` in a checkout) links it into
-`~/.gemini/config/plugins/isocan`. Restart Jetski after installing: it reads
+`#release` install carries it alongside the CLI: `isocan setup --antigravity` (or
+`node scripts/install-antigravity-plugin.mjs` in a checkout) links it into
+`~/.gemini/config/plugins/isocan`. Restart Antigravity after installing: it reads
 a plugin's hooks once, when the plugin loads.
 
 - **A canvas without its own Chat (`isocan embed`)**: the embed address opens
@@ -1488,29 +1637,18 @@ a plugin's hooks once, when the plugin loads.
   ready. Once the parent answers, it tells that one origin what is selected,
   and that is how the pane sees your selection.
 - **The pane** (`sidecars/canvas/`) opens the canvas that the workspace's
-  `.isocan/project.json` names. An unbound folder can be bound to an existing
-  canvas (by id, link or title) or to a new one. Selected items show as chips,
-  and **Ask** hands your question, with the item ids, to the Jetski
-  conversation. **Open ↗** opens the same canvas in a tab, with its Chat.
-- **Skills on both sides**: type `/` in the pane's box and the canvas's own
-  skills drop down (`isocan command ls`, built in and added with `/skill
-  add`). Run one in this conversation, which gets `/name args` and is told
-  `isocan command show <name>` holds its instructions, or hand it to a
-  standing agent as a comment (`/design-audit @Orla …`). Starters under the
-  box change with the selection and show what you can do: *Build this in the
-  repo*, *Put what we did here on the canvas*, the design skills, and *Answer
-  N open questions*.
+  `.isocan/project.json` (or `~/.isocan/bindings.json`) names. An unbound
+  folder can be bound to an existing canvas (by id, link or title) or to a new
+  one. Clicking the header title opens the same canvas in a browser tab, with
+  its Chat.
 - **The canvas can reach the conversation**: while the pane runs, a mention
-  of a Jetski conversation on the canvas (or a reply in its thread) is
+  of an Antigravity conversation on the canvas (or a reply in its thread) is
   relayed into that conversation, which answers on the canvas.
-  `ISOCAN_JETSKI_RELAY=off` turns this off. **Asks N** in the header lists
-  the questions agents left for you. **Fan out** asks Jetski's `flash`,
-  `pro` or `flash_lite` tiers the same thing in new conversations that join
-  the canvas under their own names. 💬 beside a face opens that conversation.
+  `ISOCAN_ANTIGRAVITY_RELAY=off` turns this off.
 - **Arriving**: a SessionStart hook runs when a conversation starts in a
   bound workspace. It names the conversation (`isocan identity --session`,
   keyed to that conversation) and starts its session, so what it writes is
-  attributed to it rather than to you. With `ISOCAN_JETSKI_JOIN=off` the
+  attributed to it rather than to you. With `ISOCAN_ANTIGRAVITY_JOIN=off` the
   conversation still gets the note, but nothing joins.
 - **Model-pinned agents (`--model <id>`)**: `isocan agent add`,
   `isocan rc add` and `isocan bench add` take a model id, spelled the way its
@@ -1519,11 +1657,9 @@ a plugin's hooks once, when the plugin loads.
   `ANTHROPIC_MODEL` for Claude Code, `model` in Codex's `CODEX_CONFIG`, or
   `{model}` in an `acpAdapters` declaration. `isocan harness` shows
   `model: pins` or `model: own` for each harness, so you know which agents
-  are really pinned before you compare them. The pane's **Agents** bar enrols
-  the presets in `sidecars/canvas/presets.json`, with buttons like
-  *+ Orla · Opus 5.5*. Each agent has a name of its own, never its model's.
-  They answer @mentions while your `isocan rc` runs.
+  are really pinned before you compare them. Each agent has a name of its
+  own, never its model's. They answer @mentions while your `isocan rc` runs.
 
 A canvas on this machine's own daemon (`http://127.0.0.1:…`) can only be
-framed by a browser on this machine. To use Jetski Web from anywhere else,
+framed by a browser on this machine. To use Antigravity Web from anywhere else,
 bind the folder to a canvas on a shared home such as isocan.io.

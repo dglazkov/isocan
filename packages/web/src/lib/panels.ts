@@ -18,7 +18,7 @@ function searchAtLoad(): string {
 
 /**
  * Whether a host pane framed this window (`?embed=1`,
- * `docs/projects/jetski/design.md`) — the gate on the host bridge.
+ * `docs/projects/antigravity/design.md`) — the gate on the host bridge.
  */
 export function embeddedNow(search = searchAtLoad()): boolean {
   return isEmbedded(search);
@@ -40,15 +40,28 @@ export function chatHiddenNow(search = searchAtLoad()): boolean {
  * for a panel that was pushed aside would fight the next reload.
  */
 
-export type Panel = "main" | "files" | "agents" | "context" | "personas";
+type BuiltinPanel = "main" | "files" | "agents" | "context" | "personas";
+type ExtensionPanelKey = `panel:${string}`;
+/** A built-in left-dock panel or a canvas-carried panel (`panel:<itemId>`). */
+export type Panel = BuiltinPanel | ExtensionPanelKey;
 
-const KEY: Record<Panel, (canvasId: string) => string> = {
+/** The dock key for a canvas-carried panel item (`panel:<itemId>`). */
+export function extensionPanelKey(itemId: string): ExtensionPanelKey {
+  return `panel:${itemId}`;
+}
+
+function extensionPanelItemId(panel: Panel | null): string | null {
+  return panel && panel.startsWith("panel:") ? panel.slice("panel:".length) : null;
+}
+
+const KEY: Record<BuiltinPanel, (canvasId: string) => string> = {
   main: (canvasId) => `isocan.mainpanel.${canvasId}`,
   files: (canvasId) => `isocan.filespanel.${canvasId}`,
   agents: (canvasId) => `isocan.agentspanel.${canvasId}`,
   context: (canvasId) => `isocan.contextpanel.${canvasId}`,
   personas: (canvasId) => `isocan.personaspanel.${canvasId}`,
 };
+const EXT_PANEL_KEY = (canvasId: string) => `isocan.extpanel.${canvasId}`;
 
 /**
  * Widen or narrow the rail, and slide the canvas with it.
@@ -93,9 +106,18 @@ export function openPanel(canvasId: string, panel: Panel | null, pan = true, rem
     panel = null;
   }
   const next = folded ? null : panel;
-  if (remember && !folded) for (const which of ["main", "files", "agents", "context", "personas"] as const) {
+  const extId = extensionPanelItemId(next);
+  if (remember && !folded) {
+    for (const which of ["main", "files", "agents", "context", "personas"] as const) {
+      try {
+        localStorage.setItem(KEY[which](canvasId), next === which ? "open" : "closed");
+      } catch {
+        // Private mode — the panels still work, they just forget.
+      }
+    }
     try {
-      localStorage.setItem(KEY[which](canvasId), next === which ? "open" : "closed");
+      if (extId) localStorage.setItem(EXT_PANEL_KEY(canvasId), extId);
+      else localStorage.removeItem?.(EXT_PANEL_KEY(canvasId));
     } catch {
       // Private mode — the panels still work, they just forget.
     }
@@ -107,6 +129,8 @@ export function openPanel(canvasId: string, panel: Panel | null, pan = true, rem
   ui.setAgentsPanelOpen(next === "agents");
   ui.setContextPanelOpen(next === "context");
   ui.setPersonasPanelOpen(next === "personas");
+  ui.setExtensionPanelId(extId);
+  ui.setExtensionPanelOpen(extId !== null);
   if (pan) panForDockChange(before, RAIL_PAN_MS);
 }
 
@@ -118,6 +142,8 @@ export function storedPanel(canvasId: string): Panel | null | undefined {
     if (localStorage.getItem(KEY.agents(canvasId)) === "open") return "agents";
     if (localStorage.getItem(KEY.context(canvasId)) === "open") return "context";
     if (localStorage.getItem(KEY.personas(canvasId)) === "open") return "personas";
+    const ext = localStorage.getItem(EXT_PANEL_KEY(canvasId));
+    if (ext) return extensionPanelKey(ext);
     return localStorage.getItem(KEY.main(canvasId)) === null ? undefined : null;
   } catch {
     return undefined;

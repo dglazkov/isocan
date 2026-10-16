@@ -3,7 +3,7 @@ title: Lack of spatial component governance lifecycle badges
 loop:
   - e9074052-9a65-4bb5-a703-671e6bba4b0f
 loop_rank: P2
-loop_state: ACTIVE
+loop_state: DISMISSED
 loop_goal: pg_v67IPNa4
 decision: untriaged
 ---

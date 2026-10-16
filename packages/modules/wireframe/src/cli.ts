@@ -3,6 +3,7 @@ import type { CoreModule } from "@isocan/core";
 import type { CliHost, CliModule } from "@isocan/cli/modulehost";
 import { KEEP_EMOJI, wireframeModule } from "./record.ts";
 import { WIRE_COMMAND, WIRE_PROPERTY_KEYS } from "./wire-command.ts";
+import { prototypeWalkFlow } from "./walk-flow.ts";
 
 /**
  * **Wireframes from the terminal** — the agent's hands on the same catalog
@@ -263,6 +264,8 @@ const wireframeCliCore: CoreModule = {
   ...wireframeModule,
   propertyKeys: [...WIRE_PROPERTY_KEYS],
   commands: [WIRE_COMMAND],
+  // A walk follows a prototype's links (proactive-agent phase 9).
+  walkFlow: prototypeWalkFlow,
 };
 
 export const wireframeCli: CliModule = {
@@ -276,6 +279,10 @@ export const wireframeCli: CliModule = {
     apply: async (...args) => (await import("./flesh-cli.ts")).wireCopyWriter.apply(...args),
     // `isocan words vary <screen>`: each voice's file is the spec with its words, rendered (`copy-variant.ts`).
     variant: async (...args) => (await import("./copy-variant.ts")).wireCopyVariant(...args),
+  },
+  // The desk check before a share (proactive-agent phase 8): wires behind their design system, loaded when a check runs.
+  deskCheck: {
+    behind: async (canvas, readText) => (await import("./behind.ts")).readWiresBehind(canvas, readText),
   },
 };
 

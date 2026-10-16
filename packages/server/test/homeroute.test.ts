@@ -26,21 +26,28 @@ const daemonSrc = readFileSync(
   path.join(path.dirname(fileURLToPath(import.meta.url)), "../src/daemon.ts"),
   "utf8",
 );
+const fileWorkstationSrc = readFileSync(
+  path.join(path.dirname(fileURLToPath(import.meta.url)), "../src/file-workstation.ts"),
+  "utf8",
+);
 
 describe("the routing table is known before the door opens", () => {
   it("loads homes before listening, and dials only after", () => {
-    const load = daemonSrc.indexOf("await homes.load()");
+    const load = daemonSrc.indexOf("await workstation.init(");
     const listen = daemonSrc.indexOf("await app.listen(");
-    const dial = daemonSrc.indexOf("await homes.start()");
-    expect(load, "daemon.ts must load the home table").toBeGreaterThan(-1);
+    const dial = daemonSrc.indexOf("await workstation.start()");
+    expect(load, "daemon.ts must initialise the workstation (loading the home table)").toBeGreaterThan(-1);
     expect(listen).toBeGreaterThan(-1);
-    expect(dial, "daemon.ts must still start the links").toBeGreaterThan(-1);
+    expect(dial, "daemon.ts must still start the workstation links").toBeGreaterThan(-1);
     // Loading is a file read and answers "where does this canvas live" — it
     // has to precede the first request.
     expect(load, "an unloaded table makes every canvas look homeless").toBeLessThan(listen);
     // Dialling is a network round trip whose first inbound op is written
     // through the engine, so it must NOT precede serving.
     expect(dial, "dialling before serving is the race this ordering avoids").toBeGreaterThan(listen);
+    // And FileWorkstation keeps that split intact: init loads the table, start dials.
+    expect(fileWorkstationSrc).toMatch(/async init\b[\s\S]*?await this\.homes\.load\(\)/);
+    expect(fileWorkstationSrc).toMatch(/async start\b[\s\S]*?await this\.homes\.start\(\)/);
   });
 });
 

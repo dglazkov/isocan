@@ -147,6 +147,7 @@ export const {
   // identity.ts / harness.ts — which actor
   HOME_CLAIM_KEY,
   adoptIdentity,
+  becomeHomePerson,
   builtinHarnesses,
   claimSessionIdentity,
   findSessionIdentity,

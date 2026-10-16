@@ -35,9 +35,12 @@ try{
  report.fixture=await a.ev(`(async()=>{const actor=JSON.parse(localStorage.getItem('isocan.identity'));const post=async(op,canvasId=null)=>{const r=await fetch('/api/ops',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({actor,clientId:'fixture',canvasId,op})});if(!r.ok)throw Error(await r.text());return r.json();};await post({type:'project.create',canvasId:'prj_attention',title:'Acme review'});const r=await fetch('/api/projects/prj_attention/blobs',{method:'POST',headers:{'Content-Type':'text/markdown'},body:${JSON.stringify(source)}});if(!r.ok)throw Error(await r.text());const blob=await r.json();await post({type:'item.add',itemId:'itm_document',title:'Review notes',version:{id:'ver_original',blobHash:blob.blobHash,mimeType:'text/markdown',filename:'review.md',size:blob.size},width:520,height:550,placement:{x:100,y:100}},'prj_attention');return {blobHash:blob.blobHash};})()`);
  // Morgan has a separate badge admitted only to read.
  await a.ev(`(async()=>{const actor=JSON.parse(localStorage.getItem('isocan.identity'));const {grants}=await (await fetch('/api/projects/prj_attention/grants')).json();for(const g of grants){if(g.subject==='link'){const r=await fetch('/api/projects/prj_attention/grants/'+g.id,{method:'DELETE'});if(!r.ok)throw Error(await r.text());}}const r=await fetch('/api/projects/prj_attention/grants',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({subject:'link',capability:'read',actorId:actor.id})});if(!r.ok)throw Error(await r.text());})()`);
- for(const c of clients){const loaded=c.once('Page.loadEventFired');await c.send('Page.navigate',{url:origin+'/p/prj_attention'});await loaded;await until(c,`!!document.querySelector('.item-read')`,'Read control',15000);
-  // Real input hit-testing, rather than invoking a handler through inert content.
-  const box=await c.ev(`(()=>{const r=document.querySelector('.item-read').getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}})()`);
+ for(const c of clients){const loaded=c.once('Page.loadEventFired');await c.send('Page.navigate',{url:origin+'/p/prj_attention'});await loaded;await until(c,`!!document.querySelector('.item')`,'Document card',15000);
+  // Real input hit-testing: select the document card, then click Enter in the top-left focus strip.
+  const card=await c.ev(`(()=>{const r=document.querySelector('.item').getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}})()`);
+  await c.send('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...card});await c.send('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...card});
+  await until(c,`!!document.querySelector('.item-focus-strip [aria-label="Enter item"]')`,'Enter control in focus strip',15000);
+  const box=await c.ev(`(()=>{const r=document.querySelector('.item-focus-strip [aria-label="Enter item"]').getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}})()`);
   await c.send('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...box});await c.send('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...box});
   await until(c,`!!document.querySelector('.item.entered .markdown-text strong')`,'entered document',15000);
  }
@@ -102,9 +105,10 @@ try{
  report.panZoom={documents:21,samples:profile.samples?.length ?? 0,markdownChunkSamples:(profile.samples ?? []).filter(id=>markdownNodes.has(id)).length};
  if(!report.panZoom.samples)throw Error('Profiler returned no samples');
  await cli('--canvas','prj_attention','version','promote','itm_document','ver_original');
- { const loaded=a.once('Page.loadEventFired');await a.send('Page.navigate',{url:origin+'/p/prj_attention'});await loaded;await until(a,`!!document.querySelector('.item-read')`,'Read control after presence checks'); }
+ { const loaded=a.once('Page.loadEventFired');await a.send('Page.navigate',{url:origin+'/p/prj_attention'});await loaded;await until(a,`!!document.querySelector('[data-item-id="itm_document"]')`,'Document card after presence checks'); }
  const click = async(selector) => {const box=await a.ev(`(()=>{const el=document.querySelector(${JSON.stringify(selector)});if(!el)throw Error('missing ${selector}');const r=el.getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}})()`);await a.send('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...box});await a.send('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...box});};
- await click('.item-read');await until(a,`!!document.querySelector('.item.entered .markdown-text strong')`,'read original');
+ await click('[data-item-id="itm_document"]');await until(a,`!!document.querySelector('[data-item-id="itm_document"] .item-focus-strip [aria-label="Enter item"]')`,'Enter control after presence checks');
+ await click('[data-item-id="itm_document"] .item-focus-strip [aria-label="Enter item"]');await until(a,`!!document.querySelector('.item.entered .markdown-text strong')`,'read original');
  await a.ev(`(()=>{const node=document.querySelector('.markdown-text strong').firstChild;const r=document.createRange();r.selectNodeContents(node);getSelection().removeAllRanges();getSelection().addRange(r);document.dispatchEvent(new Event('selectionchange'));})()`);
  await until(a,`!!document.querySelector('.text-comment-action')`,'comment on selection');
  await click('.text-comment-action');

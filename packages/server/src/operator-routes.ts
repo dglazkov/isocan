@@ -74,7 +74,7 @@ import { endOf } from "./badges.ts";
 import type { BadgeRecord, Desk } from "./desk.ts";
 import { CanvasNotFoundError, type Engine } from "./engine.ts";
 import type { RouteOptions } from "./http.ts";
-import { NO_PROOF_PRESENTED, proveOperator } from "./operator.ts";
+import { NO_PROOF_PRESENTED, proveOperator, proveOperatorFromProxy } from "./operator.ts";
 import { mintPass } from "./passes.ts";
 import type { PresenceHub } from "./presence.ts";
 import { liveGrants } from "./route-helpers.ts";
@@ -175,13 +175,15 @@ export function registerOperatorRoutes(app: FastifyInstance, scope: OperatorRout
   ): Promise<OperatorAct | null> => {
     const header = req.headers[OPERATOR_PROOF_HEADER];
     const token = (Array.isArray(header) ? header[0] : header)?.trim() ?? "";
-    if (!token) {
+    const verdict = token
+      ? await proveOperator({ token, auth: auth!, keys: signingKeys, operators })
+      : options.proxyAuth
+        ? proveOperatorFromProxy({ headers: req.headers, proxyAuth: options.proxyAuth, operators })
+        : null;
+    if (!verdict) {
       await reply.status(403).send({ error: NO_PROOF_PRESENTED, code: NO_OPERATOR_PROOF });
       return null;
     }
-    // `auth` is non-null here: the door hook refuses the whole prefix when it
-    // is not, with the sentence that says why.
-    const verdict = await proveOperator({ token, auth: auth!, keys: signingKeys, operators });
     const row: OperatorAct = {
       id: newId("opr"),
       act: what.act,
@@ -360,7 +362,7 @@ export function registerOperatorRoutes(app: FastifyInstance, scope: OperatorRout
    * a replica answers 409 naming the home, and the act is sent there.
    */
   const refuseIfReplica = (canvasId: string, reply: FastifyReply): boolean => {
-    const elsewhere = options.homes?.homeOf(canvasId) ?? null;
+    const elsewhere = options?.workstation?.homes.homeOf(canvasId) ?? null;
     if (!elsewhere) return false;
     void reply.status(409).send({
       error:
@@ -915,7 +917,7 @@ export function registerOperatorRoutes(app: FastifyInstance, scope: OperatorRout
     } else {
       // A space's rows live at the home the space routes forward to; an
       // operator act is never forwarded (phase 1), so a replica says so.
-      const elsewhere = options.homes?.homeScoped()?.homeUrl ?? null;
+      const elsewhere = options?.workstation?.homes.homeScoped()?.homeUrl ?? null;
       if (elsewhere) {
         return reply.status(409).send({
           error:

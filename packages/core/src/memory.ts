@@ -1,5 +1,5 @@
 import type { CanvasContents, Item, ItemVersion } from "./model.ts";
-import { canvasIdOf, canvasItemOf, isCanvasItem } from "./canvasitem.ts";
+import { canvasIdOf, canvasItemOf } from "./canvasitem.ts";
 import { areasOf } from "./area.ts";
 import { isGroupItem } from "./canvas-groups.ts";
 import { PLACEMENT_GAP } from "./placement.ts";
@@ -7,6 +7,8 @@ import { designSystem, selectDesignSystem, designSkipped, type DesignScopeOption
 import { ambientContextItems, excludedInAmbient } from "./canvas-group-context.ts";
 import { type ContextExtras, type ContextPiece, contextPieces } from "./context.ts";
 import type { RecapHeadResponse } from "./recap-head.ts";
+import { MEMORY_INHERIT, MEMORY_PERSONAL, MEMORY_PROP, memoryOf, type MemoryLink } from "./memory-link.ts";
+export * from "./memory-link.ts";
 
 /**
  * **Memory, in layers you can see** (`docs/projects/memory/design.md`).
@@ -25,20 +27,6 @@ import type { RecapHeadResponse } from "./recap-head.ts";
  * defines, set and cleared by `item.update` the way a pin is. The record is
  * never hidden: the link is an item anyone on the canvas can see.
  */
-
-export const MEMORY_PROP = "memory";
-export const MEMORY_INHERIT = "inherit";
-/** Phase 2's value — the person's own canvas, read only by their actors. */
-export const MEMORY_PERSONAL = "personal";
-
-export type MemoryLink = "inherit" | "personal";
-
-/** What a canvas card says about the memory behind it, or nothing. */
-export function memoryOf(item: Item): MemoryLink | null {
-  if (!isCanvasItem(item)) return null;
-  const raw = item.properties?.[MEMORY_PROP];
-  return raw === MEMORY_INHERIT || raw === MEMORY_PERSONAL ? raw : null;
-}
 
 /**
  * The canvases this one inherits from, **in the order the room reads them**:
@@ -89,14 +77,6 @@ export function personalContributions(canvas: CanvasContents): PersonalContribut
 export function personalCanvasItemOf(home: string, sourceCanvasId: string, owner: { name: string }): ReturnType<typeof canvasItemOf> & { title: string } {
   const card = canvasItemOf(home, sourceCanvasId);
   return { ...card, title: `${owner.name}'s canvas`, properties: { ...card.properties, [MEMORY_PROP]: MEMORY_PERSONAL } };
-}
-
-/** The patch that sets or clears the link — one spelling for both surfaces,
- *  cleared with `removeProperties` for the reason `markPatch` records. */
-export function memoryPatch(
-  memory: MemoryLink | null,
-): { properties: Record<string, string> } | { removeProperties: string[] } {
-  return memory === null ? { removeProperties: [MEMORY_PROP] } : { properties: { [MEMORY_PROP]: memory } };
 }
 
 /** A linked canvas as the reader could fetch it — or could not, with the

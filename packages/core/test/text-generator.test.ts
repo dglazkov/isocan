@@ -157,3 +157,24 @@ describe("the home's text model", () => {
     await expect(refused.generateJson("p", SCHEMA)).rejects.toThrow("view-only");
   });
 });
+
+describe("pictures with a prompt (Semantic Zoom phase 3b)", () => {
+  it("Claude's turn is the image blocks, in order, then the words; without pictures it is the words alone", async () => {
+    const images = [{ mediaType: "image/png", data: "QUNNRQ==" }, { mediaType: "image/jpeg", data: "QUNNRTI=" }];
+    const looked = recorded(message(JSON.stringify(VALUE)));
+    await envTextGenerator({ apiKey: KEY, provider: "anthropic", fetch: looked.fetch, images }).generateJson("Summarise Acme.", SCHEMA);
+    const content = JSON.parse(String(looked.calls[0]!.init.body)).messages[0].content;
+    expect(content).toEqual([
+      { type: "image", source: { type: "base64", media_type: "image/png", data: "QUNNRQ==" } },
+      { type: "image", source: { type: "base64", media_type: "image/jpeg", data: "QUNNRTI=" } },
+      { type: "text", text: "Summarise Acme." },
+    ]);
+    const plain = recorded(message(JSON.stringify(VALUE)));
+    await envTextGenerator({ apiKey: KEY, provider: "anthropic", fetch: plain.fetch }).generateJson("Summarise Acme.", SCHEMA);
+    expect(JSON.parse(String(plain.calls[0]!.init.body)).messages[0].content).toBe("Summarise Acme.");
+  });
+
+  it("the OpenAI-shaped endpoint is never handed pictures to drop unsaid", () => {
+    expect(() => envTextGenerator({ apiKey: "sk-acme", provider: "openai", images: [{ mediaType: "image/png", data: "QQ==" }] })).toThrow(/pictures/);
+  });
+});

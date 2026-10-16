@@ -3,7 +3,7 @@ title: Absence of spatial persona critique cards on canvas
 loop:
   - 079a451a-cad2-4fe4-a435-099e1036f137
 loop_rank: P2
-loop_state: ACTIVE
+loop_state: DISMISSED
 loop_goal: pg_v67IPNa4
 decision: untriaged
 ---

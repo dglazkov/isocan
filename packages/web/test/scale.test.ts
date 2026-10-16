@@ -202,9 +202,36 @@ describe("spacing", () => {
     // 950 -> 960 for the arrival toasts (.joined-*): three declarations, all
     // on existing steps. 960 -> 1320 on 27 Sep 2026 when the component
     // sheets were counted too (BC-6/BC-4): 340 declarations that were always
-    // there, measured at 1,291.
+    // there, measured at 1,291. 1320 -> 1340 on 14 Oct 2026 for the proposal
+    // marks and their Delete toast (proactive-agent phase 1): fifteen
+    // declarations, all on existing steps, against a total already at 1,318.
+    // 1340 -> 1350 the same day for the morning review (phase 3): six
+    // declarations, all on existing steps, against a total at 1,338; the
+    // digest's own rules moved from phone.css rather than being restated.
+    // 1350 -> 1360 the same day for the Explain panel (phase 4): ten
+    // declarations, all on existing steps, against a total at 1,344; the
+    // panel's sheet restates the morning panel's measures rather than
+    // sharing a sheet across two lazy chunks.
+    // 1360 -> 1390 on 14 Oct 2026 for the brief card (phase 5): twenty-six
+    // lengths in its own lazy sheet, all on existing steps, against a total
+    // at 1,355; the card's lines, its editor and the re-read's three piles.
+    // 1390 -> 1420 on 14 Oct 2026 for changes ripple (phase 6): the pulse
+    // strip and the ripple panel in their own lazy sheet, all on existing
+    // steps, taking the total to 1,405; the panel restates Explain's
+    // measures rather than sharing a sheet across two lazy chunks.
+    // 1420 -> 1470 on 14 Oct 2026 for walking it as someone else (phase 9):
+    // the walk panel's lanes, thumbnails, low-vision swatches and setup in
+    // their own lazy sheet, all on existing steps, taking the total to 1,460 from 1,419, one under the old bound;
+    // the panel restates Explain's measures rather than sharing a sheet.
+    // 1470 -> 1490 on 14 Oct 2026 for saying it like a designer (phase 10):
+    // the readings card above the Chat's composer and the vocabulary panel,
+    // twenty lengths in the proposal marks' lazy sheet, all on existing
+    // steps, taking the total to 1,480 from 1,460.
+    // 1490 -> 1720 on 15 Oct 2026 when focus.css landed for FocusHeader,
+    // NodeFocusChat, and the Image/DesignSystem/Screen focus studios, all
+    // on existing steps (measured at 1,690).
     expect(spacing.length).toBeGreaterThan(SPACING_STEPS * 4);
-    expect(spacing.length).toBeLessThan(1320);
+    expect(spacing.length).toBeLessThan(1720);
   });
 });
 

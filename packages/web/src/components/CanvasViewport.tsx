@@ -21,6 +21,7 @@ import { groundIsPlace, hasGround, isArea, parseUriList, reachHeld } from "@isoc
 import { actorColor } from "../lib/colors.ts";
 import { publishCursor, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { useSettling } from "../lib/settling.ts";
+import { useViewportLookahead } from "../lib/lookahead.ts";
 import { type Tool, useUiStore } from "../stores/uiStore.ts";
 import { pan, pinch, pinchFactor, screenToWorld, worldToScreen, zoomAt, type TwoPoints, type Viewport } from "../lib/viewport.ts";
 import { moduleDropFor } from "../modules.ts";
@@ -101,6 +102,17 @@ const VersionFanOut = lazy(() =>
 );
 import { CommentLayer } from "./CommentLayer.tsx";
 import { ModuleUnderlays } from "./ModuleUnderlays.tsx";
+/**
+ * **A canvas with no proposal downloads no proposal marks** (proactive-agent
+ * phase 1): first paint carries one scan of the items for the `proposal`
+ * property (or a goodnight note's `handoff`, phase 2), and the marks, their
+ * sheet and their keys arrive only where it finds one.
+ */
+const ProposalMarks = lazy(() => import("./ProposalMarks.tsx"));
+function ProposalsWhenAny({ canvasId, actor }: { canvasId: string; actor: Actor }) {
+  const any = useCanvasStore((s) => Object.values((s.past?.canvas ?? s.canvas)?.items ?? {}).some((i) => i.properties?.proposal || i.properties?.handoff));
+  return any ? <Suspense fallback={null}><ProposalMarks canvasId={canvasId} actor={actor} /></Suspense> : null;
+}
 import { CursorLayer } from "./CursorLayer.tsx";
 import { CursorGlow } from "./CursorGlow.tsx";
 /**
@@ -286,6 +298,16 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
     }
 
     const wheelPinch = { factor: 1, x: 0, y: 0, frame: 0 };
+    const wheelPan = { dx: 0, dy: 0, frame: 0 };
+    let wheelIdle: ReturnType<typeof setTimeout> | null = null;
+    function markWheelMoving() {
+      setPanning(true);
+      if (wheelIdle !== null) clearTimeout(wheelIdle);
+      wheelIdle = setTimeout(() => {
+        wheelIdle = null;
+        setPanning(false);
+      }, 160);
+    }
     function onWheel(e: WheelEvent) {
       stopGlide();
       freezePresentation();
@@ -294,6 +316,7 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
         // Pinch (or ctrl+wheel): always own it, wherever the cursor is, so the
         // browser never page-zooms. Zoom the canvas at the cursor instead.
         e.preventDefault();
+        markWheelMoving();
         // A trackpad sends several of these a frame; each would be a whole
         // render of everything that reads the viewport. Gather them and zoom
         // once a frame, at the latest cursor — the same total, one render.
@@ -337,8 +360,19 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
       e.preventDefault();
       // A wheel during a coast takes over from it.
       stopCoastRef.current();
-      const ui = useUiStore.getState();
-      ui.setViewport(pan(ui.viewport, -e.deltaX, -e.deltaY));
+      markWheelMoving();
+      wheelPan.dx += e.deltaX;
+      wheelPan.dy += e.deltaY;
+      if (wheelPan.frame === 0) {
+        wheelPan.frame = requestAnimationFrame(() => {
+          const { dx, dy } = wheelPan;
+          wheelPan.frame = 0;
+          wheelPan.dx = 0;
+          wheelPan.dy = 0;
+          const ui = useUiStore.getState();
+          ui.setViewport(pan(ui.viewport, -dx, -dy));
+        });
+      }
     }
     window.addEventListener("wheel", onWheel, { passive: false, capture: true });
 
@@ -350,9 +384,11 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
     function onGestureStart(e: GestureEvent) {
       e.preventDefault();
       gestureScale = e.scale;
+      markWheelMoving();
     }
     function onGestureChange(e: GestureEvent) {
       e.preventDefault();
+      markWheelMoving();
       const factor = e.scale / gestureScale;
       gestureScale = e.scale;
       const ui = useUiStore.getState();
@@ -368,6 +404,8 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
 
     return () => {
       if (wheelPinch.frame) cancelAnimationFrame(wheelPinch.frame);
+      if (wheelPan.frame) cancelAnimationFrame(wheelPan.frame);
+      if (wheelIdle !== null) clearTimeout(wheelIdle);
       window.removeEventListener("wheel", onWheel, true);
       window.removeEventListener("gesturestart", onGestureStart as EventListener, true);
       window.removeEventListener("gesturechange", onGestureChange as EventListener, true);
@@ -1193,6 +1231,7 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
   const items = useMemo(() => canvas
     ? Object.values(canvas.items).filter((item) => (!presentation?.isolate || presentation.items[item.id]) && (!groupUnderStack(canvas, item.id) || held?.includes(item.id))).sort((a, b) => Number(isArea(b) || isGroupItem(b)) - Number(isArea(a) || isGroupItem(a)) || (isGroupItem(a) && isGroupItem(b) ? groupAncestors(canvas, a.id).length - groupAncestors(canvas, b.id).length : 0))
     : [], [canvas, presentation, held]);
+  useViewportLookahead(canvasId, items, ref);
 
   return (
     <Follows
@@ -1273,6 +1312,7 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
             map node is chromeless text, and a line over it strikes through
             the words. */}
         <ModuleUnderlays canvasId={canvasId} actor={actor} />
+        <ProposalsWhenAny canvasId={canvasId} actor={actor} />
         {currentNode && canvas?.items[currentNode] && <div className="phone-current-node" aria-label="Current node" style={{ left: canvas.items[currentNode]!.x, top: canvas.items[currentNode]!.y, width: canvas.items[currentNode]!.width, height: canvas.items[currentNode]!.height }} />}
 
         {items.map((item) => (

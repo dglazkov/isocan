@@ -144,7 +144,7 @@ describe("the identity menu's branch", () => {
     expect(menu).toContain(
       "<RefusalNote refusal={error} onProve={canProve ? () => setVerify(true) : null} />",
     );
-    expect(menu).toContain("const canProve = offer !== null && canVerifyEmail(offer);");
+    expect(menu).toContain("const canProve = !sso && offer !== null && canVerifyEmail(offer);");
     // The same `setVerify(true)` the menu's own entry uses.
     expect(menu).toMatch(/if \(verify\) \{[\s\S]*?VerifyDialog/);
   });

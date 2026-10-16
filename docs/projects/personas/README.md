@@ -50,8 +50,8 @@ any other harness reads the file directly.
 | --- | --- | --- |
 | `accessibility` | Usable by somebody not using it the way you are | contrast, names, targets, alt |
 | `architect` | The op vocabulary, boundaries, the isomorphism | core's runtime deps, op types |
-| `copy` | Labels, errors, tooltips, empty states | greppable copy tells |
-| `design-auditor` | Tokens, both themes, the tells of a generated interface | grader checks, colour literals |
+| `copy` | Labels, errors, tooltips, empty states | greppable copy tells, and bench summaries that say something their source does not |
+| `design-auditor` | Tokens, both themes, the tells of a generated interface | grader checks, colour literals, and the share of a bench night's proposals a judge would keep |
 | `journeys` | Whether the app works when somebody opens it and uses it | failing journeys in `scripts/journeys.mjs` |
 | `librarian` | Whether the docs' links still lead somewhere — **the first small persona** (Haiku, $0.05 a run, hands off to `reviewer`) | dead relative links in tracked Markdown |
 | `market-researcher` | What else exists and what to take from it | **none, and it says so** |

@@ -430,6 +430,18 @@ describe("shared group layout intents", () => {
     expect(() => change(moved, planned)).toThrow(GroupConflictError);
   });
 
+  it("fit leaves a node where it is when it only shrinks off a neighbour it already touched", () => {
+    // `isocan fit` relocated nodes that grew into nothing new (14 Oct 2026).
+    let state = ordinary(card(), "label", { x: 150, y: 250, width: 120, height: 40 });
+    state = ordinary(state, "far", { x: 2000, y: 300, width: 100, height: 100 });
+    const boxOfFit = (action: ReturnType<typeof groupFitAction>) => ("targets" in action ? action.targets[0]!.box : undefined)!;
+    const shrunk = { box: boxOfFit(groupFitAction(state, [{ itemId: "a", width: 400, height: 200 }])) };
+    expect(shrunk.box).toMatchObject({ x: 100, y: 200, width: 400, height: 200 });
+    // Growing into something it did not touch before still steps clear.
+    const grown = { box: boxOfFit(groupFitAction(state, [{ itemId: "a", width: 2200, height: 400 }])) };
+    expect(grown.box!.x === 100 && grown.box!.y === 200).toBe(false);
+  });
+
   it("offers deepest named header targets and previews one atomic move plus drop", () => {
     let state = wrap(card(), "inner", ["a"]).state;
     state = wrap(state, "outer", ["inner"]).state;

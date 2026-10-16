@@ -86,13 +86,16 @@ export function webHostFor(canvasId: string, actor: Actor, destination = creatio
           (a) => a.actor.name.toLowerCase() === ask.name.toLowerCase(),
         );
       const already = standing();
-      if (already) return { actorId: already.actor.id };
+      if (already && !(ask.reuse && ask.template)) return { actorId: already.actor.id };
       await askEnrolAgent(canvasId, {
         name: ask.name,
         from: actor,
         ...(ask.template ? { template: ask.template } : {}),
         ...(ask.args ? { args: { ...ask.args } } : {}),
       });
+      // `reuse` (module API 0.2.10): the rc rewrites a standing agent's
+      // directory and sends no op, so the delivered ask is the whole answer.
+      if (already) return { actorId: already.actor.id };
       const until = Date.now() + ENROL_PATIENCE_MS;
       while (Date.now() < until) {
         const row = standing();
@@ -120,6 +123,12 @@ export function webHostFor(canvasId: string, actor: Actor, destination = creatio
      * `/wire` straight to the Chat would have skipped the first one: no
      * dialog, and with nobody parked, nothing at all.
      */
+    /** Who leads here — the night watch's own reading (`goodnight.ts`), loaded when asked. */
+    async lead() {
+      const { goodnightLead } = await import("./goodnight.ts");
+      const found = await goodnightLead(canvasId, actor.id);
+      return { lead: found.lead ? { id: found.lead.id, name: found.lead.name } : null, cannot: found.cannot };
+    },
     async runCommand(text: string): Promise<"local" | "posted"> {
       if (runLocalCommand(text, currentCommands())) return "local";
       if (!canEditNow()) throw new Error("You are reading this canvas — nothing can be posted from here.");

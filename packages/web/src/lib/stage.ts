@@ -66,6 +66,7 @@ export interface DockState {
   agentsPanelOpen: boolean;
   contextPanelOpen: boolean;
   personasPanelOpen: boolean;
+  extensionPanelOpen: boolean;
   trashOpen: boolean;
   marksOpen: boolean;
   panelWidth: number;
@@ -126,6 +127,7 @@ export function dockStateNow(): DockState {
     agentsPanelOpen,
     contextPanelOpen,
     personasPanelOpen,
+    extensionPanelOpen,
     trashOpen,
     marksOpen,
     panelWidth,
@@ -136,6 +138,7 @@ export function dockStateNow(): DockState {
     agentsPanelOpen,
     contextPanelOpen,
     personasPanelOpen,
+    extensionPanelOpen,
     trashOpen,
     marksOpen,
     panelWidth,
@@ -153,7 +156,8 @@ export function railIsOpen(ui: DockState): boolean {
     ui.filesPanelOpen ||
     ui.agentsPanelOpen ||
     ui.contextPanelOpen ||
-    ui.personasPanelOpen
+    ui.personasPanelOpen ||
+    ui.extensionPanelOpen
   );
 }
 

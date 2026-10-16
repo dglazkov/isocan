@@ -642,11 +642,29 @@ export function textBox(
   /** A named font: its face decides the glyphs, and its width scales them. */
   font?: TextFont | null,
 ): { width: number; height: number } {
+  return measureText(body, style, face, font);
+}
+
+/**
+ * `textBox`, or with `boxWidth` the same estimate wrapped inside a box that
+ * wide — the width a node already HAS. Wrapping happens at the box's inner
+ * width shrunk by `SLACK`, so the guess still errs large: the free path puts
+ * its slack in the width it chooses, and a fixed width has nowhere else to
+ * put it.
+ */
+function measureText(
+  body: string,
+  style: TextStyle,
+  face: TextFace,
+  font: TextFont | null | undefined,
+  boxWidth?: number,
+): { width: number; height: number } {
   if (font) face = font.face;
   const wide = font?.width ?? 1;
   const size = TEXT_STYLE_SIZE[style] * TEXT_FACE_SCALE[face];
-  const column = TEXT_COLUMN[style];
-  const hardMax = TEXT_COLUMN_MAX[style];
+  const inner = boxWidth === undefined ? null : Math.max(1, (boxWidth - PAD_X) / SLACK);
+  const column = inner === null ? TEXT_COLUMN[style] : inner + PAD_X;
+  const hardMax = inner === null ? TEXT_COLUMN_MAX[style] : inner + PAD_X;
 
   let rows = 0;
   let widest = 0;
@@ -684,11 +702,15 @@ export function textBox(
     const em = (text: string) => [...text].reduce((w, ch) => w + glyphEm(ch, face), 0) * lineSize * wide;
     // Wrap by word at the column, the way the browser will; a word longer
     // than the column widens the box, up to the hard limit, past which the
-    // stylesheet breaks it (`overflow-wrap: anywhere`).
+    // stylesheet breaks it (`overflow-wrap: anywhere`) — onto rows of its
+    // own, which count: in a box narrower than one word, that is every row.
     let lineRows = 1;
     let run = indent;
     for (const word of line.split(/\s+/)) {
-      const w = Math.min(em(word), hardMax - PAD_X - indent);
+      const limit = Math.max(1, hardMax - PAD_X - indent);
+      const full = em(word);
+      if (full > limit) lineRows += Math.ceil(full / limit) - 1;
+      const w = Math.min(full, limit);
       const spaced = run === indent ? run + w : run + em(" ") + w;
       if (run > indent && spaced > column - PAD_X) {
         lineRows += 1;
@@ -710,7 +732,9 @@ export function textBox(
   const paragraphs = Math.max(0, gaps - (lastBlank ? 1 : 0));
   // Prose that wrapped settles at the column, the way the composer's mirror
   // does; a label takes the width its words need.
-  const width = wrapped
+  const width = boxWidth !== undefined
+    ? boxWidth
+    : wrapped
     ? Math.max(column, Math.min(hardMax, Math.round(widest * SLACK + PAD_X)))
     : Math.round(Math.min(hardMax, Math.max(size * 2, widest * SLACK + PAD_X)));
   const height = Math.round(
@@ -732,8 +756,9 @@ export function textBox(
  *
  * So every surface that changes a node's words or look asks this one
  * question, with the look the node will have once the change lands. It only
- * ever GROWS, on both axes: a box somebody dragged wider keeps its width (more
- * room only means fewer lines, so the estimate's height still holds), and a
+ * ever GROWS, on both axes: a box somebody dragged wider keeps its width, and
+ * the height it needs is measured at that width (`textHeightAt` — the
+ * column's height was what an edit used to grow a wide box to), and a
  * note that got smaller does not have the canvas rearranged under it — `⇧F`
  * and `isocan fit` are the deliberate re-fit. Null when the box already holds
  * the words, so a caller sends nothing rather than a resize to the same size.
@@ -749,8 +774,28 @@ export function textRefit(
 ): { width: number; height: number } | null {
   const need = textBox(body, style, face, font);
   const width = Math.max(current.width, need.width);
-  const height = Math.max(current.height, need.height);
+  const height = Math.max(current.height, textHeightAt(width, body, style, face, font));
   return width === current.width && height === current.height ? null : { width, height };
+}
+
+/**
+ * **The height the words need at the width the box HAS** (14 Oct 2026).
+ *
+ * Both `textRefit` and `textNodeFit` used to ask `textBox`, which measures at
+ * the default column — 320 at body — whatever width the node was. An 840-wide
+ * note was refitted to the height of a 320 column (an edit grew it by
+ * hundreds) and `isocan fit` narrowed it to that column outright. A width is
+ * the one thing the words do not decide once somebody chose it, so the height
+ * is measured inside it.
+ *
+ * Clamped against the free estimate so a rounded width cannot add a row: a
+ * box at least as wide as the words' own never needs more height than they
+ * do, and a narrower one never needs less.
+ */
+function textHeightAt(width: number, body: string, style: TextStyle, face: TextFace, font?: TextFont | null): number {
+  const free = textBox(body, style, face, font);
+  const at = measureText(body, style, face, font, width).height;
+  return width >= free.width ? Math.min(free.height, at) : Math.max(free.height, at);
 }
 
 /**
@@ -772,13 +817,23 @@ export function textNodeRefit(
 }
 
 /**
- * What "fit to content" means for a caption: the box its words need in its
- * look, from scratch — so, unlike `textNodeRefit`, it may shrink. `⇧F` and
+ * What "fit to content" means for a caption: the height its words need in its
+ * look AT ITS WIDTH — so, unlike `textNodeRefit`, it may shrink. `⇧F` and
  * `isocan fit` both ask this, which is how a node already stored a line short
  * (made before `textNodeRefit` existed) is put right in one gesture from
  * either surface. Null when it is not a caption: paper keeps its square.
+ *
+ * A wider box keeps its width. It was refitted from scratch at the default
+ * column, which turned an 840×400 note into about 350×1600 and pushed it onto
+ * its neighbours (14 Oct 2026): a width somebody set is a layout decision,
+ * and nothing here can tell it from one the estimate made, so fit keeps it. A
+ * box crushed narrower than its words' own width still grows back to it —
+ * "fit" grows to what the content wants, the same width rule `textRefit`
+ * keeps — and either way the height is measured at the width it ends with.
  */
 export function textNodeFit(item: Item, body: string): { width: number; height: number } | null {
   if (!isTextItem(item) || paperOf(item) !== null) return null;
-  return textBox(body, textStyleOf(item), textFaceOf(item), textFontOf(item));
+  const style = textStyleOf(item), face = textFaceOf(item), font = textFontOf(item);
+  const width = Math.max(item.width, textBox(body, style, face, font).width);
+  return { width, height: textHeightAt(width, body, style, face, font) };
 }

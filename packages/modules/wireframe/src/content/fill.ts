@@ -379,6 +379,21 @@ export const FILLERS: Record<string, Filler> = {
     const e = p.focus();
     return { heading: e.title, sub: e.sub, motif: e.motif, labels: [e.status, e.category, e.date, e.amount].slice(0, num(props, "meta")) };
   },
+  "hero-banner": ({ p, props }) => ({
+    heading: p.pack.pitch[0],
+    sub: p.pack.categories[0]!,
+    lines: [p.pack.pitch[1]],
+    labels: p.cycle(p.pack.categories, Math.max(1, num(props, "bullets")), true),
+    motif: p.pack.motifs[0]!,
+  }),
+  accordion: ({ p, props, archetype }) => {
+    const n = num(props, "items");
+    const heads = archetype === "legal"
+      ? LEGAL_HEADS.slice(0, n)
+      : p.cycle(["How does this work?", "What is included?", "Can I change this later?", "Who can see my details?", "How do updates arrive?", "Where are records kept?", "What happens when I cancel?", "Need more help?"], n, true);
+    const lines = p.sentences(n);
+    return { items: heads.map((title, i) => ({ title, text: lines[i]! })) };
+  },
   "comment-list": ({ p, props }) => {
     const n = num(props, "comments");
     return {
@@ -402,6 +417,30 @@ export const FILLERS: Record<string, Filler> = {
   }),
   "gallery-section": ({ p, props }) => ({ items: p.entities(num(props, "items")).map((e) => ({ title: e.title, motif: e.motif })) }),
   "product-card-list": ({ p, props }) => ({ items: p.entities(num(props, "items")).map((e, i) => ({ title: e.title, meta: e.amount, sub: e.sub, motif: e.motif, rating: 3 + ((i + p.focusIndex) % 3) })) }),
+  "pricing-cards": ({ p, props }) => {
+    const tiers = num(props, "tiers");
+    const feats = num(props, "features");
+    const tierNames = ["Starter", "Pro", "Team", "Enterprise"].slice(0, tiers);
+    const prices = ["$0 / mo", "$19 / mo", "$49 / mo", "Custom"].slice(0, tiers);
+    const subs = ["For getting started", "For active workflows", "For growing teams", "For large organizations"].slice(0, tiers);
+    const featurePool = [
+      ...p.pack.categories.map((c) => `${c} tracking`),
+      "Unlimited history",
+      "Shared workspace",
+      "Priority support",
+      "Audit exports",
+    ];
+    return {
+      groups: ["Monthly", "Annual"],
+      items: tierNames.map((title, i) => ({
+        title,
+        meta: prices[i]!,
+        sub: subs[i]!,
+        status: "Most popular",
+        cells: Array.from({ length: feats }, (_, f) => featurePool[(i + f) % featurePool.length]!),
+      })),
+    };
+  },
   "empty-state": ({ p, props }) => {
     const [heading, line] = props.cause === "no-results" ? GENERIC.noResults : props.cause === "cleared" ? GENERIC.cleared : p.pack.empty;
     return { motif: p.pack.motifs[0]!, heading, lines: [p.x(line)] };

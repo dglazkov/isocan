@@ -58,7 +58,7 @@ export const ARCHETYPE_IDS = [
 const WAVE_1: Array<Omit<Recipe, "sections"> & { recipe: string }> = [
   {
     id: "welcome", title: "Welcome", platforms: ["app"],
-    recipe: "main: image → heading → text? → (button | button-group) → link?",
+    recipe: "main: (image | hero-banner) → heading → text? → (button | button-group) → link?",
     intents: { button: { action: "get-started" }, "button-group": { "button-1": "get-started", "button-2": "sign-in" }, link: { action: "sign-in" } },
   },
   {
@@ -93,12 +93,12 @@ const WAVE_1: Array<Omit<Recipe, "sections"> & { recipe: string }> = [
   },
   {
     id: "gallery", title: "Gallery", platforms: ["app", "site"],
-    recipe: "header: app-bar | navbar; main: chip? → (card-grid | gallery-section | product-card-list)",
+    recipe: "header: app-bar | navbar; main: chip? → (card-grid | gallery-section | product-card-list | pricing-cards)",
     intents: { "app-bar": { "action-1": "search", "action-2": "filter", "action-3": "share" } },
   },
   {
     id: "detail", title: "Detail", platforms: ["app", "web"],
-    recipe: "header: app-bar; main: detail-header → (text | long-form | description-list) → (comment-list | card-grid)?; footer: (button | button-group)?",
+    recipe: "header: app-bar; main: detail-header → (text | long-form | description-list | accordion) → (comment-list | card-grid)?; footer: (button | button-group)?",
     intents: { "app-bar": { "action-1": "share", "action-2": "more", "action-3": "edit" }, button: { action: "edit" }, "button-group": { "button-1": "edit", "button-2": "delete" } },
   },
   {
@@ -108,7 +108,7 @@ const WAVE_1: Array<Omit<Recipe, "sections"> & { recipe: string }> = [
   },
   {
     id: "settings", title: "Settings", platforms: ["app", "web"],
-    recipe: "header: app-bar | page-header; nav: side-nav?; main: profile-header? → (settings-group | form-block)",
+    recipe: "header: app-bar | page-header; nav: side-nav?; main: profile-header? → (settings-group | form-block | accordion)",
     intents: { "app-bar": { "action-1": "help", "action-2": "more", "action-3": "info" }, "page-header": { "action-1": "save", "action-2": "help", "action-3": "more" } },
   },
   {
@@ -140,7 +140,7 @@ const WAVE_1: Array<Omit<Recipe, "sections"> & { recipe: string }> = [
   },
   {
     id: "legal", title: "Terms", platforms: ["app", "site"],
-    recipe: "header: app-bar; main: long-form; footer: button?",
+    recipe: "header: app-bar; main: long-form | accordion; footer: button?",
     intents: { button: { action: "accept" }, "app-bar": { "action-1": "share", "action-2": "info", "action-3": "more" } },
   },
 ];

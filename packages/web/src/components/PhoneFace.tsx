@@ -14,7 +14,8 @@ import { AgentRowView } from "./AgentRow.tsx";
 import { ContextPanel } from "./LazyContextPanel.tsx";
 import { VersionContent } from "./ItemView.tsx";
 import { CanvasViewport } from "./CanvasViewport.tsx";
-import { ComposePopover, ThreadPopover, itemThread } from "./CommentLayer.tsx";
+import { itemThread } from "./CommentLayer.tsx";
+import { ComposePopover, ThreadPopover } from "./CommentPopovers.tsx";
 import { ZoomControls } from "./ZoomControls.tsx";
 import { Minimap } from "./Minimap.tsx";
 import "./phone.css";
@@ -26,7 +27,7 @@ export type PhoneVisit = { tab: "Chat" | "Canvas" | "Agents"; itemId: string | n
 const directions: [Direction, string, string][] = [["ArrowLeft", "left", "←"], ["ArrowUp", "up", "↑"], ["ArrowDown", "down", "↓"], ["ArrowRight", "right", "→"]];
 
 /** One visit's navigation. Nothing here changes another person's camera or a saved layout. */
-export function PhoneFace({ canvasId, actor, visit, prior }: { prior: PriorVisit | null; canvasId: string; actor: Actor; visit: MutableRefObject<PhoneVisit> }) {
+export function PhoneFace({ canvasId, actor, visit, prior, morning }: { prior: PriorVisit | null; morning: string | null; canvasId: string; actor: Actor; visit: MutableRefObject<PhoneVisit> }) {
   const canvas = useCanvasStore((s) => s.canvas);
   const title = useCanvasStore((s) => s.record?.title);
   const sessions = useCanvasStore((s) => s.sessions);
@@ -56,7 +57,7 @@ export function PhoneFace({ canvasId, actor, visit, prior }: { prior: PriorVisit
   const step = (direction: Direction) => { const next = item && findNextItem(item, items, direction); if (next) open(next.id); };
   const gestures = useTouchNavigation(step, () => update({ plan: true }));
   const current = item?.versions.find((v) => v.id === item.currentVersionId) ?? item?.versions[0];
-  const visual = current && visualFaceOf(current);
+  const visual = current && visualFaceOf(current, item?.properties.face);
   const thread = (digestThread && canvas?.threads[digestThread]) || (canvas && item ? itemThread(canvas, item.id) : null);
   const openThread = (id: string) => {
     const target = canvas?.threads[id];
@@ -81,7 +82,7 @@ export function PhoneFace({ canvasId, actor, visit, prior }: { prior: PriorVisit
     {moreOpen && <div className="phone-more-menu" role="menu"><button role="menuitem" onClick={() => { setMoreOpen(false); setThreadOpen(false); setContextOpen(true); }}>Context</button></div>}
     <div className="phone-body">
       {state.tab === "Chat" && <div className="phone-chat">
-        <VisitDigest prior={prior} onItem={open} onThread={openThread} />
+        <VisitDigest prior={prior} actor={actor} morning={morning} onItem={open} onThread={openThread} />
         <MainThreadBody canvasId={canvasId} actor={actor} docked={false} onOpenItem={open} refCards={(comment) => <MessageReferenceCards canvasId={canvasId} comment={comment} onOpenItem={open} />} />
       </div>}
       {state.tab === "Agents" && <div className="phone-agents" aria-label="Agents on this canvas">

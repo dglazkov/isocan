@@ -79,3 +79,28 @@ describe("isocan mv <item> <x> <y> <item> <x> <y> …", () => {
     expect(nan.stderr).toMatch(/positional numbers/);
   });
 });
+
+describe("isocan mv <item> x,y", () => {
+  it("takes the comma pair --at and --by take, negatives and triples included", async () => {
+    const { cards: [a, b] } = await board();
+    await json("mv", a!, "120,-40");
+    expect(await placeOf(a!)).toEqual({ x: 120, y: -40 });
+    await json("mv", a!, "-80,420");
+    expect(await placeOf(a!)).toEqual({ x: -80, y: 420 });
+    await json("mv", a!, "10,10", b!, "-300", "40");
+    expect(await placeOf(a!)).toEqual({ x: 10, y: 10 });
+    expect(await placeOf(b!)).toEqual({ x: -300, y: 40 });
+    await json("mv", b!, "--by", "5,-5");
+    expect(await placeOf(b!)).toEqual({ x: -295, y: 35 });
+    const both = await isocan("mv", a!, "1,2", "--by", "5,5");
+    expect(both.code).not.toBe(0);
+    expect(both.stderr).toMatch(/not both/);
+  });
+
+  it("moves a plain canvas item (no groups) by a comma pair", async () => {
+    await json("canvas", "create", "Acme mv plain");
+    const card = (await json("text", "Acme", "--at", "0,0")).itemId as string;
+    await json("mv", card, "300,200");
+    expect(await placeOf(card)).toEqual({ x: 300, y: 200 });
+  });
+});

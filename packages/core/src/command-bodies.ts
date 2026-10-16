@@ -424,11 +424,12 @@ something the arrangement cannot do.
 **Read the argument first, because it decides which of three things this is.**
 
 **WITH ITEMS SELECTED OR ATTACHED, tidy those and nothing else** — run
-\`isocan format grid <item ids>\`. They land in the box they already occupy,
-so the rest of the canvas does not move and nothing is shoved through
-somebody else's work. Somebody who picked six screens and asked for a tidy
-has said which six; rearranging the whole canvas is doing more than was
-asked, to work that was not chosen.
+\`isocan tidy <item ids>\`. That lines them up WHERE THEY ARE: near-aligned
+edges snapped to shared lines, nearly-equal gaps evened, nothing re-dealt and
+nothing overlapping, so the rest of the canvas does not move and the
+arrangement somebody made survives. Somebody who picked six screens and asked
+for a tidy has said which six, and asked for them neater, not rearranged. Only
+when the note says grid or lattice, run \`isocan tidy grid <item ids>\`.
 
 **\`/format\` or \`/format grid\`** — run \`isocan format grid\`. It straightens
 the lines and decides nothing: every item on one lattice, uniform gutters,
@@ -539,6 +540,64 @@ first.
 Do not start building until they confirm you have understood the same thing.
 The value is in the decisions, not the prose: a spec that says "clean, modern"
 recorded nothing.`,
+    "vocabulary": `The person asked for their design vocabulary. In the app this opens a panel and asks
+nothing of you; from a terminal, answer in one short message with three lists:
+
+1. THE DESIGN WORDS THEY NOW USE — terms such as contrast, visual hierarchy,
+   proximity or type scale that appear in their own messages here.
+2. WORDS SEEN HERE AND NOT YET THEIRS — terms in your messages and proposals'
+   whys they have not used. Name them; define each in a few plain words.
+3. THEIR WORDS YOU HAVE LEARNED — the quoted lines in the taste note
+   (\`isocan taste\`), "the thumb button" means …
+
+Never grade them and never count, unless they ask for a count. Keeping their
+own words is always fine. \`isocan words read "<sentence>"\` shows how one of
+their sentences reads.`,
+    "goodnight": `The person is stopping for the day. Talk through what to work on overnight — and only when they say "That's the plan", write the note and do the work.
+
+ARE YOU THE LEAD? \`isocan goodnight read --json\` answers for the person who
+asked: who leads this canvas's night (\`lead\`), whether anything can answer
+overnight, your free room under the cap of five proposals (promised frames
+count), what they settled today and what is left open (each cited), the items
+they have named so far, and the items another person's goodnight has named.
+If you are not the lead, say nothing and end your turn.
+
+THE CONVERSATION. Reply in the Chat, mentioning them, and end your turn after
+each reply — the next thing they say wakes you again.
+1. Open with three short parts: **settled today**, **left open**, and two or
+   three things you could try tonight, each with why, in design words. Say
+   which would hang beside their work as a proposal and which would edit an
+   original — and that you edit an original only if they name it for editing
+   ("rework the checkout screen").
+2. They steer: add, drop, reword, "not that one". Restate the plan as it now
+   stands, as a short list. Never write the note before they end it, and do
+   not argue for what they dropped.
+3. Nothing touches what was settled today, the design system, or an item
+   another person's goodnight named.
+
+WHEN THEY SAY "That's the plan" (a comment carrying \`goodnight: plan\`), write
+the note from what was agreed and nothing else:
+
+  isocan goodnight note --promise "<item> | <what you will do> | <budget>" \\
+    --edit "<item they named> | <the rework> | one new version" \\
+    --open "comment:<id> | not sure about the red" --ready 08:00
+
+Each \`--promise\` hangs an empty dashed frame beneath its item; each \`--edit\`
+names an original you may change. If nothing can answer, or you have no room,
+the note is still written and says so — it promises nothing. A refusal is a
+sentence: do what it says, or agree fewer lines with them.
+
+THEN THE NIGHT'S WORK, in this turn: for each ticked line, in order —
+  isocan goodnight fill <frame> take.html [--hunch] --why "<design words>"
+  isocan goodnight fill <original> rework.html          # an edit line
+  isocan goodnight fill <frame> --failed "<why it did not work>" [take.html]
+A line they unticked is refused: skip it. When every promise is filled or
+failed, report once — \`isocan goodnight done "<two takes I am sure of, one
+hunch; what I left alone and why>"\` — highest confidence first, with
+\`--left "<what you saw and left alone> | <why>"\` for each thing you chose not
+to touch. Never touch what they changed in the hour before /goodnight unless a
+ticked line names it. The morning review reads all of it: \`isocan goodnight
+review\` prints what they will see.`,
     "sprint": `Facilitate a design sprint on this canvas. You hold the clock; you never vote,
 never sketch, and never decide.
 

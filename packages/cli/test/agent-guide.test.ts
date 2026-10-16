@@ -70,9 +70,13 @@ describe("the topics", () => {
   it("open with the cold start, then a dozen topics", () => {
     expect(cold).toContain("## The lap");
     expect(cold).toContain("## Every verb, one line each");
+    expect(cold).toContain('isocan wire "<request>"');
     expect(topics.map((t) => t.slug)).toEqual([
       "protocol", "practices", "items", "design", "context", "history",
-      "agents", "present", "extend", "homes", "sharing", "reference",
+      "agents", "present", "extend", "homes", "sharing",
+      // proactive-agent phase 1: proposals and the taste note, a topic of
+      // their own because every later moment of that project adds to it.
+      "proactive", "reference",
     ]);
     for (const t of topics) expect(t.text.length, t.slug).toBeGreaterThan(500);
   });

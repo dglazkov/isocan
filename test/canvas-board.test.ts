@@ -15,13 +15,14 @@ const hook = readFileSync(fileURLToPath(new URL("../scripts/hooks/post-commit", 
  * **A synchronous exec cannot be interrupted, so its deadline is a wish.**
  *
  * Every child here is spawned with `execFileSync`, which blocks the worker
- * thread — vitest's timer cannot run, so the `120_000` budget on these tests
- * is unenforceable. Measured on 31 Aug under 16 spinners: this file's
- * "NO SIGNAL" test ran for **2,025,845ms, 2,218,012ms and 2,502,849ms** — 34,
- * 37 and 42 minutes — and then reported `Test timed out in 120000ms`, which
- * is true of when the deadline passed and wrong by a factor of seventeen
- * about what happened. Three of four loaded suite runs were dominated by one
- * test nobody could see was running.
+ * thread — vitest's timer cannot run, so the budget on these tests
+ * (`TEST_BUDGET_MS`) is unenforceable. Measured on 31 Aug under 16
+ * spinners: this file's "NO SIGNAL" test ran for **2,025,845ms, 2,218,012ms
+ * and 2,502,849ms** — 34, 37 and 42 minutes — and then reported `Test timed
+ * out in 120000ms` (its budget then), which is true of when the deadline
+ * passed and wrong by a factor of seventeen about what happened. Three of
+ * four loaded suite runs were dominated by one test nobody could see was
+ * running.
  *
  * `lessons.md` #6 names the shape: *a hang that never fails is the thing to
  * avoid, not a slow test that eventually does.* The child gets the deadline
@@ -32,8 +33,27 @@ const hook = readFileSync(fileURLToPath(new URL("../scripts/hooks/post-commit", 
  * Not a speed fix. The passing case still takes ~30s on a saturated machine,
  * and that is honest; what changes is that the failing case stops being
  * unbounded.
+ *
+ * **90 s became 150 s on 14 Oct 2026, because the honest cost moved and the
+ * bound did not.** The bound was set (6e26e9ea9) when `--only build` took
+ * twelve readings; it takes nineteen now (`node scripts/measure.mjs …` for every
+ * persona goal — `unused-exports` and `undocumented-exports` are seven
+ * seconds each alone), about 28 s on an idle laptop. On CI's 4-core shards,
+ * across the release runs of that day, a passing Build render took 44–79 s,
+ * and twice (876e20dc9, b094cd436) the first one in the file crossed 90 s and
+ * was killed as `spawnSync node ETIMEDOUT` — while the very next render in
+ * the same run, the same work, took 62–78 s. That is a bound inside the cost
+ * distribution, which is lessons.md #12's shape, and every render here shares
+ * it, so it moves for all of them at once. #101 warns that a longer limit is
+ * how the next timeout hides, and it would be right if the cost were
+ * contention alone; here the work itself nearly doubled. 150 s still bounds
+ * the 34-minute hang above; making the readings cheaper is the better fix,
+ * and it belongs to the board, not to this file.
  */
-const CHILD_BUDGET_MS = 90_000;
+const CHILD_BUDGET_MS = 150_000;
+/** Above the child's, so a killed child's message — with the command in it —
+ * is what a slow render fails with, never vitest's number. */
+const TEST_BUDGET_MS = CHILD_BUDGET_MS + 30_000;
 
 const git = (...args: string[]) =>
   execFileSync("git", args, { cwd: repo, encoding: "utf8", timeout: 20_000 }).trim();
@@ -214,7 +234,7 @@ describe("Recently reads the actual history", () => {
   it("names the commit at HEAD", () => {
     const html = recent().html;
     expect(html).toContain(git("rev-parse", "--short", "HEAD"));
-  }, 120_000);
+  }, TEST_BUDGET_MS);
 
   it("counts more than one commit when git reports more than one", () => {
     const real = git("rev-list", "--count", "--since=14 days ago", "HEAD");
@@ -222,7 +242,7 @@ describe("Recently reads the actual history", () => {
     const html = recent().html;
     expect(html).not.toContain("Nothing landed in the last 14 days");
     expect(Number(html.match(/(\d+) commits in the last 14 days/)![1])).toBeGreaterThan(1);
-  }, 120_000);
+  }, TEST_BUDGET_MS);
 
   it("renders real shas in every row, not whatever fell out of the parse", () => {
     /**
@@ -243,7 +263,7 @@ describe("Recently reads the actual history", () => {
       expect(sha, `"${sha}" is not a commit this repository has`).toMatch(/^[0-9a-f]{7,40}$/);
       expect(known.has(sha), `"${sha}" is not in git log`).toBe(true);
     }
-  }, 120_000);
+  }, TEST_BUDGET_MS);
 
   it("says what it left out rather than truncating silently", () => {
     // A cap is fine. A silent cap reads as "this is all of it".
@@ -283,7 +303,7 @@ describe("measurement is taken once, and only when something asks", () => {
     const out = recent().stdout;
     expect(out).toContain("no goal measured this run");
     expect(out).not.toContain("every goal holding");
-  }, 120_000);
+  }, TEST_BUDGET_MS);
 });
 
 /**
@@ -296,7 +316,7 @@ describe("the Build signal", () => {
     // A light nobody knows the rule for is a light nobody trusts.
     const html = greenBuild().html;
     for (const word of ["GREEN", "AMBER", "RED", "NO SIGNAL"]) expect(html).toContain(word);
-  }, 120_000);
+  }, TEST_BUDGET_MS);
 
   it("reports the runs it was given, and does not claim no signal", () => {
     /**
@@ -315,7 +335,7 @@ describe("the Build signal", () => {
     const html = greenBuild().html;
     expect(html, "a supplied reading is not an absent one").not.toContain("no signal");
     for (const workflow of ["release", "review"]) expect(html).toContain(workflow);
-  }, 120_000);
+  }, TEST_BUDGET_MS);
 
   it("shows NO SIGNAL — never GREEN — when CI cannot be reached", () => {
     /**
@@ -343,7 +363,7 @@ describe("the Build signal", () => {
     // The rule this light exists for. GREEN is the lie; AMBER ("still going")
     // would be one too, since nothing was asked.
     expect(["NO SIGNAL", "RED"], `the light said ${shown} with no CI reading`).toContain(shown);
-  }, 120_000);
+  }, TEST_BUDGET_MS);
 
   it("says so when CI ran a different commit than the one you are on", () => {
     // A green for code nobody pushed is the stale-copy bug in miniature.

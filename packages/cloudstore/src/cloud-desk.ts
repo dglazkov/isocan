@@ -34,7 +34,8 @@ import {
   upsertAttestation,
 } from "@isocan/core";
 import { keepsAdmission } from "@isocan/server";
-import type { Admission, BadgeRecord, Desk, PassRecord, Provenance } from "@isocan/server";
+import type { SummaryDay } from "@isocan/core/semantic-zoom";
+import type { Admission, BadgeRecord, Desk, ParkRow, PassRecord, Provenance } from "@isocan/server";
 
 export const BADGES = "badges";
 /** `grants/{id}` — the architecture's other desk row, one document per grant,
@@ -173,6 +174,9 @@ export const SHELF_DOC = "meta/shelf";
  * transaction makes the second minter adopt the first's key instead.
  */
 export const CONTENT_KEY_DOC = "meta/content-key";
+export const SUMMARY_STATS = "summary-stats";
+export const PARKS = "parks";
+export const MIGRATIONS_DOC = "meta/migrations";
 
 /**
  * How stale `lastSeen` may get before a touch costs a write.
@@ -1092,6 +1096,36 @@ export class CloudDesk implements Desk {
     return found.docs.map((doc) => asRefusal(doc.data()));
   }
 
+  // ---- semantic zoom summary cost ledger, park cursors, and migration marks ----
+
+  async summaryDays(canvasId: string): Promise<Record<string, SummaryDay>> {
+    const doc = await this.db.collection(SUMMARY_STATS).doc(canvasId).get();
+    const days = doc.data()?.["days"];
+    return days && typeof days === "object" ? (days as Record<string, SummaryDay>) : {};
+  }
+
+  async putSummaryDays(canvasId: string, days: Record<string, SummaryDay>): Promise<void> {
+    await this.db.collection(SUMMARY_STATS).doc(canvasId).set(jsonSafe({ canvasId, days }));
+  }
+
+  async parkRow(canvasId: string, actorId: string): Promise<ParkRow | null> {
+    const doc = await this.db.collection(PARKS).doc(parkDocId(canvasId, actorId)).get();
+    return doc.exists ? asParkRow(doc.data()!) : null;
+  }
+
+  async putParkRow(canvasId: string, actorId: string, row: ParkRow): Promise<void> {
+    await this.db.collection(PARKS).doc(parkDocId(canvasId, actorId)).set(jsonSafe({ canvasId, actorId, ...row }));
+  }
+
+  async linkGrantsMigrated(): Promise<boolean> {
+    const doc = await this.db.doc(MIGRATIONS_DOC).get();
+    return typeof doc.data()?.["linkGrants"] === "string";
+  }
+
+  async markLinkGrantsMigrated(at: string): Promise<void> {
+    await this.db.doc(MIGRATIONS_DOC).set({ linkGrants: at }, { merge: true });
+  }
+
   // ---- internals ----
 
   private async shelf(): Promise<Record<string, ActorClaim>> {
@@ -1349,6 +1383,19 @@ function toGroup(data: DocumentData): Group {
     members: (data["members"] as string[] | undefined) ?? [],
     at: data["at"] as string,
     ...(typeof data["deletedAt"] === "string" ? { deletedAt: data["deletedAt"] } : {}),
+  };
+}
+
+function parkDocId(canvasId: string, actorId: string): string {
+  return Buffer.from(JSON.stringify([canvasId, actorId])).toString("base64url");
+}
+
+function asParkRow(data: DocumentData): ParkRow {
+  return {
+    cursor: data["cursor"] as number,
+    delivered: data["delivered"] as number,
+    rehanded: data["rehanded"] as number,
+    parkId: data["parkId"] as string,
   };
 }
 

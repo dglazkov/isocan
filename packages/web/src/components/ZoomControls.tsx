@@ -47,7 +47,7 @@ export function ZoomControls({ canvasId, actor }: { canvasId: string; actor: Act
 
   return (
     <div
-      className="zoom-controls"
+      className="zoom-controls floats"
       onPointerDown={(e) => e.stopPropagation()}
       // Chrome you can turn off, door 2: the cluster's empty left edge offers
       // undo/redo back once they are hidden.

@@ -3,6 +3,7 @@ import { spawn, type SpawnSyncReturns } from "node:child_process";
 import net from "node:net";
 import path from "node:path";
 import { healthPath, type UpgradeVerdict } from "@isocan/core";
+import { packageBin } from "@isocan/core/packageroot";
 import { buildStamp, paths, plausibleSha, readConfigFile } from "@isocan/server";
 import { shaOfRoot } from "@isocan/api";
 import { findOnPath, rootOfBin } from "./onpath.ts";
@@ -210,7 +211,7 @@ async function smokeAttempt(
 ): Promise<SmokeResult & { raced?: boolean }> {
   await fs.mkdir(paths.buildsDir(home), { recursive: true });
   const scratch = await fs.mkdtemp(path.join(paths.buildsDir(home), ".smoke-"));
-  const bin = path.join(root, "packages", "cli", "bin", "isocan.js");
+  const bin = packageBin(root);
   const logFile = path.join(scratch, "smoke.log");
   const port = await freePort();
   const env: NodeJS.ProcessEnv = {
@@ -226,6 +227,7 @@ async function smokeAttempt(
    * that has no business reaching a candidate nobody has approved yet.
    */
   delete env.ISOCAN_HOME_URL;
+  delete env.ISOCAN_DIRECT;
   delete env.ISOCAN_STORE;
   delete env.ISOCAN_BIND;
   env.ISOCAN_CONTENT_PORT = "off";
@@ -404,11 +406,18 @@ const defaultRunner: Runner = (command, args) =>
  * from, and reading it means having it. What the check protects is the flip,
  * not the download — a mismatched tree is deleted and `current` never moves.
  */
+function parseGithubSpec(spec: string): { url: string; ref: string | null } | null {
+  const m = /^github:([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)(?:#([A-Za-z0-9_./-]+))?$/.exec(spec);
+  if (!m) return null;
+  return { url: `https://github.com/${m[1]}.git`, ref: m[2] ?? null };
+}
+
 export async function installBuild(options: {
   home: string;
   spec: string;
   want: string | null;
   npm?: string;
+  git?: string;
   run?: Runner;
 }): Promise<InstallResult> {
   const { home, spec, want } = options;
@@ -433,6 +442,7 @@ export async function installBuild(options: {
     }
   }
   const npm = options.npm ?? (process.platform === "win32" ? "npm.cmd" : "npm");
+  const git = options.git ?? (process.platform === "win32" ? "git.exe" : "git");
   const run = options.run ?? defaultRunner;
   const staging = paths.stagingBuildDir(home);
   await fs.rm(staging, { recursive: true, force: true });
@@ -441,7 +451,33 @@ export async function installBuild(options: {
     await fs.rm(staging, { recursive: true, force: true });
     return { ok: false, build: null, why };
   };
-  const done = await run(npm, ["install", "--prefix", staging, spec, "--no-audit", "--no-fund"]);
+  /**
+   * `#release` carries zero runtime dependencies, so a `github:` spec can be
+   * fetched directly with a shallow `git clone` into `node_modules/isocan` —
+   * working even on machines with Node and git but no npm, and without
+   * touching a package registry. Non-GitHub specs (or callers naming `npm`
+   * explicitly) keep the npm prefix install.
+   */
+  const gh = options.npm === undefined ? parseGithubSpec(spec) : null;
+  let done: RunResult;
+  if (gh) {
+    const target = paths.buildRoot(staging);
+    await fs.mkdir(path.dirname(target), { recursive: true });
+    done = await run(git, [
+      "clone",
+      "--depth",
+      "1",
+      "--single-branch",
+      ...(gh.ref ? ["--branch", gh.ref] : []),
+      gh.url,
+      target,
+    ]);
+    if (done.status === 0) {
+      await fs.rm(path.join(target, ".git"), { recursive: true, force: true });
+    }
+  } else {
+    done = await run(npm, ["install", "--prefix", staging, spec, "--no-audit", "--no-fund"]);
+  }
   if (done.status !== 0) {
     const said = (done.stderr || done.stdout || done.error?.message || "").trim();
     return await discard(
@@ -657,15 +693,7 @@ export async function adoptGlobal(
   home: string,
   bin: string | null = findOnPath("isocan"),
 ): Promise<Adoption> {
-  const target = path.join(
-    paths.currentLink(home),
-    "node_modules",
-    "isocan",
-    "packages",
-    "cli",
-    "bin",
-    "isocan.js",
-  );
+  const target = packageBin(path.join(paths.currentLink(home), "node_modules", "isocan"));
   if (!bin) {
     return {
       managed: false,
@@ -932,8 +960,19 @@ function isAlive(pid: number): boolean {
  * shell would run.
  */
 async function adopt(home: string, install?: Install): Promise<Adoption | null> {
-  if (install?.kind !== "global") return null;
-  return adoptGlobal(home, binOfInstall(install.root));
+  if (install?.kind === "global") return adoptGlobal(home, binOfInstall(install.root));
+  if (install?.kind === "managed") {
+    const current = `${path.resolve(paths.currentLink(home))}${path.sep}`;
+    for (const dir of (process.env.PATH ?? "").split(path.delimiter)) {
+      if (!dir) continue;
+      const candidate = path.join(dir, "isocan");
+      const linked = await fs.readlink(candidate).catch(() => null);
+      if (linked && path.resolve(dir, linked).startsWith(current)) {
+        return adoptGlobal(home, candidate);
+      }
+    }
+  }
+  return null;
 }
 
 /** Where a swap stopped, so a caller can say something true about it without

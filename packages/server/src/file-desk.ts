@@ -2,6 +2,7 @@ import { selectPersonalBinding, assertPersonalIntent, type PersonalSourceRecord,
 import type { PersonalDelegate } from "@isocan/core";
 import { randomBytes } from "node:crypto";
 import { promises as fs } from "node:fs";
+import path from "node:path";
 import type {
   ActorClaim,
   Attestation,
@@ -38,7 +39,8 @@ import {
 import { appendLineDurable, readJson, readJsonLines, writeFileAtomic } from "./fsutil.ts";
 import * as p from "./paths.ts";
 import { keepsAdmission } from "./grants.ts";
-import type { Admission, BadgeRecord, Desk, PassRecord, Provenance } from "./desk.ts";
+import type { SummaryDay } from "@isocan/core/semantic-zoom";
+import type { Admission, BadgeRecord, Desk, ParkRow, PassRecord, Provenance } from "./desk.ts";
 
 /**
  * The desk on a disk. Layout under `~/.isocan/desk/`:
@@ -1031,6 +1033,63 @@ export class FileDesk implements Desk {
     return Object.values(this.state.refusals ?? {})
       .filter((row) => row.liftedAt === undefined)
       .map((row) => ({ ...row }));
+  }
+
+  // ---- semantic zoom summary cost ledger, park cursors, and migration marks ----
+
+  async summaryDays(canvasId: string): Promise<Record<string, SummaryDay>> {
+    try {
+      const raw = JSON.parse(await fs.readFile(p.summaryStatsFile(this.home, canvasId), "utf8")) as {
+        days?: Record<string, SummaryDay>;
+      };
+      if (raw && typeof raw.days === "object" && raw.days) return structuredClone(raw.days);
+    } catch {
+      // No record yet, or unreadable: start empty.
+    }
+    return {};
+  }
+
+  async putSummaryDays(canvasId: string, days: Record<string, SummaryDay>): Promise<void> {
+    await this.enqueue(async () => {
+      const file = p.summaryStatsFile(this.home, canvasId);
+      await fs.mkdir(path.dirname(file), { recursive: true });
+      await writeFileAtomic(file, JSON.stringify({ canvasId, days }));
+    });
+  }
+
+  async parkRow(canvasId: string, actorId: string): Promise<ParkRow | null> {
+    const rows = await this.readParkRows();
+    const row = rows[`${canvasId} ${actorId}`];
+    return row ? { ...row } : null;
+  }
+
+  async putParkRow(canvasId: string, actorId: string, row: ParkRow): Promise<void> {
+    await this.enqueue(async () => {
+      const rows = await this.readParkRows();
+      rows[`${canvasId} ${actorId}`] = { ...row };
+      await fs.mkdir(this.home, { recursive: true });
+      await writeFileAtomic(p.parkCursorsFile(this.home), `${JSON.stringify(rows, null, 2)}\n`);
+    });
+  }
+
+  async linkGrantsMigrated(): Promise<boolean> {
+    return fs.stat(p.linkGrantsMigratedFile(this.home)).then(() => true, () => false);
+  }
+
+  async markLinkGrantsMigrated(at: string): Promise<void> {
+    await this.enqueue(async () => {
+      await fs.mkdir(p.deskDir(this.home), { recursive: true });
+      await writeFileAtomic(p.linkGrantsMigratedFile(this.home), at);
+    });
+  }
+
+  private async readParkRows(): Promise<Record<string, ParkRow>> {
+    try {
+      const raw = JSON.parse(await fs.readFile(p.parkCursorsFile(this.home), "utf8")) as Record<string, ParkRow>;
+      return raw && typeof raw === "object" ? raw : {};
+    } catch {
+      return {};
+    }
   }
 
   // ---- internals ----

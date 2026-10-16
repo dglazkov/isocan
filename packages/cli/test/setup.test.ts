@@ -127,21 +127,21 @@ describe("isocan setup", () => {
     expect(canvas!.createdBy.name).toBe("Nico");
   });
 
-  it("links the Jetski plugin with --jetski, without touching ~/.gemini unless asked", async () => {
-    const jetskiTarget = path.join(home, "plugins", "isocan");
-    const done = await runCli(["setup", "--jetski", "--no-install", "--no-open", "--json"], {
+  it("links the Antigravity plugin with --antigravity, without touching ~/.gemini unless asked", async () => {
+    const antigravityTarget = path.join(home, "plugins", "isocan");
+    const done = await runCli(["setup", "--antigravity", "--no-install", "--no-open", "--json"], {
       cwd: work,
       env: {
         ...process.env,
         ISOCAN_HOME: home,
         ISOCAN_PORT: String(port),
-        ISOCAN_JETSKI_PLUGIN_DIR: jetskiTarget,
+        ISOCAN_ANTIGRAVITY_PLUGIN_DIR: antigravityTarget,
       },
     });
     expect(done.code).toBe(0);
     const report = JSON.parse(done.stdout) as Record<string, string>;
-    expect(report.jetski).toContain(`installed: ${jetskiTarget}`);
-    expect((await fs.lstat(jetskiTarget)).isSymbolicLink()).toBe(true);
-    expect(await fs.readFile(path.join(jetskiTarget, "plugin.json"), "utf8")).toContain('"isocan"');
+    expect(report.antigravity).toContain(`installed: ${antigravityTarget}`);
+    expect((await fs.lstat(antigravityTarget)).isSymbolicLink()).toBe(true);
+    expect(await fs.readFile(path.join(antigravityTarget, "plugin.json"), "utf8")).toContain('"isocan"');
   });
 });

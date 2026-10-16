@@ -1,0 +1,339 @@
+---
+status: partial
+since: 2026-10-14
+see: design-partner, wireframes, standing-agents, personas, version-diff, copy-edit
+note: "the walk: proposals and the taste note first, because every moment uses them; then the night watch and the morning review; explain; the brief card; ripple; stuck detection; critics and the desk check; walkers; design words; evidence."
+---
+
+# A proactive agent — the walk
+
+**14 October 2026.** Held to [journey.md](journey.md) and
+[design.md](design.md). Each phase ends with **Trajectory**: only what the
+phase discovered that changes the project's course, and the Open entries a
+later phase must pay for.
+
+**Where we are, 14 Oct 2026: phases 1–10 are CLOSED and phase 11 (evidence) is built; the bench night, the judge and the walk wait on Dion. A slimming pass of the entry chunk follows the phases (Dion). Open questions that shape a build wait on Dion, each named under the phase it blocks (what counts as leaving, settling and being stuck; caps; where a canvas's critics and brief live; how walkers are grounded).**
+
+Rules for every phase, on top of `AGENTS.md`:
+
+- **Never over the person's work.** Nothing a phase builds edits an item
+  the person made without the person's click. A test says so for each
+  moment.
+- **No trigger, no proposal.** Every proposal carries at least one cite;
+  the CLI and the web refuse one without.
+- **No new op.** Properties, comments and the existing design ops carry
+  everything.
+- **Both surfaces.** Each phase lands the CLI verb, the web surface, the
+  agent-guide paragraph and the tests together; `surface.test.ts` names
+  every new verb.
+- **Stub agent in tests.** Journeys use a scripted agent; a real model runs
+  only in phase 11, and scheduling it is Dion's yes.
+
+## Phase 1 — Proposals, and deletes that teach
+
+**Status: CLOSED, 14 October 2026.** Core `proposal.ts` (`PROPOSAL_CAP = 5`, `proposalMarked`, `proposalsOf`, `proposalRoom`, `proposalRefusal`), `proposal-words.ts` and `design-words.ts` (twelve terms); the reducer refuses any `item.add` carrying `proposal` with an empty cite list, a missing source, an empty or overlong why, or a sixth open proposal by the same agent, so every door is refused in one sentence. `isocan propose` (placed beneath the source by footprint) and `isocan taste`; the `proactive` agent-guide topic. The web draws the dashed mark, the connector, the ochre chip and the why with defined terms, and Keep (`choose`), Compare and Delete (⌫ and the button: the trash and the `deleted` comment to the author in one undo, with an optional reason). The taste note, "What your deletes taught", is pinned and placed clear of every footprint. `proposal.test.ts`, `propose.test.ts` and the `proactive-proposal` journey (the terminal standing in for agent Kit): the proposal beneath its source with its chip; Delete trashes it, the comment reaches the author, the taste note gains a line; with nobody answerable the delete still happens and the toast says the note was not taken. Deep suite 834 of 834; entry 721,210 → 723,869.
+
+**Outcome:** core `proposal.ts` (`proposalMarked`, `proposalsOf`,
+`proposalRoom`), `design-words.ts` (the glossary); `isocan propose`
+refusing an empty cite list and a sixth open proposal; the dashed mark,
+trigger chip and dotted-underlined why in the web app, generalised from the
+wireframe *maybe* marks; **Keep** (`choose`), **Compare** (the diff
+inspector), **Delete** (⌫, one undo) that summons the author with
+`{ deleted }` data; the taste note (`taste=1`, pinned into context); the
+`proactive` agent-guide topic.
+
+**Proof:**
+
+- Unit: a proposal is marked until kept and unmarked after; Keep makes one
+  new version of the source and trashes the proposal in one undo; the cap
+  and the empty-cite refusal hold on both surfaces.
+- Journey `proactive-proposal` (stub agent): a proposal hangs beneath its
+  source with its chip; Delete trashes it, a comment reaches the author, and
+  the taste note gains a line; with nobody answerable, the delete still
+  happens and the toast says the note was not taken.
+
+### Trajectory
+
+- **2026-10-14** — Decided (Dion): the cap is five, not three ("Cap of three feels a lil small? Maybe 5?"), per agent per canvas, one constant `PROPOSAL_CAP`. Open: whether non-screen proposals draw the same way (phase 1 draws them the same). Waits on Dion.
+- **2026-10-14** — Decided (Dion): the cap does not grow with time away, and an open proposal never expires; room frees only when the person keeps or deletes one ("Should acknowledge before growing more").
+- **2026-10-14** — The cite and cap rules run in the reducer, not either client, so a plain `add --prop proposal=…` is refused in the same words; the cost is about 2.6 KB of entry chunk, because the reducer runs in the browser.
+- **2026-10-14** — Keep is `choose`, and choosing a proposal now trashes only that proposal; other children of the source stay. `isocan choose` on a proposal behaves the same way.
+- **2026-10-14** — A delete's note cannot be anchored to the trashed proposal (a thread needs a live anchor); with no prior thread it stands freestanding at the proposal's spot, in the delete's undo group.
+- **2026-10-14** — Placement counts footprints (the name strip above, the marks row below): the first cut's taste note landed on the source's name strip, and its 40-unit gap let a proposal's strip sit on the source's marks row.
+- **2026-10-14** — Open: an agent can still `isocan rm` its own proposal and free room (the guide says not to); kept and deleted proposals are not yet judge-corpus labels (a third corpus kind); on a group canvas a proposal lands at the root, not in the source's group; `--hunch` does not draw rough.
+
+## Phase 2 — The night watch
+
+**Status: CLOSED, 14 October 2026.** `/goodnight` in the Chat (or `isocan goodnight`) summons the lead (`proactive=<name>` on the canvas, else the first answerable standing agent, critics excluded), which reads `goodnight read`, opens with settled today, left open and what it could try, and is steered in the Chat; **That's the plan** (a button, the words, or `goodnight plan`) ends it. Only then does `goodnight note` write the note (Settled today, Left open, Tonight I will, Will not touch, a thought, Ready by; its model in `handoffNote`) and hang an empty `proposal=promised` frame beneath each promise. Core `planNight` holds the rules: agreed lines only, the cap with promised frames counted, an edit only on an item the person named, never the design system or anything settled today, never an item another person's open goodnight named; with nothing answerable the note promises nothing and says why. Untick by checkbox, ⌫/**Not tonight** or `goodnight untick`. The night fills (`goodnight fill`, a new version for a named original) or fails each frame with a reason; `goodnight done` posts the brief as a Chat `record` with `goodnight: {step: "brief"}` once every ticked line is answered. `goodnight.test.ts` (core 15, CLI 4) and the `proactive-night-watch` journey (real `isocan rc`, a fake ACP agent as Kit, no model). Deep suite 835 of 836, the one a connect timeout under load in `passes.test.ts`, which passes alone. Entry 723,869 → 725,217.
+
+**Outcome:** `/goodnight`, the **Hand off** menu row and `isocan handoff`;
+core derivations for *settled today* and *left open*; the handoff note as a
+text node with ticked lines, budgets, *will not touch* and *ready by*;
+promised frames (`proposal=promised`) under the screens they concern; the
+ticked note sent as an ordinary summons to the canvas's lead agent; an
+honest "nothing can answer tonight" when no standing agent is answerable.
+
+**Proof:**
+
+- Unit: settled-today and left-open on a fixture day (a `choose`, a kept
+  maybe, a DESIGN.md version, two open questions) list exactly those, each
+  cited.
+- Journey `proactive-night-watch` (stub agent through `isocan rc`): unticking
+  a line removes its frame; the summons reaches the agent; with the agent
+  dismissed, the note promises nothing and says why.
+
+### Trajectory
+
+- **2026-10-14** — Open: what counts as leaving (an explicit word only, or
+  also closing the tab or idling, and after how long); whether a team shares
+  one night watch; whether a first session gets one. Waits on Dion.
+- **2026-10-14** — Decided (Dion): the night watch starts only with an explicit `/goodnight`, never a closed tab or idling. `/goodnight` opens a conversation in the Chat about what to work on; the note and its promised frames are written from what that conversation agreed, and by the morning the canvas carries that work. Open: whether the agreed work may edit an original, or only hangs beside it.
+- **2026-10-14** — Decided (Dion): the agreed work may edit an original the conversation named for editing, as a new version the morning review lists; everything else stays beside, as proposals. Each person leaves their own `/goodnight`; one person's promises never touch an item another's conversation named.
+- **2026-10-14** — "That's the plan" is the one summons for the night: the lead writes the note and its frames and does the work in that turn, so an untick races the work. Open: a separate send, if that race matters with a real model.
+- **2026-10-14** — With nothing to answer, the person's own client writes the note, which promises nothing and says why.
+- **2026-10-14** — Promised and failed frames are proposal states the reducer counts toward five; a promised frame must cite `promise:<note>#n`, and Keep refuses an empty frame or a failure with no take.
+- **2026-10-14** — Open: when a note stops blocking another person's night (ready-by, or every ticked line answered); every standing agent wakes on `/goodnight` and the non-leads spend a turn staying silent; a second `/goodnight` the same day writes a second note; the proposal cards overlap neighbouring frames at low zoom.
+- **2026-10-14** — Entry 725,217, 18,917 past the ceiling against a jump of 20,000. Dion: finish the phases, then a slimming pass.
+
+## Phase 3 — The morning review
+
+**Status: CLOSED, 14 October 2026.** Core `morning.ts`: `morningDue` (this person's latest goodnight note, not yet reviewed, its night over, their seen mark older than ready-by; no goodnight, no review) and `nightReview` (a headline only when the night failed or made nothing; the brief found by its `goodnight` data; at most `PROPOSAL_CAP` proposals, sure, hunch, then failed with its reason; Left alone; originals edited because the person named them, each with the version before). The phone's digest leads with `MorningBrief`; on desktop a lazy `AwayPanel` shows only when a review is due. `isocan goodnight review` prints the same. "Mid-way" items (content edits in the hour before `/goodnight`) are off limits unless named: `planNight` refuses the line and `propose` refuses the night's extra proposals on them. Seeing the review closes the note (`handoffReviewed`) with a write that has no inverse. The `proactive-morning` journey: brief first, proposals in order with the failure's reason, Left alone, Checkout the only edited original with its compare, the other screens unchanged byte for byte, the note closed and still closed after a ⌘Z, and no review after a later seen mark. Deep suite 837 of 838: the one a test pinning a line that `da6fcb916` changed, fixed in `4e8c2035e`. Entry 725,389 → 725,793.
+
+**Outcome:** the "While you were away" panel on desktop as well as the
+phone, leading with the agent's brief (found by its `record` data), at most
+up to five proposals in confidence order, **Left alone** with reasons, then the
+digest; promised frames filled or filled with a reason; the rule that an
+item the person edited in their last hour is off limits unless named.
+
+**Proof:**
+
+- Journey `proactive-morning` (stub agent, a fixture night): returning past
+  *ready by* shows the brief first, its proposals (at most five), one failed promise with
+  its reason, and the person's screens unchanged byte for byte except an
+  original the goodnight conversation named for editing.
+- Unit: a sixth proposal from the night is refused; a seen mark newer than
+  *ready by* shows no review.
+
+### Trajectory
+
+- **2026-10-14** — Decided (Dion): five, and it does not scale with time away; nothing new until what is there is kept or deleted. Open: the wording when the night found nothing. Waits on Dion.
+- **2026-10-14** — The review is derived, not stored: the note's model, the lead's proposals made after the note, and the brief record; `isocan goodnight review` and the panel read one `nightReview`.
+- **2026-10-14** — Seeing the review closes the note with a write that has no inverse (`invert.ts`), so it is on nobody's ⌘Z; the panel sends it once. This answers phase 2's "when does a note stop blocking".
+- **2026-10-14** — Proposal notes are placed against real neighbours (`placeCards`): beneath their own frame first, beside only when clear, a chip when there is no room, so none covers another frame at any zoom; the night-watch journey checks it at four zooms.
+- **2026-10-14** — Open: the failed or empty night's wording (drafts in `morning.ts`); whether desktop shows the ordinary digest when no review is due (no, for now); older open proposals count toward five but are not listed; the digest below the brief lists each of the agent's overnight edits. Waits on Dion.
+
+## Phase 4 — Explain this item
+
+**Status: CLOSED, 14 October 2026.** Core `explain.ts`: `explainStory` reads the canvas alone (versions grouped into moves by one hand, split where a comment announced the work; a choose, a kept proposal or an adopted decision stands alone), picks at most four seams for Plain and Designer and every move for Deep dive, and lists the roads not taken (trashed variations, deleted proposals, unadopted options), what moved around the item since (a newer DESIGN.md, relatives, proposals beside it) and speak-design pairs. One renderer, `explainSections(story, depth)`, feeds the panel, `isocan explain` and Copy as rationale. A panel beside the canvas, loaded on click; Escape closes it with the view and selection untouched and nothing written. **Critique** asks the lead in the Chat; it answers with `explain --critique`, a record comment plus a proposal citing `explain:`; with nothing to answer the button is disabled and says why. `explain.test.ts` (core 19, CLI 5) and the `proactive-explain` journey (real `isocan rc`, a fake ACP agent). Entry 725,793 → 726,107, 193 bytes under the jump.
+
+**Outcome:** core's explain story (versions and authors, the comment that
+made each version via `lane.ts`, design decisions, `choose` and `prefer`,
+`wire why` for wires, seams by `timeline.ts` significance; the roads not
+taken from the trash and unadopted options; what moved since);
+`isocan explain <item>`; the Explain panel with pins, the depth switch and
+**Copy as rationale**; *Critique* as a summons whose "one thing to try"
+arrives as a proposal.
+
+**Proof:**
+
+- Unit: on a fixture item with fifty versions, three variations and one
+  `choose`, the story names the four seams, the chosen variation's comment
+  as its reason, and the two losers as roads not taken; a DESIGN.md
+  version newer than the item appears under *what moved*.
+- Journey `proactive-explain`: the panel opens beside the live canvas and
+  Escape closes it; nothing is written unless *Copy* or *Critique* is
+  pressed.
+
+### Trajectory
+
+*nothing yet.*
+- **2026-10-14** — The seams come from the canvas, not `timeline.ts` weights (every `item.addVersion` weighs the same): runs by one hand, split where a comment announced the work, turn fifty versions into four.
+- **2026-10-14** — `laneFor`'s open span over-claims for a history, so Explain bounds each comment to versions within two minutes after it; the Chat's own lane is unchanged.
+- **2026-10-14** — The goodnight CLI test took 37 s on CI against a 30 s limit (12 s here), which kept main red: it moved to the deep lane with a two-minute limit.
+- **2026-10-14** — Open, waits on Dion: one depth setting for the whole app or Explain only; pins drawn on changed regions; asking for a second critique; a wire's slot-level why and "behind" are pointed at, not shown.
+
+## Phase 5 — The brief as a card
+
+**Status: CLOSED, 14 October 2026.** Core `brief-card.ts`: `briefCard` reads a design request's brief as six lines (Making, For, Should feel, Never, Constraints, Right now), solid only for the person's own word (`origin: supplied`), pencil for `assumed` and `context`, at most four inferred lines shown; Right now is sensed from the canvas until someone writes it. Right, Wrong and a new value are `briefEditPatch`es on the ordinary `design.request` update, so the server records the person's provenance. An edit changes nothing on the canvas: `briefReread` sorts the screens (assumed the old line, matters more now, still holds) and writes nothing, and the lead, summoned in the Chat, answers with `design card --reread` and one question; with nobody to answer, the card says the re-read waits. Proposals citing `brief:<line>` wear "cites · For". `isocan design card`. The card is the brief item's own face on the canvas (lazy). `brief-card.test.ts` (core, CLI), `briefcard.test.ts` (web) and the `proactive-brief-card` journey. Entry 691,916 → 692,006.
+
+**Outcome:** a card item rendering the active brief, solid rules for
+supplied facts and pencil rules for assumed ones (at most four); **Right**
+and **Wrong** through `design brief --update`; proposals citing
+`brief:<factId>`; the re-read after an edit (*still holds*, *assumed the old
+line*, *matters more now* with one question); **Right now** from the
+brief's intent plus a sensed mode the person can overrule.
+
+**Proof:**
+
+- Unit: changing a fact sorts a fixture's screens by which proposals and
+  receipts cite it, and writes nothing else.
+- Journey `proactive-brief-card`: Right turns a pencil line solid, and the
+  brief's history shows the person as the source.
+
+### Trajectory
+
+- **2026-10-14** — Open: one card per canvas, per group or per design
+  request, and whether it lives on the canvas, in a panel, or both. Waits on
+  Dion.
+- **2026-10-14** — The card is the brief item's own face, and every edit is the existing `design.request` update; the person's authorship comes from the server's `factProvenance`, with no new field.
+- **2026-10-14** — The re-read is derived from the brief's previous version and never stored; receipts count as citing every changed line, since they were checked against the whole brief.
+- **2026-10-14** — Chosen, Dion to confirm: one card per design request, on the canvas; Right / Wrong appear inside the entered item (the canvas's grammar for an item's content); edits only while the request is active.
+- **2026-10-14** — Open, waits on Dion: editing a completed brief (needs `resume`); whether "matters more now" marks screens on the canvas; whether Right now stays sensed in core or becomes the lead's call; whether `context` facts belong in pencil.
+
+## Phase 6 — Changes ripple
+
+**Status: CLOSED, 14 October 2026.** Core `ripple.ts` (its own subpath, out of the entry): `rippleRuns` finds a settled run, `rippleChanges` what it changed (a token's value, a replaced literal colour, type, space or shape, a term), `rippleRead` sorts every other screen in the source's group into would change, already in sync or disagrees, and `ripplePulse` makes one tick per screen; the lead's read-back is at most three decisions, a good move named once per canvas, an argued exception in one line, and one sketch set apart. The person's own client asks the lead once a run settles; previews are proposals citing `version:<src>@vN`; nothing changes until a preview is kept, the design system is chosen, or the source is marked a one-off. A pulse strip and a panel in the web (lazy); `isocan ripple`. `ripple.test.ts` (core 13, CLI 3), the `proactive-ripple` journey (every other screen unchanged byte for byte; Keep turns Checkout current and moves nothing else). Entry 692,006 → 692,474.
+
+**Outcome:** the settle trigger in the rc; `isocan ripple <item>` listing
+the screens that use the changed tokens, values or terms; previews as
+proposals citing the source version; the three states and the altitude
+choice (design system, screen by screen, `ripple=off`); the derived pulse
+strip; the decision read-back from the lead agent.
+
+**Proof:**
+
+- Unit: on a fixture of six screens, changing one token in the source
+  lists exactly the screens that use it; `ripple=off` silences it; the pulse
+  derives behind and conflict without a write.
+- Journey `proactive-ripple` (stub agent): after a settled run of edits,
+  previews arrive as proposals and nothing else changes until Keep.
+
+### Trajectory
+
+- **2026-10-14** — Open: when an iteration has settled, and whether the
+  default altitude should ever be the design system. Waits on Dion.
+- **2026-10-14** — The settle trigger is the person's own client, not the rc: the rc wakes on mentions and has no quiet timer, so the pulse chunk asks once, as the brief card's re-read does.
+- **2026-10-14** — Chosen, Dion to confirm: settled = three or more versions of one screen by one person (gaps of 30 minutes at most), then a minute of quiet, or an explicit ask. The default altitude is screen by screen, never the design system unasked.
+- **2026-10-14** — Keep trashes a preview too, so a trashed preview whose bytes became a version of its screen reads as kept, not as a disagreement.
+- **2026-10-14** — The diff's marks skip `:root`, so a token change outlined nothing; preview outlines come from computed styles inside the frame.
+- **2026-10-14** — `--version` was reading the 260 KB agent guide on every command; it now loads only on `--agent-help`: 5,246,984 → 4,976,380 bytes, still 40 modules.
+- **2026-10-14** — Open, waits on Dion: whether the pulse shows screens outside the ripple's group; whether `ripple=off` should tick a screen as conflict for good; the ticks are under the 24 px target size; the automatic ask carries the person's name though they typed nothing.
+
+## Phase 7 — Stuck detection
+
+**Status: CLOSED, 14 October 2026.** Core `stuck.ts` (its own subpath): `stuckOn` reads the log as `evals.ts` does: an ask is a person's comment that summons someone about the item, a try is somebody else's new version or child of it, and a miss is a try undone, set aside or deleted, or asked about again within two minutes or in fewer words. Three misses in a row within 15 minutes is stuck; the reading carries the behaviour facts in words. The fourth ask's own summons carries `stuck` (the rc reads the log tail), so the lead asks instead of making a take: one to three observations and four now-or-instead pairs (density, brand expression, layout, tone of voice) with its guess on each; the person answers, asks for extremes, or names a product, and an answer resets the count. A lazy card on the canvas; `isocan stuck`. `stuck.test.ts` (core 14, CLI 3), the rc's summons test and the `proactive-stuck` journey (no fourth version made). Entry 692,474 → 693,041.
+
+**Outcome:** `stuckOn` in core over asks, results and `undoneSeqs`; the rc
+putting it in `SummonsContext`; derived observations (what survived each
+try); the agent-guide rule to ask with a `visual-cards` question set (four
+axes, its own guess marked, *show me extremes*, *name a product*) instead
+of generating again.
+
+**Proof:**
+
+- Unit: three undone tries on one item in a fixture log trip `stuckOn`;
+  three tries on three items do not; a kept result resets it.
+- Journey `proactive-stuck` (stub agent): the fourth ask gets a question
+  set, not a version.
+
+### Trajectory
+
+- **2026-10-14** — Open: the trigger (tries, time, undo speed, shrinking
+  asks) and whether the four axes are fixed. Waits on Dion.
+- **2026-10-14** — Stuck rides the ask's own summons, unlike ripple: the rc reads the recent log on the fourth ask and adds `stuck` to `SummonsContext`; the person's client only shows the detection and the wait.
+- **2026-10-14** — The typed questionnaire refuses without an active design request, so the stuck question is a Chat record drawn as tiles, not a `visual-cards` set. The tiles are words; pictures wait.
+- **2026-10-14** — Chosen, Dion to confirm: three misses in a row within 15 minutes; a keep or an answer resets the count; the four axes are fixed.
+- **2026-10-14** — Open, waits on Dion: pictures on the tiles (a preview per side, or the request's questionnaire when one is active); whether the person's own ⌘Z on an agent's take counts (it reads as set aside); the phone face; the Chat record reads as one run-on paragraph, as ripple's read-back does.
+
+## Phase 8 — Critics in the room, and the desk check
+
+**Status: CLOSED, 14 October 2026.** The room reuses the critique module whole (critics are critique cards on the canvas, notes keep their shape, one fold sorts them into agree, split and blocker) and changes only who speaks: the lead wears each lens, and its notes carry a `persona` field on comments. Each card holds `critique.on`, `critique.loud` (blockers, studio, everything) and `critique.when` (pause, share, asked); starter lenses are named for a way of looking, never a person. A split is surfaced with **Build both** (two proposals citing `critic:<note>`), never averaged. The desk check reads the audit, contrast, words against the Voice, wires behind and stale receipts, through a browser-safe reader in `@isocan/api` with module parts added through `CliModule.deskCheck`; `share` and `present` run it first and it never blocks. `isocan critic add|new|set`, `isocan critique <item>`, `share --check`. The room's web surface is in the critique module, behind its experiment. `room.test.ts` (11), `desk-check.test.ts` (4), `critics.test.ts` (3) and the `proactive-critics` journey. Entry 693,041 → 693,724.
+
+**Outcome:** critics as personas worn by the lead agent; `isocan crit
+<item> --as <persona>…`; per-critic pins coloured by `{ persona }` data; the
+read of the room (agree, split, blocker) and *build both*; the critics list
+with *how loud* and *when*; the desk check on `share` and `present`
+(design audit, contrast, words lint, wires behind, stale receipts, critics
+set to *before I share*), reporting and never blocking.
+
+**Proof:**
+
+- Unit: a fixture with two critics who disagree produces a split, not an
+  average; critic runs write comments only.
+- Journey `proactive-critics` (stub agent): two lenses over one screen give
+  two colours of pins and one synthesis; `isocan share` prints the desk
+  check before the address.
+
+### Trajectory
+
+- **2026-10-14** — Open: where a canvas's critics live when no repo is
+  bound; whether critics see each other's notes; whether a blocker can stop
+  a share. Waits on Dion.
+- **2026-10-14** — The room's web surface lives in the critique module, behind the Critique experiment: `test/modules.test.ts` forbids naming a module outside its directory. The CLI is always on.
+- **2026-10-14** — Modules add desk-check parts through `CliModule.deskCheck` (wireframe's wires behind, critique's critics), so removing a module removes its line.
+- **2026-10-14** — Chosen, Dion to confirm: critics are cards on the canvas; lenses do not read each other before they speak (by order and the guide, not enforced); a blocker warns and never stops a share; studio (3 notes) is the default loudness; a pause is a minute of quiet after the person's last edit, asked once per version.
+- **2026-10-14** — Open, waits on Dion: graduating the Critique experiment; the Share dialog does not run the desk check yet; the existing homage roster credits real designers, against design §9; a lens note's toast names the lead, not the critic; pins of two critics on one spot overlap.
+
+## Phase 9 — Walk it as someone else
+
+**Status: CLOSED, 14 October 2026.** Core `walk.ts` (its own subpath) takes a flow (a module's prototype through a new `CoreModule.walkFlow` hook, a group in reading order, or one screen) and, from a static read of each screen's own HTML and CSS (`walk-read.ts`), measures what each walker meets: the thumb's reach on a 390×844 phone, contrast at WCAG 2.2's thresholds and as seen by a low-vision walker (about 20/80, a blur and veil with their sources stated), the reading order for a screen reader. The lead walks the task through the ordinary summons, pins each stumble worn as the walker, ends each lane (made it, stumbled, gave up) and, where two or more stumble on one screen, proposes one fix citing `walk:`. Every surface says first that these are simulations and do not replace testing with people. A lazy panel; `isocan walk`. `walk.test.ts` (core 12, CLI), `walk-flow.test.ts` and the `proactive-walk` journey (no screen changes; one proposal). Entry 693,724 → 694,115.
+
+**Outcome:** `isocan walk <flow> --task "…" --as low-vision --as
+one-handed`; deterministic walkers over a wire prototype path or a group's
+reading order (contrast, target size and reach, accessible names and
+order); lanes drawn as the walker meets each screen; pins, outcomes, the
+shared stumble and one fix proposal; the simulation notice.
+
+**Proof:**
+
+- Unit: on a fixture flow with one low-contrast button and one small
+  target in the bottom corner, the two walkers stumble exactly there and
+  the shared finding names the screen both hit.
+- Journey `proactive-walk`: lanes render with the overlays and the notice;
+  nothing is written but pins and one proposal.
+
+### Trajectory
+
+- **2026-10-14** — Open: how walkers are grounded so they are not
+  caricatures, and whether a walk joins the desk check. Waits on Dion.
+- **2026-10-14** — The measurements are a static read: contrast is exact, but reach is measured only where the CSS places a target (fixed or absolute); flex and flow targets are counted as unplaced and left to the lead. A browser-measured layout is the next step.
+- **2026-10-14** — Stumbles are grounded: a measured stumble cites a finding id or says `judged`; endings must agree with the pins; a screen two walkers hit must be named with exactly one fix.
+- **2026-10-14** — The low-vision render is an SVG filter at the thumbnail's scale; it needs the frame drawn in-process (`sandbox="allow-same-origin"`, no scripts), since a plain sandboxed frame silently ignored the filter.
+- **2026-10-14** — Chosen, Dion to confirm: walkers are a situation plus a constraint (one-handed, low vision, screen reader, first-time, or one described in a line and judged, never measured); identity words are refused; a walk is not part of the desk check, which offers it as its last line; one-handed means the right thumb.
+- **2026-10-14** — Open, waits on Dion: reach from a real browser measure; a left-handed walker; walkers as editable items on the canvas; walker colours for pins; the ask and the record print raw item ids and long instructions in the Chat.
+
+## Phase 10 — Say it like a designer
+
+**Status: CLOSED, 14 October 2026.** Core `vague-words.ts` (its own subpath): ten vague words (pop, cramped, busy, clean, modern, punchy, heavy, warm, bland/boring/dull, soft), each with three named readings, underlined only where the sentence is about looks (a subject with feels/looks/seems, "make X…", or beside another look word): 0 of 80 precise asks underlined, all 20 vague ones found. In the Chat, on the first keystroke, a lazy card shows each word's readings and the sentence a designer would say; Tab takes it, Enter sends the person's own words unchanged, and a picked reading rides along as `Comment.readings`. `/vocabulary` shows the design words the person now uses, those seen and not yet theirs, and theirs the agent has learned (taste-note lines), with when to offer (fading, always, never) and an opt-in count. `isocan words read`. `vague-words.test.ts` (35), `designerwords.test.ts` (Enter sends the typed text), `words-read.test.ts` and the `proactive-words` journey. Entry 694,115 → 695,764.
+
+**Outcome:** composer underlines for vague words from `design-words.ts` in
+messages to an agent; readings drawn on the person's own screen where one is
+selected; the designer's sentence on Tab; the picked reading carried as
+data; the *when I am vague* setting; the vocabulary panel; coinages learned
+into the taste note.
+
+**Proof:**
+
+- Unit: the word list underlines "pop" and "cramped" and nothing in a
+  fixture of precise asks.
+- Journey `proactive-words`: picking a reading adds it to the sent
+  message's data; Return sends the person's words unchanged.
+
+### Trajectory
+
+- **2026-10-14** — Open: whether a pause to pick feels like friction, and
+  whether any count of asks that needed no translation is shown (opt in
+  only). Waits on Dion.
+- **2026-10-14** — Chosen, Dion to confirm: the send is never blocked; readings are words, and drawing them on the person's own screen is the lead's and deferred; the count is opt-in and off; offers fade once 8 of the last 10 asks needed no translation.
+- **2026-10-14** — The vague-word list is its own core subpath: importing `design-words` from it split a chunk out of the CLI and took `--version` to 41 modules, so the glossary terms are passed in.
+- **2026-10-14** — The deep run after this phase found two rule breaks from phase 9: a `#fff` literal in the walk panel (now the `.html-view` page white the token rule allows) and two journeys that fired `.click()` directly. Real clicks found the walk panel covering the comment toasts' close buttons; that journey waits out the toasts' 12 s, and the overlap is open.
+- **2026-10-14** — Open, waits on Dion: pictures on the readings; fading per word rather than overall. (The panels-over-toasts overlap was fixed the same day: `.canvas-page` was `position: fixed`, a stacking context that put the whole page under any body-mounted panel; it is `absolute` now, guarded in `layers.test.ts`.)
+
+## Phase 11 — Evidence
+
+**Status: PART-DONE, 14 October 2026.** Built and not run: the night and the judge wait on Dion's yes (they spend model calls). The walk is `docs/verify/2026-10-14-proactive-agent.md` (13 steps over an evening and the next morning). `bench/night.mjs` builds a synthetic Acme bakery on a scratch daemon, enrols a lead through the real `isocan rc`, runs `/goodnight` to the morning review and records every proposal with its cites, why and kind; `bench/judge.mjs` asks the cheapest model, per proposal, whether a designer would keep it. Rehearsed with the scripted ACP stand-in (no model, 42 s): five proposals (sure, two hunches, a failure with its take, Checkout edited because named), the other screens untouched, cites resolved, the judge planning five calls and refusing without a key. `proposal-keep-rate`, owned by the design-auditor persona (at least 60%), reads "no reading yet" until a night is judged. The real run costs about $1–3 for the night and under a cent for the judge.
+
+**Outcome:** a verify walk in `docs/verify/` for what only a person can
+judge (is a proposal ever unwelcome, does the morning review earn the
+return, does Explain teach, is the stuck question kind); a bench run of a
+real lead agent over a synthetic Acme canvas for one night, recording each
+proposal's cites and whether a judge would keep it; an eval of
+keep-versus-delete rates that a persona owns.
+
+**Proof:** the walk written, the night's record, and the eval's first
+number.
+
+### Trajectory
+
+- **2026-10-14** — The judge sees screen text with tags stripped, never layout, so a purely visual proposal is judged as a reordering of words; the person's own Keep and Delete outrank it.
+- **2026-10-14** — Open, waits on Dion: the real night and the judge (one `--yes` each); real keeps and deletes as labels (`--keep`, Dion walks the morning, a `labels` step to compare with the judge); the walk itself.

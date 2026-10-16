@@ -69,6 +69,16 @@ describe("the lift", () => {
     expect(reduced.some((r) => /transition:\s*none/.test(r.body) && r.selector.split(",").map((s) => s.trim()).includes(".item"))).toBe(true);
   });
 
+  it("leaves the resting shadow on while the camera moves", () => {
+    // `.panning .item { box-shadow: none }` (13 Oct 2026) faded every halo out
+    // on a pan's first frame and back after its last — a pop at both ends that
+    // bought no frames: the world has no layer of its own, so a pan repaints
+    // either way, and the 160ms transition above ran on every item twice.
+    const moving = all.filter((r) => r.selector.split(",").some((s) => /\.panning\b.*\.item\b/.test(s)));
+    expect(moving.length).toBeGreaterThan(0);
+    for (const r of moving) expect(r.body, r.selector).not.toMatch(/box-shadow\s*:/);
+  });
+
   it("is worn by what the hand holds, not by what it carries", () => {
     // `.dragging` is on every rider (an area's contents, an item's marks);
     // `.lifted` is on the drag's roots alone — so a dragged group lifts its

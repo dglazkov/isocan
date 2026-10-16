@@ -1,0 +1,25 @@
+/* A pin's open thread and the comment composer — `CommentPopovers.tsx`, a
+   lazy chunk, so these ship with it rather than in the stylesheet a first
+   visit waits for (14 Oct 2026). `.thread-popover` itself stays in
+   styles.css: eager code names it. Nothing in styles.css matches these
+   elements at equal specificity, so moving them after it changes no
+   cascade. */
+.thread-comments {
+  overflow-y: auto; overscroll-behavior: contain; min-height: 0;
+  /* Bleed into the padding so the scrollbar rides the popover's edge. */
+  margin: -10px -12px 0; padding: 10px 12px 0;
+}
+
+.thread-popover .thread-actions { display: flex; justify-content: space-between; margin-top: 6px; flex: none; }
+.thread-popover .thread-actions button {
+  background: none; border: none; color: var(--danger); font-size: 11px; padding: 2px 4px;
+}
+.thread-popover .thread-actions button.promote { color: var(--accent); }
+
+/* Dragging the textarea taller than the clamped popover scrolls, not spills. */
+.compose-popover form { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.compose-popover .row { display: flex; justify-content: flex-end; gap: 6px; margin-top: 6px; }
+
+.thread-text-anchor { margin: 0 0 12px; overflow-wrap: anywhere; }
+.thread-text-anchor blockquote { margin: 0 0 8px; padding-left: 12px; border-left: 2px solid var(--accent); white-space: pre-wrap; max-height: 160px; overflow: auto; }
+.thread-text-anchor small { color: var(--ink-muted); }

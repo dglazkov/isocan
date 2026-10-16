@@ -3,7 +3,7 @@ title: Missing spatial canvas viewport camera bookmarks
 loop:
   - 6eef2d95-6bfd-4d79-82ec-b278730b13f9
 loop_rank: P2
-loop_state: ACTIVE
+loop_state: DISMISSED
 loop_goal: pg_v67IPNa4
 decision: declined
 rank: never

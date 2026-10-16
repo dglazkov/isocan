@@ -134,6 +134,7 @@ describe("chrome inside the zoomed world", () => {
        pixels already, by the counter-scale, exactly as the titlebar's two
        ends are. */
     ".version-badge-ne",
+    ".item-focus-strip-nw",
   ];
 
   it("has rules for every selector it claims to check", () => {
@@ -292,6 +293,7 @@ describe("chrome holds its size, by transform or by --scale", () => {
     // in lib/chrome.ts — the same one home, said in CSS so a zoom needs no render.
     { className: "item-under", where: "ItemView", carries: /style=\{UNDER_ROW_CSS\}/ },
     { className: "chrome-left", where: "ItemView", carries: /\.\.\.chrome,/ },
+    { className: "item-focus-strip", where: "ItemView", carries: /\.\.\.chrome,/ },
   ];
 
   it("renders each one with the counter-scale from its one home", () => {

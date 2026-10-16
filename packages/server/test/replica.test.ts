@@ -179,7 +179,7 @@ describe("what the upgrade writes down about canvases that already exist", () =>
     await preUpgradeMachine();
     await writeBadge(home, HOME, { badgeId: "bdg_replica", secret: "s3cret", at: HOME });
     await boot(HOME);
-    expect(daemon!.homes.assignments()).toEqual({ prj_acme: HOME, prj_widget: HOME });
+    expect(daemon!.homes!.assignments()).toEqual({ prj_acme: HOME, prj_widget: HOME });
     expect(JSON.parse(await fs.readFile(p.homesFile(home), "utf8"))).toEqual({
       prj_acme: HOME,
       prj_widget: HOME,
@@ -197,7 +197,7 @@ describe("what the upgrade writes down about canvases that already exist", () =>
     // for canvases that are all local by definition. This writes zero bytes.
     await preUpgradeMachine();
     await boot(null);
-    expect(daemon!.homes.assignments()).toEqual({});
+    expect(daemon!.homes!.assignments()).toEqual({});
     // An EMPTY record is still written, and that is the guard rather than an
     // exception to it (phase 10.5). Returning before the write left this
     // migration armed on exactly the machine it was least meant for: the next
@@ -222,7 +222,7 @@ describe("what the upgrade writes down about canvases that already exist", () =>
       JSON.stringify({ prj_acme: null, prj_widget: HOME }),
     );
     await boot(HOME);
-    expect(daemon!.homes.assignments()).toEqual({ prj_acme: null, prj_widget: HOME });
+    expect(daemon!.homes!.assignments()).toEqual({ prj_acme: null, prj_widget: HOME });
   });
 });
 
@@ -305,7 +305,7 @@ describe("a pure replica does not serve pages", () => {
     // question now, and `GET /api/homes` is where it is asked.
     await boot(HOME);
     expect(daemon!.birthHome).toBe(HOME);
-    expect(daemon!.homes.assignments()).toEqual({});
+    expect(daemon!.homes!.assignments()).toEqual({});
   });
 });
 

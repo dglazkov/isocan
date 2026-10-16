@@ -6,7 +6,9 @@ export interface InboxResponse {
   entries: InboxEntry[];
   marks: import("./seen.ts").SeenMarks;
   homes: Record<string, string | null>;
-  unavailable: { canvasId: string; error: string }[];
+  /** `gone`: the canvas's home answered that it no longer has it, so the
+   * copy held here is all that is left — `isocan canvas forget` drops it. */
+  unavailable: { canvasId: string; error: string; gone?: true; title?: string }[];
 }
 
 /** The read-only inbox assembly; a canvas id explicitly presents its address. */

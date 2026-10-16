@@ -1,13 +1,21 @@
-import { createPublicKey, verify as verifySignature, X509Certificate } from "node:crypto";
+import { createHash, createPublicKey, verify as verifySignature, X509Certificate } from "node:crypto";
+import type { IncomingHttpHeaders } from "node:http";
 import {
+  attestedEmailLocalPart,
   attestedKindOf,
   BAD_ID_TOKEN,
+  harnessOf,
   isGroupSubject,
   normalizeAttribute,
+  parseSessionHeader,
+  PERSON_HARNESSES,
+  SESSION_HEADER,
   type AttestedKind,
   type Attestation,
   type GrantSubject,
 } from "@isocan/core";
+import type { BadgeRecord, Desk } from "./desk.ts";
+import type { Engine } from "./engine.ts";
 
 /**
  * **The attesters this home has borrowed** — mechanism 3's "borrow, never
@@ -106,6 +114,345 @@ export function resolveAuth(env: NodeJS.ProcessEnv = process.env): AuthConfig | 
 }
 
 /**
+ * Configuration for trusting an authenticating reverse proxy standing directly
+ * in front of this home (`ISOCAN_PROXY_EMAIL_HEADER`).
+ */
+export interface ProxyAuthConfig {
+  /** Lowercased HTTP header names checked in order for the authenticated identity. */
+  headers: readonly string[];
+  /** Positive protobuf field number when headers carry base64url wire payloads instead of plain text. */
+  protoField: number | null;
+  /** Optional prefix pattern removed from the email local-part before normalizing. */
+  stripPrefix: RegExp | null;
+}
+
+/**
+ * Resolve reverse-proxy identity attestation configuration from environment:
+ * - `ISOCAN_PROXY_EMAIL_HEADER`: comma-separated header name(s), e.g. `"x-forwarded-email"`
+ * - `ISOCAN_PROXY_EMAIL_PROTO_FIELD`: optional protobuf string field number (e.g. `"2"`)
+ * - `ISOCAN_PROXY_EMAIL_STRIP_PREFIX`: optional prefix regex stripped from local-parts
+ */
+export function resolveProxyAuth(env: NodeJS.ProcessEnv = process.env): ProxyAuthConfig | null {
+  const rawHeaders = env["ISOCAN_PROXY_EMAIL_HEADER"]?.trim();
+  if (!rawHeaders) return null;
+  const headers = rawHeaders
+    .split(",")
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean);
+  if (headers.length === 0) return null;
+  const rawField = Number(env["ISOCAN_PROXY_EMAIL_PROTO_FIELD"]?.trim() ?? "");
+  const protoField = Number.isInteger(rawField) && rawField > 0 ? rawField : null;
+  const rawPrefix = env["ISOCAN_PROXY_EMAIL_STRIP_PREFIX"]?.trim();
+  const stripPrefix = rawPrefix ? new RegExp(rawPrefix, "i") : null;
+  return { headers, protoField, stripPrefix };
+}
+
+function readVarint(buf: Buffer, pos: number): { val: number; next: number } | null {
+  let result = 0;
+  let shift = 0;
+  while (pos < buf.length && shift < 64) {
+    const byte = buf[pos++]!;
+    result += (byte & 0x7f) * 2 ** shift;
+    shift += 7;
+    if ((byte & 0x80) === 0) return { val: result, next: pos };
+  }
+  return null;
+}
+
+function extractProtoStringField(token: string, targetField: number): string | null {
+  try {
+    const buf = Buffer.from(token.trim(), "base64url");
+    let pos = 0;
+    while (pos < buf.length) {
+      const tag = readVarint(buf, pos);
+      if (!tag) break;
+      pos = tag.next;
+      const fieldNumber = tag.val >>> 3;
+      const wireType = tag.val & 0x7;
+      if (wireType === 0) {
+        const skipped = readVarint(buf, pos);
+        if (!skipped) break;
+        pos = skipped.next;
+      } else if (wireType === 1) {
+        pos += 8;
+      } else if (wireType === 5) {
+        pos += 4;
+      } else if (wireType === 2) {
+        const len = readVarint(buf, pos);
+        if (!len || len.val < 0 || len.next + len.val > buf.length) break;
+        const start = len.next;
+        const end = start + len.val;
+        if (fieldNumber === targetField) {
+          return buf.subarray(start, end).toString("utf8");
+        }
+        pos = end;
+      } else {
+        break;
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+const ANON_PROXY_LOCAL_PARTS = new Set(["", "anonymous", "nobody", "noone"]);
+
+function headerFirst(value: string | string[] | undefined): string | null {
+  const first = Array.isArray(value) ? value[0] : value;
+  return typeof first === "string" && first.trim() ? first.trim() : null;
+}
+
+/** Extract the raw proxy identity header value configured in `proxyAuth`, or null. */
+export function rawProxyHeader(headers: IncomingHttpHeaders, proxyAuth: ProxyAuthConfig | null): string | null {
+  if (!proxyAuth) return null;
+  for (const name of proxyAuth.headers) {
+    const found = headerFirst(headers[name]);
+    if (found) return found;
+  }
+  return null;
+}
+
+/** Build an `email:<addr>` attestation from configured reverse-proxy headers, or null. */
+export function attestationFromProxy(
+  headers: IncomingHttpHeaders,
+  proxyAuth: ProxyAuthConfig | null,
+  now = Date.now(),
+): Attestation | null {
+  const rawHeader = rawProxyHeader(headers, proxyAuth);
+  if (!proxyAuth || !rawHeader) return null;
+  const extracted = proxyAuth.protoField
+    ? extractProtoStringField(rawHeader, proxyAuth.protoField)
+    : rawHeader.replace(/^[a-z0-9._-]+:(?=.+@)/i, "");
+  if (!extracted || extracted.length > 320) return null;
+  const lower = extracted.trim().toLowerCase();
+  const at = lower.indexOf("@");
+  if (at <= 0 || at === lower.length - 1 || lower.indexOf("@", at + 1) !== -1) return null;
+  let local = lower.slice(0, at);
+  const domain = lower.slice(at + 1);
+  if (proxyAuth.stripPrefix) local = local.replace(proxyAuth.stripPrefix, "");
+  if (!local || ANON_PROXY_LOCAL_PARTS.has(local) || !domain.includes(".")) return null;
+  return {
+    attribute: normalizeAttribute(`email:${local}@${domain}`),
+    verifiedVia: "proxy",
+    at: new Date(now).toISOString(),
+  };
+}
+
+/** Ensure a trusted reverse-proxy email attestation is recorded on `badge` when `proxyAuth` is configured. */
+export async function ensureProxyAttestation(
+  desk: Desk,
+  badge: BadgeRecord,
+  headers: IncomingHttpHeaders,
+  proxyAuth: ProxyAuthConfig | null,
+  now = Date.now(),
+): Promise<BadgeRecord> {
+  if (!proxyAuth) return badge;
+  const attestation = attestationFromProxy(headers, proxyAuth, now);
+  if (!attestation) return badge;
+  if ((badge.attestations ?? []).some((row) => row.attribute === attestation.attribute)) return badge;
+  await desk.attest(badge.badgeId, attestation);
+  return { ...badge, attestations: [...(badge.attestations ?? []), attestation] };
+}
+
+/**
+ * Deterministic badge id (`bdg_prx_...`) for a verified reverse-proxy principal.
+ * Keyed by the normalized attribute so every surface presenting the same
+ * proxy-verified identity resolves to one desk record without a secondary
+ * index scan.
+ */
+export function proxyBadgeId(attribute: string): string {
+  return `bdg_prx_${createHash("sha256")
+    .update(`proxy:${normalizeAttribute(attribute)}`)
+    .digest("base64url")
+    .slice(0, 16)}`;
+}
+
+const PROXY_PERSON_KEY = "home:person";
+
+type ProxyPrincipalOutcome =
+  | { kind: "badge"; badge: BadgeRecord }
+  | { kind: "ended"; ended: BadgeRecord };
+
+const inflightByDesk = new WeakMap<Desk, Map<string, Promise<ProxyPrincipalOutcome>>>();
+
+/**
+ * Resolve a badge-less request carrying a verified reverse-proxy identity header
+ * to its deterministic `bdg_prx_...` badge and bound `home:person` human actor,
+ * or report an operator-ended proxy tombstone without resurrecting it.
+ */
+export async function resolveProxyPrincipal(
+  desk: Desk,
+  engine: Engine,
+  headers: IncomingHttpHeaders,
+  proxyAuth: ProxyAuthConfig | null,
+  now = Date.now(),
+): Promise<ProxyPrincipalOutcome | null> {
+  const attestation = attestationFromProxy(headers, proxyAuth, now);
+  if (!attestation) return null;
+  const badgeId = proxyBadgeId(attestation.attribute);
+  const existing = await desk.badge(badgeId);
+  if (
+    existing &&
+    (existing.attestations ?? []).some((row) => row.attribute === attestation.attribute) &&
+    existing.claims.some((row) => row.sessionKey === PROXY_PERSON_KEY)
+  ) {
+    return { kind: "badge", badge: existing };
+  }
+  let inflight = inflightByDesk.get(desk);
+  if (!inflight) {
+    inflight = new Map();
+    inflightByDesk.set(desk, inflight);
+  }
+  const prev = inflight.get(badgeId);
+  const work = (prev ?? Promise.resolve(null)).then(
+    () => ensureProxyBadgeAndPerson(desk, engine, badgeId, attestation, now),
+    () => ensureProxyBadgeAndPerson(desk, engine, badgeId, attestation, now),
+  );
+  inflight.set(badgeId, work);
+  try {
+    return await work;
+  } finally {
+    if (inflight.get(badgeId) === work) {
+      inflight.delete(badgeId);
+    }
+  }
+}
+
+async function ensureProxyBadgeAndPerson(
+  desk: Desk,
+  engine: Engine,
+  badgeId: string,
+  attestation: Attestation,
+  now: number,
+): Promise<ProxyPrincipalOutcome> {
+  let badge = await desk.badge(badgeId);
+  if (!badge) {
+    const ended = await desk.endedBadge(badgeId);
+    if (ended) return { kind: "ended", ended };
+    const iso = new Date(now).toISOString();
+    badge = {
+      badgeId,
+      secretHash: "",
+      kind: "bearer",
+      createdAt: iso,
+      lastSeen: iso,
+      admissions: [],
+      claims: [],
+    };
+    await desk.put(badge);
+  }
+  if (!(badge.attestations ?? []).some((row) => row.attribute === attestation.attribute)) {
+    await desk.attest(badgeId, attestation);
+    badge = { ...badge, attestations: [...(badge.attestations ?? []), attestation] };
+  }
+  if (!badge.claims.some((row) => row.sessionKey === PROXY_PERSON_KEY)) {
+    let existingActorId: string | null = null;
+    const resumableIds = new Set((await engine.resumable(badgeId)).map((row) => row.actor.id));
+    if (resumableIds.size > 0) {
+      for (const other of await desk.badgesAttesting(attestation.attribute)) {
+        if (other.badgeId === badgeId) continue;
+        for (const claim of other.claims) {
+          const harness = harnessOf(claim.sessionKey);
+          if (
+            harness &&
+            PERSON_HARNESSES.has(harness.toLowerCase()) &&
+            resumableIds.has(claim.actorId)
+          ) {
+            existingActorId = claim.actorId;
+            break;
+          }
+        }
+        if (existingActorId) break;
+      }
+    }
+    if (existingActorId) {
+      await engine.claim({
+        badgeId,
+        op: {
+          type: "actor.claim",
+          sessionKey: PROXY_PERSON_KEY,
+          as: existingActorId,
+        },
+      });
+    } else {
+      const localPart = attestedEmailLocalPart([attestation]) ?? "person";
+      await engine.claim({
+        badgeId,
+        op: {
+          type: "actor.claim",
+          sessionKey: PROXY_PERSON_KEY,
+          name: localPart,
+          fresh: true,
+        },
+      });
+    }
+    badge = (await desk.badge(badgeId)) ?? badge;
+  }
+  return { kind: "badge", badge };
+}
+
+const inflightSessionByDesk = new WeakMap<Desk, Map<string, Promise<BadgeRecord>>>();
+
+/**
+ * Ensure a valid `X-Isocan-Session` (`<harness>:<sessionId>`) on a
+ * proxy-authenticated request is claimed on `badge` before route handling.
+ *
+ * Ignored whenever `proxyAuth` is unset or `attestationFromProxy` returns null,
+ * so local daemons and unauthenticated requests keep explicit session claims.
+ */
+export async function ensureProxySessionClaim(
+  desk: Desk,
+  engine: Engine,
+  badge: BadgeRecord,
+  headers: IncomingHttpHeaders,
+  proxyAuth: ProxyAuthConfig | null,
+  now = Date.now(),
+): Promise<BadgeRecord> {
+  if (!proxyAuth || !attestationFromProxy(headers, proxyAuth, now)) return badge;
+  const sessionKey = parseSessionHeader(headers[SESSION_HEADER]);
+  if (!sessionKey) return badge;
+  if (badge.claims.some((row) => row.sessionKey === sessionKey)) return badge;
+  let inflight = inflightSessionByDesk.get(desk);
+  if (!inflight) {
+    inflight = new Map();
+    inflightSessionByDesk.set(desk, inflight);
+  }
+  const lockKey = `${badge.badgeId}\0${sessionKey}`;
+  const prev = inflight.get(lockKey);
+  const work = (prev ?? Promise.resolve(badge)).then(
+    () => claimProxySessionOnBadge(desk, engine, badge, sessionKey),
+    () => claimProxySessionOnBadge(desk, engine, badge, sessionKey),
+  );
+  inflight.set(lockKey, work);
+  try {
+    return await work;
+  } finally {
+    if (inflight.get(lockKey) === work) {
+      inflight.delete(lockKey);
+    }
+  }
+}
+
+async function claimProxySessionOnBadge(
+  desk: Desk,
+  engine: Engine,
+  fallback: BadgeRecord,
+  sessionKey: string,
+): Promise<BadgeRecord> {
+  const latest = (await desk.badge(fallback.badgeId)) ?? fallback;
+  if (latest.claims.some((row) => row.sessionKey === sessionKey)) return latest;
+  await engine.claim({
+    badgeId: fallback.badgeId,
+    op: {
+      type: "actor.claim",
+      sessionKey,
+    },
+  });
+  return (await desk.badge(fallback.badgeId)) ?? latest;
+}
+
+/**
  * What a home with this configuration can verify.
  *
  * `email` when there is an attester, and that is the whole list today.
@@ -124,8 +471,8 @@ export function resolveAuth(env: NodeJS.ProcessEnv = process.env): AuthConfig | 
  * could be WRITTEN and admitted nobody would be a dialog that lies, and that
  * is worse than a refusal.
  */
-export function attestersOf(auth: AuthConfig | null): AttestedKind[] {
-  return auth ? ["email"] : [];
+export function attestersOf(auth: AuthConfig | null, proxyAuth: ProxyAuthConfig | null = null): AttestedKind[] {
+  return auth || proxyAuth ? ["email"] : [];
 }
 
 /**

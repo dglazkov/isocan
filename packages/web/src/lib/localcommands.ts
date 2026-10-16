@@ -39,5 +39,9 @@ export function runLocalCommand(body: string, commands: CommandMetadata[]): bool
     useUiStore.getState().setHelpOpen(true);
     return true;
   }
+  if (command.name === "vocabulary") {
+    useUiStore.setState({ vocabularyOpen: true });
+    return true;
+  }
   return false;
 }

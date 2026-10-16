@@ -5,9 +5,13 @@ import {
   actorColors,
   actorMarks,
   actorNames,
+  applyActorColor,
   applyActorJoin,
+  applyActorMark,
   applyClaim,
+  claimsActor,
   emptyActorRegistry,
+  mergeJoins,
 } from "../src/claims.ts";
 import { actorAliases, actorColor, resolveActor, sameActor } from "../src/identity.ts";
 import { inboxOn, namesFor, reasonFor } from "../src/inbox.ts";
@@ -117,6 +121,32 @@ describe("resolveActor", () => {
   });
 });
 
+describe("mergeJoins: a home's folds, taken by a replica", () => {
+  it("adds what the home folded and reports nothing when nothing is new", () => {
+    const merged = mergeJoins({}, { [second.id]: dimitri.id });
+    expect(merged).toEqual({ [second.id]: dimitri.id });
+    expect(mergeJoins(merged!, { [second.id]: dimitri.id })).toBeNull();
+    expect(mergeJoins(undefined, undefined)).toBeNull();
+  });
+
+  it("keeps a fold it already holds rather than letting another home move it", () => {
+    // A join is forever, so the first one recorded here is the true one; a
+    // second home saying otherwise is the disagreement, not a correction.
+    const held = { [second.id]: dimitri.id };
+    expect(mergeJoins(held, { [second.id]: third.id, [kenny.id]: dimitri.id })).toEqual({
+      [second.id]: dimitri.id,
+      [kenny.id]: dimitri.id,
+    });
+  });
+
+  it("never records a fold into itself, or one that would close a loop", () => {
+    const held = { [second.id]: dimitri.id };
+    expect(mergeJoins(held, { [third.id]: third.id })).toBeNull();
+    // dimitri → second would make second → dimitri → second.
+    expect(mergeJoins(held, { [dimitri.id]: second.id })).toBeNull();
+  });
+});
+
 describe("the wire shapes answer for the old id", () => {
   const registry: ActorRegistry = {
     ...join(registryWith(dimitri, second, kenny), second.id, dimitri.id),
@@ -139,6 +169,34 @@ describe("the wire shapes answer for the old id", () => {
   it("marks: the folded actor wears the person's mark, or none", () => {
     expect(actorMarks(registry)[second.id]).toBe("🦊");
     expect(actorMarks({ ...registry, marks: { [second.id]: "🐙" } })[second.id]).toBeUndefined();
+  });
+
+  it("changing mark or colour from a folded surface updates the person and sticks on reload", () => {
+    const folded = {
+      ...join(registryWith(dimitri, second), second.id, dimitri.id),
+      colors: { [dimitri.id]: "#c93a55" },
+      marks: { [dimitri.id]: "❤️" },
+    };
+    const marked = applyActorMark(folded, { type: "actor.setMark", actorId: second.id, mark: "🏏" });
+    expect(actorMarks(marked)[second.id]).toBe("🏏");
+    expect(actorMarks(marked)[dimitri.id]).toBe("🏏");
+
+    const cleared = applyActorMark(marked, { type: "actor.setMark", actorId: second.id, mark: null });
+    expect(actorMarks(cleared)[second.id]).toBeUndefined();
+    expect(actorMarks(cleared)[dimitri.id]).toBeUndefined();
+
+    const colored = applyActorColor(folded, { type: "actor.setColor", actorId: second.id, color: "#0f8a80" });
+    expect(actorColors(colored)[second.id]).toBe("#0f8a80");
+    expect(actorColors(colored)[dimitri.id]).toBe("#0f8a80");
+  });
+
+  it("claimsActor: a badge holding a folded id speaks for the person, and vice versa", () => {
+    const joined = { [second.id]: dimitri.id };
+    const heldOld = [{ actorId: second.id, boundAt: "2026-09-01T00:00:00.000Z" }];
+    const heldNew = [{ actorId: dimitri.id, boundAt: "2026-09-01T00:00:00.000Z" }];
+    expect(claimsActor(heldOld, dimitri.id, joined)).toBe(true);
+    expect(claimsActor(heldNew, second.id, joined)).toBe(true);
+    expect(claimsActor(heldOld, kenny.id, joined)).toBe(false);
   });
 });
 

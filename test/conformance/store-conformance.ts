@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { LogEntry, OpEnvelope, Operation, CanvasState, ActorRegistry } from "@isocan/core";
+import type { SummaryEntry } from "@isocan/core/semantic-zoom";
 import { applyOperation, emptyActorRegistry, invertOperation } from "@isocan/core";
 import type { Store } from "@isocan/server";
 
@@ -257,6 +258,33 @@ export function storeConformance(
 
         expect(await store.blobMeta("prj_1", "deadbeef")).toBeNull();
         expect(await store.openBlob("prj_1", "deadbeef")).toBeNull();
+      }),
+    );
+
+    test(
+      "heals a blob filed as octet-stream when the same bytes arrive typed, and keeps the first of two specific types",
+      withStore(async ({ store }) => {
+        await seed(store);
+        // 14 Oct 2026 (lessons.md #122): a slide uploaded from an extensionless
+        // file, then the same bytes re-saved as `.html`.
+        const page = Buffer.from("<!doctype html><h1>Slide</h1>");
+        const first = await store.putBlob("prj_1", page, { mimeType: "application/octet-stream", filename: "itm_slide" });
+        const again = await store.putBlob("prj_1", page, { mimeType: "text/html", filename: "01-title.html" });
+        expect(again.blobHash).toBe(first.blobHash);
+        expect(again.mimeType, "the put answers the healed type").toBe("text/html");
+        const meta = (await store.blobMeta("prj_1", first.blobHash))!;
+        expect(meta.mimeType).toBe("text/html");
+        expect(meta.filename).toBe("01-title.html");
+        expect(meta.file, "the stored object keeps the key it was written under").toBe(`${first.blobHash}.bin`);
+        expect(await collect(await store.openBlob("prj_1", first.blobHash))).toEqual(page);
+
+        // Two specific types for the same bytes: the first stays. One hash
+        // serves both names; a later upload must not re-type it for the other.
+        const words = Buffer.from("plain words\n");
+        await store.putBlob("prj_1", words, { mimeType: "text/plain", filename: "a.txt" });
+        const md = await store.putBlob("prj_1", words, { mimeType: "text/markdown", filename: "a.md" });
+        expect(md.mimeType).toBe("text/plain");
+        expect((await store.blobMeta("prj_1", md.blobHash))!.mimeType).toBe("text/plain");
       }),
     );
 
@@ -597,6 +625,50 @@ export function storeConformance(
         expect(Date.parse(ticket.expiresAt)).toBeGreaterThan(Date.now());
         // And nothing was registered by asking: the bytes have not arrived.
         expect(await store.blobMeta("prj_1", request.blobHash)).toBeNull();
+      }),
+    );
+
+    test(
+      "semantic zoom summaries: stored per canvas, listed with touch stamps, deleted, and erased by purge",
+      withStore(async ({ store }) => {
+        await seed(store);
+        const key1 = "a".repeat(64);
+        const key2 = "b".repeat(64);
+        const entry1: SummaryEntry = {
+          key: key1,
+          kind: "text",
+          sourceIds: ["itm_1"],
+          summary: "Acme launch summary.",
+          words: 3,
+          model: "claude-haiku-4-5-20251001",
+          promptVersion: "v1",
+          madeAt: "2026-10-14T12:00:00.000Z",
+          madeFor: "home",
+        };
+        const entry2: SummaryEntry = { ...entry1, key: key2, sourceIds: ["itm_2"] };
+
+        expect(await store.listSummaries("prj_1")).toEqual([]);
+        expect(await store.getSummary("prj_1", key1)).toBeNull();
+        expect(await store.getSummary("prj_1", "../not-a-hex-key")).toBeNull();
+
+        await store.putSummary("prj_1", entry1);
+        await store.putSummary("prj_1", entry2);
+
+        expect(await store.getSummary("prj_1", key1)).toEqual(entry1);
+        const listed = await store.listSummaries("prj_1");
+        expect(listed.map((r) => r.entry.key).sort()).toEqual([key1, key2]);
+        for (const row of listed) {
+          expect(row.touched).toBeGreaterThan(0);
+        }
+
+        await store.deleteSummary("prj_1", key1);
+        expect(await store.getSummary("prj_1", key1)).toBeNull();
+        expect((await store.listSummaries("prj_1")).map((r) => r.entry.key)).toEqual([key2]);
+
+        await store.setTakenDown("prj_1", "2026-10-14T13:00:00.000Z");
+        await store.purgeCanvas("prj_1");
+        expect(await store.listSummaries("prj_1")).toEqual([]);
+        expect(await store.getSummary("prj_1", key2)).toBeNull();
       }),
     );
   });

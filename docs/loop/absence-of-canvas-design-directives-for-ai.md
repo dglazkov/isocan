@@ -3,7 +3,7 @@ title: Absence of canvas design directives for AI
 loop:
   - 27274b8e-71cd-43f9-9910-d42f5de25fc5
 loop_rank: P2
-loop_state: ACTIVE
+loop_state: DISMISSED
 loop_goal: What canvas tools teach us
 decision: stale
 rank: never

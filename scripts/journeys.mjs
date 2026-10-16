@@ -33,11 +33,13 @@
  * cannot tell its own limits from a defect generates confident nonsense.
  */
 import { execFileSync, spawn } from "node:child_process";
+import { createServer } from "node:http";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { browser, throughTheDoor } from "./lib/browser.mjs";
+import { reapOnExit, startDaemon as ownDaemon } from "./lib/daemon.mjs";
 
 const repo = fileURLToPath(new URL("..", import.meta.url));
 const cli = path.join(repo, "packages/cli/bin/isocan.js");
@@ -60,82 +62,106 @@ async function until(b, expression, what, ms = 8000) {
 }
 
 /**
- * A daemon of this run's own, and a browser that has been through the door.
+ * **A daemon of this run's own, which the run takes with it.**
  *
- * The identity is claimed through the API and written to `localStorage` under
- * the key the app reads, because every journey starts signed in — the door
- * itself has its own journey and does not belong in the middle of the others.
- */
-/**
- * **A port this run picks, and retries when it loses.**
+ * This spawned `isocan serve`, which is a launcher: it starts a DETACHED
+ * `serve --foreground` and exits, so the `proc.kill()` every teardown here
+ * sent went to a process that was already gone, and the 3 s wait after it
+ * waited for an exit that had already happened. Every rig, and every journey
+ * with a daemon of its own, left one behind. By 14 Oct 2026 this Mac held
+ * about 290 of them (≈8 GB) and a deep run reached load average 98.
  *
- * `ISOCAN_PORT=0` is not available: the daemon polls its own health on a known
- * port before reporting ready, so it must be told the number — the same
- * constraint `managed.ts` has, and the reason that file's `freePort` guesses
- * too. A guess has a real race, so this does what `smokeTest` does about it:
- * tries again. Below the ephemeral floor on both platforms (32768 on Linux,
- * 49152 on macOS), so nothing the OS hands out can land on top of it.
+ * `lib/daemon.mjs` starts the daemon itself, in its own process group, picks
+ * the port and retries only a lost race, and stops it by signalling the group
+ * and waiting. It also takes every daemon down on an uncaught error, SIGINT,
+ * SIGTERM or SIGHUP, and the daemon watches this pid (ISOCAN_DAEMON_GUARD_PID)
+ * for the one ending nothing here can see, a SIGKILL.
  */
-const pickPort = () => 20_000 + Math.floor(Math.random() * 9_000);
+const startDaemon = (home, env = {}) => ownDaemon({ cli, home, env });
 
-async function startDaemon(home, attempt = 0) {
-  const port = pickPort();
-  const proc = spawn(process.execPath, [cli, "serve"], {
-    env: {
-      ...process.env,
-      ISOCAN_HOME: home,
-      ISOCAN_PORT: String(port),
-      ISOCAN_CONTENT_PORT: String(port + 1),
-    },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  let out = "";
-  try {
-    const origin = await new Promise((resolve, reject) => {
-      const deadline = setTimeout(() => reject(new Error(`daemon did not start:\n${out}`)), 30_000);
-      const look = (chunk) => {
-        out += chunk.toString();
-        if (out.includes(`http://127.0.0.1:${port}`) && /started|running/i.test(out)) {
-          clearTimeout(deadline);
-          resolve(`http://127.0.0.1:${port}`);
-        }
-      };
-      proc.stdout.on("data", look);
-      proc.stderr.on("data", look);
-      proc.once("exit", (code) => {
-        clearTimeout(deadline);
-        reject(new Error(`daemon exited (${code}):\n${out}`));
-      });
-    });
-    return { proc, origin };
-  } catch (err) {
-    proc.kill();
-    // Only a lost port is retried. A daemon that will not boot for any other
-    // reason must say so rather than be tried four more times.
-    const raced = /EADDRINUSE|did not come up|already/i.test(String(err));
-    if (raced && attempt < 3) return startDaemon(home, attempt + 1);
-    throw err;
-  }
+/**
+ * **Chrome as it comes, on every machine, owned by the run.**
+ *
+ * `--disable-extensions`, because a managed Mac force-installs its policy
+ * extensions into every new profile, headless ones included: eleven extension
+ * targets in a profile that is a second old (14 Oct 2026). While they start,
+ * the page's lazy chunks fail to load (`net::ERR_FAILED`, "Failed to fetch
+ * dynamically imported module", a canvas that never opens), and now and then
+ * the page stops answering altogether. One browser shared by the whole run
+ * paid that start once. A browser per journey paid it fifty times: 10 fresh
+ * rigs in 30 failed, and 0 in 30 with the flag, which leaves only Chrome's own
+ * two component extensions. The journeys test isocan in the browser CI has,
+ * not in whatever a machine's policy adds.
+ *
+ * Owned like the daemon: a run that is interrupted takes its Chrome with it,
+ * and one that would not exit stays owned so the exit hook does.
+ */
+async function ownBrowser() {
+  const b = await browser({ args: ["--disable-extensions"] });
+  const unreap = reapOnExit(b.pid);
+  const close = b.close;
+  b.close = async () => {
+    await close();
+    unreap();
+  };
+  return b;
 }
 
+/**
+ * **A fresh daemon, home and browser for every journey, through the door.**
+ *
+ * One rig used to serve the whole run, and a journey could leave it changed
+ * in ways the next journey walked into:
+ *
+ * - a CLI identity name claimed in the shared home (`meadow-idle` claimed
+ *   "Meadow Journey CLI", so `meadow`, `ground-motion` and `meadow-others`
+ *   were refused it: "is taken here");
+ * - the door's cookie, `isocan_badge`, which is scoped to the host and not
+ *   the port: `critique` crossed its own daemon's door on 127.0.0.1, replacing
+ *   the rig's badge, and every later journey's Create form was refused with
+ *   "this badge does not speak for usr_… — claim that actor first";
+ * - an `identity.json` rewritten in the shared home (`proactive-proposal`
+ *   makes it Maya's), and emulated sizes and media nobody cleared.
+ *
+ * So eighteen journeys failed in a full run and passed alone. The cure is to
+ * make the full run what `--only` already was, a rig of the journey's own,
+ * rather than to teach the rig to undo every way it can be changed. That list
+ * grows with each journey, and the first one nobody thought of is the next
+ * failure. A daemon starts in under a second and Chrome in about one, so
+ * isolation costs a few seconds a journey.
+ *
+ * The identity is claimed through the API and written to `localStorage` under
+ * the key the app reads, because every journey starts signed in. The door has
+ * its own journey and does not belong in the middle of the others.
+ */
 async function rig() {
   const home = mkdtempSync(path.join(tmpdir(), "isocan-journeys-"));
-  const { proc, origin } = await startDaemon(home);
+  let daemon = null;
+  let b = null;
+  try {
+    daemon = await startDaemon(home);
+    b = await ownBrowser();
+    /**
+     * **Arm the load listener BEFORE navigating**, and wait for the document
+     * rather than for a duration. `Page.navigate` resolves when navigation
+     * STARTS; evaluating against a page that is still `about:blank` makes a
+     * relative `fetch("/api/door")` fail with "Failed to fetch" — which reads
+     * as a daemon that is down and is nothing of the kind. `grade.mjs` learned
+     * the same lesson and its `once` exists for exactly this.
+     */
+    const loaded = b.once("Page.loadEventFired");
+    await b.send("Page.navigate", { url: daemon.origin });
+    await Promise.race([loaded, sleep(15_000)]);
+    // One door-crossing, shared with the canvas screenshot (`lib/browser.mjs`).
+    await throughTheDoor(b, daemon.origin, "Journey", "journeys");
+  } catch (err) {
+    await b?.close().catch(() => {});
+    await daemon?.stop().catch(() => {});
+    rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    throw err;
+  }
+  const { origin } = daemon;
 
-  const b = await browser();
-  /**
-   * **Arm the load listener BEFORE navigating**, and wait for the document
-   * rather than for a duration. `Page.navigate` resolves when navigation
-   * STARTS; evaluating against a page that is still `about:blank` makes a
-   * relative `fetch("/api/door")` fail with "Failed to fetch" — which reads as
-   * a daemon that is down and is nothing of the kind. `grade.mjs` learned the
-   * same lesson and its `once` exists for exactly this.
-   */
-  const loaded = b.once("Page.loadEventFired");
-  await b.send("Page.navigate", { url: origin });
-  await Promise.race([loaded, sleep(15_000)]);
-  // One door-crossing, shared with the canvas screenshot (`lib/browser.mjs`).
-  await throughTheDoor(b, origin, "Journey", "journeys");
     /**
    * **A real click, on whatever is actually on top at that point.**
    *
@@ -250,7 +276,9 @@ async function rig() {
         o: { windowsVirtualKeyCode: 79, key: "o", code: "KeyO" },
         Delete: { windowsVirtualKeyCode: 46, key: "Delete", code: "Delete" },
         Escape: { windowsVirtualKeyCode: 27, key: "Escape", code: "Escape" },
+        Tab: { windowsVirtualKeyCode: 9, key: "Tab", code: "Tab" },
         j: { windowsVirtualKeyCode: 74, key: "j", code: "KeyJ" },
+        z: { windowsVirtualKeyCode: 90, key: "z", code: "KeyZ" },
       };
       const k = codes[key];
       if (!k) throw new Error(`journeys cannot press ${key} yet`);
@@ -311,14 +339,18 @@ async function rig() {
       await b.send("Page.navigate", { url: origin + route });
       await sleep(900);
     },
+    /**
+     * Browser, then daemon, then home. Each step runs even when the one
+     * before it threw: a Chrome that would not exit is no reason to leave a
+     * daemon serving a home about to be deleted. The first error is the one
+     * reported.
+     */
     close: async () => {
-      await b.close();
-      proc.kill();
-      await new Promise((r) => {
-        proc.once("exit", r);
-        setTimeout(r, 3000);
-      });
+      let failure = null;
+      try { await b.close(); } catch (err) { failure ??= err; }
+      try { await daemon.stop(); } catch (err) { failure ??= err; }
       rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      if (failure) throw failure;
     },
   };
 }
@@ -335,7 +367,7 @@ async function makeCanvas(rig, title) {
     return true;
   })()`);
   await rig.click(".canvas-card.create button[type=submit]", "the Create button");
-  await until(
+  await untilOrSay(
     rig.b,
     `[...document.querySelectorAll(".canvas-card h3")].some(h => h.textContent === ${JSON.stringify(title)})`,
     `the canvas "${title}" to appear in the list`,
@@ -345,8 +377,27 @@ async function makeCanvas(rig, title) {
     return h.closest("a").getAttribute("href").split("/").pop();
   })()`);
   await rig.go(`/p/${id}`);
-  await until(rig.b, `!!document.querySelector(".world")`, "the canvas to open");
+  await untilOrSay(rig.b, `!!document.querySelector(".world")`, "the canvas to open");
   return id;
+}
+
+/**
+ * `until`, and when it times out, where the page is and what it shows.
+ *
+ * "never became true: the canvas … to appear in the list" was the whole of
+ * seven failures for days, and the Create form had printed the reason above
+ * the list each time ("this badge does not speak for usr_…"). A wait that
+ * fails should report what the page shows, or the next reader has to rebuild
+ * the scene to find it.
+ */
+async function untilOrSay(b, expression, what, ms) {
+  try {
+    await until(b, expression, what, ms);
+  } catch (err) {
+    const page = await b.ev(`({ at: location.pathname, says: (document.body?.innerText ?? "").replace(/\\s+/g, " ").trim().slice(0, 300) })`).catch(() => null);
+    const thrown = b.takeErrors();
+    throw new Error(`${err.message} — the page is at ${page?.at ?? "?"} and shows: ${page?.says || "(nothing)"}${thrown.length ? `; it threw: ${thrown[0]}` : ""}`);
+  }
 }
 
 /**
@@ -1335,18 +1386,28 @@ export const JOURNEYS = [
       const workSleptAfter = Date.now() - workedAt;
       if (workSleptAfter > 3500) throw new Error(`with an agent working the meadow took ${workSleptAfter}ms to fall asleep — the bound is 3500`);
       const workAsleep = (await groundNow(b)).frames;
+      // Watched for at least 1.5 s and until the cursor has visibly moved,
+      // up to 8 s. It was exactly 15 samples a tenth of a second apart, but the
+      // wander is CursorLayer's rAF animation, with random "thinking" pauses of
+      // up to 1.4 s, on a page that throttles rAF. A pause at the start of a
+      // fixed window left the cursor still for all of it, and the walk failed
+      // alone on 14 Oct 2026 with a test run beside it ("did not wander").
+      // Watching longer only lengthens the stretch in which the meadow must
+      // draw nothing.
       const seen = new Set();
-      for (let i = 0; i < 15; i++) {
+      const watchFrom = Date.now();
+      while (Date.now() - watchFrom < 1500 || (seen.size < 2 && Date.now() - watchFrom < 8000)) {
         seen.add(await cursorAt());
         await sleep(100);
       }
+      const watchedMs = Date.now() - watchFrom;
       const working = await groundNow(b);
-      if (seen.size < 2) throw new Error("the working agent's cursor did not wander, so this proves nothing about the wander");
+      if (seen.size < 2) throw new Error(`the working agent's cursor did not wander in ${watchedMs}ms, so this proves nothing about the wander`);
       if (working.frames !== workAsleep || working.state !== "asleep") {
         throw new Error(`the meadow drew ${working.frames - workAsleep} frames while the agent's cursor only wandered (state ${working.state})`);
       }
       journeyCli(rig, other, "--canvas", id, "session", "end");
-      return { webgl2: true, awake: awakeSeen, frames: moving.frames - before, trailAtStop: atLast, trailBetweenHops: atBetween, sleptAfterMs: sleptAfter, framesAsleep: 0, screenshot: shot, working: { sleptAfterMs: workSleptAfter, wanderPositions: seen.size, framesWhileWandering: 0 } };
+      return { webgl2: true, awake: awakeSeen, frames: moving.frames - before, trailAtStop: atLast, trailBetweenHops: atBetween, sleptAfterMs: sleptAfter, framesAsleep: 0, screenshot: shot, working: { sleptAfterMs: workSleptAfter, wanderPositions: seen.size, watchedMs, framesWhileWandering: 0 } };
     },
   },
   {
@@ -2091,14 +2152,23 @@ export const JOURNEYS = [
     /**
      * **The lift** (groups-by-hand phase 1): what the hand holds wears
      * `--shadow-lift` once the press has become a drag, and settles back to
-     * the card's shadow on release. Depth only — nothing grows, nothing
+     * an item's resting shadow on release. Depth only — nothing grows, nothing
      * fades, nothing leaves the hand — and a dragged group lifts its FRAME,
      * not each of its members.
      *
      * Asserted as STATE: the computed `box-shadow` is polled until it equals
      * the token (a probe element resolves `var(--shadow-lift)` and
-     * `var(--shadow-card)` in this page's theme, so the comparison is
+     * `var(--shadow-item)` in this page's theme, so the comparison is
      * theme-proof), never caught mid-transition.
+     *
+     * **The resting token moved on 8 Oct 2026, and this journey was not told.**
+     * It was written on 1 Oct (3679d9086), when `.item` rested in
+     * `--shadow-card`. bcc730381 gave items their own soft halo,
+     * `--shadow-item`, on Dion's ask, and kept `--shadow-card` for the chrome.
+     * It updated `lift.test.ts` and not this, so from then on the journey
+     * failed at "the card to rest in --shadow-card" on a product working as
+     * designed. The comparison is now against the token items actually rest
+     * in, and the lift must still differ from it.
      */
     what: "a dragged card wears the lift and settles back; a dragged group lifts its frame, not its members",
     async run(rig) {
@@ -2135,12 +2205,13 @@ export const JOURNEYS = [
         document.querySelector(".item").parentElement.appendChild(probe);
         probe.style.boxShadow = "var(--shadow-lift)";
         const lift = getComputedStyle(probe).boxShadow;
-        probe.style.boxShadow = "var(--shadow-card)";
-        const card = getComputedStyle(probe).boxShadow;
+        probe.style.boxShadow = "var(--shadow-item)";
+        const rest = getComputedStyle(probe).boxShadow;
         probe.remove();
-        return { lift, card };
+        return { lift, rest };
       })()`);
-      if (!tokens.lift || tokens.lift === "none" || tokens.lift === tokens.card) throw new Error(`--shadow-lift does not resolve to its own shadow (${tokens.lift})`);
+      if (!tokens.rest || tokens.rest === "none") throw new Error(`--shadow-item does not resolve to a shadow (${tokens.rest})`);
+      if (!tokens.lift || tokens.lift === "none" || tokens.lift === tokens.rest) throw new Error(`--shadow-lift does not resolve to its own shadow (${tokens.lift})`);
       const look = (itemId) => b.ev(`(() => {
         const el = document.querySelector(${sel(itemId)});
         if (!el) return null;
@@ -2185,13 +2256,13 @@ export const JOURNEYS = [
       // arrival motion, which a headless page throttles: wait for the STATE
       // it ends in (no transform) rather than read its scale as the lift's.
       await until(b, `/^(none|matrix\\(1, 0, 0, 1, 0, 0\\))$/.test(getComputedStyle(document.querySelector(${sel(card)})).transform)`, "the card to come to rest at its own size");
-      await shadowIs(card, tokens.card, "the card to rest in --shadow-card");
+      await shadowIs(card, tokens.rest, "the card to rest in --shadow-item");
       const rest = await look(card);
       const hand = await grab(`.item[data-item-id="${card}"] .item-titlebar`, "the card's title bar");
       // A press that has not moved is a click, and a click never lifts.
       await sleep(250);
       const pressed = await look(card);
-      if (pressed.lifted || pressed.shadow !== tokens.card) {
+      if (pressed.lifted || pressed.shadow !== tokens.rest) {
         await hand.release(0);
         throw new Error(`a press that never moved already lifted the card (${pressed.shadow})`);
       }
@@ -2209,7 +2280,7 @@ export const JOURNEYS = [
       if (mid.opacity !== "1") throw new Error(`a dragged card is translucent (opacity ${mid.opacity}) — the lift says moving, not a fade`);
       if (Math.abs(mid.w - rest.w) > 0.5 || Math.abs(mid.h - rest.h) > 0.5) throw new Error(`the lifted card changed size (${rest.w}×${rest.h} → ${mid.w}×${mid.h})`);
       if (Math.abs(mid.x - rest.x - 40) > 8) throw new Error(`the card is not under the hand: moved ${mid.x - rest.x}px for a 40px drag`);
-      await shadowIs(card, tokens.card, "the released card to settle back to --shadow-card");
+      await shadowIs(card, tokens.rest, "the released card to settle back to --shadow-item");
       const settled = await look(card);
       if (settled.lifted) throw new Error("the released card still wears .lifted");
 
@@ -2242,11 +2313,11 @@ export const JOURNEYS = [
       const frameMid = await look(group);
       const memberMid = await look(card);
       await handle.release(40);
-      if (memberMid.lifted || memberMid.shadow !== tokens.card) throw new Error(`a member of the dragged group lifted too (${memberMid.shadow}) — the frame lifts, its members ride flat`);
+      if (memberMid.lifted || memberMid.shadow !== tokens.rest) throw new Error(`a member of the dragged group lifted too (${memberMid.shadow}) — the frame lifts, its members ride flat`);
       if (Math.abs(frameMid.x - frameRest.x - 40) > 8) throw new Error(`the group is not under the hand: moved ${frameMid.x - frameRest.x}px for a 40px drag`);
       if (frameMid.transform !== "none" || Math.abs(frameMid.w - frameRest.w) > 0.5) throw new Error(`the lifted frame was transformed or resized (${frameRest.w}×${frameRest.h}, ${frameRest.transform} → ${frameMid.w}×${frameMid.h}, ${frameMid.transform})`);
       await shadowIs(group, "none", "the released group's frame to lie flat again");
-      return { cardDragMode: migrated ? "legacy" : "groups", lift: tokens.lift, card: tokens.card, memberDuringGroupDrag: memberMid.shadow };
+      return { cardDragMode: migrated ? "legacy" : "groups", lift: tokens.lift, rest: tokens.rest, memberDuringGroupDrag: memberMid.shadow };
     },
   },
   {
@@ -2470,7 +2541,7 @@ export const JOURNEYS = [
       const rest = await look(b);
 
       // The second person: a browser of its own, through the door as somebody else.
-      const m = await browser();
+      const m = await ownBrowser();
       try {
         const loaded = m.once("Page.loadEventFired");
         await m.send("Page.navigate", { url: rig.origin });
@@ -2743,10 +2814,12 @@ export const JOURNEYS = [
      * Style ›, move toward its children — and they vanished, because the
      * shortest path crosses the row below. Now a pointer heading into the open
      * submenu keeps it (`lib/menuaim.ts`): this walks that diagonal in small
-     * real mouse steps, crossing the row below Align, and chooses the far item;
-     * then walks straight DOWN from Align and insists the menu does let go.
+     * real mouse steps, crossing the row below Arrange, and chooses Align
+     * bottom, far down its submenu; then walks straight DOWN from Arrange and
+     * insists the menu does let go. (Align was a root row until 14 Oct 2026;
+     * it lives under Arrange › now.)
      */
-    what: "a diagonal from Align › across the row below keeps the submenu and chooses its far item; straight down lets it go",
+    what: "a diagonal from Arrange › across the row below keeps the submenu and chooses Align bottom; straight down lets it go",
     async run(rig) {
       const { b } = rig;
       await b.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
@@ -2783,32 +2856,32 @@ export const JOURNEYS = [
           if (each) await each(at);
         }
       };
-      // Both cards selected, so Align is offered; then the menu, by a real right-click.
+      // Both cards selected, so Arrange is offered; then the menu, by a real right-click.
       const a = await centre(`.item[data-item-id="${cards[0]}"]`), c = await centre(`.item[data-item-id="${cards[1]}"]`);
       await press(a, { button: "left" });
       await press(c, { button: "left", modifiers: 8 });
       const ROOT = `.context-menu:not(.context-submenu)`;
-      const ALIGN = `${ROOT} > .context-sub > button[aria-haspopup="menu"]`;
-      const findAlign = `[...document.querySelectorAll(${JSON.stringify(ALIGN)})].find((el) => el.textContent.trim().startsWith("Align"))`;
+      const ARRANGE = `${ROOT} > .context-sub > button[aria-haspopup="menu"]`;
+      const findArrange = `[...document.querySelectorAll(${JSON.stringify(ARRANGE)})].find((el) => el.textContent.trim().startsWith("Arrange"))`;
       const openMenu = async () => {
         await mouse("mouseMoved", c.x, c.y);
         await press(c, { button: "right" });
-        await until(b, `!!${findAlign} && !${findAlign}.disabled`, "the item menu, with Align offered for two cards", 4000);
-        const row = await b.ev(`(() => { const r = ${findAlign}.getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2), left: Math.round(r.left), h: Math.round(r.height) }; })()`);
-        // Onto Align from its left, the way a hand arrives, and wait out the beat.
+        await until(b, `!!${findArrange} && !${findArrange}.disabled`, "the item menu, with Arrange offered for two cards", 4000);
+        const row = await b.ev(`(() => { const r = ${findArrange}.getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2), left: Math.round(r.left), h: Math.round(r.height) }; })()`);
+        // Onto Arrange from its left, the way a hand arrives, and wait out the beat.
         await walk({ x: row.left + 4, y: row.y }, row, 4);
-        await until(b, `${findAlign}.getAttribute("aria-expanded") === "true" && !!document.querySelector(".context-submenu")`, "hovering Align to open its submenu", 2000);
+        await until(b, `${findArrange}.getAttribute("aria-expanded") === "true" && !!document.querySelector(".context-submenu")`, "hovering Arrange to open its submenu", 2000);
         return row;
       };
-      const subOpen = `${findAlign}?.getAttribute("aria-expanded") === "true" && !!document.querySelector(".context-submenu")`;
+      const subOpen = `${findArrange}?.getAttribute("aria-expanded") === "true" && !!document.querySelector(".context-submenu")`;
 
-      // 1. The diagonal: Align's centre to the submenu's LAST row, crossing the rows below Align.
+      // 1. The diagonal: Arrange's centre to Align bottom, far down its submenu, crossing the rows below Arrange.
       const row = await openMenu();
-      const far = await b.ev(`(() => { const all = [...document.querySelectorAll(".context-submenu button")]; const el = all[all.length - 1]; el.setAttribute("data-journey-far", ""); const r = el.getBoundingClientRect(); return { x: Math.round(r.left + 12), y: Math.round(r.top + r.height / 2), label: el.textContent.trim() }; })()`);
+      const far = await b.ev(`(() => { const el = [...document.querySelectorAll(".context-submenu button")].find((e) => e.textContent.trim() === "Align bottom"); el.setAttribute("data-journey-far", ""); const r = el.getBoundingClientRect(); return { x: Math.round(r.left + 12), y: Math.round(r.top + r.height / 2), label: el.textContent.trim() }; })()`);
       const crossed = new Set();
       const diagonalAt = Date.now();
       await walk(row, far, 24, async (at) => {
-        const over = await b.ev(`(() => { const el = document.elementFromPoint(${at.x}, ${at.y})?.closest("button"); return el && !el.closest(".context-submenu") && el !== ${findAlign} ? el.textContent.trim() : null; })()`);
+        const over = await b.ev(`(() => { const el = document.elementFromPoint(${at.x}, ${at.y})?.closest("button"); return el && !el.closest(".context-submenu") && el !== ${findArrange} ? el.textContent.trim() : null; })()`);
         if (over) crossed.add(over);
         if (!(await b.ev(subOpen))) throw new Error(`the submenu closed on the way to "${far.label}", at ${at.x},${at.y}${over ? ` over "${over}"` : ""}`);
       }, 50); // a hand's pace: ~1.3s, so the close grace (300ms) alone cannot carry it — only the aim can
@@ -2824,14 +2897,14 @@ export const JOURNEYS = [
       const deadline = Date.now() + 6000;
       let bottoms = await edges();
       while (bottoms[0] !== bottoms[1] && Date.now() < deadline) { await sleep(200); bottoms = await edges(); }
-      if (far.label !== "Bottom" || bottoms[0] !== bottoms[1]) throw new Error(`choosing "${far.label}" did not align the bottoms: ${JSON.stringify(bottoms)}`);
+      if (far.label !== "Align bottom" || bottoms[0] !== bottoms[1]) throw new Error(`choosing "${far.label}" did not align the bottoms: ${JSON.stringify(bottoms)}`);
 
-      // 2. Straight down from Align is choosing another row: the submenu lets go.
+      // 2. Straight down from Arrange is choosing another row: the submenu lets go.
       await openMenu();
-      const below = await b.ev(`(() => { const el = ${findAlign}.parentElement.nextElementSibling; const r = el.getBoundingClientRect(); return { x: ${row.x}, y: Math.round(r.top + r.height / 2), label: el.textContent.trim() }; })()`);
+      const below = await b.ev(`(() => { let el = ${findArrange}.parentElement.nextElementSibling; while (el && el.classList.contains("context-sep")) el = el.nextElementSibling; const r = el.getBoundingClientRect(); return { x: ${row.x}, y: Math.round(r.top + r.height / 2), label: el.textContent.trim() }; })()`);
       const leftAt = Date.now();
       await walk(row, below, 4);
-      await until(b, `!(${subOpen})`, `moving straight down onto "${below.label}" to close Align's submenu`, 1500);
+      await until(b, `!(${subOpen})`, `moving straight down onto "${below.label}" to close Arrange's submenu`, 1500);
       const letGoMs = Date.now() - leftAt;
       return { crossed: [...crossed], diagonalMs, chose: far.label, bottoms, straightDown: { onto: below.label, letGoMs } };
     },
@@ -3527,6 +3600,270 @@ export const JOURNEYS = [
     },
   },
   {
+    name: "critique",
+    /**
+     * **Critique, scene 3, in a browser** (critique phase 4,
+     * `docs/projects/critique/journey.md`). Add two critics in the Critics
+     * dialog, right-click a screen → *Critique with…* both, see their pins in
+     * two colours, post the read, see its split, press *Build both*, and see
+     * two variations each citing the note it answers.
+     *
+     * Its own home and daemon, because it writes a `config.json` naming the
+     * scripted harness as the machine's default. **Nothing here runs a
+     * model**: `packages/cli/test/fake-acp.mjs` is every harness, and its
+     * `FAKE_ACP_ACT` hook runs the act below as the summoned agent — the
+     * critics pin notes and say done through `isocan critique`, the builder
+     * adds two variations through `isocan add`. Every write the browser makes
+     * is the real request: the enrolment rings the parked rc through the ask
+     * route, and nothing on the page is stubbed.
+     *
+     * When it fails: `CRITIQUE_SHOT=<file.png>` keeps the screen at a press
+     * that could not land, and `CRITIQUE_RC_LOG=<file>` the parked rc's output.
+     */
+    what: "two critics added in the panel, asked from a screen's menu, pin in two colours; the read's split builds both",
+    async run(rig) {
+      const { b } = rig;
+      /** A button in a scrolling list, scrolled to and pressed for real. */
+      const pressButton = async (scope, text, what) => {
+        await until(b, `[...document.querySelectorAll(${JSON.stringify(scope)})].some(e => e.textContent.trim().startsWith(${JSON.stringify(text)}))`, what, 15_000);
+        await b.ev(`(() => { const el = [...document.querySelectorAll(${JSON.stringify(scope)})].find(e => e.textContent.trim().startsWith(${JSON.stringify(text)})); el.scrollIntoView({ block: "center" }); el.setAttribute("data-journey-press", ""); return true; })()`);
+        await sleep(300);
+        try { await rig.click("[data-journey-press]", what); } catch (err) {
+          if (process.env.CRITIQUE_SHOT) writeFileSync(process.env.CRITIQUE_SHOT, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+          throw err;
+        } finally { await b.ev(`(() => { document.querySelector("[data-journey-press]")?.removeAttribute("data-journey-press"); return true; })()`); }
+      };
+      /** Mark the pin whose title matches `pattern`, or say which pins there were. */
+      const markPin = async (pattern, attr, what) => {
+        const titles = await b.ev(`(() => {
+          document.querySelector("[${attr}]")?.removeAttribute("${attr}");
+          const pins = [...document.querySelectorAll(".pin")];
+          const p = pins.find((p) => new RegExp(${JSON.stringify(pattern)}).test(p.title));
+          if (!p) return pins.map((p) => p.title);
+          p.setAttribute("${attr}", "");
+          return null;
+        })()`);
+        if (titles) throw new Error(`no pin for ${what} (/${pattern}/) — the pins read:\n  ${titles.join("\n  ")}`);
+      };
+      const home = mkdtempSync(path.join(tmpdir(), "isocan-journey-critique-"));
+      const fakeAcp = path.join(repo, "packages/cli/test/fake-acp.mjs");
+      const act = path.join(home, "act.mjs");
+      writeFileSync(path.join(home, "identity.json"), JSON.stringify({ id: "usr_crit_ada", name: "Ada", createdAt: new Date().toISOString() }));
+      writeFileSync(path.join(home, "config.json"), JSON.stringify({ adapterEnv: ["FAKE_ACP_*"], acpAdapters: { "claude-code": [process.execPath, fakeAcp] }, defaultHarness: "claude-code" }));
+      // The turn's work. Two critics whose notes make one agreement (the
+      // price, both "make it larger") and one split (the photo: remove
+      // against make it larger) — the scene's own shape.
+      writeFileSync(act, `
+import { execFileSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
+import path from "node:path";
+const NOTES = {
+  "Inevitable": [["0.5,0.3", "risk", "2", "The photo pulls the eye from the one thing this screen is for. Remove the photo."],
+                 ["0.7,0.8", "risk", "1", "The price is too quiet beside the photo. Make the price larger."]],
+  "Form Follows Emotion": [["0.52,0.32", "risk", "1", "The photo is the only warmth on the screen, and it is small. Make the photo larger and warmer."],
+                           ["0.72,0.79", "risk", "2", "The price whispers. Make the price larger."]],
+};
+export default async function act({ prompt, cli, cwd }) {
+  const who = /^You are (.+?), an agent enrolled/.exec(prompt)?.[1] ?? "";
+  const canvasId = /"canvasId":\\s*"([^"]+)"/.exec(prompt)?.[1];
+  const threadId = /"threadId":\\s*"([^"]+)"/.exec(prompt)?.[1];
+  const payload = JSON.parse(prompt.slice(prompt.indexOf("returns):\\n") + 10));
+  const run = (...args) => execFileSync(process.execPath, [cli, "--canvas", canvasId, ...args], { encoding: "utf8" });
+  if (NOTES[who]) {
+    const item = payload.item?.id;
+    for (const [at, kind, q, text] of NOTES[who]) run("critique", "note", item, "--at", at, "--kind", kind, "--question", q, text);
+    run("critique", "done", item);
+    return;
+  }
+  const strings = [];
+  const walk = (v) => { if (typeof v === "string") strings.push(v); else if (v && typeof v === "object") Object.values(v).forEach(walk); };
+  walk(payload);
+  const brief = strings.find((s) => s.includes("build both sides of this split"));
+  if (!brief) return;
+  const ideas = ["without the photo", "the photo larger and warmer"];
+  const sides = [...brief.matchAll(/--title "([^"]+)" --prop parent=(\\S+) --prop critique\\.answers=([^\\s\`]+)/g)];
+  sides.forEach(([, title, parent, answers], i) => {
+    const file = path.join(cwd, "variation-" + (i + 1) + ".html");
+    writeFileSync(file, "<main><h1>Acme checkout</h1><p>" + ideas[i] + "</p><button>Pay</button></main>");
+    run("add", file, "--title", title.replace("<the idea>", ideas[i]), "--prop", "parent=" + parent, "--prop", "critique.answers=" + answers);
+  });
+  if (threadId) run("comment", "reply", threadId, "Built both: one " + ideas[0] + ", one with " + ideas[1] + ".");
+}
+`);
+      const daemon = await startDaemon(home);
+      const { origin } = daemon;
+      // The harness variables of whoever runs this must not decide who the
+      // CLI speaks as: the person is the home's identity, the agents are the rc's.
+      const env = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(origin).port, FAKE_ACP_ACT: act, FAKE_ACP_CLI: cli };
+      for (const name of ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_ENTRYPOINT", "ISOCAN_SESSION_ID", "ISOCAN_HARNESS", "CODEX_SANDBOX", "CODEX_THREAD_ID"]) delete env[name];
+      const runCli = (...args) => {
+        const out = execFileSync(process.execPath, [cli, "--json", ...args], { cwd: home, encoding: "utf8", env });
+        return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+      };
+      let rc = null;
+      let rcOut = "";
+      try {
+        const id = runCli("canvas", "create", "Acme critique").canvasId;
+        const screenFile = path.join(home, "checkout.html");
+        writeFileSync(screenFile, "<main><img alt='a loaf' src='data:,'><h1>Acme checkout</h1><p class='price'>$12</p><button>Pay</button></main>");
+        const screen = runCli("--canvas", id, "add", screenFile, "--title", "Checkout", "--size", "390x700").itemId;
+        const scoutDir = path.join(home, "scout");
+        execFileSync("mkdir", ["-p", scoutDir]);
+        runCli("--canvas", id, "rc", "add", "Scout", "--dir", scoutDir);
+        const snapshot = () => b.ev(`fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'canvas-groups-v4'}}).then(r => r.json()).then(r => r.canvas)`);
+
+        // The runner, parked: every agent's turn is the scripted harness.
+        rc = spawn(process.execPath, [cli, "--canvas", id, "rc"], { cwd: home, env, stdio: ["ignore", "pipe", "pipe"] });
+        rc.stdout.on("data", (c) => (rcOut += c));
+        rc.stderr.on("data", (c) => (rcOut += c));
+
+        // Ada, in the browser, with the experiment on.
+        const { address } = runCli("--canvas", id, "pass");
+        await b.send("Emulation.setDeviceMetricsOverride", { width: 1400, height: 900, deviceScaleFactor: 1, mobile: false });
+        const loaded = b.once("Page.loadEventFired");
+        await b.send("Page.navigate", { url: origin });
+        await Promise.race([loaded, sleep(15_000)]);
+        await b.ev(`(() => { localStorage.clear(); localStorage.setItem("isocan.experiments", JSON.stringify(["critique"])); return true; })()`);
+        await b.send("Page.navigate", { url: address });
+        await sleep(2500);
+        await until(b, `!!document.querySelector('.item[data-item-id="${screen}"]')`, "the Checkout screen on Ada's canvas", 20_000);
+        try {
+          await until(b, `fetch('/api/projects/${id}/rc', {headers:{'x-isocan-features':'canvas-groups-v4'}}).then(r => r.json()).then(r => r.parked)`, "Ada's rc to park", 20_000);
+        } catch (err) {
+          const seen = await b.ev(`fetch('/api/projects/${id}/rc', {headers:{'x-isocan-features':'canvas-groups-v4'}}).then(async r => r.status + " " + await r.text())`);
+          throw new Error(`${err.message} — the page reads ${seen}\n${rcOut.slice(-2000)}`);
+        }
+        const versionBefore = (await snapshot()).items[screen].currentVersionId;
+
+        // 1. Critics, from the palette: add two from the roster.
+        await rig.press("k", { meta: true });
+        await until(b, `!!document.querySelector('.palette')`, "the launcher");
+        await rig.type("Critics");
+        await rig.clickText(".palette-row", "Critics", "the Critics entry");
+        await until(b, `!!document.querySelector('button[aria-label="Add Inevitable"]')`, "the roster in the Critics dialog — read from the daemon", 10_000);
+        await rig.click('button[aria-label="Add Inevitable"]', "Add Inevitable");
+        await until(b, `!!document.querySelector('button[aria-label="Inevitable is on this canvas"]')`, "Inevitable added", 10_000);
+        await rig.click('button[aria-label="Add Form Follows Emotion"]', "Add Form Follows Emotion");
+        await until(b, `!!document.querySelector('button[aria-label="Form Follows Emotion is on this canvas"]')`, "Form Follows Emotion added", 10_000);
+        const cards = runCli("--canvas", id, "critic", "ls");
+        const names = cards.critics.map((c) => c.agentName).sort();
+        if (JSON.stringify(names) !== JSON.stringify(["Form Follows Emotion", "Inevitable"])) throw new Error(`critic ls reads ${JSON.stringify(names)} after the dialog's two adds`);
+        // The same card the terminal writes: the pack's lens, its headings included.
+        const inevitable = cards.critics.find((c) => c.agentName === "Inevitable");
+        if (inevitable.questions.length !== 3 || !inevitable.credit.endsWith("; not affiliated")) throw new Error(`the web's Inevitable is not the roster's: ${JSON.stringify(inevitable)}`);
+        await rig.press("Escape");
+        await until(b, `!document.querySelector('.modal-backdrop')`, "the Critics dialog to close");
+
+        // 2. Right-click the screen → Critique with… → both. Adding a card
+        // glided the camera to it, so first the whole canvas, as a person would.
+        await rig.click(".zoom-pct", "the zoom menu");
+        await rig.clickText(".zoom-menu-row", "Zoom to Fit", "Zoom to Fit");
+        await sleep(800);
+        const centre = await b.ev(`(() => { const r = document.querySelector('.item[data-item-id="${screen}"]').getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height * 0.6) }; })()`);
+        const mouse = (type, button) => b.send("Input.dispatchMouseEvent", { type, x: centre.x, y: centre.y, button, buttons: type === "mousePressed" ? (button === "right" ? 2 : 1) : 0, clickCount: 1 });
+        await mouse("mousePressed", "left");
+        await mouse("mouseReleased", "left");
+        await mouse("mousePressed", "right");
+        await mouse("mouseReleased", "right");
+        await sleep(500);
+        const menuText = await b.ev(`[...document.querySelectorAll('.context-menu [role=menuitem]')].map(e => e.textContent.trim()).join(' | ')`);
+        await rig.clickText(".context-menu [role=menuitem]", "Critique with", `Critique with… in the screen's menu (it offers: ${menuText})`);
+        await until(b, `document.querySelectorAll('.crit-pick input[type=checkbox]').length === 2`, "both critics offered", 10_000);
+        await b.ev(`(() => { document.querySelectorAll('.crit-pick label.crit-row').forEach((l, i) => l.setAttribute('data-crit', String(i))); return true; })()`);
+        await rig.click('label[data-crit="0"] input', "the first critic's box");
+        await rig.click('label[data-crit="1"] input', "the second critic's box");
+        await pressButton(".crit-actions button", "Ask 2 critics", "Ask 2 critics");
+        await until(b, `!document.querySelector('.modal-backdrop')`, "the ask to land and the dialog to close", 40_000);
+
+        // 3. Both enrolled on Ada's runner, capped, and their notes pinned in their colours.
+        await until(b, `fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'canvas-groups-v4'}}).then(r => r.json()).then(r => Object.values(r.canvas.agents ?? {}).filter(a => a.ceiling === 'note').length === 2)`, "both critics enrolled and capped at notes", 30_000);
+        try {
+          await until(b, `fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'canvas-groups-v4'}}).then(r => r.json()).then(r => Object.values(r.canvas.threads).some(t => t.comments.some(c => c.body.includes('every critic asked here is done'))))`, "the last critic to say the read is ready", 60_000);
+        } catch (err) {
+          // What the request thread holds instead: two "Done — " lines and
+          // no ready line is the critics racing each other, not a slow rc.
+          const said = Object.values((await snapshot()).threads)
+            .filter((t) => t.comments.some((c) => /^Done — /.test(c.body)))
+            .flatMap((t) => t.comments.map((c) => `${c.author.name}: ${c.body.split("\n").join(" / ").slice(0, 160)}`));
+          throw new Error(`${err.message} — the request thread reads:\n  ${said.join("\n  ") || "(no thread with a done line)"}\n--- rc ---\n${rcOut.slice(-1500)}`);
+        }
+        const canvas = await snapshot();
+        const critics = Object.values(canvas.agents).filter((a) => a.ceiling === "note");
+        const colours = await b.ev(`fetch('/api/colors').then(r => r.json())`);
+        const wanted = { Inevitable: "#0071e3" };
+        for (const c of critics) if (wanted[c.actor.name] && colours[c.actor.id]?.toLowerCase() !== wanted[c.actor.name]) throw new Error(`${c.actor.name} wears ${colours[c.actor.id]}, not its card's ${wanted[c.actor.name]}`);
+        const noteThreads = Object.values(canvas.threads).filter((t) => t.anchorItemId === screen && /^\*\*Risk\*\* · question/.test(t.comments[0].body));
+        if (noteThreads.length !== 4) throw new Error(`${noteThreads.length} notes on the screen, not 4`);
+        const pinColours = await b.ev(`(() => [...new Set([...document.querySelectorAll('.pin')].filter(p => /Risk/.test(p.title)).map(p => getComputedStyle(p.querySelector('.pin-avatar')).backgroundColor))])()`);
+        if (pinColours.length !== 2) throw new Error(`the notes' pins wear ${JSON.stringify(pinColours)} — not two colours`);
+
+        // A pin opens its note where it is pinned — once the arrival toasts,
+        // which sit over the screen's corner, have said their piece.
+        await until(b, `!document.querySelector('.toast-said')`, "the comment toasts to clear", 30_000);
+        await markPin("^(?=[\\s\\S]*Inevitable)(?=[\\s\\S]*question 2)", "data-journey-pin", "Inevitable's question-2 note");
+        const pinAt = await b.ev(`(() => { const r = document.querySelector('[data-journey-pin]').getBoundingClientRect(); return { x: r.left, y: r.top }; })()`);
+        // Two critics pinned one region, so the later pin overlaps this one:
+        // pressed on its uncovered top-left, where a person would aim.
+        await rig.click("[data-journey-pin]", "Inevitable's photo note", { x: 0.2, y: 0.2 });
+        await until(b, `/Remove the photo/.test(document.querySelector('.thread-popover')?.textContent ?? '')`, "the note opened");
+        const pop = await b.ev(`(() => { const r = document.querySelector('.thread-popover').getBoundingClientRect(); return { x: r.left, y: r.top }; })()`);
+        if (Math.abs(pop.x - pinAt.x) > 340 || Math.abs(pop.y - pinAt.y) > 240) throw new Error(`the note opened at ${JSON.stringify(pop)}, far from its pin at ${JSON.stringify(pinAt)}`);
+        await rig.press("Escape");
+
+        // 4. The request thread: post the read; it carries a split. Its pin
+        // shows its newest comment: the last critic's done with the ready line
+        // folded in, or, when the two critics finished at once, the ready line
+        // on its own (`owesReadyLine`, 14 Oct 2026).
+        await markPin("what do you make of|Done — |every critic", "data-journey-request", "the request thread");
+        await rig.click("[data-journey-request]", "the request thread's pin");
+        await pressButton(".thread-popover button", "Post the read", "Post the read… under the ready line");
+        await until(b, `/They split/.test(document.querySelector('.crit-read')?.textContent ?? '')`, "the read, with its split, in the dialog", 10_000);
+        await b.ev(`(() => { const t = document.querySelector('.crit-say textarea'); t.setAttribute('data-journey-say', ''); return true; })()`);
+        await rig.click("[data-journey-say]", "the words field");
+        await rig.type("Reduction against warmth: one would cut the photo, one would make it the voice.");
+        await pressButton(".crit-actions button", "Post the read", "Post the read");
+        await until(b, `!document.querySelector('.modal-backdrop')`, "the read posted");
+        // The thread closed for the dialog; open it again from its pin.
+        await until(b, `!document.querySelector('.toast-said')`, "the comment toasts to clear", 30_000);
+        await markPin("what do you make of|Done — |every critic|They agree|Reduction", "data-journey-request", "the request thread, again");
+        await rig.click("[data-journey-request]", "the request thread's pin, again");
+        await until(b, `[...document.querySelectorAll('.thread-popover .comment')].some(c => /They split/.test(c.textContent) && /Reduction against warmth/.test(c.textContent))`, "the posted read in the request thread", 10_000);
+
+        // 5. Build both.
+        await pressButton(".thread-popover button", "Build both", "Build both… under the posted read");
+        await until(b, `!!document.querySelector('.crit-pick input[type=radio]:checked')`, "a builder chosen", 10_000);
+        const builder = await b.ev(`document.querySelector('.crit-pick input[type=radio]:checked').closest('label').textContent`);
+        if (!/Scout/.test(builder)) throw new Error(`the builder offered is ${builder}, not Scout — a critic must never be`);
+        if (await b.ev(`[...document.querySelectorAll('.crit-pick label')].some(l => /Inevitable|Form Follows/.test(l.textContent))`)) throw new Error("a critic is offered as a builder");
+        await pressButton(".crit-actions button", "Build both", "Build both");
+        await until(b, `!document.querySelector('.modal-backdrop')`, "the ask to build both sent");
+        await until(b, `fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'canvas-groups-v4'}}).then(r => r.json()).then(r => Object.values(r.canvas.items).filter(i => i.properties.parent === '${screen}' && i.properties['critique.answers']).length === 2)`, "two variations of the screen", 60_000);
+        const after = await snapshot();
+        const variations = Object.values(after.items).filter((i) => i.properties.parent === screen);
+        const answered = new Set(variations.map((v) => v.properties["critique.answers"]));
+        const authors = new Set([...answered].map((t) => after.threads[t]?.comments[0].author.name));
+        if (answered.size !== 2 || authors.size !== 2) throw new Error(`the variations answer ${[...answered]} by ${[...authors]} — not one note per critic`);
+        for (const v of variations) await until(b, `!!document.querySelector('.item[data-item-id="${v.id}"]')`, `${v.title} on Ada's canvas`, 10_000);
+        if (versionBefore && after.items[screen].currentVersionId !== versionBefore) throw new Error("the screen's version moved — critics and the builder must leave it as it is");
+        const errors = b.takeErrors();
+        if (errors.length > 0) throw new Error(`the page threw: ${errors[0]}`);
+        return { critics: critics.map((c) => c.actor.name), pins: pinColours, variations: variations.map((v) => v.title) };
+      } catch (err) {
+        if (process.env.CRITIQUE_RC_LOG) writeFileSync(process.env.CRITIQUE_RC_LOG, rcOut);
+        throw err;
+      } finally {
+        if (rc) {
+          rc.kill("SIGINT");
+          await new Promise((r) => { rc.once("exit", r); setTimeout(r, 3000); });
+          if (rc.exitCode === null) rc.kill("SIGKILL");
+        }
+        await daemon.stop();
+        rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+        await b.send("Emulation.clearDeviceMetricsOverride").catch(() => {});
+      }
+    },
+  },
+  {
     name: "panels",
     /** The bug: the Personas panel's header collapsed to `display: block` and
      *  its icon sat on its own title, while every test passed. */
@@ -3791,6 +4128,1791 @@ export const JOURNEYS = [
         }
       } finally {
         await rig.b.ev(`(() => { window.fetch = window.__realFetch; return true; })()`);
+      }
+    },
+  },
+  {
+    name: "proactive-proposal",
+    /**
+     * **A proposal, and a delete that teaches** (proactive-agent phase 1,
+     * journey scene 1, `docs/projects/proactive-agent/phases.md`).
+     *
+     * The agent is a stub: the terminal speaking as Kit — `propose`, a parked
+     * `wait`, and `taste` — not a model. What is under test is the canvas:
+     * the proposal hangs beneath its source with its chip, ⌫ trashes it, a
+     * comment carrying `deleted` reaches the parked author, and the line it
+     * writes lands in the pinned taste note; then, with nothing parked for
+     * Kit, a second delete still happens and the toast says the note was not
+     * taken. Screenshots of both moments are returned for a person.
+     */
+    what: "a proposal hangs beneath its source; Delete trashes it, reaches its author, and the taste note gains a line",
+    async run(rig) {
+      const env = { ...process.env, ISOCAN_HOME: rig.home, ISOCAN_PORT: new URL(rig.origin).port };
+      const runCli = (args, extra = {}) =>
+        execFileSync(process.execPath, [cli, ...args], { cwd: rig.home, encoding: "utf8", env: { ...env, ...extra } });
+      const shot = async (name) => {
+        const file = path.join(tmpdir(), `isocan-proactive-${name}-${Date.now()}.png`);
+        writeFileSync(file, Buffer.from((await rig.b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+        return file;
+      };
+
+      writeFileSync(path.join(rig.home, "identity.json"), JSON.stringify({ id: "usr_pp_maya", name: "Maya", createdAt: new Date().toISOString() }));
+      runCli(["bench", "add", "Kit", "--actor", "usr_pp_kit", "--harness", "pi"]);
+      const kit = { ISOCAN_SESSION_ID: "journey-kit" };
+      runCli(["identity", "--as", "usr_pp_kit", "--name", "Kit"], kit);
+
+      const id = JSON.parse(runCli(["--json", "canvas", "create", "Acme Bakery"])).canvasId;
+      const page = path.join(rig.home, "checkout.html");
+      writeFileSync(page, "<!doctype html><title>Checkout</title><body style='font:16px system-ui;padding:24px'><h1>Checkout</h1><p>Sourdough loaf × 1</p><p><b>Total $8</b></p><p>Pickup: Saturday 9:00</p></body>");
+      const source = JSON.parse(runCli(["--json", "--canvas", id, "add", page, "--at", "0,0", "--size", "390x520", "--title", "Checkout"])).itemId;
+      const ask = JSON.parse(runCli(["--json", "--canvas", id, "comment", "add", "people miss the pickup slot", "--at", "420,40"]));
+      const commentId = ask.commentId ?? ask.comment?.id;
+      if (!commentId) throw new Error(`comment add named no comment: ${JSON.stringify(ask)}`);
+
+      const better = path.join(rig.home, "checkout-pickup-first.html");
+      writeFileSync(better, "<!doctype html><title>Checkout</title><body style='font:16px system-ui;padding:24px'><h1>Checkout</h1><p><b>Pickup: Saturday 9:00</b></p><p>Sourdough loaf × 1</p><p>Total $8</p></body>");
+      const why = "Summary before detail: the pickup time is what the person must check, so it comes first.";
+      const first = JSON.parse(runCli(["--json", "--canvas", id, "propose", source, better, "--cites", `comment:${commentId}`, "--why", why], kit)).itemId;
+
+      const { address } = JSON.parse(runCli(["--json", "--canvas", id, "pass"]));
+      await rig.b.ev(`(() => { localStorage.clear(); return true; })()`);
+      await rig.b.send("Page.navigate", { url: address });
+      await sleep(2500);
+      await until(rig.b, `!!document.querySelector(".world")`, "the canvas to open for Maya");
+      const mark = `document.querySelector('[data-proposal="${first}"]')`;
+      await until(rig.b, `!!${mark}?.querySelector(".proposal-chip")`, "the proposal's mark and chip", 10_000);
+      const chip = await rig.b.ev(`${mark}.querySelector(".proposal-chip").textContent`);
+      if (!/Maya's comment, “people miss the pickup slot”/.test(chip)) throw new Error(`the chip does not name its trigger: ${chip}`);
+      const geometry = await rig.b.ev(`(() => {
+        const s = document.querySelector('[data-item-id="${source}"]').getBoundingClientRect();
+        const p = document.querySelector('[data-item-id="${first}"]').getBoundingClientRect();
+        return { below: p.top >= s.bottom, overlap: !(p.right <= s.left || p.left >= s.right || p.bottom <= s.top || p.top >= s.bottom) };
+      })()`);
+      if (!geometry.below || geometry.overlap) throw new Error(`the proposal does not hang beneath its source: ${JSON.stringify(geometry)}`);
+      const terms = await rig.b.ev(`[...${mark}.querySelectorAll(".proposal-term")].map(t => t.firstChild.textContent)`);
+      if (!terms.includes("Summary before detail")) throw new Error(`the why underlines nothing: ${JSON.stringify(terms)}`);
+      const beneath = await shot("beneath");
+
+      // Kit appears and parks — the stub agent's lap, so the delete has somebody to reach.
+      runCli(["--canvas", id, "session", "start", "--label", "Kit 🤖"], kit);
+      const parked = spawn(process.execPath, [cli, "--canvas", id, "wait", "--json", "--timeout", "60"], { cwd: rig.home, env: { ...env, ...kit }, stdio: ["ignore", "pipe", "pipe"] });
+      let woke = "";
+      parked.stdout.on("data", (c) => (woke += c));
+      const exited = new Promise((r) => parked.once("exit", r));
+      await sleep(3000);
+
+      await rig.type("v");
+      await rig.click(`[data-item-id="${first}"] .item-titlebar .chrome-left`, "the proposal's title");
+      await until(rig.b, `!!document.querySelector('[data-item-id="${first}"].selected')`, "the proposal selected");
+      await rig.press("Delete");
+      await until(rig.b, `!document.querySelector('[data-item-id="${first}"]')`, "the proposal to leave the canvas");
+      await until(rig.b, `!!document.querySelector(".proposal-toast")`, "the delete's toast");
+      const taken = await rig.b.ev(`document.querySelector(".proposal-toast p").textContent`);
+      if (!/Kit will note what it taught/.test(taken)) throw new Error(`the toast does not say Kit will take the note: ${taken}`);
+      await rig.click(".proposal-toast input", "the toast's reason");
+      await rig.type("it pushed the total down");
+      await rig.press("Enter");
+      await Promise.race([exited, sleep(15_000)]);
+      if (!/"deleted":\s*"/.test(woke) || !woke.includes(first)) throw new Error(`Kit's wait did not wake on the delete's comment: ${woke.slice(0, 400)}`);
+      if (!woke.includes("it pushed the total down")) throw new Error("the reason did not travel with the comment");
+
+      // Kit answers the way the guide says: one line in the taste note.
+      runCli(["--canvas", id, "taste", "Keep the total near the button; move the pickup up, not the price down."], kit);
+      // Read back from the home: the note sits above everything, which may be
+      // off this viewport, and an item off screen is not drawn.
+      const note = JSON.parse(runCli(["--json", "--canvas", id, "taste"]));
+      if (!note.text.includes("- Keep the total near the button")) throw new Error(`the taste note did not gain the line: ${note.text}`);
+      const shown = JSON.parse(runCli(["--json", "--canvas", id, "show", note.itemId]));
+      if (shown.properties.taste !== "1" || shown.properties.context !== "pinned") throw new Error(`the taste note is not pinned: ${JSON.stringify(shown.properties)}`);
+
+      // Nobody parked now: the second delete still happens, and says the note was not taken.
+      runCli(["--canvas", id, "session", "end"], kit);
+      const second = JSON.parse(runCli(["--json", "--canvas", id, "propose", source, better, "--cites", `comment:${commentId}`, "--why", "Proximity: price beside the button.", "--hunch"], kit)).itemId;
+      await until(rig.b, `!!document.querySelector('[data-proposal="${second}"] .proposal-chip')`, "the second proposal's mark", 10_000);
+      await rig.click(`[data-item-id="${second}"] .item-titlebar .chrome-left`, "the second proposal's title");
+      await until(rig.b, `!!document.querySelector('[data-item-id="${second}"].selected')`, "the second proposal selected");
+      await rig.press("Delete");
+      await until(rig.b, `!document.querySelector('[data-item-id="${second}"]')`, "the second proposal to leave the canvas");
+      await until(rig.b, `/not taken/.test(document.querySelector(".proposal-toast p")?.textContent ?? "")`, "the toast to say the note was not taken");
+      const untaken = await shot("untaken");
+      const trash = JSON.parse(runCli(["--json", "--canvas", id, "trash", "ls"]));
+      const trashed = JSON.stringify(trash);
+      if (!trashed.includes(first) || !trashed.includes(second)) throw new Error("the deletes did not reach the trash");
+      const errors = rig.b.takeErrors();
+      if (errors.length > 0) throw new Error(`the page threw: ${errors[0]}`);
+      return { screenshots: { beneath, untaken } };
+    },
+  },
+  {
+    name: "proactive-night-watch",
+    /**
+     * **The night watch** (proactive-agent phase 2, journey scene 2,
+     * `docs/projects/proactive-agent/phases.md`).
+     *
+     * Its own home and daemon, because it writes a `config.json` naming the
+     * scripted harness: **no model runs**. `packages/cli/test/fake-acp.mjs`
+     * is Kit's harness and its `FAKE_ACP_ACT` hook is Kit — summoned by the
+     * real `isocan rc` on every Chat message, reading the night with
+     * `isocan goodnight read`, answering in the thread, and only after
+     * "That's the plan" writing the note and the promised frames, then
+     * filling what is still ticked and posting the brief.
+     *
+     * Maya types `/goodnight` in the Chat, steers once (naming Checkout for a
+     * rework), presses **That's the plan**, sees the note and a promised
+     * frame, and unticks the contrast check — its frame goes. The night fills
+     * the basket's frame and edits Checkout, the one original she named, and
+     * nothing else of hers. Then, with Kit dismissed, a second `/goodnight`
+     * writes a note that promises nothing and says why. Screenshots of the
+     * conversation and of the note with its frame are returned for a person.
+     */
+    what: "/goodnight opens a talk with the lead; That's the plan writes the note and frames; untick takes a frame; with nobody to answer the note promises nothing",
+    async run(rig) {
+      const { b } = rig;
+      const home = mkdtempSync(path.join(tmpdir(), "isocan-journey-night-"));
+      const kitDir = path.join(home, "kit");
+      const fakeAcp = path.join(repo, "packages/cli/test/fake-acp.mjs");
+      const act = path.join(home, "act.mjs");
+      execFileSync("mkdir", ["-p", kitDir]);
+      writeFileSync(path.join(home, "identity.json"), JSON.stringify({ id: "usr_night_maya", name: "Maya", createdAt: new Date().toISOString() }));
+      writeFileSync(path.join(home, "config.json"), JSON.stringify({ adapterEnv: ["FAKE_ACP_*"], acpAdapters: { "claude-code": [process.execPath, fakeAcp] }, defaultHarness: "claude-code" }));
+      // Kit, scripted: the conversation's three turns and the night's work.
+      writeFileSync(act, `
+import { execFileSync } from "node:child_process";
+import { existsSync, writeFileSync } from "node:fs";
+import path from "node:path";
+export default async function act({ prompt, cli, cwd }) {
+  const canvasId = /"canvasId":\\s*"([^"]+)"/.exec(prompt)?.[1];
+  const run = (...args) => execFileSync(process.execPath, [cli, "--canvas", canvasId, ...args], { encoding: "utf8" });
+  const json = (...args) => JSON.parse(execFileSync(process.execPath, [cli, "--json", "--canvas", canvasId, ...args], { encoding: "utf8" }));
+  const read = json("goodnight", "read");
+  if (!read.youLead || !read.conversation) return;
+  const listed = json("comment", "ls");
+  const main = (Array.isArray(listed) ? listed : listed.threads).find((t) => t.main);
+  const at = main.comments.findIndex((c) => c.id === read.conversation.askId);
+  const kitSaid = main.comments.slice(at + 1).some((c) => c.author.name === "Kit");
+  if (read.conversation.planned) {
+    json("goodnight", "note",
+      "--promise", "Basket | three takes on the empty basket, one a sketch | three takes",
+      "--promise", "Order history | check the red against contrast | one take",
+      "--edit", "Checkout | pickup first | one new version",
+      "--thought", "The basket is the first thing a regular sees on a slow week.");
+    run("comment", "reply", main.id, "The note is on the canvas: untick anything you do not want. I start in a moment.");
+    const go = path.join(cwd, "night-go");
+    for (let i = 0; i < 240 && !existsSync(go); i++) await new Promise((r) => setTimeout(r, 250));
+    const now = json("goodnight", "show", "--for", "Maya");
+    for (const line of now.lines.filter((l) => l.ticked)) {
+      const file = path.join(cwd, "take-" + line.n + ".html");
+      if (line.edit) {
+        writeFileSync(file, "<!doctype html><title>Checkout</title><body style='font:16px system-ui;padding:24px'><h1>Checkout</h1><p><b>Pickup: Saturday 9:00</b></p><p>Sourdough loaf × 1</p><p>Total $8</p></body>");
+        run("goodnight", "fill", line.on, file);
+      } else {
+        writeFileSync(file, "<!doctype html><title>Basket</title><body style='font:16px system-ui;padding:24px'><h1>Your basket is empty</h1><p>Today's loaf: sourdough. Order by Friday.</p></body>");
+        run("goodnight", "fill", line.frame, file, "--hunch", "--why", "Empty states teach: show the first step, not the void.");
+      }
+    }
+    run("goodnight", "done", "One hunch on the empty basket. Checkout reworked, pickup first. You unticked the contrast check, so I left it alone.");
+    return;
+  }
+  const settled = read.settled.map((s) => s.what).join("; ") || "nothing yet";
+  const open = read.open.map((s) => s.what).join("; ") || "nothing";
+  if (!kitSaid) {
+    run("comment", "reply", main.id, "**Settled today:** " + settled + ". **Left open:** " + open + ". **Tonight I could try:** three takes on the empty Basket, one a sketch (an empty state should teach the first step); a contrast check of the red on Order history; and a rework of Checkout with the pickup time first, but only if you name it for editing.");
+    return;
+  }
+  run("comment", "reply", main.id, "The plan as it stands: three takes on the Basket, beside it; the contrast check on Order history; Checkout reworked, pickup first, because you named it. Say that's the plan when it is right.");
+}
+`);
+      const daemon = await startDaemon(home);
+      const { origin } = daemon;
+      const env = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(origin).port, FAKE_ACP_ACT: act, FAKE_ACP_CLI: cli };
+      for (const name of ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_ENTRYPOINT", "ISOCAN_SESSION_ID", "ISOCAN_HARNESS", "CODEX_SANDBOX", "CODEX_THREAD_ID"]) delete env[name];
+      const runCli = (...args) => {
+        const out = execFileSync(process.execPath, [cli, "--json", ...args], { cwd: home, encoding: "utf8", env });
+        return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+      };
+      const shot = async (name) => {
+        const file = path.join(tmpdir(), `isocan-night-${name}-${Date.now()}.png`);
+        writeFileSync(file, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+        return file;
+      };
+      let rc = null;
+      let rcOut = "";
+      try {
+        const id = runCli("canvas", "create", "Acme Bakery").canvasId;
+        const screens = {};
+        for (const [i, title, words] of [[0, "Basket", "Your basket is empty."], [1, "Checkout", "Sourdough loaf × 1 · Total $8 · Pickup: Saturday 9:00"], [2, "Order history", "Last week: two loaves"]]) {
+          const file = path.join(home, `screen-${i}.html`);
+          writeFileSync(file, `<!doctype html><title>${title}</title><body style='font:16px system-ui;padding:24px'><h1>${title}</h1><p>${words}</p></body>`);
+          screens[title] = runCli("--canvas", id, "add", file, "--title", title, "--size", "390x520", "--at", `${i * 470},0`).itemId;
+        }
+        runCli("--canvas", id, "comment", "add", "/ask Should the empty basket suggest a loaf?", "--item", screens.Basket);
+        runCli("--canvas", id, "rc", "add", "Kit", "--dir", kitDir);
+        runCli("--canvas", id, "canvas", "edit", "--prop", "proactive=Kit");
+        const versions = (itemId) => runCli("--canvas", id, "show", itemId).versions.length;
+        const before = { Basket: versions(screens.Basket), Checkout: versions(screens.Checkout), "Order history": versions(screens["Order history"]) };
+
+        rc = spawn(process.execPath, [cli, "--canvas", id, "rc"], { cwd: home, env, stdio: ["ignore", "pipe", "pipe"] });
+        rc.stdout.on("data", (c) => (rcOut += c));
+        rc.stderr.on("data", (c) => (rcOut += c));
+
+        const { address } = runCli("--canvas", id, "pass");
+        await b.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+        const loaded = b.once("Page.loadEventFired");
+        await b.send("Page.navigate", { url: origin });
+        await Promise.race([loaded, sleep(15_000)]);
+        await b.ev(`(() => { localStorage.clear(); return true; })()`);
+        await b.send("Page.navigate", { url: address });
+        await sleep(2500);
+        await until(b, `!!document.querySelector('.item[data-item-id="${screens.Basket}"]')`, "the Basket screen on Maya's canvas", 20_000);
+        await until(b, `fetch('/api/projects/${id}/rc', {headers:{'x-isocan-features':'canvas-groups-v4'}}).then(r => r.json()).then(r => r.parked)`, "Maya's rc to park", 20_000);
+        const chatText = () => b.ev(`document.querySelector(".main-panel .main-msgs")?.textContent ?? ""`);
+
+        // 1. /goodnight, in the Chat: Kit opens with what it read.
+        await rig.click(".main-panel form textarea", "the Chat's input");
+        await rig.type("/goodnight long day, the basket bugs me");
+        await rig.press("Enter");
+        await until(b, `(document.querySelector(".main-panel .main-msgs")?.textContent ?? "").includes("Tonight I could try")`, "Kit's opener in the Chat", 45_000);
+        const opener = await chatText();
+        if (!/Left open:.*Should the empty basket suggest a loaf\?/.test(opener)) throw new Error(`the opener does not say what is left open: ${opener.slice(-600)}`);
+
+        // 2. She steers, naming Checkout; Kit restates the plan.
+        await rig.click(".main-panel form textarea", "the Chat's input");
+        await rig.type("rework the checkout screen too, pickup first");
+        await rig.press("Enter");
+        await until(b, `(document.querySelector(".main-panel .main-msgs")?.textContent ?? "").includes("The plan as it stands")`, "Kit restating the plan", 45_000);
+        let early = null;
+        try { early = runCli("--canvas", id, "goodnight", "show"); } catch { /* no note yet: the point */ }
+        if (early) throw new Error("a note was written before Maya said that's the plan");
+        await until(b, `!!document.querySelector(".goodnight-plan button")`, "the That's the plan control under the conversation");
+        const conversation = await shot("conversation");
+
+        // 3. That's the plan: the note, and a promised frame under each line's item.
+        await rig.click(".goodnight-plan button", "That's the plan");
+        await until(b, `!!document.querySelector("[data-handoff]") && document.querySelectorAll('[data-promise="promised"]').length === 2`, "the note and its two promised frames", 45_000);
+        const note = runCli("--canvas", id, "goodnight", "show");
+        const [basketLine, contrastLine, reworkLine] = note.lines;
+        if (!basketLine.frame || !contrastLine.frame || reworkLine.frame || !reworkLine.edit) throw new Error(`the note's lines are not as agreed: ${JSON.stringify(note.lines)}`);
+        const under = await b.ev(`(() => {
+          const s = document.querySelector('[data-item-id="${screens.Basket}"]').getBoundingClientRect();
+          const f = document.querySelector('[data-item-id="${basketLine.frame}"]').getBoundingClientRect();
+          return f.top >= s.bottom && Math.abs(f.left - s.left) < 2;
+        })()`);
+        if (!under) throw new Error("the promised frame does not hang beneath the Basket");
+        await rig.click(".zoom-pct", "the zoom menu");
+        await rig.clickText(".zoom-menu-row", "Zoom to Fit", "Zoom to Fit");
+        await sleep(800);
+        const noteShot = await shot("note-and-frame");
+
+        // 3b. No note covers anything (the 33% screenshot, 14 Oct 2026): each
+        // proposal's note and tonight's list, measured against every item drawn
+        // and every other note, at Fit, 100%, 51% and 33% — light, and dark.
+        const apart = async (at) => {
+          const hits = await b.ev(`(() => {
+            const box = (e) => e.getBoundingClientRect();
+            const hit = (a, c) => a.left < c.right && c.left < a.right && a.top < c.bottom && c.top < a.bottom;
+            const notes = [...document.querySelectorAll(".proposal-note")].filter((n) => box(n).width > 0 && box(n).height > 0)
+              .map((n) => ({ of: n.closest("[data-proposal]")?.dataset.proposal ?? n.dataset.handoff, r: box(n) }));
+            const items = [...document.querySelectorAll(".item[data-item-id]")].map((e) => ({ id: e.dataset.itemId, r: box(e) }));
+            const out = [];
+            for (const n of notes) {
+              for (const i of items) if (i.id !== n.of && hit(n.r, i.r)) out.push(n.of + " over item " + i.id);
+              for (const m of notes) if (m !== n && hit(n.r, m.r)) out.push(n.of + " over note " + m.of);
+            }
+            return { out, notes: notes.length };
+          })()`);
+          if (hits.notes === 0) throw new Error(`no note is drawn at ${at}`);
+          if (hits.out.length) throw new Error(`a note covers something at ${at}: ${hits.out.join("; ")}`);
+        };
+        const zoomTo = async (label, outs) => {
+          await rig.click(".zoom-pct", "the zoom menu");
+          await rig.clickText(".zoom-menu-row", label, label);
+          for (let i = 0; i < outs; i++) await rig.click('.zoom-step[title="Zoom out"]', "zoom out");
+          await sleep(600);
+        };
+        const themed = async (name) => {
+          const files = {};
+          for (const theme of ["light", "dark"]) {
+            await b.ev(`(() => { document.documentElement.dataset.theme = ${JSON.stringify(theme)}; return true; })()`);
+            await sleep(200);
+            files[theme] = await shot(`${name}-${theme}`);
+          }
+          await b.ev(`(() => { document.documentElement.dataset.theme = "light"; return true; })()`);
+          return files;
+        };
+        await apart("Zoom to Fit");
+        // 100%, centred on the Basket's promised frame (selected, framed, then
+        // let go, so its note is placed rather than opened).
+        await rig.click(`[data-item-id="${basketLine.frame}"] .item-titlebar .chrome-left`, "the Basket's promised frame");
+        await zoomTo("Zoom to Selection", 0);
+        await zoomTo("Zoom to 100%", 0);
+        await rig.press("Escape");
+        await sleep(400);
+        await apart("100%");
+        const at100 = await themed("night-100");
+        await zoomTo("Zoom to 100%", 3);
+        await apart("51%");
+        await zoomTo("Zoom to Fit", 0);
+        await zoomTo("Zoom to 100%", 5);
+        await apart("33%");
+        const at33 = await themed("night-33");
+        await zoomTo("Zoom to Fit", 0);
+
+        // 4. She unticks the contrast check: its frame goes, the line stays as an offer.
+        // At this zoom tonight's list may stand as its chip alone (pointing at
+        // it opens it) or not at all (selecting the note opens it).
+        const listMode = await b.ev(`document.querySelector("[data-handoff]").closest("[data-card]").dataset.card`);
+        if (listMode === "chip") {
+          const tonight = await b.ev(`(() => { const r = document.querySelector("[data-handoff] .proposal-chip").getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`);
+          await b.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: tonight.x, y: tonight.y });
+        } else if (listMode === "none") {
+          await rig.click(`[data-item-id="${note.itemId}"] .item-titlebar .chrome-left`, "the goodnight note");
+        }
+        await sleep(200);
+        await rig.click(`[data-handoff] [data-line="2"] input`, "the contrast check's box");
+        await until(b, `!document.querySelector('[data-item-id="${contrastLine.frame}"]')`, "the contrast check's frame to go");
+        const unticked = runCli("--canvas", id, "goodnight", "show").lines[1];
+        if (unticked.ticked || unticked.frame) throw new Error(`line 2 is still a promise: ${JSON.stringify(unticked)}`);
+
+        // 5. The night: Kit fills what is still ticked, and says so.
+        writeFileSync(path.join(kitDir, "night-go"), "go");
+        await until(b, `fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'canvas-groups-v4'}}).then(r => r.json()).then(r => Object.values(r.canvas.threads).some(t => t.main && t.comments.some(c => c.goodnight?.step === "brief")))`, "the night's brief in the Chat", 60_000);
+        const frame = runCli("--canvas", id, "show", basketLine.frame);
+        if (frame.properties.proposal !== "hunch") throw new Error(`the basket's frame was not filled as a hunch: ${JSON.stringify(frame.properties)}`);
+        const after = { Basket: versions(screens.Basket), Checkout: versions(screens.Checkout), "Order history": versions(screens["Order history"]) };
+        if (after.Checkout !== before.Checkout + 1) throw new Error(`Checkout, named for editing, has ${after.Checkout} versions — not one more than ${before.Checkout}`);
+        if (after.Basket !== before.Basket || after["Order history"] !== before["Order history"]) throw new Error(`the night edited an original nobody named: ${JSON.stringify({ before, after })}`);
+        if (JSON.stringify(runCli("--canvas", id, "ls")).includes(contrastLine.frame)) throw new Error("the unticked line's frame came back");
+
+        // 6. Kit dismissed: a second goodnight promises nothing, and says why.
+        runCli("--canvas", id, "rc", "remove", "Kit");
+        await rig.click(".main-panel form textarea", "the Chat's input");
+        await rig.type("/goodnight again");
+        await rig.press("Enter");
+        await until(b, `/Nothing can answer overnight/.test(document.querySelector(".main-panel [role=alert]")?.textContent ?? "")`, "the Chat to say nothing can answer", 20_000);
+        const quiet = runCli("--canvas", id, "goodnight", "show");
+        if (quiet.itemId === note.itemId || quiet.lines.length !== 0 || !/Nothing can answer overnight: "Kit" is named to lead here/.test(quiet.nothing ?? "")) throw new Error(`the second note does not promise nothing with its reason: ${JSON.stringify(quiet)}`);
+        const errors = b.takeErrors();
+        if (errors.length > 0) throw new Error(`the page threw: ${errors[0]}`);
+        return { screenshots: { conversation, note: noteShot, at100, at33 } };
+      } catch (err) {
+        throw new Error(`${err.message}\n--- rc ---\n${rcOut.slice(-3000)}`);
+      } finally {
+        if (rc) {
+          rc.kill("SIGINT");
+          await new Promise((r) => { rc.once("exit", r); setTimeout(r, 3000); });
+          if (rc.exitCode === null) rc.kill("SIGKILL");
+        }
+        await daemon.stop();
+        rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      }
+    },
+  },
+  {
+    name: "proactive-morning",
+    /**
+     * **The morning review** (proactive-agent phase 3, journey scene 3,
+     * `docs/projects/proactive-agent/phases.md`).
+     *
+     * The night watch's fixture — its own home, the real `isocan rc`, and
+     * `packages/cli/test/fake-acp.mjs` as Kit, so **no model runs** — with
+     * Maya's half driven from her terminal: she opens the canvas in the
+     * browser (her seen mark), says `/goodnight`, names Checkout for a
+     * rework and says that's the plan. Kit promises two takes beside the
+     * Basket and a regroup of Order history, edits Checkout, fills the
+     * Basket's frames (one sure, one a hunch), fails the regroup with its
+     * reason and the take it would have shown, and posts the brief with
+     * what it left alone, ready-by now.
+     *
+     * She comes back (a reload: her mark is older than ready-by): the
+     * desktop "While you were away" panel leads with the brief, then the
+     * proposals highest confidence first, the failed promise with its
+     * reason, Left alone, and Checkout with the version before; her other
+     * screens are byte for byte what they were. Seeing it closes the note.
+     * After a visit newer than ready-by (`isocan seen --mark`) there is no
+     * review. Screenshots of the panel, light and dark, for a person.
+     */
+    what: "back after /goodnight: the desktop away panel leads with the brief, ≤5 proposals sure-first, a failed promise with its reason, Left alone, the named original's version before; a newer seen mark shows none",
+    async run(rig) {
+      const { b } = rig;
+      const home = mkdtempSync(path.join(tmpdir(), "isocan-journey-morning-"));
+      const kitDir = path.join(home, "kit");
+      const fakeAcp = path.join(repo, "packages/cli/test/fake-acp.mjs");
+      const act = path.join(home, "act.mjs");
+      execFileSync("mkdir", ["-p", kitDir]);
+      writeFileSync(path.join(home, "identity.json"), JSON.stringify({ id: "usr_morning_maya", name: "Maya", createdAt: new Date().toISOString() }));
+      writeFileSync(path.join(home, "config.json"), JSON.stringify({ adapterEnv: ["FAKE_ACP_*"], acpAdapters: { "claude-code": [process.execPath, fakeAcp] }, defaultHarness: "claude-code" }));
+      // Kit, scripted: open, restate, then — on "That's the plan" — the note and the whole night.
+      writeFileSync(act, `
+import { execFileSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
+import path from "node:path";
+export default async function act({ prompt, cli, cwd }) {
+  const canvasId = /"canvasId":\\s*"([^"]+)"/.exec(prompt)?.[1];
+  const run = (...args) => execFileSync(process.execPath, [cli, "--canvas", canvasId, ...args], { encoding: "utf8" });
+  const json = (...args) => JSON.parse(execFileSync(process.execPath, [cli, "--json", "--canvas", canvasId, ...args], { encoding: "utf8" }));
+  const read = json("goodnight", "read");
+  if (!read.youLead || !read.conversation) return;
+  const listed = json("comment", "ls");
+  const main = (Array.isArray(listed) ? listed : listed.threads).find((t) => t.main);
+  const at = main.comments.findIndex((c) => c.id === read.conversation.askId);
+  const kitSaid = main.comments.slice(at + 1).some((c) => c.author.name === "Kit");
+  if (read.conversation.planned) {
+    if (main.comments.some((c) => c.goodnight?.step === "brief")) return;
+    const note = json("goodnight", "note",
+      "--promise", "Basket | a finished take on the empty basket | one take",
+      "--promise", "Basket | a sketch of the empty basket | one sketch",
+      "--promise", "Order history | group past orders by week | one take",
+      "--edit", "Checkout | pickup first | one new version",
+      "--ready", new Date().toISOString());
+    const page = (title, body) => "<!doctype html><title>" + title + "</title><body style='font:16px system-ui;padding:24px'><h1>" + title + "</h1>" + body + "</body>";
+    for (const line of note.lines) {
+      const file = path.join(cwd, "take-" + line.n + ".html");
+      if (line.edit) {
+        writeFileSync(file, page("Checkout", "<p><b>Pickup: Saturday 9:00</b></p><p>Sourdough loaf × 1</p><p>Total $8</p>"));
+        run("goodnight", "fill", line.on, file);
+      } else if (line.n === 1) {
+        writeFileSync(file, page("Your basket is empty", "<p>Today's loaf: sourdough. Order by Friday.</p>"));
+        run("goodnight", "fill", line.frame, file, "--why", "Empty states teach: show the first step, not the void.");
+      } else if (line.n === 2) {
+        writeFileSync(file, page("Nothing here yet", "<p>A loaf, sketched.</p>"));
+        run("goodnight", "fill", line.frame, file, "--hunch", "--why", "A sketch first: the warmth of the empty state is the open question.");
+      } else {
+        writeFileSync(file, page("Order history", "<p>Week of 6 Oct: two loaves</p>"));
+        run("goodnight", "fill", line.frame, file, "--failed", "every take broke the list's scan line");
+      }
+    }
+    run("goodnight", "done", "Two takes on the basket: one I'm sure of, one hunch. Checkout reworked, pickup first. The order-history regroup did not work.",
+      "--left", "Ravi's note about delivery | a business decision, not a design one");
+    return;
+  }
+  if (!kitSaid) {
+    run("comment", "reply", main.id, "**Tonight I could try:** two takes on the empty Basket, one a sketch; a regroup of Order history by week; and Checkout reworked with the pickup time first, if you name it for editing.");
+    return;
+  }
+  run("comment", "reply", main.id, "The plan as it stands: two takes on the Basket, beside it; the Order history regroup; Checkout reworked, pickup first, because you named it. Say that's the plan when it is right.");
+}
+`);
+      const daemon = await startDaemon(home);
+      const { origin } = daemon;
+      const env = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(origin).port, FAKE_ACP_ACT: act, FAKE_ACP_CLI: cli };
+      for (const name of ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_ENTRYPOINT", "ISOCAN_SESSION_ID", "ISOCAN_HARNESS", "CODEX_SANDBOX", "CODEX_THREAD_ID"]) delete env[name];
+      const runCli = (...args) => {
+        const out = execFileSync(process.execPath, [cli, "--json", ...args], { cwd: home, encoding: "utf8", env });
+        return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+      };
+      const shot = async (name) => {
+        const file = path.join(tmpdir(), `isocan-morning-${name}-${Date.now()}.png`);
+        writeFileSync(file, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+        return file;
+      };
+      const chat = (id) => {
+        const listed = runCli("--canvas", id, "comment", "ls");
+        return ((Array.isArray(listed) ? listed : listed.threads).find((t) => t.main)?.comments ?? []);
+      };
+      const waitFor = async (test, what, ms = 45_000) => {
+        for (const end = Date.now() + ms; Date.now() < end; await sleep(400)) if (test()) return;
+        throw new Error(`timed out waiting for ${what}`);
+      };
+      let rc = null;
+      let rcOut = "";
+      try {
+        const id = runCli("canvas", "create", "Acme Bakery").canvasId;
+        const screens = {};
+        for (const [i, title, words] of [[0, "Basket", "Your basket is empty."], [1, "Checkout", "Sourdough loaf × 1 · Total $8 · Pickup: Saturday 9:00"], [2, "Order history", "Last week: two loaves"], [3, "Menu", "Sourdough, rye, focaccia"]]) {
+          const file = path.join(home, `screen-${i}.html`);
+          writeFileSync(file, `<!doctype html><title>${title}</title><body style='font:16px system-ui;padding:24px'><h1>${title}</h1><p>${words}</p></body>`);
+          screens[title] = runCli("--canvas", id, "add", file, "--title", title, "--size", "390x520", "--at", `${i * 470},0`).itemId;
+        }
+        runCli("--canvas", id, "rc", "add", "Kit", "--dir", kitDir);
+        runCli("--canvas", id, "canvas", "edit", "--prop", "proactive=Kit");
+        const current = (itemId) => { const s = runCli("--canvas", id, "show", itemId); return { versions: s.versions.length, current: s.currentVersionId, hash: s.versions.find((v) => v.id === s.currentVersionId)?.blobHash ?? null }; };
+        const before = Object.fromEntries(Object.entries(screens).map(([t, itemId]) => [t, current(itemId)]));
+
+        rc = spawn(process.execPath, [cli, "--canvas", id, "rc"], { cwd: home, env, stdio: ["ignore", "pipe", "pipe"] });
+        rc.stdout.on("data", (c) => (rcOut += c));
+        rc.stderr.on("data", (c) => (rcOut += c));
+
+        // The evening visit: Maya's seen mark is written now, before the night.
+        const { address } = runCli("--canvas", id, "pass");
+        await b.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+        const loaded = b.once("Page.loadEventFired");
+        await b.send("Page.navigate", { url: origin });
+        await Promise.race([loaded, sleep(15_000)]);
+        await b.ev(`(() => { localStorage.clear(); localStorage.setItem("isocan.theme", "light"); return true; })()`);
+        await b.send("Page.navigate", { url: address });
+        await sleep(2500);
+        await until(b, `!!document.querySelector('.item[data-item-id="${screens.Basket}"]')`, "the Basket screen on Maya's canvas", 20_000);
+        await until(b, `fetch('/api/projects/${id}/rc', {headers:{'x-isocan-features':'canvas-groups-v4'}}).then(r => r.json()).then(r => r.parked)`, "Maya's rc to park", 20_000);
+        if (await b.ev(`!!document.querySelector("[data-away-panel]")`)) throw new Error("a morning review showed before any goodnight");
+        await sleep(1500); // the visit's mark lands
+
+        // The goodnight, from her terminal: a talk, Checkout named, that's the plan.
+        const asked = runCli("--canvas", id, "goodnight", "start", "the basket bugs me");
+        await waitFor(() => chat(id).some((c) => /Tonight I could try/.test(c.body)), "Kit's opener");
+        runCli("--canvas", id, "comment", "reply", asked.threadId, "rework the checkout screen too, pickup first");
+        await waitFor(() => chat(id).some((c) => /The plan as it stands/.test(c.body)), "Kit restating the plan");
+        runCli("--canvas", id, "goodnight", "plan");
+        // The tab she said goodnight in stays open all night, and the review is
+        // owed to her coming back, not to that tab re-rendering. It did mount
+        // mid-night (15 Oct 2026): the desktop gate read the note on every
+        // render, phase 6's ripple pulse re-rendered the canvas on Kit's first
+        // fill, the review closed the note, and Kit's named edit of Checkout
+        // was refused, so no brief ever came. Watched while the night runs.
+        for (const end = Date.now() + 90_000; ; await sleep(400)) {
+          if (await b.ev(`!!document.querySelector("[data-away-panel]")`)) throw new Error("the morning review showed in the evening's own tab during the night (it closes the note, and the night's named edit is then refused)");
+          if (chat(id).some((c) => c.goodnight?.step === "brief")) break;
+          if (Date.now() > end) throw new Error("timed out waiting for the night's brief");
+        }
+        const review = runCli("--canvas", id, "goodnight", "review");
+        if (!review.due) throw new Error(`the review is not due after the night: ${review.notDue}`);
+
+        // The morning: she comes back. The panel leads with the brief.
+        await b.send("Page.reload", {});
+        await sleep(2500);
+        await until(b, `!!document.querySelector("[data-away-panel] [data-morning]")`, "the morning review in the desktop away panel", 20_000);
+        const panel = await b.ev(`(() => {
+          const p = document.querySelector("[data-away-panel]");
+          const m = p.querySelector("[data-morning]");
+          const first = p.querySelector("details > :not(summary)");
+          return {
+            leads: first === m,
+            brief: m.querySelector("[data-morning-brief]")?.textContent ?? "",
+            headline: m.querySelector("[data-morning-headline]")?.textContent ?? null,
+            proposals: [...m.querySelectorAll("[data-morning-proposal]")].map((li) => [li.dataset.morningProposal, li.textContent]),
+            left: m.querySelector("[data-morning-left]")?.textContent ?? "",
+            edited: [...m.querySelectorAll("[data-morning-edited]")].map((li) => li.dataset.morningEdited),
+            digest: !!p.querySelector("[data-change-seq]"),
+          };
+        })()`);
+        if (!panel.leads) throw new Error("the brief does not lead the away panel");
+        if (!/Two takes on the basket/.test(panel.brief)) throw new Error(`the brief is not Kit's: ${panel.brief}`);
+        if (panel.headline) throw new Error(`a night that made things carries a failure line: ${panel.headline}`);
+        const states = panel.proposals.map(([s]) => s);
+        if (JSON.stringify(states) !== JSON.stringify(["sure", "hunch", "failed"])) throw new Error(`the proposals are not highest confidence first: ${JSON.stringify(panel.proposals)}`);
+        if (panel.proposals.length > 5) throw new Error("more than five proposals in one morning");
+        if (!/every take broke the list's scan line/.test(panel.proposals[2][1])) throw new Error(`the failed promise does not say why: ${panel.proposals[2][1]}`);
+        if (!/Ravi's note about delivery — a business decision/.test(panel.left)) throw new Error(`Left alone is missing Kit's reason: ${panel.left}`);
+        if (JSON.stringify(panel.edited) !== JSON.stringify([screens.Checkout])) throw new Error(`the edited originals are not just Checkout: ${JSON.stringify(panel.edited)}`);
+        if (!panel.digest) throw new Error("the digest of what everyone did does not follow the brief");
+        const after = Object.fromEntries(Object.entries(screens).map(([t, itemId]) => [t, current(itemId)]));
+        for (const t of ["Basket", "Order history", "Menu"]) {
+          if (JSON.stringify(after[t]) !== JSON.stringify(before[t])) throw new Error(`“${t}” changed overnight: ${JSON.stringify({ before: before[t], after: after[t] })}`);
+        }
+        if (after.Checkout.versions !== before.Checkout.versions + 1 || after.Checkout.hash === before.Checkout.hash) throw new Error(`Checkout, named for editing, is not one new version: ${JSON.stringify(after.Checkout)}`);
+        // Closing the note is not her act: the review renders, the note closes,
+        // and one ⌘Z on arrival does not reopen it.
+        await waitFor(() => runCli("--canvas", id, "goodnight", "review").reviewed, "the note to close once its review was seen", 10_000);
+        // Focus the canvas first (an empty spot of it), so the chord reaches the page.
+        for (const type of ["mousePressed", "mouseReleased"]) await b.send("Input.dispatchMouseEvent", { type, x: 1200, y: 820, button: "left", clickCount: 1 });
+        await rig.press("z", { meta: true });
+        await sleep(1500);
+        if (!runCli("--canvas", id, "goodnight", "review").reviewed) throw new Error("one ⌘Z on arrival reopened the night's note");
+        if (!(await b.ev(`!!document.querySelector("[data-away-panel] [data-morning]")`))) throw new Error("the review went away on ⌘Z");
+        const lightShot = await shot("away-light");
+        await b.send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: "dark" }] });
+        await b.ev(`(() => { localStorage.setItem("isocan.theme", "dark"); document.documentElement.dataset.theme = "dark"; return true; })()`);
+        await sleep(600);
+        const darkShot = await shot("away-dark");
+        await b.send("Emulation.setEmulatedMedia", { features: [] });
+        await b.ev(`(() => { localStorage.setItem("isocan.theme", "light"); document.documentElement.dataset.theme = "light"; return true; })()`);
+
+        // The version before: the existing compare inspector.
+        await rig.click(`[data-morning-edited="${screens.Checkout}"] [data-morning-before]`, "See the version before");
+        await until(b, `!!document.querySelector("[data-version-compare]")`, "the version compare to open");
+        await rig.press("Escape");
+
+        // A visit newer than ready-by: no review.
+        runCli("--canvas", id, "seen", "--mark");
+        const later = runCli("--canvas", id, "goodnight", "review");
+        if (later.due || later.notDue !== "you have been back since its ready-by") throw new Error(`a seen mark newer than ready-by still owes a review: ${JSON.stringify({ due: later.due, notDue: later.notDue })}`);
+        await b.send("Page.reload", {});
+        await sleep(2500);
+        await until(b, `!!document.querySelector('.item[data-item-id="${screens.Basket}"]')`, "the canvas again", 20_000);
+        await sleep(1500);
+        if (await b.ev(`!!document.querySelector("[data-away-panel]")`)) throw new Error("the review showed again after a visit newer than ready-by");
+        const errors = b.takeErrors();
+        if (errors.length > 0) throw new Error(`the page threw: ${errors[0]}`);
+        return { screenshots: { light: lightShot, dark: darkShot } };
+      } catch (err) {
+        throw new Error(`${err.message}\n--- rc ---\n${rcOut.slice(-3000)}`);
+      } finally {
+        if (rc) {
+          rc.kill("SIGINT");
+          await new Promise((r) => { rc.once("exit", r); setTimeout(r, 3000); });
+          if (rc.exitCode === null) rc.kill("SIGKILL");
+        }
+        await daemon.stop();
+        rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      }
+    },
+  },
+  {
+    name: "proactive-explain",
+    /**
+     * **Explain this item** (proactive-agent phase 4, journey scene 4,
+     * `docs/projects/proactive-agent/phases.md`).
+     *
+     * Its own home and daemon with the real `isocan rc` and
+     * `packages/cli/test/fake-acp.mjs` as Kit, the canvas's lead — **no model
+     * runs**. A synthetic Acme Checkout with a few versions, two variations
+     * (each announced in a comment) and a `choose`; a DESIGN.md that moved on
+     * afterwards; a comment saying "make it more obvious".
+     *
+     * Maya opens Explain from the item's menu: a panel beside the live
+     * canvas, the canvas and her selection where they were. It names the
+     * choice with its comment, the losing variation in the trash, the newer
+     * DESIGN.md and the speak-design pair, in all three depths. Escape
+     * closes it, and nothing was written. Opened again from ⌘K, **Critique**
+     * summons Kit, whose critique arrives in the panel with its proposal
+     * citing `explain:` beneath Checkout; **Copy as rationale** puts a note
+     * beside it. With Kit dismissed, Critique is off and the panel says why.
+     * Screenshots of the panel at each depth, light and dark, for a person.
+     */
+    what: "Explain opens beside the canvas and Escape closes it; nothing is written until Critique or Copy as rationale is pressed",
+    async run(rig) {
+      const { b } = rig;
+      const home = mkdtempSync(path.join(tmpdir(), "isocan-journey-explain-"));
+      const kitDir = path.join(home, "kit");
+      const fakeAcp = path.join(repo, "packages/cli/test/fake-acp.mjs");
+      const act = path.join(home, "act.mjs");
+      execFileSync("mkdir", ["-p", kitDir]);
+      writeFileSync(path.join(home, "identity.json"), JSON.stringify({ id: "usr_explain_maya", name: "Maya", createdAt: new Date().toISOString() }));
+      writeFileSync(path.join(home, "config.json"), JSON.stringify({ adapterEnv: ["FAKE_ACP_*"], acpAdapters: { "claude-code": [process.execPath, fakeAcp] }, defaultHarness: "claude-code" }));
+      // Kit, scripted: asked for a critique, it reads the deep story and answers in one command.
+      writeFileSync(act, `
+import { execFileSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
+import path from "node:path";
+export default async function act({ prompt, cli, cwd }) {
+  const canvasId = /"canvasId":\\s*"([^"]+)"/.exec(prompt)?.[1];
+  const itemId = /Critique, please: “[^”]*” \\((itm_[\\w-]+)\\)/.exec(prompt)?.[1];
+  if (!canvasId || !itemId) return;
+  const run = (...args) => execFileSync(process.execPath, [cli, "--canvas", canvasId, ...args], { encoding: "utf8" });
+  const deep = JSON.parse(execFileSync(process.execPath, [cli, "--json", "--canvas", canvasId, "explain", itemId], { encoding: "utf8" }));
+  if (deep.story.critique) return;
+  const file = path.join(cwd, "try.html");
+  writeFileSync(file, "<!doctype html><title>Checkout</title><body style='font:16px system-ui;padding:24px'><h1>Checkout</h1><p>Pickup: Saturday 9:00</p><p>Sourdough loaf × 1</p><p><b>Total $8</b> <button>Pay</button></p></body>");
+  run("explain", itemId, "--critique",
+    "--working", "The pickup slot leads, so the one thing a regular must check comes first.",
+    "--risk", "The total sits below the fold on a small phone.",
+    "--try", "Proximity: put the total beside the Pay button.",
+    "--speak", "make it more obvious => raise the total in the visual hierarchy",
+    "--propose", file);
+}
+`);
+      const daemon = await startDaemon(home);
+      const { origin } = daemon;
+      const env = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(origin).port, FAKE_ACP_ACT: act, FAKE_ACP_CLI: cli };
+      for (const name of ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_ENTRYPOINT", "ISOCAN_SESSION_ID", "ISOCAN_HARNESS", "CODEX_SANDBOX", "CODEX_THREAD_ID"]) delete env[name];
+      const runCli = (...args) => {
+        const out = execFileSync(process.execPath, [cli, "--json", ...args], { cwd: home, encoding: "utf8", env });
+        return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+      };
+      const page = (name, words) => {
+        const file = path.join(home, `${name}.html`);
+        writeFileSync(file, `<!doctype html><title>${name}</title><body style='font:16px system-ui;padding:24px'><h1>Checkout</h1><p>${words}</p></body>`);
+        return file;
+      };
+      const shot = async (name) => {
+        const file = path.join(tmpdir(), `isocan-explain-${name}-${Date.now()}.png`);
+        writeFileSync(file, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+        return file;
+      };
+      const panel = `document.querySelector("[data-explain-panel]")`;
+      const panelText = () => b.ev(`${panel}?.textContent ?? ""`);
+      const served = async (id) => b.ev(`fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'canvas-groups-v4'}}).then(r => r.json()).then(r => JSON.stringify([r.canvas.items, r.canvas.threads, r.canvas.trash]))`);
+      let rc = null;
+      let rcOut = "";
+      try {
+        const id = runCli("canvas", "create", "Acme Bakery").canvasId;
+        const ds = path.join(home, "DESIGN.md");
+        writeFileSync(ds, "# Acme Bakery\n\nPrimary: #b5523b\n");
+        const system = runCli("--canvas", id, "add", ds, "--title", "DESIGN.md", "--at", "1000,0", "--prop", "role=design-system").itemId;
+        const checkout = runCli("--canvas", id, "add", page("checkout", "Sourdough loaf × 1 · Total $8 · Pickup: Saturday 9:00"), "--title", "Checkout", "--size", "390x520", "--at", "0,0").itemId;
+        runCli("--canvas", id, "edit", checkout, page("checkout-2", "Sourdough loaf × 1 · Pickup: Saturday 9:00 · Total $8"));
+        const takes = {};
+        for (const [i, title, words] of [[0, "Checkout A", "A: one long page"], [1, "Checkout B", "B: shorter form, pickup slot first"]]) {
+          takes[title] = runCli("--canvas", id, "add", page(`take-${i}`, title), "--title", title, "--size", "390x520", "--at", `${i * 470},700`, "--prop", `parent=${checkout}`).itemId;
+          runCli("--canvas", id, "comment", "add", `${words} #${takes[title]}`, "--item", takes[title]);
+        }
+        runCli("--canvas", id, "choose", takes["Checkout B"]);
+        writeFileSync(ds, "# Acme Bakery\n\nPrimary: #a3412c\n");
+        runCli("--canvas", id, "edit", system, ds);
+        runCli("--canvas", id, "comment", "add", "make it more obvious where the total is", "--item", checkout);
+        const basket = runCli("--canvas", id, "add", page("basket", "Your basket is empty."), "--title", "Basket", "--size", "390x520", "--at", "500,0").itemId;
+        runCli("--canvas", id, "rc", "add", "Kit", "--dir", kitDir);
+        runCli("--canvas", id, "canvas", "edit", "--prop", "proactive=Kit");
+        rc = spawn(process.execPath, [cli, "--canvas", id, "rc"], { cwd: home, env, stdio: ["ignore", "pipe", "pipe"] });
+        rc.stdout.on("data", (c) => (rcOut += c));
+        rc.stderr.on("data", (c) => (rcOut += c));
+
+        const { address } = runCli("--canvas", id, "pass");
+        await b.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+        const loaded = b.once("Page.loadEventFired");
+        await b.send("Page.navigate", { url: origin });
+        await Promise.race([loaded, sleep(15_000)]);
+        await b.ev(`(() => { localStorage.clear(); return true; })()`);
+        await b.send("Page.navigate", { url: address });
+        await sleep(2500);
+        const sel = (itemId) => `'.item[data-item-id="${itemId}"]'`;
+        await until(b, `!!document.querySelector(${sel(checkout)})`, "Checkout on Maya's canvas", 20_000);
+        await until(b, `fetch('/api/projects/${id}/rc', {headers:{'x-isocan-features':'canvas-groups-v4'}}).then(r => r.json()).then(r => r.parked)`, "Kit's rc to park", 20_000);
+        await sleep(1500);
+
+        // 1. Explain, from the item's menu: a real right-click on Checkout, a real press.
+        await rig.click(`[data-item-id="${checkout}"] .item-titlebar .chrome-left`, "Checkout's title");
+        await until(b, `!!document.querySelector('[data-item-id="${checkout}"].selected')`, "Checkout selected");
+        const before = await served(id);
+        const world = await b.ev(`document.querySelector(".world")?.getAttribute("style") ?? ""`);
+        const mouse = (type, x, y, button = "left") => b.send("Input.dispatchMouseEvent", { type, x, y, button, buttons: type === "mousePressed" ? (button === "right" ? 2 : 1) : 0, clickCount: 1 });
+        const at = await b.ev(`(() => { const r = document.querySelector(${sel(checkout)}).getBoundingClientRect(); return { x: Math.round(r.left + 20), y: Math.round(r.bottom - 20) }; })()`);
+        await mouse("mouseMoved", at.x, at.y, "none");
+        await mouse("mousePressed", at.x, at.y, "right");
+        await mouse("mouseReleased", at.x, at.y, "right");
+        const row = `[...document.querySelectorAll(".context-menu button")].find((el) => el.textContent.trim() === "Explain")`;
+        await until(b, `!!${row}`, `the item menu, offering "Explain"`, 4000);
+        const r = await b.ev(`(() => { const r = ${row}.getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`);
+        await mouse("mousePressed", r.x, r.y);
+        await mouse("mouseReleased", r.x, r.y);
+        await until(b, `!!${panel}?.querySelector('[data-explain-section="how"] li')`, "the Explain panel, with how it got here", 10_000);
+
+        // Beside the canvas, not over it: the canvas still drawn, the panel on the right.
+        const beside = await b.ev(`(() => { const p = ${panel}.getBoundingClientRect(); return { left: p.left, right: p.right, w: innerWidth, world: !!document.querySelector(".world"), modal: !!document.querySelector("[aria-modal=true]") }; })()`);
+        if (!beside.world || beside.modal || beside.left < beside.w / 2 || beside.right > beside.w) throw new Error(`the panel is not beside the canvas: ${JSON.stringify(beside)}`);
+        const plain = await panelText();
+        for (const want of ["v3 · Maya chose “Checkout B” over 1 other take — “B: shorter form, pickup slot first", "“Checkout A”, a variation by Maya, in the trash", "the design system “DESIGN.md”: 1 newer version", "“make it more obvious” → visual hierarchy"]) {
+          if (!plain.includes(want)) throw new Error(`the panel does not say ${JSON.stringify(want)}: ${plain.slice(0, 900)}`);
+        }
+        if (!(await b.ev(`!!${panel}.querySelector('[data-explain-trash]')`))) throw new Error("the road not taken has no way to be seen again");
+
+        // 2. Light and dark.
+        const shots = {};
+        for (const theme of ["light", "dark"]) {
+          await b.ev(`(() => { document.documentElement.dataset.theme = ${JSON.stringify(theme)}; return true; })()`);
+          await sleep(250);
+          shots[theme] = await shot(theme);
+        }
+        await b.ev(`(() => { document.documentElement.dataset.theme = "light"; return true; })()`);
+
+        // 3. Escape closes it; her place and her selection are where they were, and nothing was written.
+        await rig.press("Escape");
+        await until(b, `!${panel}`, "Escape to close the panel", 3000);
+        if (!(await b.ev(`!!document.querySelector('[data-item-id="${checkout}"].selected')`))) throw new Error("closing Explain lost the selection");
+        const worldAfter = await b.ev(`document.querySelector(".world")?.getAttribute("style") ?? ""`);
+        if (worldAfter !== world) throw new Error(`Explain moved the canvas: ${world} → ${worldAfter}`);
+        if ((await served(id)) !== before) throw new Error("opening Explain and closing it wrote to the canvas");
+
+        // 4. ⌘K → Explain this item; Critique summons Kit, whose critique and proposal arrive in the panel.
+        await rig.press("k", { meta: true });
+        await until(b, `!!document.querySelector(".command-palette input, [data-palette] input, .palette input")`, "the launcher", 3000);
+        await rig.type("Explain this item");
+        await sleep(200);
+        await rig.press("Enter");
+        await until(b, `!!${panel}?.querySelector("[data-explain-critique]") && !${panel}.querySelector("[data-explain-critique]").disabled`, "Critique, offered with Kit to answer", 10_000);
+        if ((await served(id)) !== before) throw new Error("opening Explain from ⌘K wrote to the canvas");
+        await rig.click("[data-explain-critique]", "Critique");
+        await until(b, `(${panel}?.textContent ?? "").includes("Kit's critique") && (${panel}.textContent).includes("a proposal beneath it")`, "Kit's critique and its proposal in the panel", 60_000);
+        const critique = await panelText();
+        if (!/Working: The pickup slot leads/.test(critique) || !/A risk: The total sits below the fold/.test(critique)) throw new Error(`the critique is not in the panel: ${critique.slice(-800)}`);
+        if (!critique.includes("“make it more obvious” → raise the total in the visual hierarchy")) throw new Error(`Kit's speak-design pair is not in the panel: ${critique.slice(0, 900)}`);
+        const story = runCli("--canvas", id, "explain", checkout).story;
+        const proposal = runCli("--canvas", id, "show", story.critique.proposal.itemId);
+        const cites = JSON.parse(proposal.properties.proposalCites);
+        if (cites[0]?.kind !== "explain" || cites[0]?.ref !== story.critique.commentId) throw new Error(`the proposal does not cite the critique: ${JSON.stringify(cites)}`);
+        await until(b, `!!document.querySelector('[data-proposal="${proposal.id ?? story.critique.proposal.itemId}"] .proposal-chip')`, "the proposal's mark beneath Checkout", 10_000);
+        const critiqued = await shot("critique");
+
+        // 5. Copy as rationale: one note beside Checkout.
+        const items = Object.keys(JSON.parse(await served(id))[0]).length;
+        await rig.click("[data-explain-rationale]", "Copy as rationale");
+        await until(b, `fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'canvas-groups-v4'}}).then(r => r.json()).then(r => Object.values(r.canvas.items).some(i => i.title === "Why “Checkout” looks like this"))`, "the rationale note on the canvas", 10_000);
+        if (Object.keys(JSON.parse(await served(id))[0]).length !== items + 1) throw new Error("Copy as rationale wrote more than one item");
+        await rig.click(".explain-close", "the panel's close");
+
+        // 6. Kit dismissed: Critique is off, and the panel says why; the history stands.
+        runCli("--canvas", id, "rc", "remove", "Kit");
+        await rig.click(`[data-item-id="${basket}"] .item-titlebar .chrome-left`, "Basket's title");
+        await rig.press("k", { meta: true });
+        await until(b, `!!document.querySelector(".command-palette input, [data-palette] input, .palette input")`, "the launcher", 3000);
+        await rig.type("Explain this item");
+        await sleep(200);
+        await rig.press("Enter");
+        await until(b, `!!${panel}?.querySelector("[data-explain-cannot]")`, "the panel to say why nothing can critique", 10_000);
+        const cannot = await b.ev(`${panel}.querySelector("[data-explain-cannot]").textContent`);
+        if (!/No critique: .*Kit/.test(cannot)) throw new Error(`the panel does not say why: ${cannot}`);
+        if (!(await b.ev(`${panel}.querySelector("[data-explain-critique]").disabled`))) throw new Error("Critique is offered with nobody to answer");
+        if (!(await panelText()).includes("v1 · Maya drafted it")) throw new Error("the history does not stand without a critique");
+        await rig.press("Escape");
+        const errors = b.takeErrors();
+        if (errors.length > 0) throw new Error(`the page threw: ${errors[0]}`);
+        return { screenshots: { ...shots, critique: critiqued } };
+      } catch (err) {
+        throw new Error(`${err.message}\n--- rc ---\n${rcOut.slice(-3000)}`);
+      } finally {
+        if (rc) {
+          rc.kill("SIGINT");
+          await new Promise((r) => { rc.once("exit", r); setTimeout(r, 3000); });
+          if (rc.exitCode === null) rc.kill("SIGKILL");
+        }
+        await daemon.stop();
+        rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      }
+    },
+  },
+  {
+    name: "proactive-brief-card",
+    /**
+     * **The brief, as a card** (proactive-agent phase 5, journey scene 5,
+     * `docs/projects/proactive-agent/phases.md`).
+     *
+     * Its own home and daemon with the real `isocan rc` and
+     * `packages/cli/test/fake-acp.mjs` as Kit, the canvas's lead — **no model
+     * runs**. A synthetic Acme pre-order app: Menu, Checkout and Basket, and
+     * a design request whose brief says some lines (For, Should feel) and
+     * assumes one (Never). Asked, Kit leaves a proposal beneath Checkout that
+     * cites the For line, and its chip says so.
+     *
+     * The brief's item wears the card: said lines solid, inferred ones pencil
+     * with Right / Wrong. Maya presses **Right** on Never: it turns solid, and
+     * the brief's history names her as its source. She changes **For**:
+     * nothing on the canvas changes (every screen byte for byte), Checkout is
+     * sorted under *assumed the old line* (its proposal cites For), Kit's
+     * re-read puts Menu under *matters more now* and asks ONE question. With
+     * Kit dismissed, an edit still lands and the card says the re-read waits.
+     * Screenshots of the card, light and dark, before and after the edit.
+     */
+    what: "the brief card: Right turns a pencil line solid with Maya as its source; an edit changes no screen, sorts them, and Kit asks one question",
+    async run(rig) {
+      const { b } = rig;
+      const home = mkdtempSync(path.join(tmpdir(), "isocan-journey-brief-"));
+      const kitDir = path.join(home, "kit");
+      const fakeAcp = path.join(repo, "packages/cli/test/fake-acp.mjs");
+      const act = path.join(home, "act.mjs");
+      execFileSync("mkdir", ["-p", kitDir]);
+      writeFileSync(path.join(home, "identity.json"), JSON.stringify({ id: "usr_brief_maya", name: "Maya", createdAt: new Date().toISOString() }));
+      writeFileSync(path.join(home, "config.json"), JSON.stringify({ adapterEnv: ["FAKE_ACP_*"], acpAdapters: { "claude-code": [process.execPath, fakeAcp] }, defaultHarness: "claude-code" }));
+      // Kit, scripted: asked about Checkout, it proposes against the For line;
+      // asked for a re-read, it reads the card and answers in one command.
+      writeFileSync(act, `
+import { execFileSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
+import path from "node:path";
+export default async function act({ prompt, cli, cwd }) {
+  const canvasId = /"canvasId":\\s*"([^"]+)"/.exec(prompt)?.[1];
+  if (!canvasId) return;
+  const run = (...args) => execFileSync(process.execPath, [cli, "--canvas", canvasId, ...args], { encoding: "utf8" });
+  const json = (...args) => JSON.parse(execFileSync(process.execPath, [cli, "--json", "--canvas", canvasId, ...args], { encoding: "utf8" }));
+  const byTitle = (title) => json("ls").find((i) => i.title === title);
+  if (prompt.includes("what would you change on Checkout")) {
+    const file = path.join(cwd, "pickup-first.html");
+    writeFileSync(file, "<!doctype html><title>Checkout</title><body style='font:16px system-ui;padding:24px'><h1>Checkout</h1><p><b>Pickup: Saturday 9:00</b></p><p>Sourdough loaf × 1</p><p>Total $8</p></body>");
+    run("propose", byTitle("Checkout").id, file, "--cites", "brief:for", "--why", "Summary before detail: a regular checks the pickup slot first.");
+    return;
+  }
+  if (prompt.includes("Brief re-read, please (")) {
+    const card = json("design", "card");
+    if (!card.reread || card.reread.answer) return;
+    run("design", "card", "--reread", "--matters", byTitle("Menu").id, "--question", "As well as regulars, or instead?");
+  }
+}
+`);
+      const daemon = await startDaemon(home);
+      const { origin } = daemon;
+      const env = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(origin).port, FAKE_ACP_ACT: act, FAKE_ACP_CLI: cli };
+      for (const name of ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_ENTRYPOINT", "ISOCAN_SESSION_ID", "ISOCAN_HARNESS", "CODEX_SANDBOX", "CODEX_THREAD_ID"]) delete env[name];
+      const runCli = (...args) => {
+        const out = execFileSync(process.execPath, [cli, "--json", ...args], { cwd: home, encoding: "utf8", env });
+        return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+      };
+      const page = (name, words) => {
+        const file = path.join(home, `${name}.html`);
+        writeFileSync(file, `<!doctype html><meta charset="utf-8"><title>${name}</title><body style='font:16px system-ui;padding:24px'><h1>${name}</h1><p>${words}</p></body>`);
+        return file;
+      };
+      // The card itself, magnified: at the canvas's fitted zoom it is too small to read in a picture.
+      const shot = async (name) => {
+        const file = path.join(tmpdir(), `isocan-brief-card-${name}-${Date.now()}.png`);
+        const r = await b.ev(`(() => { const r = document.querySelector('[data-item-id="itm_acme_brief"]').getBoundingClientRect(); return { x: r.left, y: r.top, width: r.width, height: r.height }; })()`);
+        const clip = { x: Math.max(0, r.x - 8), y: Math.max(0, r.y - 30), width: r.width + 16, height: Math.min(r.height + 38, 900 - Math.max(0, r.y - 30)), scale: 2.5 };
+        writeFileSync(file, Buffer.from((await b.send("Page.captureScreenshot", { format: "png", clip })).data, "base64"));
+        return file;
+      };
+      const card = `document.querySelector("[data-brief-card]")`;
+      const line = (cite) => `${card}?.querySelector('[data-brief-line="${cite}"]')`;
+      // A canvas holding a design request is served only to a reader that says it can decode one.
+      const features = "canvas-groups-v4,questionnaires-v1,design-requests-v1,design-requests-v2,design-decisions-v1,design-repairs-v1";
+      const served = async (id) => b.ev(`fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'${features}'}}).then(r => r.json()).then(r => JSON.stringify(r.canvas?.items ?? r))`);
+      let rc = null;
+      let rcOut = "";
+      try {
+        const id = runCli("canvas", "create", "Acme Bakery").canvasId;
+        const screens = {};
+        for (const [i, title, words] of [[0, "Menu", "Sourdough · Rye · Croissant"], [1, "Checkout", "Sourdough loaf × 1 · Total $8 · Pickup: Saturday 9:00"], [2, "Basket", "Your basket is empty."]]) {
+          screens[title] = runCli("--canvas", id, "add", page(title, words), "--title", title, "--size", "390x520", "--at", `${560 + i * 470},0`).itemId;
+        }
+        const start = path.join(home, "start.json");
+        writeFileSync(start, JSON.stringify({
+          requestId: "req_acme_brief", itemId: "itm_acme_brief", versionId: "ver_acme_brief_1", title: "The brief", width: 480, height: 820, placement: { x: 0, y: 0 },
+          source: { entrance: "external-agent", externalRequestId: "acme-brief" },
+          fields: {
+            intent: "refine", fidelity: "designed", delivery: "html-node", targetItemId: null, groupId: null,
+            audience: "regulars who order weekly", primaryTask: "a pre-order app", constraints: ["pickup only"],
+            facts: [
+              { id: "feel", name: "Should feel", value: "warm, quick", origin: "supplied", sources: [] },
+              { id: "never", name: "Never", value: "pushy", origin: "assumed", sources: [] },
+            ],
+            references: [], outstandingDecisionIds: [], outputIds: [],
+          },
+        }));
+        if (runCli("--canvas", id, "design", "start", start).status !== "accepted") throw new Error("the design request was not admitted");
+        runCli("--canvas", id, "rc", "add", "Kit", "--dir", kitDir);
+        runCli("--canvas", id, "canvas", "edit", "--prop", "proactive=Kit");
+        rc = spawn(process.execPath, [cli, "--canvas", id, "rc"], { cwd: home, env, stdio: ["ignore", "pipe", "pipe"] });
+        rc.stdout.on("data", (c) => (rcOut += c));
+        rc.stderr.on("data", (c) => (rcOut += c));
+
+        const { address } = runCli("--canvas", id, "pass");
+        await b.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+        const loaded = b.once("Page.loadEventFired");
+        await b.send("Page.navigate", { url: origin });
+        await Promise.race([loaded, sleep(15_000)]);
+        await b.ev(`(() => { localStorage.clear(); return true; })()`);
+        await b.send("Page.navigate", { url: address });
+        await sleep(2500);
+        await until(b, `fetch('/api/projects/${id}/rc', {headers:{'x-isocan-features':'${features}'}}).then(r => r.json()).then(r => r.parked)`, "Kit's rc to park", 20_000);
+        await sleep(1500);
+
+        // 0. Kit, asked, proposes beneath Checkout against the For line; the chip says which line.
+        runCli("--canvas", id, "comment", "add", "@Kit what would you change on Checkout for our regulars?", "--item", screens.Checkout);
+        await until(b, `!!document.querySelector('[data-proposal] .proposal-chip')`, "Kit's proposal beneath Checkout, with its chip", 60_000);
+        const chip = await b.ev(`document.querySelector('[data-proposal] .proposal-chip').textContent`);
+        if (!/cites · For/.test(chip)) throw new Error(`the chip does not name the brief's line: ${chip}`);
+
+        // 1. The card: said lines solid, inferred ones pencil — and, once Maya
+        // steps inside it (a real double-click, the canvas's way into any
+        // item's content), Right / Wrong beside the pencil ones.
+        await until(b, `!!${card}?.querySelector("[data-brief-enter]")`, "the brief card, saying how to answer its pencil lines", 20_000);
+        const enterAt = await b.ev(`(() => { const r = ${card}.querySelector("header").getBoundingClientRect(); const x = Math.round(r.left + r.width / 2), y = Math.round(r.top + r.height / 2); const top = document.elementFromPoint(x, y); return { x, y, hit: !!top && !!top.closest('[data-item-id="itm_acme_brief"]'), over: top ? (top.className?.toString?.() || top.tagName) : "nothing" }; })()`);
+        if (!enterAt.hit) throw new Error(`the brief card is covered by ${enterAt.over} where a person would double-click it`);
+        for (const clickCount of [1, 2]) {
+          await b.send("Input.dispatchMouseEvent", { type: "mousePressed", x: enterAt.x, y: enterAt.y, button: "left", buttons: 1, clickCount });
+          await b.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: enterAt.x, y: enterAt.y, button: "left", buttons: 0, clickCount });
+          await sleep(150);
+        }
+        await until(b, `!!${line("never")}?.querySelector("[data-brief-right]")`, "Right and Wrong beside Never once inside the card", 20_000);
+        const ruled = await b.ev(`(() => { const rule = (c) => { const el = ${card}.querySelector('[data-brief-line="' + c + '"]'); const s = getComputedStyle(el); return [el.hasAttribute("data-said") ? "said" : el.hasAttribute("data-inferred") ? "inferred" : "empty", s.borderBottomStyle]; }; return { for: rule("for"), feel: rule("feel"), never: rule("never"), now: rule("now") }; })()`);
+        if (ruled.for.join() !== "said,solid" || ruled.feel.join() !== "said,solid" || ruled.never.join() !== "inferred,dashed" || ruled.now.join() !== "inferred,dashed") throw new Error(`the rules do not say who said what: ${JSON.stringify(ruled)}`);
+        if (await b.ev(`!!${line("for")}.querySelector("[data-brief-right]")`)) throw new Error("a said line offers Right");
+        await b.ev(`(() => { ${card}.scrollIntoView({ block: "start" }); return true; })()`);
+        const shots = {};
+        for (const theme of ["light", "dark"]) {
+          await b.ev(`(() => { document.documentElement.dataset.theme = ${JSON.stringify(theme)}; return true; })()`);
+          await sleep(250);
+          shots[`card-${theme}`] = await shot(`card-${theme}`);
+        }
+        await b.ev(`(() => { document.documentElement.dataset.theme = "light"; return true; })()`);
+
+        // 2. Right: the pencil line turns solid, and the brief's history names Maya.
+        await rig.click(`[data-brief-line="never"] [data-brief-right]`, "Right on Never");
+        await until(b, `${line("never")}?.hasAttribute("data-said")`, "Never to turn solid", 10_000);
+        const read = runCli("--canvas", id, "design", "brief", "req_acme_brief").requests[0];
+        const never = read.brief.facts.find((f) => f.id === "never");
+        if (never?.origin !== "supplied") throw new Error(`Right did not make Never supplied: ${JSON.stringify(never)}`);
+        if (!read.brief.continuation.factProvenance.some((p) => p.field === "facts.never" && p.actorId === "usr_brief_maya" && p.kind === "direct")) throw new Error(`the brief's history does not name Maya: ${JSON.stringify(read.brief.continuation.factProvenance)}`);
+        const versions = runCli("--canvas", id, "show", "itm_acme_brief").versions;
+        if (versions.at(-1).createdBy.name !== "Maya") throw new Error(`the brief's new version is not Maya's: ${JSON.stringify(versions.at(-1).createdBy)}`);
+
+        // 3. Maya changes For: nothing on the canvas changes; the screens are sorted; Kit asks one question.
+        const screensOf = (items) => JSON.stringify(Object.values(JSON.parse(items)).filter((i) => i.id !== "itm_acme_brief").map((i) => [i.id, i.currentVersionId, i.versions.length, i.x, i.y, i.properties]));
+        const before = screensOf(await served(id));
+        await rig.click(`[data-brief-line="for"] [data-brief-edit]`, "Edit on For");
+        await until(b, `!!${line("for")}?.querySelector("input")`, "For's editor");
+        await rig.selectAll();
+        await rig.type("regulars, and weekend first-timers");
+        await rig.click(`[data-brief-line="for"] [data-brief-save]`, "Save For");
+        await until(b, `(${line("for")}?.textContent ?? "").includes("weekend first-timers")`, "For's new words on the card", 10_000);
+        await until(b, `!!${card}.querySelector('[data-reread="old"] [data-reread-item="${screens.Checkout}"]')`, "Checkout under assumed the old line", 15_000);
+        await until(b, `!!${card}.querySelector("[data-reread-question]")`, "Kit's one question on the card", 60_000);
+        const reread = await b.ev(`${card}.querySelector("[data-brief-reread]").textContent`);
+        for (const want of ["Assumed the old line", "its proposal “Checkout — proposal” cites For", "Matters more now", "Menu", "Still holds", "Basket", "Kit asks: As well as regulars, or instead?"]) {
+          if (!reread.includes(want)) throw new Error(`the re-read does not say ${JSON.stringify(want)}: ${reread}`);
+        }
+        if (!(await b.ev(`!!${card}.querySelector('[data-reread="more"] [data-reread-item="${screens.Menu}"]')`))) throw new Error("Menu is not under matters more now");
+        if (screensOf(await served(id)) !== before) throw new Error("editing the brief changed something on the canvas besides the brief");
+        await b.ev(`(() => { ${card}.querySelector("[data-brief-reread]").scrollIntoView({ block: "end" }); return true; })()`);
+        for (const theme of ["light", "dark"]) {
+          await b.ev(`(() => { document.documentElement.dataset.theme = ${JSON.stringify(theme)}; return true; })()`);
+          await sleep(250);
+          shots[`reread-${theme}`] = await shot(`reread-${theme}`);
+        }
+        await b.ev(`(() => { document.documentElement.dataset.theme = "light"; return true; })()`);
+        const printed = runCli("--canvas", id, "design", "card");
+        if (printed.reread?.answer?.question !== "As well as regulars, or instead?") throw new Error(`the terminal does not read the same re-read: ${JSON.stringify(printed.reread)}`);
+
+        // 4. Kit dismissed: an edit still lands, writes no screen, and the card says the re-read waits.
+        runCli("--canvas", id, "rc", "remove", "Kit");
+        await sleep(1000);
+        await rig.click(`[data-brief-line="constraints"] [data-brief-edit]`, "Edit on Constraints");
+        await until(b, `!!${line("constraints")}?.querySelector("input")`, "Constraints' editor");
+        await rig.selectAll();
+        await rig.type("pickup only · no accounts");
+        await rig.click(`[data-brief-line="constraints"] [data-brief-save]`, "Save Constraints");
+        await until(b, `!!${card}.querySelector("[data-reread-waits]")`, "the card to say the re-read waits", 15_000);
+        const waits = await b.ev(`${card}.querySelector("[data-reread-waits]").textContent`);
+        if (!/^The re-read waits: /.test(waits)) throw new Error(`the card does not say the re-read waits: ${waits}`);
+        if (screensOf(await served(id)) !== before) throw new Error("an edit with nobody to answer changed the canvas");
+        const errors = b.takeErrors();
+        if (errors.length > 0) throw new Error(`the page threw: ${errors[0]}`);
+        return { screenshots: shots };
+      } catch (err) {
+        // What the brief's item was showing, so a failure names the face rather than a timeout.
+        const face = await b.ev(`(document.querySelector("[data-design-record]")?.textContent ?? "no design record face on screen").slice(0, 1200)`).catch(() => "");
+        throw new Error(`${err.message}\n--- the brief's face ---\n${face}\n--- rc ---\n${rcOut.slice(-3000)}`);
+      } finally {
+        if (rc) {
+          rc.kill("SIGINT");
+          await new Promise((r) => { rc.once("exit", r); setTimeout(r, 3000); });
+          if (rc.exitCode === null) rc.kill("SIGKILL");
+        }
+        await daemon.stop();
+        rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      }
+    },
+  },
+  {
+    name: "proactive-stuck",
+    /**
+     * **Stuck** (proactive-agent phase 7, journey scene 7,
+     * `docs/projects/proactive-agent/phases.md`).
+     *
+     * Its own home and daemon with the real `isocan rc` and
+     * `packages/cli/test/fake-acp.mjs` as Kit, the canvas's lead — **no model
+     * runs**. A synthetic Acme canvas with a Header and a Footer.
+     *
+     * Maya asks Kit for a new header in the Chat three times, each ask
+     * shorter, and steps the header back to its original after each take.
+     * The fourth ask gets no fourth take: the rc's summons carries `stuck`,
+     * and Kit posts the question instead — what it noticed and four
+     * now-and-instead pairs with its guesses. Maya's card shows it with each
+     * guess highlighted and chosen by default; Header still has exactly the
+     * three takes. **Show me extremes** answers it, and the card goes.
+     *
+     * Then with the rc stopped (nothing to answer), Ravi — a person — makes
+     * three takes at the Footer that Maya sets aside; on her fourth ask the
+     * card still shows what the behaviour says, and that the question waits.
+     * Screenshots of the question, light and dark, and of the wait.
+     */
+    what: "stuck: after three takes set aside, the fourth ask gets four now-or-instead pairs with Kit's guess highlighted, not a fourth take; with nothing to answer the card says the question waits",
+    async run(rig) {
+      const { b } = rig;
+      const home = mkdtempSync(path.join(tmpdir(), "isocan-journey-stuck-"));
+      const kitDir = path.join(home, "kit");
+      const fakeAcp = path.join(repo, "packages/cli/test/fake-acp.mjs");
+      const act = path.join(home, "act.mjs");
+      execFileSync("mkdir", ["-p", kitDir]);
+      writeFileSync(path.join(home, "identity.json"), JSON.stringify({ id: "usr_stuck_maya", name: "Maya", createdAt: new Date().toISOString() }));
+      writeFileSync(path.join(home, "config.json"), JSON.stringify({ adapterEnv: ["FAKE_ACP_*"], acpAdapters: { "claude-code": [process.execPath, fakeAcp] }, defaultHarness: "claude-code" }));
+      // Kit, scripted: told it is stuck, it asks; otherwise it makes a take at the item the ask named.
+      writeFileSync(act, `
+import { execFileSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
+import path from "node:path";
+export default async function act({ prompt, cli, cwd }) {
+  const canvasId = /"canvasId":\\s*"([^"]+)"/.exec(prompt)?.[1];
+  if (!canvasId) return;
+  const run = (...args) => execFileSync(process.execPath, [cli, "--canvas", canvasId, ...args], { encoding: "utf8" });
+  const stuck = /"stuck":\\s*\\{\\s*"itemId":\\s*"(itm_[\\w-]+)"/.exec(prompt)?.[1];
+  if (stuck) {
+    run("stuck", stuck, "--question",
+      "--observe", "You kept the photo every time.", "--observe", "You set aside every warmer colour.",
+      "--tile", "density | Roomy, one idea per row | Dense, more at a glance | now",
+      "--tile", "brand | Quiet, the photo speaks | Loud, the bakery's red | instead",
+      "--tile", "layout | Photo on top | Photo beside the words | now",
+      "--tile", "tone | Plain | Warm, a little playful | instead");
+    return;
+  }
+  if (prompt.includes("Stuck answer (")) return;
+  const item = /"items":\\s*\\[\\s*"(itm_[\\w-]+)"/.exec(prompt)?.[1];
+  if (!item) return;
+  const file = path.join(cwd, "take-" + Date.now() + ".html");
+  writeFileSync(file, "<!doctype html><title>Header</title><header style='padding:24px;background:#b5452a;color:#fff'><h1>Fresh bread, take " + Date.now() % 1000 + "</h1></header>");
+  run("edit", item, file);
+}
+`);
+      const daemon = await startDaemon(home);
+      const { origin } = daemon;
+      const env = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(origin).port, FAKE_ACP_ACT: act, FAKE_ACP_CLI: cli };
+      for (const name of ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_ENTRYPOINT", "ISOCAN_SESSION_ID", "ISOCAN_HARNESS", "CODEX_SANDBOX", "CODEX_THREAD_ID"]) delete env[name];
+      const runCli = (args, as = {}) => {
+        const out = execFileSync(process.execPath, [cli, "--json", ...args], { cwd: home, encoding: "utf8", env: { ...env, ...as } });
+        return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+      };
+      const page = (name, words) => {
+        const file = path.join(home, `${name}-${Date.now()}.html`);
+        writeFileSync(file, `<!doctype html><meta charset="utf-8"><title>${name}</title><body style='margin:0;font:16px system-ui'><header style='padding:24px;background:#f4ede4'><h1>${words}</h1></header></body>`);
+        return file;
+      };
+      const shot = async (name) => {
+        const file = path.join(tmpdir(), `isocan-stuck-${name}-${Date.now()}.png`);
+        writeFileSync(file, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+        return file;
+      };
+      const card = `document.querySelector("[data-stuck-card]")`;
+      const features = "canvas-groups-v4,questionnaires-v1,design-requests-v1,design-requests-v2,design-decisions-v1,design-repairs-v1";
+      const served = async (id) => JSON.parse(await b.ev(`fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'${features}'}}).then(r => r.json()).then(r => JSON.stringify(r.canvas))`));
+      let rc = null;
+      let rcOut = "";
+      try {
+        const id = runCli(["canvas", "create", "Acme Bakery"]).canvasId;
+        const header = runCli(["--canvas", id, "add", page("Header", "Fresh bread"), "--title", "Header", "--size", "390x200", "--at", "0,0"]).itemId;
+        const footer = runCli(["--canvas", id, "add", page("Footer", "Open from seven"), "--title", "Footer", "--size", "390x200", "--at", "0,320"]).itemId;
+        const original = { [header]: runCli(["--canvas", id, "show", header]).currentVersionId, [footer]: runCli(["--canvas", id, "show", footer]).currentVersionId };
+        runCli(["--canvas", id, "rc", "add", "Kit", "--dir", kitDir]);
+        runCli(["--canvas", id, "canvas", "edit", "--prop", "proactive=Kit"]);
+        rc = spawn(process.execPath, [cli, "--canvas", id, "rc"], { cwd: home, env, stdio: ["ignore", "pipe", "pipe"] });
+        rc.stdout.on("data", (c) => (rcOut += c));
+        rc.stderr.on("data", (c) => (rcOut += c));
+
+        const { address } = runCli(["--canvas", id, "pass"]);
+        await b.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+        const loaded = b.once("Page.loadEventFired");
+        await b.send("Page.navigate", { url: origin });
+        await Promise.race([loaded, sleep(15_000)]);
+        await b.ev(`(() => { localStorage.clear(); return true; })()`);
+        await b.send("Page.navigate", { url: address });
+        await until(b, `!!document.querySelector('[data-item-id="${footer}"]')`, "the canvas with its header and footer", 20_000);
+        await until(b, `fetch('/api/projects/${id}/rc', {headers:{'x-isocan-features':'${features}'}}).then(r => r.json()).then(r => r.parked)`, "Kit's rc to park", 20_000);
+
+        // 1. Three asks, each shorter; Kit makes a take for each; Maya steps the header back each time.
+        const versionsOf = async (itemId) => (await served(id)).items[itemId].versions.length;
+        for (const [i, ask] of ["@Kit a new header for the menu, warmer, keep the photo", "@Kit again, but warmer", "@Kit again"].entries()) {
+          runCli(["--canvas", id, "notify", ask, "--item", header]);
+          await until(b, `fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'${features}'}}).then(r => r.json()).then(r => r.canvas.items["${header}"].versions.length === ${i + 2})`, `Kit's take ${i + 1}`, 60_000);
+          runCli(["--canvas", id, "version", "promote", header, original[header]]);
+        }
+        if (await b.ev(`!!${card}`)) throw new Error("the stuck card showed before the fourth ask");
+
+        // 2. The fourth ask: a question, not a take.
+        runCli(["--canvas", id, "notify", "@Kit no", "--item", header]);
+        await until(b, `!!${card}?.querySelector('[data-stuck-section="tiles"]')`, "Kit's question on Maya's card", 60_000);
+        if ((await versionsOf(header)) !== 4) throw new Error(`the fourth ask made a take: Header has ${await versionsOf(header)} versions, not the original and three`);
+        const text = await b.ev(`${card}.textContent`);
+        for (const w of ["I've been guessing at “Header”", "Three tries in", "none of them landed", "The asks got shorter", "What I noticed", "You kept the photo every time.", "Now, or instead?", "Density", "Brand expression", "Layout", "Tone of voice", "Dense, more at a glance", "Show me extremes", "Name a product that gets it right"]) {
+          if (!text.includes(w)) throw new Error(`the card does not say ${JSON.stringify(w)}: ${text.slice(0, 1500)}`);
+        }
+        const guesses = await b.ev(`JSON.stringify([...${card}.querySelectorAll("[data-stuck-tile]")].map((t) => [t.dataset.stuckTile, t.querySelector("[data-guess]")?.dataset.stuckSide, t.querySelector('[aria-checked="true"]')?.dataset.stuckSide]))`);
+        const want = [["density", "now", "now"], ["brand", "instead", "instead"], ["layout", "now", "now"], ["tone", "instead", "instead"]];
+        if (guesses !== JSON.stringify(want)) throw new Error(`the guesses are not highlighted and chosen by default: ${guesses}`);
+        const shots = {};
+        for (const theme of ["light", "dark"]) {
+          await b.ev(`(() => { document.documentElement.dataset.theme = ${JSON.stringify(theme)}; return true; })()`);
+          await sleep(400);
+          shots[`question-${theme}`] = await shot(`question-${theme}`);
+        }
+        await b.ev(`(() => { document.documentElement.dataset.theme = "light"; return true; })()`);
+        const printed = runCli(["--canvas", id, "stuck", header]);
+        if (printed.question?.tiles?.length !== 4) throw new Error(`the terminal does not read the same question: ${JSON.stringify(printed).slice(0, 400)}`);
+
+        // 3. Show me extremes: an ordinary message to Kit; the card goes.
+        await rig.click("[data-stuck-extremes]", "Show me extremes");
+        await until(b, `!${card}`, "the card to go once answered", 15_000);
+        const said = Object.values((await served(id)).threads).flatMap((t) => t.comments).find((c) => c.author.name === "Maya" && c.body.includes("Stuck answer ("));
+        if (!said || !said.body.includes("show me extremes") || !said.body.startsWith("@Kit")) throw new Error(`the answer did not reach Kit: ${said?.body}`);
+
+        // 4. Nothing to answer: the rc stops; Ravi's three takes at the Footer are set aside; the fourth ask's card says the question waits.
+        rc.kill("SIGINT");
+        await new Promise((r) => { rc.once("exit", r); setTimeout(r, 3000); });
+        if (rc.exitCode === null) rc.kill("SIGKILL");
+        rc = null;
+        const ravi = { ISOCAN_SESSION_ID: "stuck-ravi" };
+        runCli(["identity", "--as", "usr_stuck_ravi", "--name", "Ravi"], ravi);
+        for (const ask of ["A footer with the opening hours and the address", "Again, shorter", "again"]) {
+          runCli(["--canvas", id, "notify", ask, "--item", footer]);
+          runCli(["--canvas", id, "edit", footer, page("Footer", `Open from seven, ${ask.length}`)], ravi);
+          runCli(["--canvas", id, "version", "promote", footer, original[footer]]);
+        }
+        runCli(["--canvas", id, "notify", "no", "--item", footer]);
+        await until(b, `${card}?.dataset.stuckCard === "${footer}" && ${card}.textContent.includes("The question waits:")`, "the card saying the question waits", 30_000);
+        const waits = await b.ev(`${card}.textContent`);
+        if (!waits.includes("has been guessing at “Footer”") || !waits.includes("none of them landed")) throw new Error(`the waiting card does not say what the behaviour shows: ${waits}`);
+        if (await b.ev(`!!${card}.querySelector('[data-stuck-section="tiles"]')`)) throw new Error("the waiting card drew tiles nobody wrote");
+        shots["waits-light"] = await shot("waits-light");
+        const errors = b.takeErrors();
+        if (errors.length > 0) throw new Error(`the page threw: ${errors[0]}`);
+        return { screenshots: shots };
+      } catch (err) {
+        const said = await b.ev(`(document.querySelector("[data-stuck-card]")?.textContent ?? "no stuck card").slice(0, 1200)`).catch(() => "");
+        throw new Error(`${err.message}\n--- the card ---\n${said}\n--- rc ---\n${rcOut.slice(-3000)}`);
+      } finally {
+        if (rc) {
+          rc.kill("SIGINT");
+          await new Promise((r) => { rc.once("exit", r); setTimeout(r, 3000); });
+          if (rc.exitCode === null) rc.kill("SIGKILL");
+        }
+        await daemon.stop();
+        rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      }
+    },
+  },
+  {
+    name: "proactive-critics",
+    /**
+     * **Critics in the room, and the desk check** (proactive-agent phase 8,
+     * journey scene 8, `docs/projects/proactive-agent/phases.md`).
+     *
+     * Its own home and daemon with the real `isocan rc` and
+     * `packages/cli/test/fake-acp.mjs` as Kit, the canvas's lead — **no model
+     * runs**. A synthetic Acme canvas with one screen, Home: a promotion
+     * banner over a hero photo.
+     *
+     * With the Critique experiment on (the room is the critique module's),
+     * Maya opens *Crit with the room…* from Home's menu, adds two starter
+     * lenses — The Reductionist and The Brand Voice — and asks the room. Kit,
+     * woken by the ask, wears each lens: the two disagree about the banner
+     * (cut it / leave it) and agree about the hero (shrink it), and Kit posts
+     * the read. Home carries pins in two colours, each its critic's; the read
+     * of the room shows one synthesis — Kit's words, an agreement and a split
+     * with *Build both* — and Home is unchanged. *Build both* reaches Kit,
+     * whose two proposals hang beneath Home, each citing the critic it
+     * answers. With The Brand Voice set to *before I share*, `isocan share`
+     * prints the desk check above the address and asks Kit to wear it.
+     * Screenshots of the pins and the read, light and dark.
+     */
+    what: "critics in the room: two lenses over one screen give two colours of pins and one read of the room with a split and Build both; isocan share prints the desk check before the address",
+    async run(rig) {
+      const { b } = rig;
+      const home = mkdtempSync(path.join(tmpdir(), "isocan-journey-critics-"));
+      const kitDir = path.join(home, "kit");
+      const fakeAcp = path.join(repo, "packages/cli/test/fake-acp.mjs");
+      const act = path.join(home, "act.mjs");
+      execFileSync("mkdir", ["-p", kitDir]);
+      writeFileSync(path.join(home, "identity.json"), JSON.stringify({ id: "usr_critics_maya", name: "Maya", createdAt: new Date().toISOString() }));
+      writeFileSync(path.join(home, "config.json"), JSON.stringify({ adapterEnv: ["FAKE_ACP_*"], acpAdapters: { "claude-code": [process.execPath, fakeAcp] }, defaultHarness: "claude-code" }));
+      // Kit, scripted: asked for a crit, it wears each lens and posts the read; asked to build both, it proposes two.
+      writeFileSync(act, `
+import { execFileSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
+import path from "node:path";
+export default async function act({ prompt, cli, cwd }) {
+  const canvasId = /"canvasId":\\s*"([^"]+)"/.exec(prompt)?.[1];
+  if (!canvasId) return;
+  const run = (...args) => execFileSync(process.execPath, [cli, "--canvas", canvasId, ...args], { encoding: "utf8" });
+  // The summons carries the ask and the thread around it, so a line can appear twice: one take per note.
+  const both = [...new Map([...prompt.matchAll(/isocan propose (itm_[\\w-]+) \\S+ --cites critic:(thr_[\\w-]+)/g)].map((m) => [m[2], m])).values()];
+  // The newest ask is the one to answer: the summons carries the Chat's earlier turns too.
+  const newest = prompt.lastIndexOf("Build both, please (") > prompt.lastIndexOf("Crit, please (") ? "both" : "crit";
+  if (newest === "both" && both.length === 2) {
+    const takes = [["Home, quieter", "No banner: the order button is the one thing that moves.", "background:#fff"], ["Home, braver", "The banner keeps its red and becomes the header: one block, not two.", "background:#b5452a;color:#fff"]];
+    both.forEach(([, item, note], i) => {
+      const file = path.join(cwd, "both-" + i + ".html");
+      writeFileSync(file, "<!doctype html><title>" + takes[i][0] + "</title><main style='font:16px system-ui'><header style='padding:24px;" + takes[i][2] + "'><h1>Fresh bread</h1></header><button>Order for pickup</button></main>");
+      run("propose", item, file, "--cites", "critic:" + note, "--why", takes[i][1]);
+    });
+    return;
+  }
+  const asks = [...prompt.matchAll(/Crit, please \\((itm_[\\w-]+)@[^)]*\\)[^\\n]*/g)];
+  const crit = asks.at(-1)?.[1];
+  if (newest !== "crit" || !crit) return;
+  if (asks.at(-1)[0].includes("before they share")) {
+    run("critique", "note", crit, "--as", "brand-voice", "--at", "0.5,0.3", "--kind", "risk", "The heading could be anyone's bakery. Set it in the brand's face.");
+    return;
+  }
+  run("critique", "note", crit, "--as", "reductionist", "--at", "0.5,0.07", "--kind", "risk", "The promotion banner competes with the order button. Cut it.");
+  run("critique", "note", crit, "--as", "reductionist", "--at", "0.48,0.5", "--kind", "risk", "The hero photo pushes the menu below the fold. Reduce it.");
+  run("critique", "note", crit, "--as", "brand-voice", "--at", "0.53,0.09", "--kind", "working", "The banner's red is the only thing that says Acme. Leave it.");
+  run("critique", "note", crit, "--as", "brand-voice", "--at", "0.55,0.53", "--kind", "risk", "The hero is a stock loaf anyone could use. Shrink it to a strip.");
+  run("critique", "read", crit, "--post", "--say", "Reduction against recognition: the banner is both the noise and the brand. Both lenses would give the hero less room.");
+}
+`);
+      const daemon = await startDaemon(home);
+      const { origin } = daemon;
+      const env = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(origin).port, FAKE_ACP_ACT: act, FAKE_ACP_CLI: cli };
+      for (const name of ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_ENTRYPOINT", "ISOCAN_SESSION_ID", "ISOCAN_HARNESS", "CODEX_SANDBOX", "CODEX_THREAD_ID"]) delete env[name];
+      const runCli = (args, as = {}) => {
+        const out = execFileSync(process.execPath, [cli, "--json", ...args], { cwd: home, encoding: "utf8", env: { ...env, ...as } });
+        return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+      };
+      const shot = async (name) => {
+        const file = path.join(tmpdir(), `isocan-critics-${name}-${Date.now()}.png`);
+        writeFileSync(file, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+        return file;
+      };
+      const card = `document.querySelector("[data-room-read]")`;
+      const features = "canvas-groups-v4,questionnaires-v1,design-requests-v1,design-requests-v2,design-decisions-v1,design-repairs-v1";
+      const served = async (id) => JSON.parse(await b.ev(`fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'${features}'}}).then(r => r.json()).then(r => JSON.stringify(r.canvas))`));
+      let rc = null;
+      let rcOut = "";
+      try {
+        const id = runCli(["canvas", "create", "Acme Bakery"]).canvasId;
+        const page = path.join(home, "home.html");
+        writeFileSync(page, `<!doctype html><meta charset="utf-8"><title>Home</title><body style='margin:0;font:16px system-ui'><div style='padding:16px;background:#b5452a;color:#fff;font-weight:600'>Two loaves for one, today only</div><img alt='A loaf on a counter' style='display:block;width:100%;height:320px;background:#e8dcc8'><main style='padding:24px'><h1>Fresh bread, every morning</h1><p>Order by eight, collect from nine.</p><button style='padding:12px 20px'>Order for pickup</button></main></body>`);
+        const screen = runCli(["--canvas", id, "add", page, "--title", "Home", "--size", "390x800", "--at", "0,0"]).itemId;
+        const before = runCli(["--canvas", id, "show", screen]);
+        runCli(["--canvas", id, "rc", "add", "Kit", "--dir", kitDir]);
+        runCli(["--canvas", id, "canvas", "edit", "--prop", "proactive=Kit"]);
+        rc = spawn(process.execPath, [cli, "--canvas", id, "rc"], { cwd: home, env, stdio: ["ignore", "pipe", "pipe"] });
+        rc.stdout.on("data", (c) => (rcOut += c));
+        rc.stderr.on("data", (c) => (rcOut += c));
+
+        const { address } = runCli(["--canvas", id, "pass"]);
+        await b.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+        const loaded = b.once("Page.loadEventFired");
+        await b.send("Page.navigate", { url: origin });
+        await Promise.race([loaded, sleep(15_000)]);
+        await b.ev(`(() => { localStorage.clear(); localStorage.setItem("isocan.experiments", JSON.stringify(["critique"])); return true; })()`);
+        await b.send("Page.navigate", { url: address });
+        await until(b, `!!document.querySelector('[data-item-id="${screen}"]')`, "the canvas with Home", 20_000);
+        await until(b, `fetch('/api/projects/${id}/rc', {headers:{'x-isocan-features':'${features}'}}).then(r => r.json()).then(r => r.parked)`, "Kit's rc to park", 20_000);
+
+        // 1. Home's menu → Crit with the room… → two starter lenses, switched on.
+        const centre = await b.ev(`(() => { const r = document.querySelector('.item[data-item-id="${screen}"]').getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height * 0.6) }; })()`);
+        const mouse = (type, button) => b.send("Input.dispatchMouseEvent", { type, x: centre.x, y: centre.y, button, buttons: type === "mousePressed" ? (button === "right" ? 2 : 1) : 0, clickCount: 1 });
+        await mouse("mousePressed", "left");
+        await mouse("mouseReleased", "left");
+        await mouse("mousePressed", "right");
+        await mouse("mouseReleased", "right");
+        await sleep(500);
+        const menuText = await b.ev(`[...document.querySelectorAll('.context-menu [role=menuitem]')].map(e => e.textContent.trim()).join(' | ')`);
+        await rig.clickText(".context-menu [role=menuitem]", "Crit with the room", `Crit with the room… in Home's menu (it offers: ${menuText})`);
+        await until(b, `!!document.querySelector('[data-critics-room] [data-critic-add="reductionist"]')`, "Critics in the room with the starter lenses", 15_000);
+        await rig.click('[data-critic-add="reductionist"]', "The Reductionist");
+        await until(b, `!!document.querySelector('[data-critic="the-reductionist"]')`, "The Reductionist on the canvas", 15_000);
+        await rig.click('[data-critic-add="brand-voice"]', "The Brand Voice");
+        await until(b, `!!document.querySelector('[data-critic="the-brand-voice"]')`, "The Brand Voice on the canvas", 15_000);
+        const ls = runCli(["--canvas", id, "critic", "ls"]);
+        const switched = ls.critics.map((c) => [c.agentName, c.room.on]);
+        if (JSON.stringify(switched) !== JSON.stringify([["The Reductionist", true], ["The Brand Voice", true]])) throw new Error(`critic ls reads ${JSON.stringify(switched)} after the panel's two adds`);
+        if (ls.critics.some((c) => /[A-Z][a-z]+ [A-Z][a-z]+;/.test(c.credit))) throw new Error(`a starter lens credits a person: ${JSON.stringify(ls.critics.map((c) => c.credit))}`);
+
+        // 2. Ask the room: Kit wears both lenses, and posts the read.
+        await rig.click("[data-critics-ask]", "Ask the room about “Home”");
+        await until(b, `!document.querySelector('[data-critics-room]')`, "the dialog to close on the ask");
+        await until(b, `!!${card}?.querySelector('[data-room-say]') && !!${card}.querySelector('[data-room-split]')`, "the read of the room with Kit's words and a split", 60_000);
+        const pins = JSON.parse(await b.ev(`JSON.stringify([...document.querySelectorAll('.pin [data-persona]')].map((p) => [p.dataset.persona, getComputedStyle(p).backgroundColor]))`));
+        const colours = new Map(pins);
+        if (pins.length !== 4 || colours.size !== 2) throw new Error(`Home's lens pins are not four in two colours: ${JSON.stringify(pins)}`);
+        if (colours.get("the-reductionist") === colours.get("the-brand-voice")) throw new Error(`the two critics' pins share a colour: ${JSON.stringify(pins)}`);
+        const text = await b.ev(`${card}.textContent`);
+        for (const w of ["Read of the room — “Home”", "The Reductionist", "The Brand Voice", "Kit: Reduction against recognition", "Agree", "Split", "against", "Blocker", "None.", "Build both"]) {
+          if (!text.includes(w)) throw new Error(`the read of the room does not say ${JSON.stringify(w)}: ${text.slice(0, 1500)}`);
+        }
+        const sides = JSON.parse(await b.ev(`JSON.stringify([...${card}.querySelectorAll('[data-room-split] > ul')].map((u) => u.textContent))`));
+        if (sides.length !== 2 || !sides[0].includes("Leave it") || !sides[1].includes("Cut it")) throw new Error(`the split is not two whole sides: ${JSON.stringify(sides)}`);
+        const agree = await b.ev(`${card}.querySelector('[data-room-section="agree"]').textContent`);
+        if (!agree.includes("The Reductionist and The Brand Voice agree")) throw new Error(`the agreement is missing: ${agree}`);
+        const syntheses = Object.values((await served(id)).threads).flatMap((t) => t.comments).filter((c) => c.body.startsWith("Read of the room"));
+        if (syntheses.length !== 1) throw new Error(`${syntheses.length} reads of the room posted, not one`);
+        const after = await served(id);
+        if (after.items[screen].versions.length !== before.versions.length || after.items[screen].currentVersionId !== before.currentVersionId) throw new Error("a critic changed Home");
+        // The four notes' arrival toasts sit over the corner the card is in; dismiss them, as a person would.
+        while (await b.ev(`!!document.querySelector('.toast-close')`)) await rig.click(".toast-close", "a toast's close button");
+        await until(b, `!document.querySelector('.toast')`, "the arrival toasts to go", 10_000);
+        const shots = {};
+        for (const theme of ["light", "dark"]) {
+          await b.ev(`(() => { document.documentElement.dataset.theme = ${JSON.stringify(theme)}; return true; })()`);
+          await sleep(400);
+          shots[`room-${theme}`] = await shot(`room-${theme}`);
+        }
+        await b.ev(`(() => { document.documentElement.dataset.theme = "light"; return true; })()`);
+
+        // 3. Build both: two proposals beneath Home, each citing the critic it answers; Home untouched.
+        await rig.click("[data-room-both]", "Build both");
+        await until(b, `!!${card}?.querySelector('[data-room-both-asked]')`, "the card to say both were asked for", 15_000);
+        await until(b, `fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'${features}'}}).then(r => r.json()).then(r => Object.values(r.canvas.items).filter((i) => i.properties.proposal && i.properties.parent === "${screen}").length === 2)`, "Kit's two proposals beneath Home", 60_000);
+        const proposals = Object.values((await served(id)).items).filter((i) => i.properties.proposal && i.properties.parent === screen);
+        const cited = proposals.map((p) => JSON.parse(p.properties.proposalCites)[0].kind);
+        if (JSON.stringify(cited) !== JSON.stringify(["critic", "critic"])) throw new Error(`the proposals do not cite their critics: ${JSON.stringify(cited)}`);
+        const still = await served(id);
+        if (still.items[screen].currentVersionId !== before.currentVersionId) throw new Error("Build both changed Home");
+
+        // 4. The desk check: The Brand Voice before I share; share prints it above the address.
+        runCli(["--canvas", id, "critic", "set", "brand-voice", "--when", "share"]);
+        const printed = execFileSync(process.execPath, [cli, "--canvas", id, "share"], { cwd: home, encoding: "utf8", env });
+        const desk = printed.indexOf("Desk check before you share:");
+        const at = printed.search(/^address/m);
+        if (desk < 0 || at < 0 || desk > at) throw new Error(`share did not print the desk check before the address:\n${printed}`);
+        if (!printed.includes("it never blocks") || !printed.includes("The Brand Voice — asked to read it")) throw new Error(`the desk check does not say what it asked:\n${printed}`);
+        await until(b, `fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'${features}'}}).then(r => r.json()).then(r => Object.values(r.canvas.threads).some((t) => t.comments[0]?.persona === "the-brand-voice" && t.comments[0].body.includes("brand's face")))`, "Kit's note as The Brand Voice before the share", 60_000);
+        const errors = b.takeErrors();
+        if (errors.length > 0) throw new Error(`the page threw: ${errors[0]}`);
+        return { screenshots: shots, deskCheck: printed.slice(desk, at).trim() };
+      } catch (err) {
+        const said = await b.ev(`(document.querySelector("[data-room-read]")?.textContent ?? "no read of the room").slice(0, 1200)`).catch(() => "");
+        throw new Error(`${err.message}\n--- the read ---\n${said}\n--- rc ---\n${rcOut.slice(-3000)}`);
+      } finally {
+        if (rc) {
+          rc.kill("SIGINT");
+          await new Promise((r) => { rc.once("exit", r); setTimeout(r, 3000); });
+          if (rc.exitCode === null) rc.kill("SIGKILL");
+        }
+        await daemon.stop();
+        rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      }
+    },
+  },
+  {
+    name: "proactive-walk",
+    /**
+     * **Walk it as someone else** (proactive-agent phase 9, journey scene 9,
+     * `docs/projects/proactive-agent/phases.md`).
+     *
+     * Its own home and daemon with the real `isocan rc` and
+     * `packages/cli/test/fake-acp.mjs` as Kit, the canvas's lead — **no model
+     * runs**. A synthetic Acme flow, "Order a loaf": three phone screens in a
+     * group, Checkout with a faint "Edit" and a small "Help" in the bottom-left
+     * corner.
+     *
+     * Maya opens *Walk it as someone else…* from the group's menu, says the
+     * task, and walks it one-handed and with low vision. With Kit not yet
+     * answering, the lanes draw anyway — the thumb's zones over each screen,
+     * the low-vision render, the failing words as they see them beside the fix
+     * — the notice says these are simulations, the walk says it waits, and
+     * nothing is written. With Kit's rc parked, Walk asks Kit; Kit pins one
+     * stumble per walker on Checkout, ends each lane, names the shared problem
+     * and proposes one fix. The canvas carries the two pins worn as the
+     * walkers and one proposal citing the walk; every screen is unchanged.
+     * Screenshots of the lanes, light and dark.
+     */
+    what: "walk it as someone else: two lanes over a flow with the thumb's zones and the low-vision render beside the fix, the simulation notice, the walk waiting with nothing to answer; with Kit, pins, outcomes, a shared finding and one fix — nothing else written",
+    async run(rig) {
+      const { b } = rig;
+      const home = mkdtempSync(path.join(tmpdir(), "isocan-journey-walk-"));
+      const kitDir = path.join(home, "kit");
+      const fakeAcp = path.join(repo, "packages/cli/test/fake-acp.mjs");
+      const act = path.join(home, "act.mjs");
+      execFileSync("mkdir", ["-p", kitDir]);
+      writeFileSync(path.join(home, "identity.json"), JSON.stringify({ id: "usr_walk_maya", name: "Maya", createdAt: new Date().toISOString() }));
+      writeFileSync(path.join(home, "config.json"), JSON.stringify({ adapterEnv: ["FAKE_ACP_*"], acpAdapters: { "claude-code": [process.execPath, fakeAcp] }, defaultHarness: "claude-code" }));
+      const pages = {
+        "Pick a loaf": `<!doctype html><meta charset="utf-8"><title>Pick a loaf</title><style>body{margin:0;color:#1d1b18;background:#fffdf8;font:16px system-ui}h1{padding:24px 16px 0}ul{padding:0 16px;list-style:none}li{padding:12px 0;border-bottom:1px solid #e8dcc8}.go{position:fixed;left:16px;right:16px;bottom:16px;height:56px;border:0;border-radius:12px;background:#8a3a20;color:#fff;font:600 16px system-ui}</style><body><h1>Pick a loaf</h1><ul><li><a href="#rye">Rye</a></li><li><a href="#sourdough">Sourdough</a></li><li><a href="#seeded">Seeded</a></li></ul><button class="go">Continue</button></body>`,
+        "Choose a day": `<!doctype html><meta charset="utf-8"><title>Choose a day</title><style>body{margin:0;color:#222;background:#fffdf8;font:16px system-ui}h1{padding:24px 16px 0}label,select{display:block;margin:8px 16px}.go{position:fixed;left:16px;right:16px;bottom:16px;height:56px;border:0;border-radius:12px;background:#8a3a20;color:#fff;font:600 16px system-ui}</style><body><h1>Choose a day</h1><label for="d">Pickup day</label><select id="d"><option>Saturday</option><option>Sunday</option></select><button class="go">Continue</button></body>`,
+        Checkout: `<!doctype html><meta charset="utf-8"><title>Checkout</title><style>body{margin:0;color:#222;background:#ffffff;font:16px system-ui}h1{padding:24px 16px 0}p{margin:8px 16px}.edit{color:#aaaaaa;background:#ffffff;border:0;font:16px system-ui}.help{position:fixed;left:8px;bottom:8px;width:28px;height:28px;display:grid;place-items:center;border-radius:14px;background:#eee;color:#222;text-decoration:none}.pay{position:fixed;left:16px;right:16px;bottom:56px;height:56px;border:0;border-radius:12px;background:#8a3a20;color:#fff;font:600 16px system-ui}</style><body><h1>Checkout</h1><p>Sourdough, Saturday 9:00 <button class="edit">Edit</button></p><p>£4.20</p><button class="pay">Pay £4.20</button><a class="help" href="#help" aria-label="Help">?</a></body>`,
+      };
+      // Kit, scripted: asked to walk, it pins one stumble per walker on Checkout, ends each lane, and proposes one fix.
+      writeFileSync(act, `
+import { execFileSync } from "node:child_process";
+import { readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+export default async function act({ prompt, cli, cwd }) {
+  const canvasId = /"canvasId":\\s*"([^"]+)"/.exec(prompt)?.[1];
+  if (!canvasId || !prompt.includes("Walk it as someone else, please (")) return;
+  const run = (...args) => execFileSync(process.execPath, [cli, "--canvas", canvasId, ...args], { encoding: "utf8" });
+  const fix = path.join(cwd, "checkout-fix.html");
+  writeFileSync(fix, ${JSON.stringify(pages.Checkout.replace("#aaaaaa", "#595959").replace("width:28px;height:28px", "width:48px;height:48px"))});
+  run("walk",
+    "--stumble", "one-handed | Checkout | 3.1 | Could not reach Help in the far corner with the thumb.",
+    "--stumble", "low-vision | Checkout | 3.1 | Could not see Edit beside the pickup time.",
+    "--outcome", "one-handed | stumbled | Paid, but never found help.",
+    "--outcome", "low-vision | stumbled | Paid without changing the day: Edit was invisible.",
+    "--shared", "Checkout | The secondary actions are faint and out of the thumb's reach.",
+    "--fix", fix, "--why", "Contrast and target size: Edit darkens to 7:1 and Help grows to 48 px.");
+}
+`);
+      const daemon = await startDaemon(home);
+      const { origin } = daemon;
+      const env = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(origin).port, FAKE_ACP_ACT: act, FAKE_ACP_CLI: cli };
+      for (const name of ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_ENTRYPOINT", "ISOCAN_SESSION_ID", "ISOCAN_HARNESS", "CODEX_SANDBOX", "CODEX_THREAD_ID"]) delete env[name];
+      const runCli = (args, as = {}) => {
+        const out = execFileSync(process.execPath, [cli, "--json", ...args], { cwd: home, encoding: "utf8", env: { ...env, ...as } });
+        return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+      };
+      const shot = async (name) => {
+        const file = path.join(tmpdir(), `isocan-walk-${name}-${Date.now()}.png`);
+        writeFileSync(file, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+        return file;
+      };
+      const panel = `document.querySelector("[data-walk-panel]")`;
+      const features = "canvas-groups-v4,questionnaires-v1,design-requests-v1,design-requests-v2,design-decisions-v1,design-repairs-v1";
+      const served = async (id) => JSON.parse(await b.ev(`fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'${features}'}}).then(r => r.json()).then(r => JSON.stringify(r.canvas))`));
+      const comments = (c) => Object.values(c.threads).flatMap((t) => t.comments);
+      let rc = null;
+      let rcOut = "";
+      try {
+        const id = runCli(["canvas", "create", "Acme Bakery"]).canvasId;
+        runCli(["--canvas", id, "canvas", "group", "new", "Order a loaf"]);
+        const screens = {};
+        let x = 0;
+        for (const [title, html] of Object.entries(pages)) {
+          const file = path.join(home, `${title.replace(/\W+/g, "-")}.html`);
+          writeFileSync(file, html);
+          screens[title] = runCli(["--canvas", id, "add", file, "--title", title, "--size", "390x844", "--in", "Order a loaf", "--at", `${x},0`]).itemId;
+          x += 470;
+        }
+        runCli(["--canvas", id, "rc", "add", "Kit", "--dir", kitDir]);
+        runCli(["--canvas", id, "canvas", "edit", "--prop", "proactive=Kit"]);
+
+        const { address } = runCli(["--canvas", id, "pass"]);
+        await b.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+        const loaded = b.once("Page.loadEventFired");
+        await b.send("Page.navigate", { url: origin });
+        await Promise.race([loaded, sleep(15_000)]);
+        await b.ev(`(() => { localStorage.clear(); return true; })()`);
+        await b.send("Page.navigate", { url: address });
+        await until(b, `!!document.querySelector('[data-item-id="${screens.Checkout}"]')`, "the canvas with the flow", 20_000);
+        const before = await served(id);
+        const group = Object.values(before.items).find((i) => i.properties.kind === "group");
+        if (!group) throw new Error("no group on the canvas");
+
+        // 1. The group's menu → Walk it as someone else…: the task, two walkers, Walk — with Kit not answering.
+        const openMenu = async () => {
+          const at = await b.ev(`(() => { const r = document.querySelector('.item[data-item-id="${screens["Choose a day"]}"]').getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height * 0.5) }; })()`);
+          const mouse = (type, button) => b.send("Input.dispatchMouseEvent", { type, x: at.x, y: at.y, button, buttons: type === "mousePressed" ? (button === "right" ? 2 : 1) : 0, clickCount: 1 });
+          await mouse("mousePressed", "left");
+          await mouse("mouseReleased", "left");
+          await mouse("mousePressed", "right");
+          await mouse("mouseReleased", "right");
+          await sleep(500);
+          const menuText = await b.ev(`[...document.querySelectorAll('.context-menu [role=menuitem]')].map(e => e.textContent.trim()).join(' | ')`);
+          await rig.clickText(".context-menu [role=menuitem]", "Walk it as someone else", `Walk it as someone else… in the group's menu (it offers: ${menuText})`);
+          await until(b, `!!${panel}`, "the walk panel", 15_000);
+        };
+        await openMenu();
+        const opened = await b.ev(`${panel}.dataset.walkPanel`);
+        if (opened !== group.id) throw new Error(`the panel opened on ${opened}, not the group ${group.id}`);
+        await until(b, `${panel}.querySelector('[data-walk-flow]')?.textContent.includes('Pick a loaf → Choose a day → Checkout')`, "the flow's three screens in reading order", 15_000);
+        await b.ev(`(() => { const i = ${panel}.querySelector('[data-walk-task]'); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(i, 'order a loaf for Saturday'); i.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
+        const picked = JSON.parse(await b.ev(`JSON.stringify([...${panel}.querySelectorAll('[data-walk-walker]')].filter((c) => c.checked).map((c) => c.dataset.walkWalker))`));
+        if (JSON.stringify(picked) !== JSON.stringify(["one-handed", "low-vision"])) throw new Error(`the default walkers are ${JSON.stringify(picked)}`);
+        await until(b, `!${panel}.querySelector('[data-walk-go]').disabled`, "Walk to be ready (the screens read)", 15_000);
+        await rig.click("[data-walk-go]", "Walk");
+        await until(b, `!!${panel}.querySelector('[data-walk-waits]')?.textContent.startsWith('The walk waits')`, "the walk to say it waits", 15_000);
+        await until(b, `${panel}.querySelectorAll('[data-walk-lane="one-handed"] [data-walk-render="thumb"]').length === 3 && ${panel}.querySelectorAll('[data-walk-lane="low-vision"] [data-walk-render="low-vision"]').length >= 3`, "two lanes, the thumb's zones and the low-vision render on every screen", 15_000);
+        const notice = await b.ev(`${panel}.querySelector('[data-walk-notice]')?.textContent ?? ""`);
+        if (!/These are simulations, not people/.test(notice) || !/do not replace testing/.test(notice)) throw new Error(`the simulation notice is missing: ${notice}`);
+        const waitsText = await b.ev(`${panel}.querySelector('[data-walk-waits]').textContent`);
+        const seen = JSON.parse(await b.ev(`JSON.stringify([...${panel}.querySelectorAll('[data-walk-lane="low-vision"] [data-walk-seen] [data-walk-swatch]')].map((s) => [s.dataset.walkSwatch, s.textContent, getComputedStyle(s).color, getComputedStyle(s).filter]))`));
+        if (seen.length !== 2 || seen[0][0] !== "seen" || seen[1][0] !== "fix" || seen[0][1] !== "Edit" || seen[0][2] === seen[1][2] || !seen.every((s) => s[3].includes("walk-low-vision"))) throw new Error(`the failure is not shown as they see it beside the fix: ${JSON.stringify(seen)}`);
+        if (!(await b.ev(`!!${panel}.querySelector('[data-walk-lane="low-vision"] [data-walk-fixed]')`))) throw new Error("no screen drawn with the fix in the low-vision lane");
+        const lenses = JSON.parse(await b.ev(`JSON.stringify([...${panel}.querySelectorAll('[data-walk-lane="low-vision"] .walk-lens')].map((l) => getComputedStyle(l).filter))`));
+        if (!lenses.length || !lenses.every((f) => /url\(.*walk-low-vision/.test(f))) throw new Error(`the low-vision lane's screens are not drawn through the low-vision filter: ${JSON.stringify(lenses)}`);
+        if (await b.ev(`[...${panel}.querySelectorAll('[data-walk-lane="one-handed"] .walk-lens')].some((l) => getComputedStyle(l).filter !== "none")`)) throw new Error("the one-handed lane is drawn blurred");
+        const reachFinding = await b.ev(`${panel}.querySelector('[data-walk-lane="one-handed"] [data-walk-screen="${screens.Checkout}"] [data-walk-finding="3.1"]')?.textContent ?? ""`);
+        if (!reachFinding.includes("“Help” is 28×28 px in the stretch zone")) throw new Error(`the one-handed lane does not find Help: ${reachFinding}`);
+        const asked = await served(id);
+        if (comments(asked).length !== comments(before).length) throw new Error("a walk with nothing to answer wrote a comment");
+        const shots = {};
+        // Tall enough for both lanes at once: the thumb's zones above, low vision beside the fix below.
+        await b.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1700, deviceScaleFactor: 1, mobile: false });
+        for (const theme of ["light", "dark"]) {
+          await b.ev(`(() => { document.documentElement.dataset.theme = ${JSON.stringify(theme)}; return true; })()`);
+          await sleep(400);
+          shots[`waits-${theme}`] = await shot(`waits-${theme}`);
+        }
+        await b.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+        await b.ev(`(() => { document.documentElement.dataset.theme = "light"; return true; })()`);
+        await b.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+        await b.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+        await until(b, `!${panel}`, "Escape to close the panel");
+
+        // 2. Kit's rc parks; Walk asks Kit, whose pins, outcomes, shared finding and one fix come back.
+        rc = spawn(process.execPath, [cli, "--canvas", id, "rc"], { cwd: home, env, stdio: ["ignore", "pipe", "pipe"] });
+        rc.stdout.on("data", (c) => (rcOut += c));
+        rc.stderr.on("data", (c) => (rcOut += c));
+        await until(b, `fetch('/api/projects/${id}/rc', {headers:{'x-isocan-features':'${features}'}}).then(r => r.json()).then(r => r.parked)`, "Kit's rc to park", 20_000);
+        await openMenu();
+        await until(b, `!!${panel}.querySelector('[data-walk-task]')`, "the walk's setup");
+        await b.ev(`(() => { const i = ${panel}.querySelector('[data-walk-task]'); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(i, 'order a loaf for Saturday'); i.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
+        await until(b, `!${panel}.querySelector('[data-walk-go]').disabled`, "Walk to be ready", 15_000);
+        await rig.click("[data-walk-go]", "Walk");
+        await until(b, `${panel}.querySelectorAll('[data-walk-outcome]').length === 2 && !!${panel}.querySelector('[data-walk-shared] [data-walk-fix]')`, "Kit's outcomes and the shared finding with its fix", 60_000);
+        const outcomes = JSON.parse(await b.ev(`JSON.stringify([...${panel}.querySelectorAll('[data-walk-outcome]')].map((o) => o.dataset.walkOutcome))`));
+        if (JSON.stringify(outcomes) !== JSON.stringify(["stumbled", "stumbled"])) throw new Error(`the lanes end ${JSON.stringify(outcomes)}`);
+        const sharedText = await b.ev(`${panel}.querySelector('[data-walk-shared]').textContent`);
+        if (!sharedText.includes("“Checkout”: The secondary actions are faint and out of the thumb's reach.")) throw new Error(`the shared finding does not name Checkout: ${sharedText}`);
+        const lanePins = await b.ev(`${panel}.querySelectorAll('[data-walk-pin]').length`);
+        if (lanePins < 2) throw new Error(`the lanes carry ${lanePins} pins, not one per stumble`);
+        const after = await served(id);
+        const added = Object.keys(after.items).filter((k) => !before.items[k]);
+        if (added.length !== 1) throw new Error(`the walk added ${added.length} items, not one proposal`);
+        const proposal = after.items[added[0]];
+        const cites = JSON.parse(proposal.properties.proposalCites ?? "[]");
+        if (proposal.properties.parent !== screens.Checkout || cites[0]?.kind !== "walk") throw new Error(`the fix is not a proposal beneath Checkout citing the walk: ${JSON.stringify(proposal.properties)}`);
+        for (const [title, sid] of Object.entries(screens)) {
+          if (after.items[sid].currentVersionId !== before.items[sid].currentVersionId || after.items[sid].versions.length !== before.items[sid].versions.length) throw new Error(`the walk changed ${title}`);
+        }
+        const pins = Object.values(after.threads).filter((t) => t.anchorItemId === screens.Checkout && ["one-handed", "low-vision"].includes(t.comments[0]?.persona));
+        if (pins.length !== 2) throw new Error(`Checkout carries ${pins.length} walker pins, not two`);
+        const newThreads = Object.keys(after.threads).filter((k) => !before.threads[k] && !after.threads[k].main);
+        if (newThreads.length !== 2) throw new Error(`the walk opened ${newThreads.length} threads, not two pins`);
+        if (!(await b.ev(`!!document.querySelector('.pin [data-persona="one-handed"]') && !!document.querySelector('.pin [data-persona="low-vision"]')`))) throw new Error("the canvas does not draw the walkers' pins");
+        // The walkers' pins arrive as comment toasts in the corner the panel is
+        // in, and by the layer scale a toast (--z-toast) sits over a floating
+        // panel (--z-float). That held only on paper while `.canvas-page` was
+        // `position: fixed`: it made the page its own stacking context, so the
+        // body-mounted panel covered every toast's close button. Guarded here
+        // by pressing them for real, and only where one actually lies over the
+        // open panel — otherwise the presses prove nothing about the layers.
+        await until(b, `!!document.querySelector('.toast-close')`, "the walkers' pins to arrive as toasts", 15_000);
+        const overPanel = JSON.parse(await b.ev(`JSON.stringify((() => { const p = ${panel}.getBoundingClientRect(); return [...document.querySelectorAll('.toast-close')].map((c) => { const r = c.getBoundingClientRect(); const x = r.left + r.width / 2, y = r.top + r.height / 2; return x > p.left && x < p.right && y > p.top && y < p.bottom; }); })())`));
+        if (!overPanel.some(Boolean)) throw new Error(`no toast's close button lies over the open walk panel, so pressing them no longer proves the toasts sit above it: ${JSON.stringify(overPanel)}`);
+        // What traps the toasts, named, when one is covered: every ancestor that makes a stacking context.
+        const traps = await b.ev(`(() => { const out = []; for (let el = document.querySelector('.toasts')?.parentElement; el && el !== document.documentElement; el = el.parentElement) { const s = getComputedStyle(el); const why = [s.position === 'fixed' || s.position === 'sticky' ? 'position: ' + s.position : '', s.zIndex !== 'auto' && s.position !== 'static' ? 'z-index: ' + s.zIndex : '', s.isolation === 'isolate' ? 'isolation' : '', s.transform !== 'none' ? 'transform' : '', s.filter !== 'none' ? 'filter' : '', /paint|layout|strict|content/.test(s.contain) ? 'contain: ' + s.contain : '', s.opacity !== '1' ? 'opacity' : ''].filter(Boolean); if (why.length) out.push((el.className || el.tagName) + ' (' + why.join(', ') + ')'); } return out.join('; ') || 'none'; })()`);
+        while (await b.ev(`!!document.querySelector('.toast-close')`)) {
+          await rig.click(".toast-close", `a toast's close button, over the open walk panel (stacking contexts above the toasts: ${traps})`);
+        }
+        await until(b, `!document.querySelector('.toast')`, "the arrival toasts to go", 10_000);
+        await b.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1700, deviceScaleFactor: 1, mobile: false });
+        for (const theme of ["light", "dark"]) {
+          await b.ev(`(() => { document.documentElement.dataset.theme = ${JSON.stringify(theme)}; return true; })()`);
+          await sleep(400);
+          shots[`walked-${theme}`] = await shot(`walked-${theme}`);
+        }
+        await b.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+        await b.ev(`(() => { document.documentElement.dataset.theme = "light"; return true; })()`);
+        const errors = b.takeErrors();
+        if (errors.length > 0) throw new Error(`the page threw: ${errors[0]}`);
+        return { screenshots: shots, waits: waitsText };
+      } catch (err) {
+        const said = await b.ev(`(document.querySelector("[data-walk-panel]")?.textContent ?? "no panel").slice(0, 1500)`).catch(() => "");
+        throw new Error(`${err.message}\n--- the panel ---\n${said}\n--- rc ---\n${rcOut.slice(-3000)}`);
+      } finally {
+        if (rc) {
+          rc.kill("SIGINT");
+          await new Promise((r) => { rc.once("exit", r); setTimeout(r, 3000); });
+          if (rc.exitCode === null) rc.kill("SIGKILL");
+        }
+        await daemon.stop();
+        rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      }
+    },
+  },
+  {
+    name: "proactive-words",
+    /**
+     * **Say it like a designer** (proactive-agent phase 10, journey scene 10,
+     * `docs/projects/proactive-agent/phases.md`).
+     *
+     * The agent is a stub: the terminal speaking as Kit, parked on `wait`.
+     * Maya types "make the header pop more, it feels cramped" in the Chat:
+     * only *pop* and *cramped* are underlined, each with three readings, and
+     * the designer's sentence is offered on Tab. She picks *contrast* for pop
+     * and presses Enter: her words are sent unchanged, and the reading rides
+     * with them as data — Kit's wait wakes holding both. Then Tab takes the
+     * designer's sentence for "the total needs more pop", which is what is
+     * sent. Kit learns her word for the main button into the taste note, and
+     * `/vocabulary` shows the words she now uses, those she has seen, and
+     * that one. Screenshots of the readings and the panel, light and dark.
+     * No fixed sleeps: the park is waited for as the daemon shows it.
+     */
+    what: "say it like a designer: only the vague words are underlined with three readings; Enter sends the person's words unchanged with the picked reading as data; Tab takes the designer's sentence; the vocabulary panel lists what they use, have seen and taught",
+    async run(rig) {
+      const { b } = rig;
+      // A canvas uses groups: the page's own reads say which shapes they speak.
+      const FEATURES = `{headers:{'x-isocan-features':'canvas-groups-v4,questionnaires-v1,design-requests-v1,design-requests-v2,design-decisions-v1,design-repairs-v1'}}`;
+      const env = { ...process.env, ISOCAN_HOME: rig.home, ISOCAN_PORT: new URL(rig.origin).port };
+      const runCli = (args, extra = {}) =>
+        execFileSync(process.execPath, [cli, ...args], { cwd: rig.home, encoding: "utf8", env: { ...env, ...extra } });
+      const shot = async (name) => {
+        const file = path.join(tmpdir(), `isocan-words-${name}-${Date.now()}.png`);
+        writeFileSync(file, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+        return file;
+      };
+      const themed = async (name, shots) => {
+        for (const theme of ["light", "dark"]) {
+          await b.ev(`(() => { document.documentElement.dataset.theme = ${JSON.stringify(theme)}; return true; })()`);
+          // Two frames: the theme's colours are painted before the picture is taken.
+          await b.ev(`new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(true))))`);
+          shots[`${name}-${theme}`] = await shot(`${name}-${theme}`);
+        }
+        await b.ev(`(() => { document.documentElement.dataset.theme = "light"; return true; })()`);
+      };
+
+      writeFileSync(path.join(rig.home, "identity.json"), JSON.stringify({ id: "usr_pw_maya", name: "Maya", createdAt: new Date().toISOString() }));
+      runCli(["bench", "add", "Kit", "--actor", "usr_pw_kit", "--harness", "pi"]);
+      const kit = { ISOCAN_SESSION_ID: "journey-words-kit" };
+      runCli(["identity", "--as", "usr_pw_kit", "--name", "Kit"], kit);
+      const id = JSON.parse(runCli(["--json", "canvas", "create", "Acme Bakery"])).canvasId;
+      const page = path.join(rig.home, "header.html");
+      writeFileSync(page, "<!doctype html><title>Header</title><body style='margin:0;font:16px system-ui'><header style='padding:12px;background:#f4ede4'><h1 style='margin:0'>Acme Bakery</h1><p style='margin:0'>Fresh bread daily</p></header></body>");
+      runCli(["--canvas", id, "add", page, "--at", "0,0", "--size", "390x200", "--title", "Header"]);
+      // Kit has spoken here in design words, so Maya has seen some she has not used.
+      runCli(["--canvas", id, "notify", "Morning! I read the menu: the visual hierarchy leads with the photo, and proximity groups each loaf with its price."], kit);
+
+      // Kit parks — collected at spawn, ready when the daemon shows the park waiting (lessons.md #123).
+      runCli(["--canvas", id, "session", "start", "--label", "Kit 🤖"], kit);
+      const parked = spawn(process.execPath, [cli, "--canvas", id, "wait", "--json", "--timeout", "90"], { cwd: rig.home, env: { ...env, ...kit }, stdio: ["ignore", "pipe", "pipe"] });
+      let woke = "";
+      parked.stdout.on("data", (c) => (woke += c));
+      parked.stderr.on("data", (c) => (woke += c));
+      const exited = new Promise((r) => parked.once("exit", r));
+      try {
+        const { address } = JSON.parse(runCli(["--json", "--canvas", id, "pass"]));
+        await b.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false });
+        await b.ev(`(() => { localStorage.clear(); return true; })()`);
+        await b.send("Page.navigate", { url: address });
+        await until(b, `!!document.querySelector(".main-panel .mention-input")`, "the Chat's composer for Maya", 20_000);
+        await until(b, `fetch('/api/projects/${id}/sessions', ${FEATURES}).then(r => r.ok ? r.json() : []).then(s => s.some(x => x.actor.id === "usr_pw_kit" && (x.status ?? "").includes("waiting")))`, "Kit's park to show as waiting", 20_000).catch(async (err) => {
+          throw new Error(`${err.message}: ${await b.ev(`fetch('/api/projects/${id}/sessions', ${FEATURES}).then(r => r.text())`)} / wait said: ${woke.slice(0, 300)}`);
+        });
+
+        // 1. Only the vague words, each with three readings, and the designer's sentence.
+        const said = "make the header pop more, it feels cramped";
+        await rig.click(".main-panel .mention-input", "the Chat's composer");
+        await rig.type(said);
+        const card = `document.querySelector(".main-panel .designer-words")`;
+        await until(b, `!!${card}?.querySelector("[data-designer-sentence]")`, "the readings and the designer's sentence", 10_000);
+        await until(b, `document.querySelectorAll(".main-panel .mention-backdrop .vague-word").length > 0`, "the underline in the composer");
+        const underlined = await b.ev(`JSON.stringify([...document.querySelectorAll(".main-panel .mention-backdrop .vague-word")].map((w) => w.textContent))`);
+        if (underlined !== JSON.stringify(["pop", "cramped"])) throw new Error(`the underline is not exactly pop and cramped: ${underlined}`);
+        const readings = await b.ev(`JSON.stringify([...${card}.querySelectorAll("[data-vague-word]")].map((w) => [w.dataset.vagueWord, [...w.querySelectorAll("[data-reading]")].map((r) => r.dataset.reading)]))`);
+        if (readings !== JSON.stringify([["pop", ["contrast", "scale", "colour"]], ["cramped", ["spacing", "density", "size"]]])) throw new Error(`the readings are not three each: ${readings}`);
+        const sentence = await b.ev(`${card}.querySelector("[data-designer-sentence]").textContent`);
+        if (!sentence.includes("raise the header's contrast and add space between its parts")) throw new Error(`the designer's sentence is not offered: ${sentence}`);
+
+        // 2. She picks contrast by looking; Enter sends her words unchanged, the pick beside them.
+        await rig.click('.main-panel [data-vague-word="pop"] [data-reading="contrast"]', "the contrast reading of pop");
+        await until(b, `${card}.querySelector('[data-reading="contrast"]').getAttribute("aria-checked") === "true"`, "contrast picked");
+        if (!(await b.ev(`document.activeElement?.classList.contains("mention-input")`))) throw new Error("picking a reading took the caret out of the composer");
+        const shots = {};
+        await themed("readings", shots);
+        await rig.press("Enter");
+        await Promise.race([exited, new Promise((r) => setTimeout(r, 20_000))]);
+        if (parked.exitCode === null) throw new Error("Kit's wait did not wake on Maya's message");
+        const wake = JSON.parse(woke.slice(woke.indexOf("{")));
+        const text = JSON.stringify(wake);
+        if (!text.includes(JSON.stringify(said))) throw new Error(`Kit did not get Maya's words unchanged: ${text.slice(0, 600)}`);
+        if (!/"readings":\s*\[\s*\{\s*"word":\s*"pop",\s*"reading":\s*"contrast"\s*\}\s*\]/.test(text)) throw new Error(`the picked reading did not travel with the message: ${text.slice(0, 600)}`);
+        const served = async () => JSON.parse(await b.ev(`fetch('/api/projects/${id}/canvas', ${FEATURES}).then(r => r.json()).then(r => JSON.stringify(r.canvas))`));
+        const sent = Object.values((await served()).threads).flatMap((t) => t.comments).filter((c) => c.author.id === "usr_pw_maya");
+        if (sent.length !== 1 || sent[0].body !== said || JSON.stringify(sent[0].readings) !== JSON.stringify([{ word: "pop", reading: "contrast" }])) throw new Error(`the sent message is not her words with the reading as data: ${JSON.stringify(sent)}`);
+        await until(b, `!document.querySelector(".main-panel .designer-words") && document.querySelector(".main-panel .mention-input").value === ""`, "the composer to clear after sending");
+
+        // 3. Tab takes the designer's sentence, and that is what Enter sends.
+        await rig.type("the total needs more pop");
+        await until(b, `!!document.querySelector(".main-panel .designer-words [data-designer-sentence]")`, "the second offer");
+        // The offer is the Chat's once the field's underline is drawn from it.
+        await until(b, `document.querySelectorAll(".main-panel .mention-backdrop .vague-word").length === 1`, "the second underline");
+        await rig.press("Tab");
+        await until(b, `document.querySelector(".main-panel .mention-input").value === "the total needs more contrast"`, "Tab to take the designer's sentence").catch(async (err) => {
+          throw new Error(`${err.message}: the field holds ${await b.ev(`JSON.stringify([document.querySelector(".main-panel .mention-input").value, document.activeElement?.className, document.querySelectorAll(".main-panel .vague-word").length])`)}`);
+        });
+        await rig.press("Enter");
+        await until(b, `fetch('/api/projects/${id}/canvas', ${FEATURES}).then(r => r.json()).then(r => Object.values(r.canvas.threads).flatMap(t => t.comments).some(c => c.author.id === "usr_pw_maya" && c.body === "the total needs more contrast" && !c.readings))`, "the designer's sentence sent, with no readings", 10_000);
+
+        // 4. Kit learns her word; /vocabulary lists what she uses, has seen, and taught.
+        runCli(["--canvas", id, "taste", '"the thumb button" means the main action, within thumb reach'], kit);
+        await until(b, `fetch('/api/projects/${id}/canvas', ${FEATURES}).then(r => r.json()).then(r => Object.values(r.canvas.items).some(i => i.properties?.taste === "1"))`, "the taste note on Maya's canvas", 10_000);
+        await rig.type("/vocabulary");
+        // The "/" menu completes the command on the first Enter; the second sends it.
+        await rig.press("Enter");
+        await rig.press("Enter");
+        const panel = `document.querySelector(".main-panel [data-vocabulary]")`;
+        await until(b, `!!${panel}?.querySelector("ul[data-vocabulary-learned]")`, "the vocabulary panel with a learned word", 10_000);
+        const vocab = await b.ev(`JSON.stringify({ use: [...${panel}.querySelectorAll("[data-vocabulary-use] span")].map((s) => s.textContent), seen: [...${panel}.querySelectorAll("[data-vocabulary-seen] span")].map((s) => s.textContent), learned: ${panel}.querySelector("[data-vocabulary-learned]").textContent, count: !!${panel}.querySelector("[data-vocabulary-count]") })`);
+        const v = JSON.parse(vocab);
+        if (JSON.stringify(v.use) !== JSON.stringify(["contrast"])) throw new Error(`words she now uses: ${vocab}`);
+        if (JSON.stringify(v.seen) !== JSON.stringify(["proximity", "visual hierarchy"])) throw new Error(`words seen and not used: ${vocab}`);
+        if (!v.learned.includes("“the thumb button”") || !v.learned.includes("the main action, within thumb reach")) throw new Error(`the learned word: ${vocab}`);
+        if (v.count) throw new Error("the count of asks showed without being asked for");
+        const leftover = await served();
+        if (Object.values(leftover.threads).flatMap((t) => t.comments).some((c) => c.body.includes("/vocabulary"))) throw new Error("/vocabulary was posted to everyone instead of answered here");
+        await themed("vocabulary", shots);
+        const errors = b.takeErrors();
+        if (errors.length > 0) throw new Error(`the page threw: ${errors[0]}`);
+        return { screenshots: shots };
+      } finally {
+        if (parked.exitCode === null) parked.kill("SIGKILL");
+        try { runCli(["--canvas", id, "session", "end"], kit); } catch { /* already gone */ }
       }
     },
   },
@@ -4132,6 +6254,480 @@ export const JOURNEYS = [
       return { screen: screen.item.id, from: title, to: NEW, refusedOn: rowScreen.item.id, refusal };
     },
   },
+  {
+    name: "semantic-zoom-text",
+    /**
+     * **Semantic Zoom, phase 1: a long note far away shows a summary**
+     * (`docs/projects/semantic-zoom/phases.md`, phase 1's proof). Its own
+     * daemon, because the shared one has no text model: this one's model is a
+     * stub on loopback (`ISOCAN_TEXT_ENDPOINT`) that records what it was asked
+     * and answers a fixed summary — never a real model — and its quiet period
+     * is 2.5 s rather than 30 so the walk does not wait half a minute.
+     *
+     * Flag off, zoomed out: no request to the summaries route, no chunk of the
+     * experiment's, nothing asked of the stub, and the node shows its opening
+     * words. Flag on: the summary shows, marked ≈ and named "Summary of …".
+     * An edit: the old summary stays with its updating mark, then the new one
+     * replaces it, and at no sampled frame in between is the mark missing.
+     */
+    what: "flag off asks nothing; flag on, a far-away long note shows its ≈ summary; an edit keeps the old one, marked updating, until the new one lands",
+    async run(rig) {
+      const { b } = rig;
+      const asked = [];
+      const stub = createServer((req, res) => {
+        let body = "";
+        req.on("data", (c) => (body += c));
+        req.on("end", () => {
+          const sent = JSON.parse(body || "{}");
+          asked.push(sent);
+          const prompt = JSON.stringify(sent.messages ?? []);
+          const summary = /Ravi adds a revision/.test(prompt) ? `Acme summary ${asked.length}: revised plan, Ravi adds a revision.` : `Acme summary ${asked.length}: launch slips two weeks; Ravi owns pricing.`;
+          res.writeHead(200, { "content-type": "application/json" });
+          res.end(JSON.stringify({ id: "msg_stub", type: "message", role: "assistant", model: sent.model, stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify({ summary }) }] }));
+        });
+      });
+      await new Promise((r) => stub.listen(0, "127.0.0.1", r));
+      const home = mkdtempSync(path.join(tmpdir(), "isocan-journey-sz-"));
+      const daemon = await startDaemon(home, {
+        ISOCAN_TEXT_API_KEY: "sk-ant-journey-stub-not-a-key",
+        ISOCAN_TEXT_PROVIDER: "anthropic",
+        ISOCAN_TEXT_ENDPOINT: `http://127.0.0.1:${stub.address().port}/v1/messages`,
+        ISOCAN_SUMMARY_QUIET_MS: "2500",
+        ISOCAN_SUMMARY_MODEL: "",
+        ISOCAN_TEXT_MODEL: "",
+      });
+      const { origin } = daemon;
+      try {
+        const env = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(origin).port, ISOCAN_SESSION_ID: "acme-semantic-zoom-journey", ISOCAN_HARNESS: "test" };
+        const runCli = (...args) => {
+          const out = execFileSync(process.execPath, [cli, "--json", ...args], { cwd: home, encoding: "utf8", env });
+          return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+        };
+        runCli("identity", "--session", "--name", "Acme Notes CLI");
+        const id = runCli("canvas", "create", "Acme semantic zoom").canvasId;
+        const words = (extra = "") => `# Notes\n\n${"The Acme launch slips two weeks while Ravi rewrites the pricing page and the team settles the open question on data residency. ".repeat(3)}${extra}`;
+        const file = path.join(home, "notes.md");
+        writeFileSync(file, words());
+        const note = runCli("--canvas", id, "text", "-f", file, "--at", "0,0").itemId;
+        const sel = JSON.stringify(`.item[data-item-id="${note}"]`);
+
+        await b.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+        const loaded = b.once("Page.loadEventFired");
+        await b.send("Page.navigate", { url: origin });
+        await Promise.race([loaded, sleep(15_000)]);
+        await throughTheDoor(b, origin, "Journey", "journeys-semantic-zoom");
+        const open = async () => {
+          await b.send("Page.navigate", { url: `${origin}/p/${id}` });
+          await until(b, `!!document.querySelector(${sel})`, "the note on the canvas", 15_000);
+        };
+        const scale = () => b.ev(`parseFloat(getComputedStyle(document.querySelector(".world")).getPropertyValue("--scale")) || 1`);
+        const zoomOut = async () => {
+          for (let n = 0; (await scale()) > 0.15 && n < 80; n++) {
+            const at = await b.ev(`(() => { const r = document.querySelector(${sel}).getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`);
+            await b.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: Math.min(Math.max(at.x, 200), 1080), y: Math.min(Math.max(at.y, 200), 700), deltaX: 0, deltaY: 120, modifiers: 2 });
+            await sleep(40);
+          }
+          await until(b, `!!document.querySelector(${sel} + " .text-mark")`, "the note too small to read, drawn as its mark", 4000);
+        };
+        const summaryRequests = () => b.ev(`performance.getEntriesByType("resource").filter((e) => e.name.includes("/summaries")).length`);
+        const chunk = () => b.ev(`performance.getEntriesByType("resource").some((e) => /SemanticZoom-/.test(e.name)) || [...document.querySelectorAll("script[src],link[href]")].some((e) => /SemanticZoom-/.test(e.src || e.href))`);
+
+        // 1. Flag off: nothing asked, nothing loaded, the opening words.
+        await b.ev(`(() => { localStorage.removeItem("isocan.experiments"); return true; })()`);
+        await open();
+        await zoomOut();
+        await sleep(3000);
+        if (await summaryRequests()) throw new Error("with the flag off the page still asked the summaries route");
+        if (await chunk()) throw new Error("with the flag off the Semantic Zoom chunk loaded anyway");
+        if (asked.length) throw new Error(`with the flag off the model was asked ${asked.length} time(s)`);
+        if (await b.ev(`!!document.querySelector(".sz-gist")`)) throw new Error("with the flag off a summary is drawn");
+        const opening = await b.ev(`document.querySelector(${sel} + " .text-mark").textContent.trim()`);
+        if (opening !== "Notes") throw new Error(`with the flag off the far-away note says "${opening}", not its opening words`);
+
+        // 2. Flag on: the summary, marked as one.
+        await b.ev(`(() => { localStorage.setItem("isocan.experiments", JSON.stringify(["semantic.zoom"])); return true; })()`);
+        await open();
+        await zoomOut();
+        const gist = sel + ' + " .sz-gist"';
+        await until(b, `/Acme summary \\d+: launch slips/.test(document.querySelector(${gist})?.textContent ?? "") && !document.querySelector(${gist}).hasAttribute("data-stale")`, "the note's summary, current", 20_000);
+        const first = await b.ev(`(() => { const g = document.querySelector(${gist}); return { text: g.textContent.trim(), name: g.getAttribute("aria-label"), role: g.getAttribute("role") }; })()`);
+        if (!first.text.startsWith("≈")) throw new Error(`the summary is not marked ≈: "${first.text}"`);
+        if (first.name !== "Summary of Notes") throw new Error(`the summary's accessible name is "${first.name}", not "Summary of Notes"`);
+        if (asked.length !== 1) throw new Error(`one note, ${asked.length} model calls`);
+        if (asked[0].model !== "claude-haiku-5-5") throw new Error(`the summary asked ${asked[0].model}, not the cheap tier`);
+        if (!/too far away to read/.test(String(asked[0].system))) throw new Error("the summary was asked under the copywriter's system line");
+
+        // 3. An edit: the old summary stays, marked updating, until the new one replaces it — never an empty frame.
+        await b.ev(`(() => {
+          window.__szGaps = 0; window.__szWatch = true;
+          const look = () => { if (!document.querySelector(${gist})) window.__szGaps++; };
+          new MutationObserver(look).observe(document.querySelector(".world"), { subtree: true, childList: true, characterData: true, attributes: true });
+          const frame = () => { if (!window.__szWatch) return; look(); requestAnimationFrame(frame); };
+          requestAnimationFrame(frame);
+          return true;
+        })()`);
+        writeFileSync(file, words("\n\nRavi adds a revision to the plan."));
+        runCli("--canvas", id, "edit", note, file);
+        await until(b, `document.querySelector(${gist})?.hasAttribute("data-stale") && /launch slips/.test(document.querySelector(${gist}).textContent) && !!document.querySelector(${gist} + " .sz-updating")`, "the old summary kept, marked as being updated", 10_000);
+        await until(b, `/revised plan/.test(document.querySelector(${gist})?.textContent ?? "") && !document.querySelector(${gist}).hasAttribute("data-stale")`, "the new summary in the old one's place", 20_000);
+        const gaps = await b.ev(`(() => { window.__szWatch = false; return window.__szGaps; })()`);
+        if (gaps !== 0) throw new Error(`the summary mark was missing on ${gaps} sampled frame(s) between the old summary and the new`);
+        if (asked.length !== 2) throw new Error(`one edit, ${asked.length - 1} more model calls`);
+        return { note, calls: asked.length, first: first.text, then: await b.ev(`document.querySelector(${gist}).textContent.trim()`) };
+      } finally {
+        await daemon.stop();
+        stub.close();
+        rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+        await b.send("Emulation.clearDeviceMetricsOverride").catch(() => {});
+      }
+    },
+  },
+  {
+    name: "semantic-zoom-board",
+    /**
+     * **Semantic Zoom, phase 2: a board's areas say what they hold**
+     * (`docs/projects/semantic-zoom/phases.md`, phase 2's proof). Its own
+     * daemon with a recording stub on loopback, as `semantic-zoom-text`: the
+     * stub answers each prompt with the frame's title and its members' titles
+     * as it was sent them, so what a card says IS what the home collected.
+     *
+     * A board of three areas — on a groups canvas an area is a group (`isocan
+     * area new`), so its members are explicit — plus a fourth group holding a
+     * note excluded from context. Zoomed out until the cards cannot be read:
+     * four summary cards, ≈ and "Summary of …", one model call each, the
+     * excluded note's words in none of them. Then a person drags a card from
+     * To do into Doing: both summaries keep their old words marked updating,
+     * never an empty frame, until the quiet period has passed and both are
+     * replaced by what the frames now hold — two more calls, nothing else.
+     *
+     * Then phase 3b, looking at pictures: a picture is added to Onboarding.
+     * With the setting off the stub is sent no image, and the card says what
+     * the words say. With it on, the stub is sent the picture as an image
+     * block and the card shows the summary made from it. Turned off again,
+     * the card never shows that summary: a viewer with vision off never reads
+     * a vision summary.
+     */
+    what: "a three-area board far away shows three ≈ summaries; a card dragged across changes both after the quiet period; an excluded note never reaches the model; a picture is sent only with looking at pictures on, and its summary is read only then",
+    async run(rig) {
+      const { b } = rig;
+      const asked = [];
+      const stub = createServer((req, res) => {
+        let body = "";
+        req.on("data", (c) => (body += c));
+        req.on("end", () => {
+          const sent = JSON.parse(body || "{}");
+          asked.push(sent);
+          const content = sent.messages?.[0]?.content;
+          const blocks = Array.isArray(content) ? content : [];
+          const prompt = String(blocks.find((one) => one.type === "text")?.text ?? content ?? "");
+          const title = /titled "([^"]+)"/.exec(prompt)?.[1] ?? "?";
+          const members = [...prompt.matchAll(/^- (?:Note|Card|Screen|Picture) "([^"]+)"/gm)].map((m) => m[1]);
+          const seen = blocks.filter((one) => one.type === "image").length;
+          const summary = `Acme ${title} holds ${members.join(" and ") || "nothing"}${seen ? `, ${seen} seen` : ""}`;
+          res.writeHead(200, { "content-type": "application/json" });
+          res.end(JSON.stringify({ id: "msg_stub", type: "message", role: "assistant", model: sent.model, stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify({ summary }) }] }));
+        });
+      });
+      await new Promise((r) => stub.listen(0, "127.0.0.1", r));
+      const home = mkdtempSync(path.join(tmpdir(), "isocan-journey-szb-"));
+      const daemon = await startDaemon(home, {
+        ISOCAN_TEXT_API_KEY: "sk-ant-journey-stub-not-a-key",
+        ISOCAN_TEXT_PROVIDER: "anthropic",
+        ISOCAN_TEXT_ENDPOINT: `http://127.0.0.1:${stub.address().port}/v1/messages`,
+        ISOCAN_SUMMARY_QUIET_MS: "2500",
+        ISOCAN_SUMMARY_MODEL: "",
+        ISOCAN_TEXT_MODEL: "",
+      });
+      const { origin } = daemon;
+      try {
+        const env = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(origin).port, ISOCAN_SESSION_ID: "acme-semantic-board-journey", ISOCAN_HARNESS: "test" };
+        const runCli = (...args) => {
+          const out = execFileSync(process.execPath, [cli, "--json", ...args], { cwd: home, encoding: "utf8", env });
+          return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+        };
+        runCli("identity", "--session", "--name", "Acme Board CLI");
+        const id = runCli("canvas", "create", "Acme sprint board").canvasId;
+        const frames = {};
+        for (const [n, title] of ["To do", "Doing", "Done", "Onboarding"].entries()) {
+          frames[title] = runCli("--canvas", id, "canvas", "group", "new", title, "--at", `${n * 800},0`, "--size", "700x900").itemId;
+        }
+        const cards = {};
+        const note = (frame, title, words) => {
+          const file = path.join(home, `${title.replace(/\W+/g, "-")}.md`);
+          writeFileSync(file, `# ${title}\n\n${words}\n`);
+          cards[title] = runCli("--canvas", id, "text", "-f", file, "--in", frames[frame]).itemId;
+        };
+        note("To do", "Billing migration", "Ravi moves Acme billing to the new ledger.");
+        note("To do", "Copy fix", "Ana rewrites the empty state.");
+        note("Doing", "Safari crash", "Ana is on the Safari crash.");
+        note("Done", "Pricing page", "Ravi shipped the pricing page.");
+        note("Onboarding", "Sign up", "Sign up asks for a work email.");
+        note("Onboarding", "Margins", "ACME-CONFIDENTIAL margins are forty percent.");
+        runCli("--canvas", id, "context", "exclude", cards.Margins);
+        // Every source quiet before the browser looks, so the first summaries are made at once.
+        await sleep(2800);
+
+        await b.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+        const loaded = b.once("Page.loadEventFired");
+        await b.send("Page.navigate", { url: origin });
+        await Promise.race([loaded, sleep(15_000)]);
+        await throughTheDoor(b, origin, "Journey", "journeys-semantic-board");
+        await b.ev(`(() => { localStorage.setItem("isocan.experiments", JSON.stringify(["semantic.zoom"])); return true; })()`);
+        await b.send("Page.navigate", { url: `${origin}/p/${id}` });
+        const frameSel = (title) => JSON.stringify(`.item[data-item-id="${frames[title]}"]`);
+        await until(b, Object.keys(frames).map((t) => `!!document.querySelector(${frameSel(t)})`).join(" && "), "the four frames on the canvas", 15_000);
+
+        // Zoomed out around the board's middle until a card's words are under 5px and the whole board is on screen.
+        const scale = () => b.ev(`parseFloat(getComputedStyle(document.querySelector(".world")).getPropertyValue("--scale")) || 1`);
+        const box = () => b.ev(`(() => { const rs = [${Object.keys(frames).map(frameSel).join(",")}].map((s) => document.querySelector(s).getBoundingClientRect()); return { left: Math.min(...rs.map((r) => r.left)), right: Math.max(...rs.map((r) => r.right)), top: Math.min(...rs.map((r) => r.top)), bottom: Math.max(...rs.map((r) => r.bottom)) }; })()`);
+        const zoomOut = async () => {
+          for (let n = 0; (await scale()) > 0.24 && n < 80; n++) {
+            const r = await box();
+            await b.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: Math.min(Math.max(Math.round((r.left + r.right) / 2), 200), 1080), y: Math.min(Math.max(Math.round((r.top + r.bottom) / 2), 200), 700), deltaX: 0, deltaY: 120, modifiers: 2 });
+            await sleep(40);
+          }
+        };
+        await zoomOut();
+        const at = await box();
+        if (at.left < 0 || at.right > 1280 || at.top < 0 || at.bottom > 900) throw new Error(`zoomed out to ${await scale()}, the board is not all on screen: ${JSON.stringify(at)}`);
+
+        // 1. Four summary cards, each marked and named, current.
+        const cardOf = (title) => `${frameSel(title)} + " .sz-card"`;
+        const current = (title) => `(() => { const c = document.querySelector(${cardOf(title)}); return !!c && !c.hasAttribute("data-stale"); })()`;
+        await until(b, Object.keys(frames).map(current).join(" && "), "a current summary card in each of the four frames", 20_000);
+        const read = (title) => b.ev(`(() => { const c = document.querySelector(${cardOf(title)}); return { text: c.textContent.trim(), name: c.getAttribute("aria-label"), role: c.getAttribute("role"), raised: getComputedStyle(c.closest(".item")).zIndex }; })()`);
+        const first = {};
+        for (const title of Object.keys(frames)) {
+          const c = (first[title] = await read(title));
+          if (!c.text.startsWith("≈")) throw new Error(`${title}'s summary is not marked ≈: "${c.text}"`);
+          if (c.name !== `Summary of ${title}`) throw new Error(`${title}'s summary is named "${c.name}"`);
+          if (c.role !== "note") throw new Error(`${title}'s summary has role ${c.role}`);
+          // The frame rises over its members while its card shows, so the card is not painted under them.
+          if (c.raised !== "1") throw new Error(`${title}'s frame stays at z-index ${c.raised} under its members`);
+        }
+        // Members are listed by id, so in either order.
+        if (!/holds (Billing migration and Copy fix|Copy fix and Billing migration)$/.test(first["To do"].text)) throw new Error(`To do says "${first["To do"].text}"`);
+        if (!/holds Safari crash$/.test(first.Doing.text)) throw new Error(`Doing says "${first.Doing.text}"`);
+        if (asked.length !== 4) throw new Error(`four frames, ${asked.length} model calls`);
+        const prompts = () => asked.map((a) => JSON.stringify(a.messages));
+        if (!prompts().every((p) => /This is a group on a canvas/.test(p))) throw new Error("a call was not a group's summary");
+        if (prompts().some((p) => /CONFIDENTIAL|forty percent|Margins/.test(p))) throw new Error("the excluded note reached the model");
+        if (/Margins/.test(first.Onboarding.text) || !/holds Sign up$/.test(first.Onboarding.text)) throw new Error(`Onboarding says "${first.Onboarding.text}"`);
+
+        // 2. A person drags Copy fix from To do into Doing.
+        await b.ev(`(() => {
+          window.__szbGaps = 0; window.__szbWatch = true;
+          const look = () => { if (!document.querySelector(${cardOf("To do")}) || !document.querySelector(${cardOf("Doing")})) window.__szbGaps++; };
+          new MutationObserver(look).observe(document.querySelector(".world"), { subtree: true, childList: true, characterData: true, attributes: true });
+          const frame = () => { if (!window.__szbWatch) return; look(); requestAnimationFrame(frame); };
+          requestAnimationFrame(frame);
+          return true;
+        })()`);
+        const from = await b.ev(`(() => { const r = document.querySelector(${JSON.stringify(`.item[data-item-id="${cards["Copy fix"]}"]`)}).getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`);
+        const into = await b.ev(`(() => { const r = document.querySelector(${frameSel("Doing")}).getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.bottom - r.height / 4) }; })()`);
+        const hit = await b.ev(`document.elementFromPoint(${from.x}, ${from.y})?.closest(".item")?.dataset.itemId ?? null`);
+        if (hit !== cards["Copy fix"]) throw new Error(`a press on Copy fix lands on ${hit} — under its frame's summary card, a person could not grab it`);
+        // At the canvas's level a press on a member takes its whole group; ⌘ (Ctrl off a Mac) reaches the one card, as a person does.
+        const MOD = process.platform === "darwin" ? 4 : 2;
+        const mouse = (type, x, y, buttons) => b.send("Input.dispatchMouseEvent", { type, x: Math.round(x), y: Math.round(y), modifiers: MOD, buttons, button: "left", clickCount: type === "mouseMoved" ? 0 : 1 });
+        await mouse("mousePressed", from.x, from.y, 1);
+        for (let s = 1; s <= 12; s++) {
+          await mouse("mouseMoved", from.x + ((into.x - from.x) * s) / 12, from.y + ((into.y - from.y) * s) / 12, 1);
+          await sleep(30);
+        }
+        await mouse("mouseReleased", into.x, into.y, 0);
+        const parent = () => runCli("--canvas", id, "show", cards["Copy fix"]).containerId ?? null;
+        for (let n = 0; parent() !== frames.Doing && n < 20; n++) await sleep(250);
+        if (parent() !== frames.Doing) throw new Error(`the drag left Copy fix in ${parent()}, not in Doing (${frames.Doing})`);
+        await until(b, `(() => { const c = document.querySelector(${cardOf("To do")}); return !!c && c.hasAttribute("data-stale") && /Copy fix/.test(c.textContent) && !!c.querySelector(".sz-updating"); })()`, "To do's old summary kept, marked as being updated", 10_000);
+        await until(b, `(() => { const c = document.querySelector(${cardOf("Doing")}); return !!c && c.hasAttribute("data-stale") && /holds Safari crash/.test(c.textContent); })()`, "Doing's old summary kept, marked as being updated", 10_000);
+        await until(b, `${current("To do")} && /holds Billing migration$/.test(document.querySelector(${cardOf("To do")}).textContent)`, "To do's new summary, without Copy fix", 20_000);
+        await until(b, `${current("Doing")} && /Copy fix and Safari crash|Safari crash and Copy fix/.test(document.querySelector(${cardOf("Doing")}).textContent)`, "Doing's new summary, with Copy fix", 20_000);
+        const gaps = await b.ev(`(() => { window.__szbWatch = false; return window.__szbGaps; })()`);
+        if (gaps !== 0) throw new Error(`a frame's summary card was missing on ${gaps} sampled frame(s) between the old summary and the new`);
+        if (asked.length !== 6) throw new Error(`one drag across two frames, ${asked.length - 4} more model calls`);
+        if (prompts().some((p) => /CONFIDENTIAL|forty percent|Margins/.test(p))) throw new Error("the excluded note reached the model");
+        const after = { todo: (await read("To do")).text, doing: (await read("Doing")).text };
+
+        // 3. Looking at pictures (phase 3b). A picture joins Onboarding; with the setting off, no image is sent.
+        const images = () => asked.reduce((n, a) => n + (Array.isArray(a.messages?.[0]?.content) ? a.messages[0].content.filter((one) => one.type === "image").length : 0), 0);
+        const shot = path.join(home, "acme-sign-up.png");
+        writeFileSync(shot, Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64"));
+        runCli("--canvas", id, "add", shot, "--in", frames.Onboarding, "--title", "Sign up shot");
+        await until(b, `${current("Onboarding")} && /Sign up shot/.test(document.querySelector(${cardOf("Onboarding")}).textContent)`, "Onboarding's text-only summary, naming the picture by title", 20_000);
+        if (images() !== 0) throw new Error(`with looking at pictures off, ${images()} image(s) were sent`);
+        if (/seen/.test((await read("Onboarding")).text)) throw new Error("with looking at pictures off, the card shows a summary made from pictures");
+        const textOnly = asked.length;
+
+        // With it on: the picture goes as an image block, and the card shows what was made from it.
+        const reopen = async (flags) => {
+          await b.ev(`(() => { localStorage.setItem("isocan.experiments", ${JSON.stringify(JSON.stringify(flags))}); return true; })()`);
+          await b.send("Page.navigate", { url: `${origin}/p/${id}` });
+          await until(b, Object.keys(frames).map((t) => `!!document.querySelector(${frameSel(t)})`).join(" && "), "the four frames, reopened", 15_000);
+          await zoomOut();
+        };
+        await reopen(["semantic.zoom", "semantic.zoom.vision"]);
+        await until(b, `${current("Onboarding")} && /1 seen/.test(document.querySelector(${cardOf("Onboarding")}).textContent)`, "Onboarding's summary made looking at its picture", 20_000);
+        if (images() !== 1) throw new Error(`looking at pictures, ${images()} image(s) were sent, not the one picture`);
+        if (asked.length !== textOnly + 1) throw new Error(`looking at pictures cost ${asked.length - textOnly} calls, not one`);
+        if (!/\(picture 1\)/.test(prompts().at(-1))) throw new Error("the prompt does not say which member the picture is of");
+        const looked = (await read("Onboarding")).text;
+
+        // Off again: the vision summary is never read, though it is cached.
+        await reopen(["semantic.zoom"]);
+        await until(b, `${current("Onboarding")} && /Sign up shot/.test(document.querySelector(${cardOf("Onboarding")}).textContent)`, "Onboarding's text-only summary again", 20_000);
+        await sleep(1500);
+        if (/seen/.test((await read("Onboarding")).text)) throw new Error("with looking at pictures off again, the card shows the summary made from pictures");
+        if (asked.length !== textOnly + 1) throw new Error(`turning looking at pictures off made ${asked.length - textOnly - 1} more calls`);
+        return { frames: Object.keys(frames).length, calls: asked.length, scale: await scale(), before: first["To do"].text, after, looked, images: images() };
+      } finally {
+        await daemon.stop();
+        stub.close();
+        rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+        await b.send("Emulation.clearDeviceMetricsOverride").catch(() => {});
+      }
+    },
+  },
+  {
+    name: "canvas-pan-zoom",
+    /**
+     * **Pan and zoom stay responsive and never show blank content or flicker**
+     * (16 Oct 2026). A populated board of HTML screens and Markdown notes is
+     * panned across and zoomed out and back in while every animation frame
+     * checks the items inside the viewport. No card on screen may fall into
+     * `.item-standby` or show an undecoded HTML shell, and no rendered card may
+     * drop its face mid-gesture.
+     */
+    what: "panning and zooming across screens and notes stays responsive and never shows blank content or flickers",
+    async run(rig) {
+      const { b, home, origin } = rig;
+      const port = new URL(origin).port;
+      const env = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: port, ISOCAN_SESSION_ID: "acme-pan-zoom-journey", ISOCAN_HARNESS: "test" };
+      const runCli = (...args) => {
+        const out = execFileSync(process.execPath, [cli, "--json", ...args], { cwd: home, encoding: "utf8", env });
+        return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+      };
+      runCli("identity", "--session", "--name", "Acme Pan CLI");
+      const id = runCli("canvas", "create", "Acme pan zoom").canvasId;
+      const htmlIds = [];
+      for (let i = 0; i < 6; i++) {
+        const file = path.join(home, `screen-${i}.html`);
+        writeFileSync(
+          file,
+          `<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;font-family:sans-serif;background:#f4f1ea;color:#1d2a24;padding:24px}h1{margin:0 0 12px}.box{padding:16px;background:#fff;border-radius:8px}</style></head><body><h1>Acme screen ${i}</h1><div class="box">Storefront preview ${i}</div></body></html>`,
+        );
+        htmlIds.push(runCli("--canvas", id, "add", file, "--title", `Acme screen ${i}`, "--at", `${(i % 3) * 940},${Math.floor(i / 3) * 700}`, "--size", "880x640").itemId);
+      }
+      for (let i = 0; i < 16; i++) {
+        const file = path.join(home, `note-${i}.md`);
+        writeFileSync(file, `# Acme note ${i}\n\nQuarterly check ${i} with **bold** words and \`code\`.\n`);
+        runCli("--canvas", id, "add", file, "--title", `Acme note ${i}`, "--at", `${(i % 8) * 380},${1480 + Math.floor(i / 8) * 320}`, "--size", "320x260");
+      }
+
+      await b.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+      try {
+        await b.send("Page.navigate", { url: `${origin}/p/${id}` });
+        await until(b, `document.querySelectorAll(".item[data-item-id]").length >= 16`, "the board's items to mount", 20_000);
+        // Zoom to 0.55 so screens and notes share the viewport, then wait for idle WebP snapshots to warm.
+        const worldScale = `Number((document.querySelector(".world")?.style.transform.match(/scale\\(([0-9.]+)\\)/) ?? [])[1] ?? 1)`;
+        for (let i = 0; i < 40 && (await b.ev(worldScale)) < 0.55; i++) {
+          await b.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: 720, y: 450, deltaX: 0, deltaY: -40, modifiers: 2 });
+          await sleep(30);
+        }
+        await sleep(3500);
+
+        const htmlLit = JSON.stringify(htmlIds);
+        await b.ev(`(() => {
+          const htmlSet = new Set(${htmlLit});
+          const world = document.querySelector(".world");
+          const boxes = [];
+          for (const el of document.querySelectorAll(".item[data-item-id]")) {
+            const itemId = el.dataset.itemId;
+            const c = el.querySelector(":scope > .item-content");
+            if (!itemId || !c) continue;
+            boxes.push({
+              id: itemId,
+              c,
+              x: parseFloat(el.style.left) || 0,
+              y: parseFloat(el.style.top) || 0,
+              w: parseFloat(el.style.width) || 0,
+              h: parseFloat(el.style.height) || 0,
+            });
+          }
+          window.__pzGaps = []; window.__pzCams = new Set(); window.__pzBlank = 0; window.__pzFlicker = 0; window.__pzBlankIds = new Set();
+          const seen = new Map();
+          let last = performance.now();
+          const sample = () => {
+            const xf = world?.style.transform ?? "";
+            const t = /translate(?:3d)?\\((-?[0-9.]+)px,\\s*(-?[0-9.]+)px/.exec(xf);
+            const s = /scale\\(([0-9.]+)\\)/.exec(xf);
+            const tx = t ? Number(t[1]) : 0, ty = t ? Number(t[2]) : 0, scale = s ? Number(s[1]) : 1;
+            let frameBlank = false;
+            for (const bx of boxes) {
+              const left = bx.x * scale + tx, top = bx.y * scale + ty, w = bx.w * scale, h = bx.h * scale;
+              if (left + w <= 4 || top + h <= 4 || left >= innerWidth - 4 || top >= innerHeight - 4 || w < 24 || h < 18) continue;
+              const c = bx.c;
+              const isHtml = htmlSet.has(bx.id) || !!c.querySelector(".html-view-surface, .html-view");
+              const roomy = w >= 180 && h >= 110;
+              if (!isHtml && !roomy && !c.querySelector(".text-mark, .sz-gist")) continue;
+              let blank = false;
+              if (c.querySelector(".item-standby") || !c.firstElementChild) blank = true;
+              else if (isHtml) {
+                const img = c.querySelector("img.html-snapshot");
+                const snapOk = !!img && img.complete && img.naturalWidth > 0;
+                const liveOk = [...c.querySelectorAll("iframe")].some((fr) => !fr.classList.contains("arriving"));
+                if (!snapOk && !liveOk) blank = true;
+              }
+              if (blank) {
+                frameBlank = true;
+                window.__pzBlankIds.add(bx.id);
+                if (seen.get(bx.id) === "ready") window.__pzFlicker++;
+                seen.set(bx.id, "blank");
+              } else {
+                seen.set(bx.id, "ready");
+              }
+            }
+            if (frameBlank) window.__pzBlank++;
+          };
+          const f = (now) => {
+            window.__pzGaps.push(now - last); last = now;
+            window.__pzCams.add(world?.style.transform ?? "");
+            sample();
+            if (window.__pzOn) requestAnimationFrame(f);
+          };
+          window.__pzOn = true;
+          sample();
+          requestAnimationFrame(f);
+          return true;
+        })()`);
+
+        const wheel = (dx, dy, modifiers = 0) => b.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: 720, y: 450, deltaX: dx, deltaY: dy, modifiers });
+        for (let i = 0; i < 40; i++) {
+          await wheel(i < 20 ? 45 : -45, i % 2 ? 30 : -30);
+          await sleep(16);
+        }
+        for (let i = 0; i < 40; i++) {
+          await wheel(0, i < 20 ? 45 : -45, 2);
+          await sleep(16);
+        }
+        await sleep(250);
+
+        const got = await b.ev(`(() => {
+          window.__pzOn = false;
+          const s = window.__pzGaps.slice(1).sort((a, b) => a - b);
+          const p90 = s.length ? s[Math.min(s.length - 1, Math.floor(0.9 * s.length))] : 0;
+          return { frames: s.length, cams: window.__pzCams.size, p90: Math.round(p90 * 10) / 10, blank: window.__pzBlank, flicker: window.__pzFlicker, blankIds: [...window.__pzBlankIds] };
+        })()`);
+        if (got.cams < 12) throw new Error(`pan and zoom moved the camera through only ${got.cams} positions`);
+        if (got.blank > 0) throw new Error(`blank content appeared on ${got.blank} frame(s) during pan/zoom (${got.blankIds.join(", ")})`);
+        if (got.flicker > 0) throw new Error(`rendered content flickered ${got.flicker} time(s) during pan/zoom`);
+        if (got.p90 > 34) throw new Error(`pan/zoom p90 frame gap was ${got.p90} ms (budget 34 ms)`);
+        return got;
+      } finally {
+        await b.send("Emulation.clearDeviceMetricsOverride").catch(() => {});
+      }
+    },
+  },
 ];
 
 /**
@@ -4220,26 +6816,39 @@ async function main() {
       ]
     : chosen;
 
-  const r = await rig();
+  // Any daemon a CLI under this run starts for itself (an `rc` or a `wait`
+  // whose daemon went away calls `ensureDaemon`) inherits this, and so dies
+  // with the run too rather than outliving it unowned.
+  process.env.ISOCAN_DAEMON_GUARD_PID = String(process.pid);
   const results = [];
-  try {
-    for (const journey of list) {
-      const started = Date.now();
-      try {
-        const proof = await journey.run(r);
-        results.push({ name: journey.name, what: journey.what, ok: true, ms: Date.now() - started, ...(proof ? { proof } : {}) });
-      } catch (err) {
-        results.push({
-          name: journey.name,
-          what: journey.what,
-          ok: false,
-          ms: Date.now() - started,
-          why: err instanceof Error ? err.message : String(err),
-        });
-      }
+  const why = (err) => (err instanceof Error ? err.message : String(err));
+  for (const journey of list) {
+    // A rig of the journey's own: see `rig()` for what sharing one cost.
+    const booted = Date.now();
+    let r = null;
+    const result = { name: journey.name, what: journey.what };
+    try {
+      r = await rig();
+    } catch (err) {
+      results.push({ ...result, ok: false, ms: Date.now() - booted, why: `the rig did not start: ${why(err)}` });
+      continue;
     }
-  } finally {
-    await r.close();
+    const started = Date.now();
+    try {
+      const proof = await journey.run(r);
+      Object.assign(result, { ok: true, ms: Date.now() - started, ...(proof ? { proof } : {}) });
+    } catch (err) {
+      Object.assign(result, { ok: false, ms: Date.now() - started, why: why(err) });
+    }
+    try {
+      await r.close();
+    } catch (err) {
+      // A walk that passed and left a browser or daemon it could not stop
+      // did not pass: the next one would run beside it.
+      if (result.ok) Object.assign(result, { ok: false, why: `the walk passed, then its rig would not stop: ${why(err)}` });
+    }
+    result.setupMs = started - booted;
+    results.push(result);
   }
 
   const failed = results.filter((x) => !x.ok);

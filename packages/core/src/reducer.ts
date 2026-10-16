@@ -13,6 +13,7 @@ import type {
 import { emptyCanvas, mainThread } from "./model.ts";
 import type { MetaPatch, NewComment, NewVersion, OpEnvelope } from "./ops.ts";
 import { OpValidationError, unknownOperation } from "./errors.ts";
+import { BEYOND_CEILING } from "./ceiling.ts";
 import { questionnaireQuestionMarkdown, validateQuestionnaireComment, questionnaireStates, rejectQuestionnaireMetadata } from "./questionnaire.ts";
 import { DesignPartnerContractError, parseDesignQuestionSet, parseDesignResponse } from "./design-partner.ts";
 import { designResponseMarkdown } from "./design-partner-plan.ts";
@@ -20,6 +21,7 @@ import { positionIsMeaningful, resolvePlacement } from "./placement.ts";
 import { applyGroupChange, resolveGroupOperation, validateGroupForest } from "./canvas-groups.ts";
 import { validateDesignRecordState, validateDesignRecordEffect } from "./design-record.ts";
 import { validateClick } from "./prototype-click.ts";
+import { PROPOSAL_PROP, proposalRefusal } from "./proposal.ts";
 import { DesignRestoreConflict, designDecisionMarkdown, designTargetMatches, rejectDesignDecisionMetadata, sameDesignValue, validateDesignDecisionComment } from "./design-decision-state.ts";
 
 /**
@@ -209,6 +211,13 @@ export function reduceOperation(state: CanvasState | null, envelope: OpEnvelope)
         throw new OpValidationError("duplicate-id", `item id already exists: ${op.itemId}`);
       }
       requireFinite({ width: op.width, height: op.height }, "item.add");
+      // No trigger, no proposal; and one agent's open proposals are capped
+      // (`proposal.ts`). Here, at the one writer, so every surface is refused
+      // by the same sentence rather than trusted to ask first.
+      if (op.properties?.[PROPOSAL_PROP] !== undefined) {
+        const refused = proposalRefusal(canvas, actor.id, op.properties);
+        if (refused) throw new OpValidationError("bad-op", refused);
+      }
       if ("x" in op.placement) {
         requireFinite({ x: op.placement.x, y: op.placement.y }, "item.add placement");
       }
@@ -303,16 +312,35 @@ export function reduceOperation(state: CanvasState | null, envelope: OpEnvelope)
 
     case "item.update": {
       const item = getItem(op.itemId);
-      const renamed =
-        op.filename === undefined
+      const updatedVersions =
+        op.filename === undefined && op.faces === undefined
           ? item.versions
-          : item.versions.map((version) =>
-              version.id === item.currentVersionId ? { ...version, filename: op.filename! } : version,
-            );
+          : item.versions.map((version) => {
+              if (version.id !== item.currentVersionId) return version;
+              let nextFaces = version.faces ? { ...version.faces } : undefined;
+              if (op.faces !== undefined) {
+                nextFaces = nextFaces ?? {};
+                for (const [key, value] of Object.entries(op.faces)) {
+                  const faceKey = key as keyof typeof nextFaces;
+                  if (value === null || value === undefined) {
+                    delete nextFaces[faceKey];
+                  } else {
+                    nextFaces[faceKey] = value;
+                  }
+                }
+                if (Object.keys(nextFaces).length === 0) nextFaces = undefined;
+              }
+              const { faces: _oldFaces, ...restVersion } = version;
+              return {
+                ...restVersion,
+                ...(op.filename !== undefined ? { filename: op.filename } : {}),
+                ...(nextFaces ? { faces: nextFaces } : {}),
+              };
+            });
       return putItem({
         ...item,
         ...applyMetaPatch(item, op.patch),
-        versions: renamed,
+        versions: updatedVersions,
         ...stamp,
       });
     }
@@ -639,10 +667,14 @@ export function reduceOperation(state: CanvasState | null, envelope: OpEnvelope)
       // gate from anybody else's (`EnrolledAgent.writtenBy`).
       const standing = canvas.agents?.[op.agent.id];
       const rules = op.rules !== undefined ? op.rules : standing?.rules;
+      // A ceiling outlives a re-enrolment (critique phase 2): `rc add` of a
+      // capped critic's name must not quietly lift what `critic release`
+      // and `agent.withdraw` are the only ways to lift.
       const row = {
         actor: op.agent,
         ...(rules !== undefined ? { rules } : {}),
         writtenBy: actor,
+        ...(standing?.ceiling ? { ceiling: standing.ceiling, ...(standing.ceilingBy ? { ceilingBy: standing.ceilingBy } : {}) } : {}),
       };
       return withCanvas({
         ...canvas,
@@ -690,6 +722,27 @@ export function reduceOperation(state: CanvasState | null, envelope: OpEnvelope)
       return withCanvas({ ...canvas, agents, withdrawn: { ...canvas.withdrawn, [op.actorId]: actor } });
     }
 
+    case "agent.ceiling": {
+      // Set by a person, about an agent: never by the agent itself, and
+      // lifted only by whoever set it (or by withdrawing the agent). The
+      // door has already refused anything a capped actor sends that is not
+      // a note, this op included (`ceilingRefusal`); these are the rules
+      // for everybody else.
+      const standing = canvas.agents?.[op.actorId];
+      if (!standing) throw new OpValidationError("unknown-actor", `no standing agent: ${op.actorId}`);
+      if (op.actorId === actor.id) throw new OpValidationError(BEYOND_CEILING, "an agent cannot set or lift its own ceiling — the person who enrolled it does");
+      if (op.ceiling !== null && op.ceiling !== "note") throw new OpValidationError("bad-op", `not a ceiling: ${String(op.ceiling)} (the one there is is "note")`);
+      if (op.ceiling === null) {
+        if (!standing.ceiling) return state;
+        if (standing.ceilingBy && standing.ceilingBy.id !== actor.id) {
+          throw new OpValidationError(BEYOND_CEILING, `${standing.actor.name}'s ceiling was set by ${standing.ceilingBy.name}, who lifts it — or withdraw the agent`);
+        }
+        const { ceiling: _c, ceilingBy: _b, ...rest } = standing;
+        return withCanvas({ ...canvas, agents: { ...canvas.agents, [op.actorId]: rest } });
+      }
+      return withCanvas({ ...canvas, agents: { ...canvas.agents, [op.actorId]: { ...standing, ceiling: op.ceiling, ceilingBy: actor } } });
+    }
+
     default:
       return unknownOperation(op);
   }
@@ -717,6 +770,34 @@ function toComment(c: NewComment, actor: Actor, ts: string): Comment {
   if (c.mentions?.length) comment.mentions = [...c.mentions];
   if (c.record) comment.record = c.record;
   if (c.click) comment.click = validateClick(c.click);
+  if (c.deleted !== undefined) {
+    if (typeof c.deleted !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(c.deleted)) {
+      throw new OpValidationError("bad-op", "a delete note names the proposal it deleted by its item id");
+    }
+    comment.deleted = c.deleted;
+  }
+  if (c.persona !== undefined) {
+    // A critic worn by the lead (proactive-agent phase 8): the card's name, a slug.
+    if (typeof c.persona !== "string" || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(c.persona)) {
+      throw new OpValidationError("bad-op", "a critic's note names the critic it is worn as by its card's name, a lowercase slug");
+    }
+    comment.persona = c.persona;
+  }
+  if (c.goodnight !== undefined) {
+    // A goodnight turn (proactive-agent phase 2): a plan, or a brief naming its note.
+    const { step, note } = (c.goodnight ?? {}) as { step?: unknown; note?: unknown };
+    if (step === "plan" && note === undefined) comment.goodnight = { step };
+    else if (step === "brief" && typeof note === "string" && /^[\w-]{1,64}$/.test(note)) comment.goodnight = { step, note };
+    else throw new OpValidationError("bad-op", "a goodnight turn is a plan, or a brief naming its note");
+  }
+  if (c.readings !== undefined) {
+    // Picked readings of vague words (proactive-agent phase 10): a few word → reading pairs.
+    const ok = /^[a-z][a-z ]{0,31}$/;
+    if (!Array.isArray(c.readings) || c.readings.length > 8 || !c.readings.every((r) => ok.test(r?.word) && ok.test(r?.reading))) {
+      throw new OpValidationError("bad-op", "readings are up to eight lowercase word → reading pairs");
+    }
+    comment.readings = c.readings.map(({ word, reading }) => ({ word, reading }));
+  }
   if (c.items?.length) comment.items = [...c.items];
   const context = c.context;
   if (context) {

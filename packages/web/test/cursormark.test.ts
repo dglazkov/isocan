@@ -64,6 +64,10 @@ describe("the cursor chip", () => {
     expect(own).toContain('{mark && <b className="cursor-glyph">{mark}</b>}');
     expect(own).toContain('own-cursor${mark ? " marked" : ""}');
     expect(own).not.toContain("cursor-mark");
+    // Your own cursor does not show your own name next to it — only a `/`
+    // cursor signal when editing or live.
+    expect(own).toContain('cursorChipLabel(signal, "")');
+    expect(own).toContain("{(editing || label) && (");
   });
 
   it("asks for the raw mark, not the disc's fallback", () => {

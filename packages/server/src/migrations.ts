@@ -37,7 +37,7 @@ import type { Store } from "./store.ts";
  * use `--as`. A sessionKey names one conversation on one machine, so that
  * should be approximately nobody.
  */
-export async function runMigrations(
+export async function runWorkstationMigrations(
   home: string,
   store: Store,
   desk: Desk,
@@ -48,7 +48,6 @@ export async function runMigrations(
 ): Promise<void> {
   await migrateLegacyClaims(home, store, desk);
   await migrateLegacyAgents(home, store, desk);
-  await grantTheLinkOnOldCanvases(home, store, desk);
   await recordWhereTheCanvasesAlreadyLive(home, store, configuredHome);
 }
 
@@ -171,27 +170,21 @@ async function recordWhereTheCanvasesAlreadyLive(
  * so a birth path that forgot to write the row would look perfect until the
  * day somebody turned a link off and it did not go off. The rows are written.
  *
- * **The marker, and its honest limit.** A file beside the desk says this ran,
- * so the ordinary case is one `stat` at boot. It is a FILE, so a container
- * that starts from a fresh filesystem re-runs it — the hosted home does
- * exactly that on every cold start — and what that costs is one `grantsFor`
- * query per canvas, writing nothing once the rows exist. That is acceptable
- * at journey scale and would not be at ten thousand canvases; the fix when it
- * matters is to move the marker onto the desk itself, where it survives the
- * container. Named here rather than discovered there.
+ * **The marker lives on the desk** (`linkGrantsMigrated` /
+ * `markLinkGrantsMigrated`), so a hosted container starting from a fresh
+ * filesystem sees the marker in Firestore and skips the per-canvas scan on
+ * every cold start.
  *
  * `grantedBy` is the migration rather than a badge id, so "who opened this
  * canvas up?" answers "nobody — it predates the question" instead of
  * fingering whichever badge happened to be around.
  */
-async function grantTheLinkOnOldCanvases(home: string, store: Store, desk: Desk): Promise<void> {
-  const marker = p.linkGrantsMigratedFile(home);
-  if (await fs.stat(marker).then(() => true, () => false)) return;
+export async function grantTheLinkOnOldCanvases(store: Store, desk: Desk): Promise<void> {
+  if (await desk.linkGrantsMigrated()) return;
   for (const canvas of await store.listCanvases()) {
     await ensureLinkGrant(desk, canvas.id, GRANTED_BY_MIGRATION);
   }
-  await fs.mkdir(p.deskDir(home), { recursive: true }).catch(() => {});
-  await fs.writeFile(marker, new Date().toISOString()).catch(() => {});
+  await desk.markLinkGrantsMigrated(new Date().toISOString());
 }
 
 /** The registry as it looked before the badge. */

@@ -97,6 +97,15 @@ describe("Wireframe fidelity layers", () => {
     });
     expect(lofiHtml).toContain('class="frame app s-glass lofi"');
     expect(lofiHtml).toContain("wf-elevated");
+    expect(lofiHtml).toContain(".frame.lofi .btn.secondary");
+
+    // Checking hifi adds .lofi and .hifi classes and studio lighting / primary button shadow rules
+    const hifiHtml = renderWire({
+      ...styled,
+      layers: { system: true, copy: true, lofi: true, hifi: true },
+    });
+    expect(hifiHtml).toContain('class="frame app s-glass lofi hifi"');
+    expect(hifiHtml).toContain(".frame.hifi :is(.btn.primary,.fab)");
   });
 
   it("embeds and reads back WireSpec inside bespoke High-Fi HTML", () => {

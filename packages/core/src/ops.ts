@@ -1,6 +1,6 @@
 import type { TextAnchor } from "./text-anchor.ts";
 import type { GroupAction, GroupCell, GroupPlacementPolicy } from "./canvas-group-types.ts";
-import type { Actor, Comment, CommentThread, ItemVersion, VisualFace } from "./model.ts";
+import type { Actor, Comment, CommentThread, ItemVersion, NamedFaceId, VisualFace } from "./model.ts";
 
 /**
  * The operation vocabulary — the isomorphism contract. Every mutation the web
@@ -26,6 +26,8 @@ export interface NewVersion {
   size: number;
   /** Optional visual face (canvas iframe presentation, visualizer, inlined HTML). */
   visual?: VisualFace;
+  /** Optional named fidelity faces (`wireframe`, `mid-fi`, `hi-fi`, `prototype`). */
+  faces?: Partial<Record<NamedFaceId, VisualFace>>;
 }
 
 /**
@@ -69,6 +71,14 @@ export interface NewComment {
   record?: true | import("./roll.ts").RollKind;
   /** A prototype click; see Comment.click. */
   click?: import("./prototype-click.ts").PrototypeClick;
+  /** A deleted proposal's id; see Comment.deleted. */
+  deleted?: string;
+  /** The critic a lead's note is worn as; see Comment.persona. */
+  persona?: string;
+  /** A goodnight turn; see Comment.goodnight. */
+  goodnight?: import("./model.ts").GoodnightMark;
+  /** Picked readings of vague words; see Comment.readings. */
+  readings?: Array<{ word: string; reading: string }>;
   /** Resolved #item-references (item ids); see Comment.items. */
   items?: string[];
   /** Public attachment intent; the home resolves it at one canvas revision. */
@@ -294,6 +304,9 @@ export type Operation =
        * filename is a property of the version, which is why it rides here
        * rather than in the patch (which canvases share). */
       filename?: string;
+      /** Attach, update, or remove (when `null`) named fidelity faces on the
+       * current version without minting a new version history entry. */
+      faces?: Partial<Record<NamedFaceId, VisualFace | null>>;
     }
   | { type: "item.addVersion"; itemId: string; version: NewVersion; briefHeight?: number }
   | {
@@ -526,6 +539,25 @@ export type Operation =
        * whole story, which is journey 8's "history untouched". */
       type: "agent.withdraw";
       actorId: string;
+    }
+  | {
+      /**
+       * **A ceiling on one agent's standing here** (critique phase 2): with
+       * `note`, the only ops the home accepts from that actor on this canvas
+       * are an item-anchored `thread.create`, a `thread.reply` and an
+       * `item.react` (`ceilingRefusal`); `null` lifts it. Set by `isocan
+       * critique` when it enrols a critic, lifted by `isocan critic release`
+       * — and by `agent.withdraw`, whose row it lives on.
+       *
+       * A distinct type rather than a field on `agent.enroll`, for
+       * `agent.invite`'s reason: a home that does not know ceilings must
+       * REFUSE this op, not accept an enrolment and drop the field — a
+       * critic left uncapped without anyone being told is the one outcome
+       * the ceiling exists to prevent. Not undoable, like every standing op.
+       */
+      type: "agent.ceiling";
+      actorId: string;
+      ceiling: "note" | null;
     };
 
 /**

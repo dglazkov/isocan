@@ -92,8 +92,8 @@ command you run prints `⚠ … CANCELLED this`, stop, say where you got to in o
 comment, and leave nothing half-made.
 
 **Design work has one entry.** Before building or resuming a designed screen,
-run `isocan design workflow` — it reads this canvas's policy, open requests
-and next steps (topic `design`).
+run `isocan design workflow` (`design`). For a **wireframe** or flow sketch,
+run `isocan wire "<request>"` (`wire`) instead of hand-writing HTML.
 
 ## Who is at your terminal
 
@@ -111,7 +111,8 @@ or agent manager, offer `isocan embed` — the canvas in a pane beside you.
 ## Practices that matter from the first lap
 
 - **Versions are the medium.** "Change X on this item" means `edit` it; the
-  person compares versions, and `version promote` brings one back.
+  person compares versions, and `version promote` brings one back. A script
+  keeping one card current uses `edit --if-version` (topic `agents`).
 - **Confirm before anything destructive** — deleting, emptying the trash,
   anything far outside the ask. `undo` reverts only your own ops.
 - **A mark on an item is an instruction**; clear it once you have acted.
@@ -139,7 +140,7 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 
 **Items** (`items`)
 - `add <thing> [--as file|site|doc|canvas]` — one door for a file, a site, a Google Doc or a canvas
-- `text`, `inline`, `get`, `show`, `ls [--kind|--filter]`, `set`, `edit`, `tree`, `save` — make, read, change, write out
+- `text`, `inline`, `get`, `show`, `ls [--kind|--filter|--summaries]`, `set`, `edit`, `face`, `tree`, `save` — make, read, change, switch face, write out; `summary [--refresh|--stats]` — the ≈ summary
 - `version ls|promote|prune` — the version stack (prune ⚠)
 - `mv`, `align`, `distribute`, `fit`, `tidy`, `merge`, `react`, `copy` — arrange, mark, duplicate
 - `rm`, `restore`, `trash ls|restore|empty` (empty ⚠), `undo`, `redo` — take back
@@ -163,7 +164,11 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 - `design workflow|start|brief|receipt|questions|ask|answer|reference|compare|respond|decide|review|craft` — a design request
 - `design show|check|set|use|import|skip|direction|project|reconcile|recipes|recipe|audit|repair` — the design system
 - `diff`, `prefer`, `choose` — what changed between versions, the eye test, the winner folded back
-- `words` — a screen's words as a copy deck; `--apply` rewords strings and touches nothing else; `words vary` makes N voices as variations; `words mix` folds a per-string pick of them home; `words lint` checks them against DESIGN.md's Voice
+- `propose`, `taste` — work left beneath an item with its trigger and why; what deletes taught (`proactive`)
+- `goodnight start|plan|read|note|fill|done|untick|show|review` — the night watch: a talk, a note and promised frames, the morning review (`proactive`)
+- `explain <item>` — how an item got here: versions that mattered, roads not taken, what moved since; `--critique` answers a Critique (`proactive`)
+- `stuck [item]` — tries that missed: ask, don't guess; `walk [flow]` — a flow as simulated people see it (`proactive`)
+- `words` — a screen's copy deck; `--apply` rewords strings; `words vary` makes N voices; `words mix` folds a pick home; `words lint` checks DESIGN.md's Voice
 - `doc status` — where one of this repo's documents stands
 
 **History** (`history`)
@@ -177,7 +182,7 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 
 **What a canvas carries** (`extend`, and a topic per module)
 - `module add|rm|ls`, `tool ls|add`, `panel ls|add` — modules, rail tools, dock panels
-- `map`, `docs`, `sticker`, `sandbox`, `wire`, `competition`, `anatomy`, `voice`, `judge` — module families; `--agent-help <verb>` finds each
+- `map`, `docs`, `sticker`, `sandbox`, `wire`, `competition`, `anatomy`, `voice`, `judge`, `critic`, `critique`, `lottie` — module families; `--agent-help <verb>` finds each
 
 <!-- topic: protocol | the lap in full — naming yourself, the session, who is at your terminal, parking, several of you, your inbox, asking a person, pointing at words -->
 
@@ -197,7 +202,7 @@ isocan canvas ls              # the directory's canvas; --all for the home
 
 A directory nobody has readied yet takes one command: `isocan setup` puts
 this guide's skill where agents look, the CLI on PATH, and the daemon behind
-the app (`--jetski` also links the Jetski plugin into
+the app (`--antigravity` also links the Antigravity plugin into
 `~/.gemini/config/plugins/isocan`). On a machine that has never held a canvas it also writes **isocan.io**
 down as the birth default, so the first canvas somebody makes is at the hosted
 home rather than trapped on one laptop — it says so in its report, and `isocan
@@ -266,7 +271,11 @@ Pick like this, once, before you appear:
    earlier in this same session: keep it, a stable name beats a fresh one.
    A bare name is the HUMAN's — never yours to keep. (A `badge bdg_…` line
    under it is this machine's credential with the daemon, handed out
-   automatically; there is nothing for you to do with it.) On a machine where
+   automatically; there is nothing for you to do with it.) On a
+   proxy-authenticated home, the human and each harness session are named
+   automatically on the first command (`isocan whoami` already shows your
+   assigned session name; `isocan identity --name "<name>" --session` still
+   renames it if desired). On a machine where
    nobody has been named yet it errors with "no identity configured" — that
    is the answer "nobody, yet", not a broken install; same for a `canvas
    list` that is empty before you have named yourself (the handshake is what
@@ -302,7 +311,19 @@ never a way to take a name that isn't yours.
 its comments, mentions and undo become yours, and the home refuses it unless
 this machine already speaks for both. It exists for a person who spent weeks
 as a second name on a second machine; an agent almost never wants it, and
-never for an actor that is not its own earlier self.
+never for an actor that is not its own earlier self. Asked to merge your
+person's identities, run `isocan identity --home --join <actorId>`: `--home`
+folds into the machine's person rather than into you, and the home refuses
+folding a person into an agent.
+
+`isocan identity --home --as <actorId>` is the reversible alternative when a
+machine already has a person and `isocan setup <pass>` admitted another one
+without making it the default ("admitted but not made default"): it makes
+that actor the machine's person — what the CLI speaks as with no session,
+direct mode included — under its own name, folding nothing. The home refuses
+an actor this machine's badge was never handed. The confirmation names who it
+was before; the same command with that id switches back. Run it only when the
+person asks.
 
 If `--session` found no harness session, mention it to the human after you
 have worked around it: a harness isocan has not met can opt in for good by
@@ -342,6 +363,8 @@ think is the last.
    outrank the derived narration until your next comment.
 4. **Build.** `add` new files, `edit <item> <file>` for changes to existing
    items (each edit stacks a version — never re-add), `mv`/`set` to arrange.
+   The file's extension is its type: keep it (`slide.html`, not `/tmp/itm_x`);
+   a file with none keeps the item's current name and type.
    Every op you run snaps your cursor to where it happened.
 5. **Close the loop on the thread.** Always `isocan comment reply <thread>
    "…"` describing what you did, where you put it, and any judgment calls.
@@ -554,7 +577,11 @@ where somebody actually named you, rather than the Chat being busy.
 
 The daemon assembles the inbox at each canvas’s home, using the same routing
 and seen marks as the web inbox. A failed or withdrawn home is reported as
-unavailable. Reading the inbox never marks a canvas seen.
+unavailable. A canvas deleted at its home while this machine was away is said
+once — *gone at its home* — and `isocan canvas forget <id>` lets go of the
+copy here (refused while the home still has it; the copy is moved aside, not
+erased, and the command says where). Reading the inbox never marks a canvas
+seen.
 
 **It is the same rule `isocan wait` parks on** — one function, `reasonFor`
 in core, that both call: a comment
@@ -779,7 +806,8 @@ explicit `file` property; they cannot read neighboring files from your disk.
   prints — and opens — the address of that ONE item, filling the window:
 
   ```sh
-  isocan open "Checkout"        # → http://…/p/<canvas>/i/<itemId>
+  isocan open "Checkout"        # → http://…/p/<canvas>/i/<itemId>  (View Focus)
+  isocan open "Checkout" --edit # → http://…/p/<canvas>/w/<itemId>  (Edit Focus)
   ```
 
   Full screen is a route rather than an operation, which is why you can hand
@@ -920,7 +948,11 @@ isocan fit <items...>                  # grow items to the size their content wa
   gathered below. It is one `items.move`, so it is one undo, and it is a fixed
   point — running it on a formatted canvas moves nothing. `--dry-run` says what
   would move. Prefer it over placing items by hand; hand placement is for what
-  the person asked for on top of it.
+  the person asked for on top of it. **Naming items is a different request**:
+  `isocan tidy <items...>` lines THOSE up where they are — near-aligned edges
+  snapped, nearly-equal gaps evened, nothing re-dealt, name strips and marks
+  rows kept clear (`in-place`, what the app's Tidy row does). `isocan tidy
+  grid <items...>` re-deals them onto a lattice instead.
 - **Say what a thing came from.** When you build an item FROM another one — a
   variation, a spec written from a sketch, a page split out of a page — add
   `--prop parent=<source item id>`. It costs one property and it is what makes
@@ -1192,6 +1224,24 @@ argument needs `--` first. For anything with more than one line in it, pipe it:
 ```sh
 printf '## Standup\n\n- text tool landed\n- park bug fixed\n' | isocan text -f -
 ```
+
+## Summaries, far away (an experiment)
+
+Behind the *Semantic Zoom* experiment, a person zoomed out past where words
+can be read sees a short model-written summary of a long text node, a group
+or an area, marked **≈** in the app. `isocan summary <item|group|area>` prints
+the cached one and whether it is `current`, `stale` (the content changed since;
+it says how old the summary is), `short` (40 words or fewer: the words are the
+summary), `excluded` (never sent to a model) or `missing`; `--json` for the
+row. `isocan ls --summaries` adds the column and never makes one. **A summary
+is approximate**: read the words (`isocan get <item>`) before acting on
+anything it says. `--refresh` asks the home to make one, under the app's rules:
+you need edit access, it spends the canvas owner's model key only as that key
+is shared, a thing changed in the last 30 s waits, and a canvas makes at most
+so many an hour — either way the CLI prints the home's answer and exits 0.
+`isocan summary --stats [--days N]` (editors) prints what they cost: calls,
+tokens, the hour's budget, the cache. A summary is never an op; nothing it
+does is in undo.
 
 ## A Google Doc on the canvas
 
@@ -1507,6 +1557,13 @@ The practices that belong to design work in particular — how a request is
 entered, how its questions are asked, and what reading the design system
 before a screen means.
 
+- **Wireframes and flow sketches use `isocan wire`.** When a person asks for a
+  wireframe, low-fidelity layout or multi-screen flow sketch (with or without
+  `/wire`), run `isocan wire "<request>"` (`isocan --agent-help wire`) rather
+  than hand-authoring HTML through `design start`. It composes catalog
+  wireframes, variations and a clickable prototype in one step, and `isocan
+  wire layer <group> --layer system|lofi|hifi` steps fidelity up — or the
+  person can switch layers directly from the group's on-canvas `◧ Wire ▾` pill.
 - **One design request, through either entrance.** Read `isocan design
   workflow` for the procedure and canvas-owned automatic enrollment policy.
   `isocan design brief [request] --json` returns canonical briefs, exact
@@ -2400,7 +2457,8 @@ it:
 
 Both are `item.update` with a property, so they replicate, undo and are visible
 to everybody like any other fact. The same two verbs are on an item's menu in
-the app.
+the app, under "For agents": **Agents always read this** is `pin`, **Agents
+skip this** is `exclude`, and pressing a ticked one is `unmark`.
 
 **Keeping a piece of a source here.** Inheritance keeps following a source. To
 stop following and keep one piece instead, `isocan context pin <item> --from
@@ -2522,7 +2580,8 @@ They accept `--item <refs...>` and `--in <group> [--include-excluded]`.
 `ask <question...>`, `comment add <text>` and `comment reply <thread> <text>`
 accept the same `--in` context attachment. `comment edit <thread> <comment> <text>`
 preserves saved context unless `--in` explicitly replaces it. `ask --item`
-and `comment add --item` choose the thread's anchor; `--in` chooses the
+and `comment add --item` choose the thread's anchor (`comment add --item <item>
+--at 0.6,0.8` pins it at a point on the item, as fractions of its size); `--in` chooses the
 context attached to the message. Group #references also expand at the writer.
 Excluded descendants stay listed and skip content unless explicitly overridden.
 This does not change mention/summon permissions. `session say <text>` remains
@@ -3065,6 +3124,53 @@ The reference is the types themselves: the package is TypeScript source, so
 your editor answers what `connect()` returns straight from the install, and
 there is no separate API document to go stale. The ops a script sends are the
 ops you would have typed — one op per user-visible act is still one undo.
+
+## Keeping one card current: `edit --if-version`
+
+A generator that updates the same card every run — a weekly report, a live
+pulse — must not stack its version over what a person did to the card since
+it last looked. `isocan edit <item> <file> --if-version <versionId>` is the
+edit that checks first: the new content lands only if `<versionId>` is still
+the item's current version, and otherwise nothing is written.
+
+```sh
+isocan --json edit "Pulse" pulse.md --if-version ver_abc --op-id op_week41pulse \
+  --if-meta '{"title":"Pulse","properties":{"kind":"pulse"}}' --prop week=41
+```
+
+- **One act.** `--title`, `--prop k=v` and `--rm-prop key` ride in the same
+  op as the content, so the card never shows new words under an old title,
+  and one `undo` takes all of it back.
+- **`--if-meta`** also refuses when the title or any property is not exactly
+  what you pass — which is how you find out a person renamed or re-tagged the
+  card. Pass back the `title` and `properties` the last `--json` answer
+  printed. Leave it out and only the version is checked.
+- **`--op-id op_…`** is this edit's own name (`op_` and 6–32 of
+  `A–Z a–z 0–9 _ -`). Use the same one on every retry of the same edit: if the
+  first send landed and you never saw the answer, the retry answers
+  `replayed` with the version that landed, and applies nothing twice. If it
+  never arrived, the retry simply applies. A *new* op id against a version
+  that has moved is refused like anybody else's late edit.
+
+What comes back, with `--json`:
+
+| `status` | exit | means |
+| --- | --- | --- |
+| `applied` | 0 | it landed; `versionId` is the new current version — keep it, with `title` and `properties`, for next time |
+| `replayed` | 0 | this op id had already landed; `versionId` is what it wrote |
+| `conflict` | 4 | the item changed; nothing was written; `currentVersionId`, `title` and `properties` say where it stands now |
+| `unsupported` | 5 | the home is older than conditional edits; nothing was written |
+
+It **never** falls back to an unconditional edit: a refusal is the answer.
+After a `conflict`, re-read the card (`isocan get`), decide whether your
+update still applies, and send a new edit against `currentVersionId` under a
+new op id. The condition is checked by the home in the same step that
+writes, so two writers racing cannot both win. isocan.io has understood the
+op since September 2026, so `unsupported` means a self-hosted home that has
+not been upgraded.
+
+To bound the stack a regenerated card grows: `isocan version prune <item>
+--keep 14 --force`.
 
 ## Codex native sandbox
 
@@ -3622,6 +3728,9 @@ in the web app drives:
   filter flags. Browsing does not admit you; opening an address uses the normal
   door. Public catalogue and entry pages ask crawlers not to index them; that
   instruction is not a confidentiality boundary or a crawler guarantee.
+- `isocan share` prints a **desk check** first — audit, contrast, words,
+  wires behind, stale receipts, critics set to *before I share* — and
+  `isocan share --check` runs it alone. It never blocks (topic `proactive`).
 - `isocan share --link off` — new arrivals are turned away **and the people
   who got in on that link are expelled**. It prints how many. Anyone another
   grant still covers stays, which is why the line can say "3 expelled, 1 kept
@@ -3906,6 +4015,365 @@ then fix the cause rather than the symptom. Do not loop on the door, and do
 not delete your identity file to "start clean" — that is the one action that
 makes this refusal certain.
 
+<!-- topic: proactive | speaking first without speaking over — proposals, their cites and cap, the taste note, `/goodnight` and the morning review, Explain's critique, the brief card, `stuck`, critics, the desk check, `walk`, vague words -->
+
+## Proposals: work beside the person's, never over it
+
+When you have a reason to change something the person made and they did not
+ask, **propose** it instead of editing it. A proposal is an ordinary item
+hanging beneath its source, drawn with a dashed outline, a chip naming what
+prompted it, and your why; the person keeps it, compares it, or deletes it.
+
+```sh
+isocan propose <source> <file> --cites comment:<commentId> --why "Summary before detail: the pickup time comes first."
+isocan propose <source> sketch.html --cites op:412 --cites brief:audience --why "…" --hunch
+```
+
+The grammar, the same every time:
+
+- **Solid is the person's; dashed is yours.** Never `edit` an item the
+  person made to deliver an idea of your own — propose it. Placement is
+  beneath the source, clear of everything; you do not choose it.
+- **No trigger, no proposal.** `--cites kind:ref` at least once: `comment`,
+  `op` (a seq), `version` (`<item>@vN`), `design` (a DESIGN.md version),
+  `brief` (a line of the brief card: `brief:for`), `promise`, `docket`,
+  `critic`. The chip shows the first. A
+  proposal without one is refused, by the CLI and by the canvas itself.
+- **The why is design words, two sentences at most** — "summary before
+  detail", "visual hierarchy", "proximity", "primary action", "type scale",
+  "density". The canvas underlines the terms it knows and defines them in
+  place, so the person learns the word by seeing their own work in it.
+- **`--hunch` when you are not sure,** and draw it rough (a wireframe, a
+  pencil note): fidelity is confidence, and the person reads it before a word.
+- **Five open proposals per agent per canvas, and no more** — the canvas
+  refuses a sixth. Room frees only when the person keeps or deletes one;
+  nothing ages out. Waiting is the answer, not making room yourself.
+
+**Keep** is `choose`: the proposal becomes the next version of its source and
+goes to the trash, one undo; other proposals on the same source stay.
+**Compare** is the diff (`isocan diff <proposal> --source`).
+
+**A delete comes back to you.** When the person deletes your proposal, a
+comment reaches you on its thread carrying `deleted: <itemId>`, with their
+reason when they typed one. Answer it by adding **one line** to the taste
+note — what the delete taught, as a rule a later proposal can be held to —
+and nothing else:
+
+```sh
+isocan taste "No gates before value: never put sign-up before the menu."
+isocan taste                       # read it
+```
+
+The taste note ("What your deletes taught") is pinned into context, so
+`isocan context` hands it to every agent: **read it before you propose.** The
+person edits or clears it like any note; do not argue with a line they removed.
+
+## The night watch: `/goodnight`
+
+A person stopping for the day types `/goodnight` in the Chat (or runs
+`isocan goodnight`). That opens a **conversation** with the canvas's lead
+agent — the one the canvas names with `proactive=<name>` (`isocan canvas edit
+--prop proactive=Kit`), else its standing agent something answers for. Nothing
+else starts a night: not a closed tab, not an idle pointer.
+
+If you are woken by one, `isocan command show goodnight` is the procedure. The
+short version:
+
+1. `isocan goodnight read --json` — whether you lead, whether anything can
+   answer overnight, your free room under the cap (promised frames count),
+   what they **settled today** and what is **left open** (each cited), what
+   they have named so far, and what another person's goodnight has named.
+   Not the lead: say nothing.
+2. Open in the Chat with settled today, left open, and two or three things you
+   could try, each with why. They steer; restate the plan each time. **Never
+   write the note before they say "That's the plan"** (a comment carrying
+   `goodnight: plan`; `isocan goodnight plan` from a terminal).
+3. Then write it from what was agreed, and nothing else:
+
+```sh
+isocan goodnight note --promise "Basket | three takes on the empty basket, one a sketch | three takes" \
+  --edit "Checkout | pickup first | one new version" \
+  --open "comment:cmt_abc | not sure about the red" --ready 08:00
+```
+
+Each `--promise` hangs an empty dashed frame (`proposal=promised`) beneath its
+item. `--edit` changes an original, as a new version — **only an item the
+person named in the conversation**, and never the design system or what was
+settled today. Nothing touches an item another person's goodnight named. The
+note's **Will not touch** always lists what was settled today, the design
+system and every original nobody named; `--wont` may add, never remove. If
+nothing can answer, or your five are already waiting, the note still lands and
+says so — it promises nothing.
+
+4. The night's work, in the same turn, line by line:
+
+```sh
+isocan goodnight fill <frame> take.html --why "Proximity: …" [--hunch]
+isocan goodnight fill <named original> rework.html
+isocan goodnight fill <frame> --failed "every take broke the list's scan line" [the-take.html]
+isocan goodnight done "Two takes I'm sure of, one hunch. Left Ravi's delivery note alone: a business call."
+```
+
+A line the person unticked (`isocan goodnight untick <n>`, or the box on the
+note) is refused — skip it. An empty frame never stays empty without a reason:
+`done` waits until every ticked line is filled or failed, and posts the brief
+as a record the morning review reads. `isocan goodnight show` prints the note.
+Say what you saw and did not act on with `--left "<what> | <why>"` on `done`
+(repeatable), so the morning lists it under **Left alone**. An item the person
+changed in the hour before `/goodnight` is off limits unless a ticked line
+names it: `note` refuses a line on it they did not name, and `propose` refuses
+a proposal beside it while the note is open.
+
+## The morning review
+
+When the person comes back after their own `/goodnight` — their seen mark older
+than the note's ready-by — the "While you were away" panel (desktop and phone)
+leads with your brief: one plain line first if the night failed or made
+nothing, then your words, then at most five proposals, highest confidence
+first (sure, hunch, then the promises that did not work, each with its
+reason), then **Left alone**, then each original you edited because they named
+it, with the version before. `isocan goodnight review [--for <who>]` prints the
+same thing (`--json` says whether it is `due`). Seeing it closes the note
+(`handoffReviewed`), so it no longer holds other people's goodnights off the
+items it named. The cap does not grow with time away: nothing new until what
+is there is kept or deleted.
+
+## Explain this item, and the critique you are asked for
+
+`isocan explain <item> [--json]` prints how an
+item got here — the same story the Explain panel draws, derived from the
+canvas and never generated: the versions that mattered (a run of edits by one
+hand is one move; a `choose`, a kept proposal and an adopted decision stand
+alone), each with who made it and the reason given at the time (the comment
+that made it, the chosen variation's own comment); the roads not taken (the
+variations a `choose` trashed, deleted proposals, options nobody adopted);
+what moved around it since (a newer DESIGN.md, newer versions of its
+relatives); and *speak design*, phrases typed about it beside a designer's
+term. Read it before you change an item somebody else shaped.
+
+When a person presses **Critique**, you (the canvas's lead) get a Chat message
+"Critique, please: …" naming the item. Read `isocan explain <item>`, then
+answer in one command — what is working, one risk, one thing to
+try — and make the thing to try a proposal beneath it:
+
+```sh
+isocan explain <item> --critique --working "The pickup slot leads." \
+  --risk "The total sits below the fold on small phones." \
+  --try "Proximity: pin the total beside the button." \
+  --speak "make the total pop => raise the total's contrast" --propose try.html [--hunch]
+```
+
+The critique posts as a record (it wakes nobody); `--propose` makes the
+proposal citing `explain:<that comment>`, with `--try` as its why (two
+sentences at most), under the cap like any other. `--speak` pairs the
+person's own words with a designer's (repeatable). Nothing else in Explain
+writes: `--rationale` (Copy as rationale) puts the explanation beside the item
+as a note, and only when somebody asks for it.
+
+## The brief, as a card
+
+A design request's brief is an item on the canvas, and it draws as a card:
+**Making**, **For**, **Should feel**, **Never**, **Constraints**, **Right
+now**. A line the person said (`origin: supplied`) has a solid rule; one
+somebody inferred (`assumed`, `context`, or Right now as the canvas reads it:
+exploring, refining, shipping) has a pencil rule and **Right** / **Wrong**.
+`isocan design card [request] [--json]` prints the same card, and each line's
+cite. Read it before you propose against a brief, and cite the line your
+proposal answers — `--cites brief:for` — so its chip says `cites · For`.
+
+The person's edits go through the brief itself (`design brief --update`), so
+its history names them; the terminal has the same three:
+
+```sh
+isocan design card --right never                 # an inference becomes their word
+isocan design card --wrong tone --value "plain"  # it goes; theirs takes its place
+isocan design card --set for --value "regulars, and weekend first-timers"
+```
+
+Do not write an inferred line and then confirm it yourself: Right is the
+person's. **An edit changes nothing on the canvas — it only re-reads.** Every
+screen in the brief's scope is sorted: *assumed the old line* (a proposal
+beneath it cites the changed line, or its evidence was checked against the
+brief before the edit), *still holds*, and *matters more now*, which is your
+call as the canvas's lead. The edit posts "Brief re-read, please (…)" to you
+in the Chat. Read `isocan design card --json`, then answer in one command,
+naming the screens that matter more now and asking the person **one**
+clarifying question:
+
+```sh
+isocan design card --reread --matters Menu --question "As well as regulars, or instead?"
+```
+
+It posts as a record (it wakes nobody) and the card shows it under the edit.
+Never edit a screen because the brief changed: propose, citing the line. With
+nobody to answer, the edit still lands and the card says the re-read waits.
+
+## Stuck: stop guessing, and ask
+
+When a person's last tries at one item have all missed — **three in a row**,
+each set aside, undone or deleted, or asked for again within two minutes or
+in fewer words ("again", "no"), all within fifteen minutes — the next ask
+about it should get a question, not a fourth take. A summons through
+`isocan rc` says so: its payload carries `stuck` (the item, the person, and
+what the behaviour says). A parked `wait` does not; before you answer an ask
+with another version of an item, `isocan stuck <item>` tells you. A take you
+make anyway is a fourth guess.
+
+Answer the stuck ask with one command, and make nothing:
+
+```sh
+isocan stuck Header --question \
+  --observe "You kept the photo every time." --observe "You undid the colour twice." \
+  --tile "density | Roomy, one idea per row | Dense, more at a glance | now" \
+  --tile "brand | Quiet, the photo speaks | Loud, the bakery's red | instead" \
+  --tile "layout | Photo on top | Photo beside the words | now" \
+  --tile "tone | Plain | Warm, a little playful | instead"
+```
+
+- **Own the miss.** The question opens "I've been guessing", in your voice.
+  Never say the person is stuck; an observation that does is refused.
+- **Observations are what you noticed in the takes** — what survived every
+  try, what was undone twice — read from the versions (`isocan diff`), one
+  sentence each, one to three. The person can correct them.
+- **Four pairs, always the same four** — density, brand expression, layout,
+  tone of voice — each *now* (what the item does today) and *instead*, with
+  your own guess as the last part. The card highlights it.
+- The person answers with a side per pair, **show me extremes** (one take at
+  each end of every pair, side by side) or **name a product that gets it
+  right**; it reaches you as an ordinary ask, "Stuck answer (…)", and the
+  count starts again. Make one take from it.
+
+With nothing to answer, the person's card still shows what the behaviour
+says and that the question waits.
+
+## Critics in the room: you wear the lenses
+
+A critic in the room is a **lens** — a card on the canvas named for what it
+looks for ("The Reductionist": *cut until it breaks, then add one thing
+back*), never for a person — that the person switched on. You, the lead,
+wear it: its notes are yours, posted as that critic, and its pin wears its
+colour. **Critics never edit; only you act, and only when asked.**
+
+The person sets each critic up (`isocan critic add reductionist`, `isocan
+critic new "The Purist" --lens "One typeface, nothing decorative" --refs
+"Swiss railway signage"`, `isocan critic set <critic> --on|--off --loud
+blockers|studio|everything --when pause|share|asked`; `isocan critic ls`
+lists them with their settings). A crit reaches you as a Chat message that
+starts `Crit, please (<item>@<version>…)` and names the critics, from the
+person (`isocan critique <item>`, or `--as reductionist,brand-voice`), from
+their pause, or from the desk check before a share. Answer it:
+
+```sh
+isocan get <item>          # the screen, once; read it, not the threads
+isocan critique note <item> --as reductionist --at 0.5,0.2 --kind risk \
+  "The promotion banner competes with the order button. Cut it."
+isocan critique note <item> --as brand-voice --at 0.52,0.22 --kind working \
+  "The banner's red is the only thing that says Acme. Leave it."
+isocan critique read <item> --post --say "Reduction against recognition: the banner is the noise and the brand."
+```
+
+- **Each lens on its own, from the screen alone.** Write every lens's notes
+  before you read any back, and never let one lens answer another's note.
+  Read them together only with `critique read`.
+- **Each says what its volume allows.** *Blockers only* says blockers;
+  *studio crit* the few that matter (three at most); *everything* up to
+  eight. A note quieter or one more than that is refused. A lens with
+  nothing to say at its volume says nothing; the read names it.
+- **The read of the room** is agree, split and blocker, folded from the
+  notes (`critique read <item>`); your `--say` names each tension in design
+  words. **Never average a split, and never pick a side**: a split is the
+  person's to choose.
+- **Build both** is the person's: on a split they press it (or run
+  `isocan critique both <a>+<b>`) and you are asked, in the Chat, for two
+  proposals — `isocan propose <item> <file> --cites critic:<note> --why …`,
+  one per side. Leave the screen as it is.
+
+## The desk check before a share
+
+`isocan share` and `isocan present <item>` read the canvas first and print a
+desk check above their own lines: the design audit, the system's contrast,
+the words against DESIGN.md's Voice, wires behind their design system, stale
+design receipts, and the critics set to *before I share* — who are asked of
+you as a crit, with the findings, once per screen version. `isocan share
+--check` runs it alone and changes nothing. **It reports; it never blocks**:
+a blocker a critic raises is a warning in the room, not a gate.
+A walk is not part of the check; it is offered as its last line.
+
+## Walk it as someone else
+
+A person asks for a walk of a task over a flow — a group of screens (reading
+order), a wire prototype (its links, from where it opens), or one screen —
+as one or more **walkers**: each one situation and one constraint, never a
+biography. The starters are `one-handed` (a phone in one hand, the right
+thumb), `low-vision` (about 20/80, at reading distance), `screen-reader` and
+`first-time`; a person can describe another (`--as "commuter: one hand on a
+strap, reading on a moving bus"`). **They are simulations**: every surface
+says so, and so do you — they never replace testing with people.
+
+```sh
+isocan walk "Order a loaf"                                   # the lanes, measured; writes nothing
+isocan walk "Order a loaf" --task "order a loaf for Saturday" --as one-handed --as low-vision
+```
+
+What can be measured is measured, from the screens' own code, and you never
+narrate over it: thumb reach and target size where the CSS places a target
+(44×44 outside the thumb's easy zone, 24×24 anywhere), contrast against
+WCAG with what low vision sees and the nearest fix, names and roles for a
+screen reader. Each finding has an id per screen (`3.1`). The first-time
+walker and described ones are yours to judge; their pins say so.
+
+The ask reaches you, the lead, in the Chat: "Walk it as someone else, please
+(…)" with the screens at their versions, each walker and what was measured.
+Walk each one through the task in order, then answer once:
+
+```sh
+isocan walk --stumble "one-handed | Checkout | 3.1 | Could not reach Help in the corner." \
+  --stumble "low-vision | Checkout | 3.1 | Could not see Edit beside the time." \
+  --stumble "first-time | Choose a day | judged | Did not know “slot” meant a pickup time." \
+  --outcome "one-handed | stumbled | Reached Pay, not Help." \
+  --outcome "low-vision | stumbled | Could not find Edit." --outcome "first-time | made it | …" \
+  --shared "Checkout | The secondary actions are faint and out of the thumb's reach." \
+  --fix checkout-fix.html --why "Contrast and target size: Edit darkens to 7:1 and Help grows to 48 px."
+```
+
+- **A measured walker's stumble cites what was measured on that screen** (its
+  id), or says `judged` — and a judged pin says it was not measured.
+- **Every walker ends once** — made it, stumbled or gave up — and an ending
+  agrees with the pins: no "made it" after a stumble, no "gave up" without one.
+- **Where two or more walkers stumbled on one screen, name it** (`--shared`)
+  and make **one fix**: a proposal beneath that screen citing `walk:<id>`,
+  under the cap. The walk writes the pins (comments worn as each walker), the
+  record in the Chat and that proposal — nothing else, and never the screen.
+
+`isocan walk [walk]` reads a walk back: the lanes, your pins and outcomes,
+the shared finding and the fix, or why it waits.
+
+## Say it like a designer: ask for the reading, never guess
+
+Some words a person types read more than one way: "make the header **pop**"
+is contrast, scale or colour; "it feels **cramped**" is spacing, density or
+size. The Chat underlines only those words as the person types, shows the
+three readings, and offers the sentence a designer would say (Tab takes it;
+Enter sends their own words, unchanged — both are fine, and nothing is
+graded). When they pick a reading, it travels with the message as data:
+`readings: [{ word: "pop", reading: "contrast" }]` on the comment.
+
+- **Honour a picked reading.** It is what they meant; do not re-read the word.
+- **No reading picked, and the word is in the list? Ask, in one line,
+  naming the three** — "pop as more contrast, more scale, or more colour?" —
+  rather than guess. `isocan words read "<their sentence>"` prints the
+  readings and the designer's sentence; `--pick pop=contrast` follows one.
+  It prints "nothing here reads more than one way" for a clear ask.
+- **Say it back in design words** when you answer, once, without
+  correcting them: "raised the header's contrast" teaches "contrast".
+- **Learn their own words.** When a person names something their way ("the
+  thumb button"), add it to the taste note, quoted, so the next agent uses it
+  back — and it shows in their vocabulary panel as a word you learned:
+
+```sh
+isocan taste '"the thumb button" means the main action, within thumb reach'
+```
+
 <!-- topic: reference | every verb with its flags, the older spellings, and the fine print -->
 
 ## Quick reference of the whole surface
@@ -3913,7 +4381,7 @@ makes this refusal certain.
 `isocan --help` covers everything; the commands you'll live in:
 `comment ls|add|reply|edit|anchor|main|rm`,
 `session start|on|work|say|signal|point|select|end|move`,
-`canvas new|ls|show|edit|archive|rm` (rm needs `--force` and is
+`canvas new|ls|show|edit|archive|forget|rm` (rm needs `--force` and is
 NOT undoable — confirm on the thread first, and never delete a canvas you did
 not make). **`canvas archive` is the one to reach for instead**: it takes a
 canvas out of the list and changes nothing else — the address, the history,

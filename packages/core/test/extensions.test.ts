@@ -1,14 +1,24 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_COMMANDS,
+  EXTENSION_ACTOR_PREFIX,
+  EXTENSION_COLORS,
   EXTENSION_ICONS,
+  IDENTITY_COLORS,
   LABEL_LIMIT,
   PANEL_ROLE,
   PANEL_SIDES,
   TITLE_LIMIT,
   TOOL_ROLE,
+  actorColor,
+  extensionColor,
+  isExtensionActor,
   isPanelExtension,
   isToolExtension,
+  panelActor,
+  panelActorId,
+  panelActorRoute,
+  panelActorsIn,
   panelCapabilities,
   panelExtensionItems,
   panelProperties,
@@ -350,15 +360,47 @@ describe("what a panel may do, before you keep it", () => {
 
   it("does not claim powers this phase has not built", () => {
     /**
-     * The honest half, and the one worth a test: there is no frame (phase 4)
-     * and no door (phase 6), so the list says what the panel WILL be able to
-     * do and that it cannot yet. A capability list that overstated would be
+     * The honest half, and the one worth a test: phase 4 builds the frame on
+     * the content origin, while the selection feed (phase 5) and the op door
+     * (phase 6) are not built yet. A capability list that overstated would be
      * worse than none — somebody reads it before pressing --yes.
      */
     const said = panelCapabilities(readPanel(review).panel!).join("\n");
-    expect(said).toContain("cannot run yet");
+    expect(said).toContain("cannot read what is selected yet");
     expect(said).toContain("cannot send an operation");
     expect(said, "the frame is the content origin's, never the app's").toContain("content origin");
     expect(said, "it paints in its slot and nowhere else").toContain("left dock");
+  });
+
+  it("wears an extension colour that never collides with a person's IDENTITY_COLORS", () => {
+    const personHexes = new Set(IDENTITY_COLORS.map((c) => c.value.toLowerCase()));
+    const personNames = new Set(IDENTITY_COLORS.map((c) => c.name.toLowerCase()));
+    expect(EXTENSION_COLORS.length).toBeGreaterThan(0);
+    for (const ext of EXTENSION_COLORS) {
+      expect(personHexes.has(ext.value.toLowerCase()), `${ext.value} collides with IDENTITY_COLORS`).toBe(false);
+      expect(personNames.has(ext.name.toLowerCase()), `${ext.name} collides with IDENTITY_COLORS`).toBe(false);
+    }
+    for (const id of ["itm_a", "itm_b", "itm_panel_1", "itm_panel_2", "itm_review"]) {
+      expect(personHexes.has(extensionColor(id).toLowerCase())).toBe(false);
+      // And `actorColor` gives the panel's actor the exact same mineral colour
+      // its item wears, never a person's IDENTITY_COLORS — even if a registry
+      // map happened to carry an override.
+      const actor = panelActor(id, "Acme Review");
+      expect(actor.id.startsWith(EXTENSION_ACTOR_PREFIX)).toBe(true);
+      expect(isExtensionActor(actor.id)).toBe(true);
+      expect(isExtensionActor("usr_nico")).toBe(false);
+      expect(actorColor(actor.id, { [actor.id]: IDENTITY_COLORS[0]!.value })).toBe(extensionColor(id));
+      expect(personHexes.has(actorColor(actor.id).toLowerCase())).toBe(false);
+    }
+    expect(panelActorId("itm_review")).toBe("ext_review");
+    expect(panelActorRoute("prj_1", "itm_review")).toBe("/api/projects/prj_1/panels/itm_review/actor");
+    const withPanel: CanvasContents = {
+      ...here,
+      items: {
+        ...here.items,
+        itm_review: { ...page("itm_review", "Acme Review"), properties: panelProperties() },
+      },
+    };
+    expect(panelActorsIn(withPanel)).toEqual([{ id: "ext_review", name: "Acme Review" }]);
   });
 });

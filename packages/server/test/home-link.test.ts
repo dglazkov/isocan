@@ -513,7 +513,7 @@ describe("what a replica carries", () => {
 
     // The row, on A's disk, naming H — written by the birth itself, before the
     // op was ever forwarded.
-    expect(A.daemon.homes.assignments()).toEqual({ [CANVAS]: H.base });
+    expect(A.daemon.homes!.assignments()).toEqual({ [CANVAS]: H.base });
     expect(JSON.parse(await fs.readFile(p.homesFile(aDir), "utf8"))).toEqual({
       [CANVAS]: H.base,
     });
@@ -533,7 +533,7 @@ describe("what a replica carries", () => {
     await A.daemon.close();
     A = await node(await replica(aDir, H.base), aDir, priya);
     expect((await A.daemon.engine.listCanvases()).map((canvas) => canvas.id)).toEqual([CANVAS]);
-    expect(A.daemon.homes.homeOf(CANVAS)).toBe(H.base);
+    expect(A.daemon.homes!.homeOf(CANVAS)).toBe(H.base);
   }, 30_000);
 
   it("does not forget what it holds when the home is unreachable", async () => {
@@ -654,7 +654,7 @@ describe("the lid close", () => {
     // passes just as well against a replica that threw its canvas away and
     // took a full snapshot every time it reconnected — converging on the right
     // state while the seq cursor did nothing at all.
-    const handshake = A.daemon.homes.link(H.base)!.handshakes(CANVAS);
+    const handshake = A.daemon.homes!.link(H.base)!.handshakes(CANVAS);
     expect(handshake.snapshots).toBe(0);
     expect(handshake.resumed).toBeGreaterThanOrEqual(1);
     expect(handshake.last).toMatchObject({ type: "resumed", since: 2, lastSeq: 5 });
@@ -672,12 +672,56 @@ describe("the lid close", () => {
     await birthAtA();
     await letBIn();
     await until(() => canvas(B), (snap) => snap.lastSeq === 2, "B to adopt the canvas");
-    expect(B.daemon.homes.link(H.base)!.handshakes(CANVAS).snapshots).toBeGreaterThanOrEqual(1);
+    expect(B.daemon.homes!.link(H.base)!.handshakes(CANVAS).snapshots).toBeGreaterThanOrEqual(1);
     // Adopted whole: state, title, and the home's lastSeq.
     const snap = await canvas(B);
     expect(snap.project.title).toBe("Acme Sprint Board");
     expect(snap.canvas.items["itm_1"]!.x).toBe(5);
   }, 20_000);
+});
+
+describe("a fold made at the home", () => {
+  /**
+   * **Found 14 Oct 2026.** A person folded their old dev identity into their
+   * main one from a browser AT the home, and the laptop that replicates the
+   * canvas went on showing two people. The home already sent its `joined`
+   * map on every snapshot, resume and roster; the replica merged the names
+   * and colours beside it and dropped the map. So names caught up while undo,
+   * the inbox and ownership on the laptop still saw two actors.
+   */
+  it("reaches a replica that holds the canvas, and is still there after it restarts", async () => {
+    await birthAtA();
+    await letBIn();
+    await until(() => canvas(B), (snap) => snap.canvas.items["itm_1"] !== undefined, "B to hold the canvas");
+
+    // At the home, one browser that speaks for both of a person's names.
+    const old = { id: "usr_acme_old", name: "Acme Laptop" };
+    const person = { id: "usr_acme", name: "Acme Person" };
+    await H.badge.speakAs(old, "web:old");
+    await H.badge.speakAs(person, "web:person");
+    // The old name wrote here, so this is a room the fold repaints.
+    await op(H, old, {
+      type: "item.add",
+      itemId: "itm_old",
+      version: nv("ver_old"),
+      width: 40,
+      height: 40,
+      placement: { x: 1, y: 1 },
+    });
+    await op(H, person, { type: "actor.join", from: old.id, into: person.id }, null);
+
+    const folded = await until(
+      () => canvas(B),
+      (snap) => snap.joined?.[old.id] === person.id,
+      "the fold to reach B",
+    );
+    expect(folded.names[old.id]).toBe(person.name);
+
+    // Written down, not just held: the file a restart reads has it.
+    await B.daemon.close();
+    const stored = JSON.parse(await fs.readFile(p.actorsFile(bDir), "utf8")) as { joined?: Record<string, string> };
+    expect(stored.joined?.[old.id]).toBe(person.id);
+  }, 30_000);
 });
 
 describe("what a replica will and will not do on its own", () => {
@@ -750,7 +794,7 @@ describe("what a replica will and will not do on its own", () => {
     process.on("unhandledRejection", onRejection);
     vi.spyOn(console, "error").mockImplementation(() => {});
     try {
-      const link = A.daemon.homes.link(H.base)!;
+      const link = A.daemon.homes!.link(H.base)!;
       let asked = 0;
       (link as unknown as { ensureBadge(): Promise<unknown> }).ensureBadge = () => {
         asked += 1;
@@ -761,7 +805,7 @@ describe("what a replica will and will not do on its own", () => {
           ),
         );
       };
-      await A.daemon.homes.bind("prj_unkept", H.base);
+      await A.daemon.homes!.bind("prj_unkept", H.base);
       const state = await until(
         async () => link.canvasStates().find((c) => c.canvasId === "prj_unkept") ?? null,
         (s) => s !== null && s.failures >= 2,
@@ -1233,7 +1277,7 @@ describe("the link a canvas actually has to its home", () => {
    * The count outlives the link precisely so this can be reported.
    */
   it("reports a canvas whose socket has never connected, and why", async () => {
-    await A.daemon.homes.bind("prj_ghost", H.base);
+    await A.daemon.homes!.bind("prj_ghost", H.base);
     const state = await until(
       () => stateOf(A, "prj_ghost"),
       (found) => (found?.failures ?? 0) >= 2,

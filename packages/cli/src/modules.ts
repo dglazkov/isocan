@@ -8,6 +8,8 @@ import { anatomyCli } from "@isocan/anatomy/cli";
 import { talkCli } from "@isocan/talk/cli";
 import { wireframeCli } from "@isocan/wireframe/cli";
 import { judgeCli } from "@isocan/judge/cli";
+import { critiqueCli } from "@isocan/critique/cli";
+import { lottieCli } from "@isocan/lottie/cli";
 import type { CliModule } from "./modulehost.ts";
 
 /**
@@ -16,4 +18,4 @@ import type { CliModule } from "./modulehost.ts";
  * in one list and not the other is the web-only (or terminal-only) feature
  * AGENTS.md forbids, and `test/modules.test.ts` says so.
  */
-export const CLI_MODULES: readonly CliModule[] = [mindmapCli, mermaidCli, documentsCli, stickersCli, sandboxCli, competitionCli, anatomyCli, talkCli, wireframeCli, judgeCli];
+export const CLI_MODULES: readonly CliModule[] = [mindmapCli, mermaidCli, documentsCli, stickersCli, sandboxCli, competitionCli, anatomyCli, talkCli, wireframeCli, judgeCli, critiqueCli, lottieCli];

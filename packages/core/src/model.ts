@@ -107,6 +107,42 @@ export interface VisualFace {
 }
 
 /**
+ * The named fidelity and presentation faces an artifact version can carry
+ * alongside its source and default visual face, ordered from lowest to highest
+ * fidelity so a freshly published wireframe stays the default view until an
+ * explicit `properties.face` selection switches to a higher-fidelity face.
+ */
+export const NAMED_FACE_IDS = ["wireframe", "mid-fi", "hi-fi", "prototype"] as const;
+
+/** One of the named fidelity/presentation faces in `NAMED_FACE_IDS`. */
+export type NamedFaceId = (typeof NAMED_FACE_IDS)[number];
+
+/** Any selectable face of an item version: source, visual, or a named fidelity face. */
+export type ItemFaceId = "source" | "visual" | NamedFaceId;
+
+/** Property key on an item or containing group that selects which face to display. */
+export const FACE_PROP = "face";
+
+/** Is `value` one of the canonical named face identifiers? */
+export function isNamedFaceId(value: string): value is NamedFaceId {
+  return (NAMED_FACE_IDS as readonly string[]).includes(value);
+}
+
+const FACE_LABELS: Record<ItemFaceId, string> = {
+  wireframe: "Wireframe",
+  "mid-fi": "Mid-Fi",
+  "hi-fi": "Hi-Fi",
+  prototype: "Prototype",
+  visual: "Visual",
+  source: "Source",
+};
+
+/** Human-readable label for a face toggle button in the canvas card or workbench stage. */
+export function faceLabel(face: ItemFaceId): string {
+  return FACE_LABELS[face] ?? face;
+}
+
+/**
  * One entry in an item's stack: a blob by content hash, and who made it when. Versions are
  * appended, never edited — re-editing an item is `item.addVersion`, so every wording is kept.
  */
@@ -125,28 +161,186 @@ export interface ItemVersion {
    * When absent, renderers fall back to the source face (blobHash).
    */
   visual?: VisualFace;
+  /**
+   * Optional named fidelity faces (`wireframe`, `mid-fi`, `hi-fi`, `prototype`)
+   * attached to this version so an item can progress from wireframe to hi-fi
+   * without minting extra version history entries and can flip between faces.
+   */
+  faces?: Partial<Record<NamedFaceId, VisualFace>>;
   createdAt: string;
   createdBy: Actor;
 }
 
-/**
- * The face to render visually on the canvas card, in full screen, and in the
- * workbench preview pane. Falls back to the source face (blobHash) when no
- * distinct visual face is defined.
- */
-export function visualFaceOf(version: ItemVersion): {
+function resolveVisualFace(
+  version: ItemVersion,
+  face: VisualFace,
+): {
   blobHash: string;
   mimeType: string;
   filename: string;
   size: number;
 } {
+  return {
+    blobHash: face.blobHash,
+    mimeType: face.mimeType,
+    filename: face.filename ?? version.filename,
+    size: face.size ?? version.size,
+  };
+}
+
+/**
+ * The face to render visually on the canvas card, in full screen, and in the
+ * workbench preview pane. Honors `preferredFace` when provided and available on
+ * the version; otherwise falls back to the first named face in `NAMED_FACE_IDS`,
+ * then `version.visual`, then the source face (`blobHash`).
+ */
+export function visualFaceOf(
+  version: ItemVersion | undefined,
+  preferredFace?: string | null,
+): {
+  blobHash: string;
+  mimeType: string;
+  filename: string;
+  size: number;
+} {
+  if (!version) {
+    return { blobHash: "", mimeType: "text/plain", filename: "", size: 0 };
+  }
+  if (preferredFace === "source") {
+    return sourceFaceOf(version);
+  }
+  if (preferredFace && isNamedFaceId(preferredFace)) {
+    const named = version.faces?.[preferredFace];
+    if (named) return resolveVisualFace(version, named);
+  }
+  if (preferredFace === "visual" && version.visual) {
+    return resolveVisualFace(version, version.visual);
+  }
+  if (version.faces) {
+    for (const id of NAMED_FACE_IDS) {
+      const named = version.faces[id];
+      if (named) return resolveVisualFace(version, named);
+    }
+  }
   if (version.visual) {
-    return {
-      blobHash: version.visual.blobHash,
-      mimeType: version.visual.mimeType,
-      filename: version.visual.filename ?? version.filename,
-      size: version.visual.size ?? version.size,
-    };
+    return resolveVisualFace(version, version.visual);
+  }
+  return sourceFaceOf(version);
+}
+
+/**
+ * Resolve which face ID is currently active for `item`, checking the item's own
+ * `properties.face` first, then walking ancestor groups via `containerId`, and
+ * finally falling back to the version's default visual/named face.
+ */
+export function activeFaceIdOf(
+  item: Pick<Item, "properties" | "containerId">,
+  version: ItemVersion | undefined,
+  canvas?: Pick<CanvasContents, "items"> | null,
+): ItemFaceId {
+  let requested: string | undefined = item.properties[FACE_PROP];
+  if (!requested && canvas && item.containerId) {
+    let cur: string | undefined = item.containerId;
+    const seen = new Set<string>();
+    while (cur && !seen.has(cur)) {
+      seen.add(cur);
+      const parent: Item | undefined = canvas.items[cur];
+      if (!parent) break;
+      if (parent.properties[FACE_PROP]) {
+        requested = parent.properties[FACE_PROP];
+        break;
+      }
+      cur = parent.containerId;
+    }
+  }
+  if (!version) return "source";
+  if (requested === "source") return "source";
+  if (requested === "visual" && version.visual) return "visual";
+  if (requested && isNamedFaceId(requested) && version.faces?.[requested]) {
+    return requested;
+  }
+  if (version.faces) {
+    for (const id of NAMED_FACE_IDS) {
+      if (version.faces[id]) return id;
+    }
+  }
+  if (version.visual) return "visual";
+  return "source";
+}
+
+/**
+ * All distinct faces available on `version` in display order, for the workbench
+ * stage toggle bar and canvas face controls.
+ */
+export function availableFacesOf(version: ItemVersion | undefined): ItemFaceId[] {
+  if (!version) return ["source"];
+  const result: ItemFaceId[] = [];
+  const namedHashes = new Set<string>();
+  if (version.faces) {
+    for (const id of NAMED_FACE_IDS) {
+      const face = version.faces[id];
+      if (face) {
+        result.push(id);
+        namedHashes.add(face.blobHash);
+      }
+    }
+  }
+  if (
+    version.visual &&
+    version.visual.blobHash !== version.blobHash &&
+    !namedHashes.has(version.visual.blobHash)
+  ) {
+    result.push("visual");
+  }
+  const hasDistinctFace =
+    result.length > 0 &&
+    (result.length > 1 ||
+      (version.visual !== undefined && version.visual.blobHash !== version.blobHash) ||
+      Object.values(version.faces ?? {}).some((f) => f !== undefined && f.blobHash !== version.blobHash));
+  if (hasDistinctFace) {
+    result.push("source");
+  }
+  return result.length > 0 ? result : ["source"];
+}
+
+/**
+ * Blob hashes of HTML faces on `version` other than `activeBlobHash`, so
+ * `HtmlItemView` can pre-warm their iframes in the background for a zero-flash
+ * toggle when switching between wireframe and hi-fi.
+ */
+export function warmFacesOf(version: ItemVersion | undefined, activeBlobHash: string): string[] {
+  if (!version) return [];
+  const hashes = new Set<string>();
+  if (version.faces) {
+    for (const id of NAMED_FACE_IDS) {
+      const face = version.faces[id];
+      if (face && face.mimeType === "text/html" && face.blobHash !== activeBlobHash) {
+        hashes.add(face.blobHash);
+      }
+    }
+  }
+  if (
+    version.visual &&
+    version.visual.mimeType === "text/html" &&
+    version.visual.blobHash !== activeBlobHash
+  ) {
+    hashes.add(version.visual.blobHash);
+  }
+  return [...hashes];
+}
+
+/**
+ * The source face of the artifact: shown in the workbench editor, inspected via
+ * `isocan get`, and synchronized with disk via `isocan save`.
+ */
+export function sourceFaceOf(version: ItemVersion | undefined): {
+  blobHash: string;
+  mimeType: string;
+  filename: string;
+  size: number;
+} {
+  if (!version) {
+    return { blobHash: "", mimeType: "text/plain", filename: "", size: 0 };
   }
   return {
     blobHash: version.blobHash,
@@ -156,27 +350,19 @@ export function visualFaceOf(version: ItemVersion): {
   };
 }
 
-/**
- * The source face of the artifact: shown in the workbench editor, inspected via
- * `isocan get`, and synchronized with disk via `isocan save`.
- */
-export function sourceFaceOf(version: ItemVersion): {
-  blobHash: string;
-  mimeType: string;
-  filename: string;
-  size: number;
-} {
-  return {
-    blobHash: version.blobHash,
-    mimeType: version.mimeType,
-    filename: version.filename,
-    size: version.size,
-  };
-}
-
-/** Is the visual face distinct from the source face? */
-export function hasDistinctVisualFace(version: ItemVersion): boolean {
-  return version.visual !== undefined && version.visual.blobHash !== version.blobHash;
+/** Is a visual or named face distinct from the source face? */
+export function hasDistinctVisualFace(version: ItemVersion | undefined): boolean {
+  if (!version) return false;
+  if (version.visual !== undefined && version.visual.blobHash !== version.blobHash) {
+    return true;
+  }
+  if (version.faces) {
+    for (const id of NAMED_FACE_IDS) {
+      const face = version.faces[id];
+      if (face && face.blobHash !== version.blobHash) return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -272,6 +458,28 @@ export interface Comment {
   record?: true | import("./roll.ts").RollKind;
   /** A person pressed a control in a prototype; see `prototype-click.ts`. */
   click?: import("./prototype-click.ts").PrototypeClick;
+  /** A person deleted this proposal (an item id); its author is asked what it taught — see `proposal.ts`. */
+  deleted?: string;
+  /**
+   * A critic's note worn by the lead (proactive-agent phase 8, design §9):
+   * the critic card's name (`critique.critic`), so one actor is accountable
+   * for the words and the canvas colours the pin in the critic's colour.
+   */
+  persona?: string;
+  /**
+   * A turn of a goodnight conversation that machinery reads (proactive-agent
+   * phase 2, `goodnight.ts`): `plan`, the person saying "That's the plan";
+   * `brief`, the agent's account of the night, a `record` naming its note —
+   * what the morning review finds it by.
+   */
+  goodnight?: GoodnightMark;
+  /**
+   * The readings a person picked for their own vague words (proactive-agent
+   * phase 10, `vague-words.ts`): "pop" read as `contrast`. The body is what
+   * they typed, untouched; this says which way they meant it, and an agent
+   * honours it rather than guessing.
+   */
+  readings?: Array<{ word: string; reading: string }>;
   /** Item ids #-referenced in the body, resolved at authoring time against
    * the live items the author could see. Absent on older comments. */
   items?: string[];
@@ -284,6 +492,13 @@ export interface Comment {
    * honest source for how long that took, since both ends are daemon
    * timestamps rather than something the author typed. */
   editedAt?: string;
+}
+
+/** What a goodnight comment carries: which turn it is, and for a brief, the note it reports on. */
+export interface GoodnightMark {
+  step: "plan" | "brief";
+  /** The note's item id — a brief only. */
+  note?: string;
 }
 
 /**
@@ -369,6 +584,17 @@ export interface EnrolledAgent {
    * say where an invitation came from when somebody asks.
    */
   invitedFrom?: string;
+  /**
+   * **What this agent may do here, at most** (critique phase 2) — `note`
+   * for an enrolled critic: notes on items, replies, reactions, and nothing
+   * else, checked at the home after the badge's capability
+   * (`ceilingRefusal`), so it only ever narrows. Written by `agent.ceiling`,
+   * kept across a re-enrolment, gone with the row on `agent.withdraw`.
+   */
+  ceiling?: "note";
+  /** Who set the ceiling — the one actor, beside `agent.withdraw`, whose
+   *  `agent.ceiling … null` lifts it. */
+  ceilingBy?: Actor;
 }
 
 /**

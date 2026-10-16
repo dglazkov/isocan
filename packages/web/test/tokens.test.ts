@@ -271,6 +271,12 @@ describe("every token used is a token defined", () => {
       "--run",
       "--w",
       "--need",
+      // An item's box height in world units, set beside `--w` on every item
+      // (ItemView), and where Semantic Zoom's card starts under a frame's
+      // title strip, set on the card (`SemanticZoom.tsx`): both numbers only
+      // the item knows.
+      "--h",
+      "--sz-top",
     ]);
     const known = defined(rules);
     const missing = all

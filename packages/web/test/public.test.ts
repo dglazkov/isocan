@@ -3,7 +3,8 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { PUBLIC_CANVASES_ROUTE, publicListingRoute, type PublicCanvas } from "@isocan/core";
 import { PublicRows } from "../src/components/PublicCatalogue.tsx";
-import { ApiError, publicCanvases, setPublicListing } from "../src/lib/api.ts";
+import { ApiError } from "../src/lib/api.ts";
+import { publicCanvases, setPublicListing } from "../src/lib/api-access.ts";
 
 afterEach(() => vi.unstubAllGlobals());
 describe("the Public client wire", () => {

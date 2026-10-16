@@ -74,8 +74,8 @@ beforeEach(async () => {
     op: { type: "project.create", canvasId: REMOTE, title: "Remote" },
   });
   expect(remote.status, await remote.clone().text()).toBe(200);
-  expect(replica.homes.for(LOCAL), "prj_local must be homed on the replica").toBeNull();
-  expect(replica.homes.for(REMOTE), "prj_remote must be homed at the other daemon").not.toBeNull();
+  expect(replica.homes!.for(LOCAL), "prj_local must be homed on the replica").toBeNull();
+  expect(replica.homes!.for(REMOTE), "prj_remote must be homed at the other daemon").not.toBeNull();
 });
 
 afterEach(async () => {

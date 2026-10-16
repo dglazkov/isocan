@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
-import { type ModuleManifest, enginesSatisfied, moduleSlug } from "@isocan/core";
+import { type ModuleManifest, enginesSatisfied, moduleSlug, modules } from "@isocan/core";
+import { packagePath } from "@isocan/core/packageroot";
 
 /**
  * **Runtime modules on this machine** (`docs/projects/modules/design.md`,
@@ -57,6 +58,27 @@ export function moduleFile(home: string, slug: string, relative: string): string
   const target = path.resolve(root, relative);
   if (!target.startsWith(root + path.sep)) return null;
   if (!existsSync(target)) return null;
+  const real = realpathSync(target);
+  return real.startsWith(root + path.sep) ? real : null;
+}
+
+/**
+ * **A built-in module's asset, or null** (critique phase 4). A module built
+ * into this copy (design-competition, critique) registers no base and is not
+ * under `~/.isocan/modules/`, so its `assets/` were reachable from the
+ * terminal (`packagePath("packages/modules", …)`, which `lensOf` reads) and
+ * from nowhere a browser could ask. The same files, served the same way:
+ * only a module this process registered, only under its `assets/`, real
+ * paths on both sides.
+ */
+export function builtInAsset(slug: string, relative: string): string | null {
+  if (!relative.startsWith("assets/")) return null;
+  if (!modules().some((m) => moduleSlug(m.name) === slug)) return null;
+  const dir = packagePath("packages/modules", slug, "assets");
+  if (!existsSync(dir)) return null;
+  const root = realpathSync(dir);
+  const target = path.resolve(root, relative.slice("assets/".length));
+  if (!target.startsWith(root + path.sep) || !existsSync(target)) return null;
   const real = realpathSync(target);
   return real.startsWith(root + path.sep) ? real : null;
 }

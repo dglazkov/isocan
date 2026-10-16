@@ -3,7 +3,7 @@ title: Lack of component interface prop-table canvas documentation
 loop:
   - 2db0c9f3-f661-4408-afc0-fe71a997befb
 loop_rank: P2
-loop_state: ACTIVE
+loop_state: DISMISSED
 loop_goal: What canvas tools teach us
 decision: declined
 rank: never

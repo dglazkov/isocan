@@ -7,7 +7,7 @@ import {
 import { chartSvg, listRows, sel, stepsRow, upTo, word } from "./primitives.ts";
 
 /**
- * **Wave 1's 28 blocks — the unit Jev chooses** (research §1, *Blocks*, and
+ * **Wave 1's 31 blocks — the unit Jev chooses** (research §1, *Blocks*, and
  * *Recommendation*). Props are the research's, transcribed; elements are the
  * actionable parts of each, with the intents each can take.
  *
@@ -125,7 +125,7 @@ export const BLOCKS: Component[] = [
       skip: { accepts: ["skip"], default: "skip", when: (p) => p.skip === true },
     },
     draw: ({ props, label, hot, fill }) => `<div class="onb">${flag(props, "skip") ? `<div class="right"><span class="lnk"${hot("skip")}>${label("skip")}</span></div>` : ""}${
-      str(props, "media") === "none" ? "" : fill?.motif ? pic(fill.motif, str(props, "media") === "image" ? "4/3" : "1/1", str(props, "media")) : img(str(props, "media") === "image" ? "4/3" : "1/1", str(props, "media"))}<div class="center">${
+      str(props, "media") === "none" ? "" : fill?.motif ? pic(fill.motif, str(props, "media") === "image" ? "4/3" : "1/1", str(props, "media")) : img(str(props, "media") === "image" ? "4/3" : "1/1", str(props, "media") === "illustration" ? "illustration pat-dotted" : str(props, "media"))}<div class="center">${
       fill?.heading !== undefined ? `${tx(fill.heading, "title")}${tx((fill.lines ?? []).join(" "), "body")}` : `${bar(60, "k")}${bars(2)}`}</div><div class="dots">${
       rowsOf(num(props, "steps"), (i) => `<i class="${i + 1 === sel(props, "current", "steps") ? "on" : ""}"></i>`)}</div><div class="actions">${btn(label("next"), "primary", "block", hot("next"))}</div></div>`,
   },
@@ -286,6 +286,40 @@ export const BLOCKS: Component[] = [
         return m === undefined ? `<span class="meta-i">${icon()}${bar(60 + (i % 2) * 20, "in")}</span>` : i === 0 ? statusTag(m) : `<span class="meta-i">${tx(m, "meta", "span")}</span>`;
       })}</div><div class="actions row">${rowsOf(num(props, "actions"), (i) => btn(label(`action-${i + 1}`), i === 0 ? "primary" : "secondary", "", hot(`action-${i + 1}`)))}</div></div>`,
   },
+  {
+    id: "hero-banner", kind: "block", category: "content", namedBy: 2, h: 360,
+    props: { media: choice(["image", "illustration", "video", "none"], "image"), badge: yn(true), bullets: count(0, 4, 3), cta: count(1, 2, 2) },
+    elements: upTo(2, "cta", "cta", [...intentsIn("auth", "forward"), ...JUMPS], ["get-started", "sign-in"]),
+    draw: ({ props, label, hot, wide, fill }) => {
+      const mKind = str(props, "media");
+      const mWireCls = mKind === "illustration" ? "illustration pat-dotted" : mKind === "video" ? "pat-striped" : "";
+      const mBox = fill?.motif ? pic(fill.motif, "4/3", mKind === "illustration" ? "illustration" : "") : img("4/3", mWireCls);
+      const mediaEl = mKind === "none" ? "" : mKind === "video" ? `<div class="video hero-media">${mBox}<span class="play">▶</span></div>` : `<div class="hero-media">${mBox}</div>`;
+      const badgeEl = flag(props, "badge") ? (fill?.sub !== undefined ? `<div>${statusTag(fill.sub)}</div>` : `<span class="chip">${bar(48, "in emp-primary")}</span>`) : "";
+      const headEl = fill?.heading !== undefined ? tx(fill.heading, "title hero-h") : bar(82, "title emp-primary");
+      const bodyEl = fill?.lines ? tx(fill.lines.join(" "), "body") : bars(2, 0, "emp-secondary");
+      const bulletsEl = num(props, "bullets") > 0
+        ? `<div class="hero-bullets">${rowsOf(num(props, "bullets"), (i) => `<div class="chk"><span class="cb on"></span>${word(fill?.labels, i, bar(55 + (i % 3) * 10, "in emp-tertiary"))}</div>`)}</div>`
+        : "";
+      const ctaEl = `<div class="actions row hero-cta">${rowsOf(num(props, "cta"), (i) => btn(label(`cta-${i + 1}`), i === 0 ? "primary" : "secondary", "", hot(`cta-${i + 1}`)))}</div>`;
+      return `<div class="hero${wide && mKind !== "none" ? " split" : ""}"><div class="hero-copy">${badgeEl}${headEl}${bodyEl}${bulletsEl}${ctaEl}</div>${mediaEl}</div>`;
+    },
+  },
+  {
+    id: "accordion", kind: "block", category: "content", namedBy: 3, h: 360,
+    props: { items: count(3, 8, 5), open: index(8, 1) },
+    draw: ({ props, fill }) => {
+      const items = num(props, "items");
+      const openIdx = sel(props, "open", "items");
+      return `<div class="accordion">${rowsOf(items, (i) => {
+        const expanded = i + 1 === openIdx;
+        const it = nth(fill?.items, i);
+        const head = it ? tx(it.title, "k wrap", "span") : bar(68 - (i % 3) * 8, "k emp-primary");
+        const body = expanded ? `<div class="acc-body">${it?.text ? tx(it.text, "body") : bars(2, i, "emp-secondary")}</div>` : "";
+        return `<div class="acc-item${expanded ? " open" : ""}"><div class="acc-head">${head}<span class="chev">${expanded ? "−" : "+"}</span></div>${body}</div>`;
+      })}</div>`;
+    },
+  },
   // ---- social
   {
     id: "comment-list", kind: "block", category: "social", namedBy: 1, h: 360,
@@ -320,7 +354,7 @@ export const BLOCKS: Component[] = [
       const m = (ratio: string, cls = "") => (it?.motif ? pic(it.motif, ratio, cls) : img(ratio, cls));
       const head = it ? `${tx(it.person ?? it.title, "k")}${tx(it.meta ?? "", "meta")}` : `${bar(35, "k")}${bar(20, "meta")}`;
       return `<div class="fpost"${hot("row")}><div class="fhead">${avatarOf(it?.person, "s")}<div class="row-t">${head}</div></div>${it ? tx(it.text ?? "", "body") : bars(2, p)}${
-        media === "image" ? m("4/3") : media === "video" ? `<div class="video">${m("16/9")}<span class="play">▶</span></div>` : media === "link" ? `<div class="linkcard">${m("1/1", "thumb-img")}<div>${it ? `${tx(it.title, "k")}${tx(it.sub ?? "", "meta")}` : `${bar(70, "k")}${bar(40, "meta")}`}</div></div>` : ""}<div class="factions">${
+        media === "image" ? m("4/3") : media === "video" ? `<div class="video">${m("16/9", "pat-striped")}<span class="play">▶</span></div>` : media === "link" ? `<div class="linkcard">${m("1/1", "thumb-img")}<div>${it ? `${tx(it.title, "k")}${tx(it.sub ?? "", "meta")}` : `${bar(70, "k")}${bar(40, "meta")}`}</div></div>` : ""}<div class="factions">${
         rowsOf(num(props, "actions"), (i) => `<span class="fa"${hot(`action-${i + 1}`)}>${glyph(intent(`action-${i + 1}`))} ${label(`action-${i + 1}`)}</span>`)}</div></div>`;
     }),
   },
@@ -359,6 +393,31 @@ export const BLOCKS: Component[] = [
       return str(props, "layout") === "list"
         ? `<div class="plist">${rowsOf(num(props, "items"), card)}</div>`
         : `<div class="grid" style="grid-template-columns:repeat(${wide ? 4 : 2},1fr)">${rowsOf(num(props, "items"), card)}</div>`;
+    },
+  },
+  {
+    id: "pricing-cards", kind: "block", category: "commerce", namedBy: 2, h: 440,
+    props: { tiers: count(2, 4, 3), features: count(3, 6, 4), highlight: index(4, 2), billing: yn(true) },
+    elements: upTo(4, "plan", "tiers", [...FORWARD, ...intentsIn("auth"), ...JUMPS], ["get-started", "upgrade", "contact", "continue"]),
+    draw: ({ props, label, hot, wide, fill }) => {
+      const tiers = num(props, "tiers");
+      const hi = sel(props, "highlight", "tiers");
+      const feats = num(props, "features");
+      const billing = flag(props, "billing")
+        ? `<div class="billing-row"><div class="seg">${rowsOf(2, (i) => `<span class="${i === 1 ? "on" : ""}">${word(fill?.groups, i, bar(55, "in"))}</span>`)}</div></div>`
+        : "";
+      const cards = rowsOf(tiers, (i) => {
+        const popular = i + 1 === hi;
+        const it = nth(fill?.items, i);
+        const badge = popular ? (it?.status ? `<div>${statusTag(it.status)}</div>` : `<span class="st tier-badge">${bar(40, "in emp-primary")}</span>`) : "";
+        const head = it
+          ? `${tx(it.title, "k")}${tx(it.meta ?? "", "big")}${it.sub ? tx(it.sub, "meta") : ""}`
+          : `${bar(45, "k emp-primary")}${bar(55, "fat emp-primary")}${bar(70, "meta emp-subtle")}`;
+        const list = `<div class="tier-feats">${rowsOf(feats, (f) => `<div class="chk"><span class="cb on"></span>${word(it?.cells, f, bar(60 + ((i + f) % 3) * 10, "in emp-tertiary"))}</div>`)}</div>`;
+        const action = `<div class="actions">${btn(label(`plan-${i + 1}`), popular ? "primary" : "secondary", "block", hot(`plan-${i + 1}`))}</div>`;
+        return `<div class="card tier${popular ? " popular" : ""}">${badge}${head}${list}${action}</div>`;
+      });
+      return `<div class="pricing">${billing}<div class="grid pricing-grid" style="grid-template-columns:repeat(${wide ? tiers : 1},1fr)">${cards}</div></div>`;
     },
   },
   // ---- feedback

@@ -19,9 +19,23 @@ it("delivers exact image blocks and real CLI/browser actions through an actual s
   const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a1ioAAAAASUVORK5CYII=", "base64");
   await fs.writeFile(path.join(workspace, "pixel.png"), png);
   await fs.writeFile(path.join(workspace, "screen.html"), "<!doctype html><title>Acme synthetic transport</title><input id=\"quantity\" type=\"number\" value=\"0\"><form onsubmit=\"event.preventDefault();document.querySelector('#result').textContent='SAVED'\"><input id=\"name\" value=\"Existing\"><select id=\"choice\" size=\"2\"><option value=\"one\">One</option><option value=\"two\">Two</option></select><input id=\"checked\" type=\"checkbox\"><button id=\"submit\">Submit</button></form><output id=\"result\">Empty</output><button id=\"save\" onclick=\"this.textContent='Saved'\">Save</button>");
-  const config = { source: process.cwd(), workspace, home: fixture.home, base: fixture.base, canvasId: fixture.canvasId, condition: "B", runId: "synthetic", fixtureId: "inventory", sessionId: "study-agent", deadline: new Date(Date.now() + 25_000).toISOString(), evidence: path.join(directory, "evidence"), questions: path.join(directory, "questions") };
+  // The server shuts itself down at this deadline and answers nothing after
+  // it, so a deadline shorter than the test's real cost reads as a 60 s
+  // "-32001 Request timed out" on whichever call comes next. It was 25 s
+  // against a test that takes 30+ s on 4-vCPU runners (five red releases,
+  // 14–15 Oct 2026); 3 s locally reproduces it. It sits inside the 90 s budget.
+  const config = { source: process.cwd(), workspace, home: fixture.home, base: fixture.base, canvasId: fixture.canvasId, condition: "B", runId: "synthetic", fixtureId: "inventory", sessionId: "study-agent", deadline: new Date(Date.now() + 80_000).toISOString(), evidence: path.join(directory, "evidence"), questions: path.join(directory, "questions") };
   const configFile = path.join(directory, "config.json"); await fs.writeFile(configFile, JSON.stringify(config));
   const client = new Client({ name: "synthetic-independent-test", version: "1" });
+  // A request the SDK gives up on fails from a timer — "MCP error -32001:
+  // Request timed out", with no line of this file in its stack — and that is
+  // all CI said on dbd408b32 (14 Oct 2026), once, 60 s into a test that passes
+  // in 6. Naming the call is what makes the next one a diagnosis.
+  const sdkCallTool = client.callTool.bind(client);
+  client.callTool = ((params: { name: string; arguments?: unknown }, ...rest: unknown[]) =>
+    (sdkCallTool as (...args: unknown[]) => ReturnType<typeof sdkCallTool>)(params, ...rest).catch((error: Error) => {
+      throw new Error(`${params.name} ${JSON.stringify(params.arguments ?? {}).slice(0, 160)} — ${error.message}`, { cause: error });
+    })) as typeof client.callTool;
   const transport = new StdioClientTransport({ command: process.execPath, args: [path.resolve("scripts/lib/design-partner-mcp.mjs"), configFile], env: { PATH: process.env.PATH ?? "", HOME: process.env.HOME ?? "" }, stderr: "pipe" });
   try {
     await client.connect(transport);
@@ -51,8 +65,13 @@ it("delivers exact image blocks and real CLI/browser actions through an actual s
     expect((await fixture.client.snapshot(fixture.canvasId)).canvas).toEqual(before);
     await client.callTool({ name: "browser", arguments: { action: "navigate", url: "task:screen.html" } });
     let observed: any;
-    const deadline = Date.now() + 5000;
-    do { const snapshot = await client.callTool({ name: "browser", arguments: { action: "snapshot" } }); observed = JSON.parse(((snapshot.content as any[])[0] as any).text); if (observed.controls?.some((row: any) => row.id === "save")) break; } while (Date.now() < deadline);
+    const deadline = Date.now() + 15000;
+    do {
+      const snapshot = await client.callTool({ name: "browser", arguments: { action: "snapshot" } });
+      observed = JSON.parse(((snapshot.content as any[])[0] as any).text);
+      if (observed.controls?.some((row: any) => row.id === "save")) break;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    } while (Date.now() < deadline);
     expect(observed.controls.some((row: any) => row.id === "save")).toBe(true);
     for (const [selector, text] of [["#quantity", "4"], ["#quantity", "2"], ["#name", "Acme"]]) {
       await client.callTool({ name: "browser", arguments: { action: "fill", selector, text } });

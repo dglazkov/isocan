@@ -20,6 +20,7 @@
 
 import type { Actor } from "./model.ts";
 import type { Attestation } from "./badge.ts";
+import { isAgentHarness } from "./claims.ts";
 import type { AttestedKind, GrantSubject } from "./grants.ts";
 
 /**
@@ -95,6 +96,13 @@ export interface AttestOffer {
    * they are, so it discloses to Jordan only that Jordan exists here.
    */
   resumable: Actor[];
+  /**
+   * The `home:person` human actor already claimed on the presenting badge,
+   * when one exists (for example, on a deterministic reverse-proxy badge).
+   * Lets a browser tab adopt its server-bound identity without issuing a
+   * redundant `actor.claim` under a separate `web:` key.
+   */
+  bound?: Actor;
 }
 
 /** What `POST {@link ATTEST_ROUTE}` takes: a token from the attester this
@@ -160,4 +168,63 @@ export function grantSubjectOf(who: string): GrantSubject {
   if (trimmed.includes("@")) return `email:${trimmed}`;
   if (trimmed.split("/").length === 3) return `repo:${trimmed}`;
   return trimmed as GrantSubject;
+}
+
+/**
+ * The newest `email:<local>@<domain>` address on a badge without its `email:`
+ * prefix, or null when the badge carries none. Shared across the daemon, web
+ * app, and CLI so every surface reads the same attested mailbox.
+ */
+export function attestedEmail(attestations: readonly Attestation[]): string | null {
+  for (let i = attestations.length - 1; i >= 0; i--) {
+    const attr = attestations[i]!.attribute;
+    if (!attr.startsWith("email:")) continue;
+    const address = attr.slice("email:".length).trim();
+    const at = address.indexOf("@");
+    if (at <= 0) continue;
+    if (address.slice(0, at).trim()) return address;
+  }
+  return null;
+}
+
+/**
+ * The local-part of the newest `email:<local>@<domain>` attestation on a
+ * badge, or null when the badge carries none. Shared so the daemon and web app
+ * derive identical default human display names at the door.
+ */
+export function attestedEmailLocalPart(attestations: readonly Attestation[]): string | null {
+  const address = attestedEmail(attestations);
+  if (!address) return null;
+  return address.slice(0, address.indexOf("@")).trim() || null;
+}
+
+/**
+ * Lowercased HTTP header carrying an agent harness session key
+ * (`<harness>:<sessionId>`) for stateless per-session agent attribution behind
+ * an authenticating reverse proxy.
+ */
+export const SESSION_HEADER = "x-isocan-session";
+
+/**
+ * Validate and normalize an `X-Isocan-Session` header value into a canonical
+ * `<harness>:<sessionId>` session key, or return null when absent or malformed.
+ *
+ * Only non-person, non-replica harnesses (`isAgentHarness(harness) === true`)
+ * with a non-empty printable ASCII `<sessionId>` (`<= 256` total characters, no
+ * whitespace or control characters) are accepted.
+ */
+export function parseSessionHeader(
+  raw: string | readonly string[] | undefined | null,
+): string | null {
+  const first = Array.isArray(raw) ? raw[0] : raw;
+  if (typeof first !== "string") return null;
+  if (/[\r\n\0]/.test(first)) return null;
+  const trimmed = first.trim();
+  if (!trimmed || trimmed.length > 256 || !/^[\x21-\x7e]+$/.test(trimmed)) return null;
+  const colon = trimmed.indexOf(":");
+  if (colon <= 0 || colon === trimmed.length - 1) return null;
+  const harness = trimmed.slice(0, colon);
+  const sessionId = trimmed.slice(colon + 1);
+  if (!isAgentHarness(harness) || !sessionId) return null;
+  return trimmed;
 }

@@ -14,7 +14,7 @@ import { compileDesignContract, contractLonghands, resolveContractValue, type De
 import { expandContractValues, matchContractSelector } from "./design-contract-rules.ts";
 
 /** Identifies the interpretation of a report so cached findings can be invalidated when rules change. */
-export const DESIGN_AUDIT_VERSION = "1.1.0";
+export const DESIGN_AUDIT_VERSION = "1.2.0";
 /** These token categories define the audit boundary; unrelated geometry is not a spacing decision. */
 export type DesignValueKind = "colour" | "type size" | "radius" | "spacing";
 /** Original-source coordinates let either editor select the same value after HTML entity decoding. */
@@ -374,16 +374,69 @@ export function auditScreen(source: string, tokens: DesignTokens): ScreenAudit {
     }).slice(0, 5).map(one => ({ value: `var(${one.token})`, token: one.token, explanation: `${one.value} is a declared ${kind}; confirm its intended role before replacing.`, prerequisites: env.has(one.token) ? [] : [`Include the governing CSS export (isocan design --css); ${one.token} is not declared here.`], requiresReview: true as const }));
     diagnostics.push({ code: `design/off-scale-${kind === "type size" ? "font-size" : kind === "colour" ? "color" : kind}`, severity: "warning", range: where, actual, kind, property, explanation: `${actual} is outside the governing system's declared ${kind} values.`, candidates });
   };
+  /**
+   * **A `var()` inside a function's arguments** — a gradient stop, an
+   * `rgb()` channel. `resolve()` expands a declaration's top-level `var()`
+   * only, so before this every nested one reached `values()` as an opaque
+   * function and each printed "var() cannot be resolved statically" on every
+   * HTML add, on screens built exactly as the guide asks. Each nested
+   * reference resolves through the same `resolve()` (same cascade rules, same
+   * missing-variable report, said once), and its spelling is put back in
+   * place, so `rgb(var(--r) 34 51)` is read as `rgb(17 34 51)`. Null when a
+   * reference does not resolve: `resolve()` has already reported why.
+   */
+  const cyclesOf = new WeakMap<Env, Set<string>>();
+  const containsVar = (node: CssNode) => { let found = false; walk(node, n => { if (n.type === "Function" && n.name.toLowerCase() === "var") found = true; }); return found; };
+  const inlineVars = (located: Located, property: string, env: Env): string | null => {
+    const { node } = located;
+    if (node.type === "Function" && node.name.toLowerCase() === "var") {
+      let cyclic = cyclesOf.get(env);
+      if (!cyclic) { cyclic = cycles(env); cyclesOf.set(env, cyclic); }
+      const result = resolve(located, env, cyclic, property, true);
+      if (!Array.isArray(result)) return null;
+      const pieces = result.map(one => inlineVars(one, property, env));
+      return pieces.some(one => one === null) ? null : pieces.join(" ");
+    }
+    const text = spelling(located), start = node.loc?.start.offset ?? 0;
+    let out = text;
+    for (const child of children(node).reverse()) {
+      if (!containsVar(child)) continue;
+      const piece = inlineVars({ node: child, part: located.part }, property, env);
+      if (piece === null) return null;
+      out = out.slice(0, (child.loc?.start.offset ?? 0) - start) + piece + out.slice((child.loc?.end.offset ?? 0) - start);
+    }
+    return out;
+  };
   const values = (list: Located[], kind: DesignValueKind, property: string, env: Env, colorShorthand = false) => {
     for (const located of list) {
       const n = located.node, actual = spelling(located);
       if (n.type === "Operator" || n.type === "WhiteSpace" || n.type === "Comment" || n.type === "Url" || n.type === "String") continue;
       if (NEUTRAL.test(actual)) continue;
+      if (n.type === "Function" && n.name.toLowerCase() === "var") {
+        // Reached only as a function's argument (a gradient stop); a
+        // declaration's own top-level var() was expanded by resolve().
+        let cyclic = cyclesOf.get(env);
+        if (!cyclic) { cyclic = cycles(env); cyclesOf.set(env, cyclic); }
+        const result = resolve(located, env, cyclic, property, true);
+        if (Array.isArray(result)) values(result, kind, property, env, colorShorthand);
+        continue;
+      }
       if (kind === "colour") {
         if (n.type === "Hash" || (n.type === "Identifier" && NAMED_COLOURS.has(n.name.toLowerCase()))) { note(located, kind, property, env); continue; }
         if (n.type === "Function") {
+          if (COLOUR_FUNCTIONS.test(n.name) && children(n).some(containsVar)) {
+            // The colour as it computes, at the original source range, so a
+            // finding still selects what the author wrote.
+            const text = inlineVars(located, property, env);
+            if (text === null) continue;
+            const parsed = children(parseCss(text, { context: "value", positions: true }))[0];
+            const from = location(located);
+            if (parsed) values([{ node: parsed, part: { text, offset: i => (i <= 0 ? from.start.offset : from.end.offset) }, use: located }], kind, property, env, colorShorthand);
+            continue;
+          }
           if (COLOUR_FUNCTIONS.test(n.name) && !/[a-z-]+\(/i.test(actual.slice(actual.indexOf("(") + 1))) note(located, kind, property, env);
           else if (/^(?:repeating-)?(?:linear|radial|conic)-gradient$/i.test(n.name)) values(children(n).map(node => ({ node, part: located.part })), kind, property, env, true);
+          else if (n.name.toLowerCase() === "color-mix") uncovered("unsupported-expression", location(located), `color-mix() computes its colour when the page renders; the mixed ${property} is unexamined.`);
           else uncovered("unsupported-expression", location(located), `${n.name}() cannot be resolved statically for ${property}.`);
         } else if (!colorShorthand) uncovered("unsupported-expression", location(located), `This ${property} color expression is unsupported.`);
       } else if ((n.type === "Dimension" && LENGTH_UNITS.test(n.unit)) || n.type === "Percentage" || (n.type === "Number" && Number(n.value) === 0)) note(located, kind, property, env);
