@@ -127,3 +127,115 @@ export const summonsPrompt = (
     JSON.stringify(fullPayload, null, 2)
   );
 };
+
+function clipStatus(text: string, max = 64): string {
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (clean.length <= max) return clean;
+  const cut = clean.slice(0, max - 1);
+  const word = cut.lastIndexOf(" ");
+  return `${(word >= max * 0.6 ? cut.slice(0, word) : cut).trimEnd()}…`;
+}
+
+/**
+ * Turn a streaming thought buffer from ACP (`agent_thought_chunk`) into a
+ * short, readable line for the live cursor chip (`💭 …`). Returns null until
+ * there is a meaningful clause to show.
+ */
+export function formatThoughtStatus(buffer: string): string | null {
+  const tail = buffer.slice(-500);
+  const stripped = tail
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/[`*_~]/g, "")
+    .replace(/^\s*#+\s*/gm, "")
+    .replace(/^\s*(?:[-*+]|\d+\.)\s+/gm, "");
+  const parts = stripped
+    .split(/\n+|(?<=[.!?])\s+/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter((line) => line.length >= 12 && line.split(" ").length >= 3);
+  const chosen = parts.at(-1);
+  if (!chosen) return null;
+  const bare = chosen.replace(/[.!?:;,]+$/, "").trim();
+  if (!bare) return null;
+  return `💭 ${clipStatus(bare, 64)}${bare.endsWith("…") ? "" : "…"}`;
+}
+
+/**
+ * Turn a raw ACP tool title (`File .agents/skills/isocan-collab/SKILL.md`,
+ * `Terminal isocan edit itm_abc …`) into a readable cursor status and any
+ * referenced canvas item id.
+ */
+export function humanizeToolStatus(
+  rawTitle: string,
+  canvasItems?: Record<string, Item>,
+): { status: string; itemId?: string } | null {
+  const raw = rawTitle.replace(/\s+/g, " ").trim();
+  if (!raw) return null;
+
+  let itemId: string | undefined;
+  let item: Item | undefined;
+  if (canvasItems) {
+    for (const match of raw.matchAll(/\bitm_[a-zA-Z0-9_-]+\b/g)) {
+      const candidate = match[0];
+      if (canvasItems[candidate]) {
+        itemId = candidate;
+        item = canvasItems[candidate];
+        break;
+      }
+    }
+  }
+  const itemLabel = item ? clipStatus(item.title || item.id, 28) : null;
+
+  if (/(?:SKILL\.md|--agent-help|agent-guide\.md)/i.test(raw)) {
+    return { status: "checking canvas guide…", ...(itemId ? { itemId } : {}) };
+  }
+
+  const cliMatch = raw.match(/\bisocan\s+(?:--[a-z-]+\s+)*([a-z-]+)/i);
+  if (cliMatch) {
+    const verb = cliMatch[1]!.toLowerCase();
+    if (verb === "show" || verb === "get" || verb === "words") {
+      return {
+        status: itemLabel ? `looking at "${itemLabel}"…` : "reading canvas item…",
+        ...(itemId ? { itemId } : {}),
+      };
+    }
+    if (verb === "edit" || verb === "set" || verb === "mv" || verb === "resize" || verb === "face") {
+      return {
+        status: itemLabel ? `updating "${itemLabel}"…` : "updating canvas item…",
+        ...(itemId ? { itemId } : {}),
+      };
+    }
+    if (verb === "add" || verb === "new" || verb === "text" || verb === "draw") {
+      return { status: "adding to the canvas…", ...(itemId ? { itemId } : {}) };
+    }
+    if (verb === "comment") {
+      return { status: "writing a reply…", ...(itemId ? { itemId } : {}) };
+    }
+    if (verb === "ls" || verb === "list" || verb === "status" || verb === "summary") {
+      return { status: "surveying the canvas…", ...(itemId ? { itemId } : {}) };
+    }
+  }
+
+  const fileRead = raw.match(/^(?:File|Read|View|Cat)\s+(.+)$/i);
+  if (fileRead) {
+    const base = fileRead[1]!.trim().replace(/['"]/g, "").split(/[\\/]/).pop() ?? fileRead[1]!.trim();
+    return { status: `reading ${clipStatus(base, 36)}…`, ...(itemId ? { itemId } : {}) };
+  }
+
+  const fileWrite = raw.match(/^(?:Write|Edit|Update|Patch)\s+(.+)$/i);
+  if (fileWrite) {
+    const base = fileWrite[1]!.trim().replace(/['"]/g, "").split(/[\\/]/).pop() ?? fileWrite[1]!.trim();
+    return { status: `editing ${clipStatus(base, 36)}…`, ...(itemId ? { itemId } : {}) };
+  }
+
+  if (/^(?:Search|Grep|Find|Glob)\b/i.test(raw)) {
+    return { status: "searching workspace…", ...(itemId ? { itemId } : {}) };
+  }
+
+  const cleaned = raw.replace(/^(?:Terminal|Bash|Run|Command):?\s*/i, "").trim();
+  if (!cleaned) return null;
+  if (itemLabel && itemId) {
+    return { status: `working on "${itemLabel}"…`, itemId };
+  }
+  return { status: clipStatus(cleaned, 64) };
+}
+

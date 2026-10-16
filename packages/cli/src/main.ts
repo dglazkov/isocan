@@ -7527,6 +7527,11 @@ program
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const item = resolveItem(snapshot, ref);
+      await narrate(ctx, p.id, {
+        activity: { kind: "working", itemId: item.id },
+        cursor: itemCenter(item),
+        status: `reading "${truncate(item.title || item.id, 24)}"…`,
+      });
       const version =
         opts.rev === undefined
           ? item.versions.find((v) => v.id === item.currentVersionId)
@@ -7557,6 +7562,7 @@ program
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const item = resolveItem(snapshot, ref);
       await narrate(ctx, p.id, {
+        activity: { kind: "working", itemId: item.id },
         cursor: itemCenter(item),
         status: `looking at "${truncate(item.title || item.id, 24)}"`,
       });
@@ -8269,6 +8275,11 @@ program
         const ctx = await ctxOf(cmd);
         const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
         const item = resolveItem(snapshot, ref);
+        await narrate(ctx, p.id, {
+          activity: { kind: "working", itemId: item.id },
+          cursor: itemCenter(item),
+          status: `updating "${truncate(item.title || item.id, 24)}"…`,
+        });
         const patch = metaPatch(opts);
         if (opts.face !== undefined) {
           const trimmedFace = opts.face.trim();

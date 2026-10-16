@@ -3795,9 +3795,10 @@ button.mt-card:hover { border-color: var(--accent); }
 .canvas-viewport.own-cursor-on { cursor: none; }
 .remote-cursor svg { display: block; filter: drop-shadow(0 1px 2px var(--shade)); }
 .cursor-chip {
-  margin: 2px 0 0 10px; padding: 3px 8px; border-radius: 999px 999px 999px 3px;
-  color: var(--accent-ink); font-size: 11px; font-weight: 600; line-height: 1.2; white-space: nowrap;
-  display: flex; flex-direction: column; align-items: flex-start;
+  margin: 2px 0 0 10px; padding: 4px 10px; border-radius: 14px 14px 14px 3px;
+  color: var(--accent-ink); font-size: 11px; font-weight: 600; line-height: 1.25;
+  max-width: 280px; white-space: nowrap;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
   box-shadow: 0 4px 10px -4px var(--shade);
 }
 /* **A mark is worn AS the pointer** (agent pointers, 30 Sep 2026). The arrow
@@ -3825,7 +3826,10 @@ button.mt-card:hover { border-color: var(--accent); }
   padding: 0; margin: 0; min-width: 120px; caret-color: currentColor;
 }
 .cursor-chip-input::placeholder { color: inherit; }
-.cursor-chip em { font-style: normal; font-weight: 400; font-size: 10px; opacity: 0.85; }
+.cursor-chip em {
+  font-style: normal; font-weight: 400; font-size: 10.5px; opacity: 0.92;
+  white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
 /* Quiet-but-alive: the agent hasn't touched the daemon in a while but its
    session is live — breathe instead of freezing, so thinking reads as
    presence rather than a crash. */

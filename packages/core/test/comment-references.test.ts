@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyOperation, commentReferencedItemIds, contextContentPage, resolveContextOperation, type CanvasState, type Comment, type Item } from "../src/index.ts";
+import { applyOperation, commentReferencedItemIds, contextContentPage, resolveContextOperation, threadTargetItem, type CanvasState, type Comment, type CommentThread, type Item } from "../src/index.ts";
 
 const actor = { id: "usr_test", name: "Test" };
 const ts = "2026-09-13T12:00:00.000Z";
@@ -63,5 +63,52 @@ describe("current previews of recorded message references", () => {
     expect(contextContentPage(comment.context!).entries[0]!.blob!.blobHash).toBe("hash_linked");
     state.canvas.items.linked!.currentVersionId = "no-longer-available";
     expect(commentReferencedItemIds(state.canvas, comment)).toEqual([]);
+  });
+});
+
+describe("threadTargetItem", () => {
+  it("resolves anchored items first, then explicit comment item refs (including on the main chat thread)", () => {
+    const state = seed();
+    const anchored: CommentThread = {
+      id: "thr_anchored",
+      x: 10,
+      y: 20,
+      anchorItemId: "linked",
+      comments: [{ id: "c1", author: actor, body: "Look here", createdAt: ts }],
+      createdAt: ts,
+      createdBy: actor,
+    };
+    expect(threadTargetItem(state.canvas, anchored)?.id).toBe("linked");
+
+    // Main chat thread has anchorItemId: null, but comments carry selected `items`.
+    const mainChat: CommentThread = {
+      id: "thr_main",
+      x: 400,
+      y: 500,
+      anchorItemId: null,
+      main: true,
+      comments: [
+        { id: "c_old", author: actor, body: "Hi", createdAt: ts },
+        { id: "c_ask", author: actor, body: "Work on this yellow box", items: ["nearby"], createdAt: ts },
+      ],
+      createdAt: ts,
+      createdBy: actor,
+    };
+    expect(threadTargetItem(state.canvas, mainChat)?.id).toBe("nearby");
+
+    // Explicit extra item ids from the summoning op win when the thread has no anchor.
+    expect(threadTargetItem(state.canvas, mainChat, ["linked"])?.id).toBe("linked");
+
+    // Freestanding thread with no item references returns undefined.
+    const free: CommentThread = {
+      id: "thr_free",
+      x: 100,
+      y: 100,
+      anchorItemId: null,
+      comments: [{ id: "c_free", author: actor, body: "General question", createdAt: ts }],
+      createdAt: ts,
+      createdBy: actor,
+    };
+    expect(threadTargetItem(state.canvas, free)).toBeUndefined();
   });
 });

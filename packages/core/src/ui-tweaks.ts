@@ -21,8 +21,10 @@
  *    carry its own look across collaborators and sessions, with one-step undo.
  */
 
+/** Canvas property key storing shared UI tweak overrides (`project.update`). */
 export const UI_TWEAKS_PROP = "ui.tweaks";
 
+/** Identifier for a customizable UI piece in Devtools and `isocan tweak`. */
 export type UiPieceId =
   | "glass"
   | "toolbar"
@@ -34,6 +36,7 @@ export type UiPieceId =
   | "layers"
   | "colors";
 
+/** Metadata and DOM selector for one customizable UI piece. */
 export interface UiPiece {
   id: UiPieceId;
   name: string;
@@ -42,8 +45,10 @@ export interface UiPiece {
   selector: string;
 }
 
+/** Value kind accepted by a UI tweak knob. */
 export type UiKnobKind = "number" | "color";
 
+/** Definition of one customizable UI knob, its bounds, and its shipped default. */
 export interface UiKnob {
   key: string;
   piece: UiPieceId;
@@ -58,8 +63,10 @@ export interface UiKnob {
   placeholder?: string;
 }
 
+/** Active non-default UI tweak values keyed by `UiKnob.key`. */
 export type UiTweaks = Record<string, number | string>;
 
+/** Ordered catalog of every customizable UI piece on the canvas. */
 export const UI_PIECES: readonly UiPiece[] = [
   {
     id: "glass",
@@ -117,6 +124,7 @@ export const UI_PIECES: readonly UiPiece[] = [
   },
 ];
 
+/** Full catalog of UI knobs across all pieces, in display and CSS emission order. */
 export const UI_KNOBS: readonly UiKnob[] = [
   // 1. Floating Glass
   {
@@ -773,14 +781,17 @@ export const UI_KNOBS: readonly UiKnob[] = [
 const KNOB_BY_KEY = new Map<string, UiKnob>(UI_KNOBS.map((knob) => [knob.key, knob]));
 const PIECE_BY_ID = new Map<string, UiPiece>(UI_PIECES.map((piece) => [piece.id, piece]));
 
+/** Look up a UI knob definition by its dotted key (`"glass.opacity"`). */
 export function findUiKnob(key: string): UiKnob | undefined {
   return KNOB_BY_KEY.get(key);
 }
 
+/** Look up a UI piece definition by its piece id (`"glass"`). */
 export function findUiPiece(id: string): UiPiece | undefined {
   return PIECE_BY_ID.get(id);
 }
 
+/** Return every knob belonging to a given UI piece, in display order. */
 export function knobsForPiece(piece: UiPieceId): readonly UiKnob[] {
   return UI_KNOBS.filter((knob) => knob.piece === piece);
 }
@@ -821,6 +832,7 @@ export function normalizeUiTweakValue(
   return Math.round(clamped * 1000) / 1000;
 }
 
+/** Whether a knob's value matches its shipped default (within float epsilon). */
 export function isDefaultUiTweak(knob: UiKnob, value: number | string | undefined): boolean {
   if (value === undefined) return true;
   if (knob.kind === "number" && typeof value === "number" && typeof knob.defaultValue === "number") {

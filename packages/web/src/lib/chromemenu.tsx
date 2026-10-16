@@ -60,6 +60,7 @@ export function hideMenu(e: React.MouseEvent, id: string): void {
   ]);
 }
 
+/** Context-menu handler for chrome regions that offer `"Tweak <Piece>…"` in UI Devtools. */
 export function chromeTweakMenu(e: React.MouseEvent): void {
   const target = e.target instanceof Element ? e.target : null;
   if (!target || target.closest("input, textarea, select, [contenteditable='true']")) return;
