@@ -10,7 +10,8 @@
 # requests"):
 #
 #   - Measure first. Nothing here fixes anything; the page proposes one change.
-#   - A plan before anything runs (scripts/keel/night-plan.mjs): the owner's
+#   - A plan after read-only production observation and before gate/agent work
+#     (scripts/keel/night-plan.mjs): the owner's
 #     from the branch keel-night-plan when it is dated tonight, else keel's
 #     default plan; the page shows it, and the PR commits it as it ended
 #     (docs/night/<date>.json). A default night writes its plan to
@@ -35,7 +36,8 @@
 #     exit 2) or a failing gate makes this run red, and GitHub emails. A
 #     measure outside its bound (exit 1) is news: it is on the page, not red.
 #
-# No secret of its own. A project whose `setup` must clone a private repo names
+# Optional Vercel collection uses VERCEL_API_TOKEN only in its collection step.
+# A project whose `setup` must clone a private repo names
 # a secret in .keel/keel.json "setupToken"; the Install step alone gets it, as
 # GH_TOKEN. Repo setting: Actions must be allowed to create pull requests;
 # until they are, the branch is pushed and the run ends green with a notice.
@@ -98,6 +100,10 @@ jobs:
             fs.appendFileSync(process.env.GITHUB_OUTPUT, `setup<<${eof}\n${c.setup ?? ""}\n${eof}\n`);
             // Only the secret NAME, never its value: the Install step looks it up.
             fs.appendFileSync(process.env.GITHUB_OUTPUT, `setup_token=${tok ?? ""}\n`);
+            import("./scripts/keel/production-collectors.mjs").then(({ productionConfig }) => {
+              const p = productionConfig(c);
+              fs.appendFileSync(process.env.GITHUB_OUTPUT, `production_vercel=${p.enabled && p.sources.some(s => s.provider === "vercel")}\n`);
+            });
             if (tok) console.log(`setupToken: ${tok} (a repo secret, for the Install step only)`);
           '
       # Where improve writes the health page and what the PR commits: the
@@ -128,7 +134,27 @@ jobs:
             npm ci
           fi
 
-      # Tonight's plan, before anything else runs (keel phase 73): the one on
+      # Read-only production collection, restored from the newest enabled attempt.
+      # The provider CLI/identity must be supplied by project setup. No model runs.
+      - name: Collect production evidence
+        id: production
+        continue-on-error: true
+        env:
+          BASE: ${{ github.event.repository.default_branch }}
+          VERCEL_TOKEN: ${{ steps.config.outputs.production_vercel == 'true' && secrets.VERCEL_API_TOKEN || '' }}
+        run: node scripts/keel/production-night.mjs
+
+      - name: Retain production evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: keel-production-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/keel-production/
+          if-no-files-found: ignore
+          retention-days: 90
+
+      # Tonight's plan follows read-only production observation and precedes
+      # gate/agent work (keel phase 73): the one on
       # the plan branch keel-night-plan when it holds a valid plan dated for
       # tonight (the run's UTC date, the date its page and PR carry), else
       # keel's default plan (scripts/keel/night-plan.mjs: deterministic, no
@@ -488,12 +514,17 @@ jobs:
       - name: Verdict
         if: always()
         env:
+          PRODUCTION_OUTCOME: ${{ steps.production.outcome }}
           CANVAS_OUTCOME: ${{ steps.canvas.outcome }}
           CODE: ${{ steps.improve.outputs.code }}
           GATE: ${{ steps.improve.outputs.gate }}
           PLAN: ${{ steps.plan.outputs.code }}
           PUBLISH: ${{ steps.pr.outputs.publish }}
         run: |
+          if [ "$PRODUCTION_OUTCOME" = failure ]; then
+            echo "::error::Production collection or recovery has gaps; other health work still ran."
+            exit 1
+          fi
           if [ "$CANVAS_OUTCOME" = failure ]; then
             echo "::error::Canvas projection failed; the health report and queue were still processed."
             exit 1

@@ -14,7 +14,7 @@
   "phases": {
     "shape": "projects"
   },
-  "practice": "0.8.31",
+  "practice": "0.8.32",
   "practices": [
     "base",
     "agents-md",
@@ -58,5 +58,26 @@
   "migrations": [
     "0004-test-ledger",
     "0005-test-ledger-reach"
-  ]
+  ],
+  "production": {
+    "version": 1,
+    "enabled": true,
+    "sources": [
+      {
+        "id": "isocan-production",
+        "provider": "gcp",
+        "project": "isocan-io-prod",
+        "service": "isocan",
+        "environment": "production",
+        "windowMinutes": 1440,
+        "maxEvents": 1000,
+        "maxBytes": 1048576,
+        "timeoutMs": 30000,
+        "threshold": 3,
+        "site": "https://isocan.io",
+        "region": "us-west1"
+      }
+    ],
+    "since": "2026-10-17T00:00:00Z"
+  }
 }

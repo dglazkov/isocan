@@ -18,8 +18,9 @@
 #     data-only PR in the night's queue (keel-night/<date>-final), which the
 #     night's drain merges with the series. So a finalization that failed
 #     after the send, or a build that finished after a brief sent at
-#     readyBy, still reaches the archive; a run with nothing new changes
-#     nothing.
+#     readyBy, still reaches the archive; a run with nothing new commits
+#     and pushes nothing, but still opens the PR for its own branch when an
+#     earlier run pushed it and failed to open one.
 #
 #   - The card (keel phase 78), on every run, over or not: tonight's plan as
 #     it stands, republished as the canvas's live card night-plan, when the
@@ -127,9 +128,11 @@ jobs:
             console.log(healthDirIn(".", JSON.parse(readFileSync(".keel/keel.json", "utf8"))));
           ')
           START=HEAD
+          OWN=0
           if git ls-remote --exit-code --heads origin "$BRANCH" > /dev/null; then
             git fetch -q --no-tags origin "+refs/heads/$BRANCH:refs/remotes/origin/$BRANCH"
             START="refs/remotes/origin/$BRANCH"
+            OWN=1
           elif [ ! -f "$HEALTH/$DAY.md" ] && git ls-remote --exit-code --heads origin "keel-night/$DAY" > /dev/null; then
             git fetch -q --no-tags origin "+refs/heads/keel-night/$DAY:refs/remotes/origin/keel-night/$DAY"
             START="refs/remotes/origin/keel-night/$DAY"
@@ -140,18 +143,25 @@ jobs:
           PATHS=("docs/night/$DAY.json")
           if [ -f "$HEALTH/$DAY.md" ]; then PATHS+=("$HEALTH/$DAY.md"); fi
           if [ -z "$(git status --porcelain -- "${PATHS[@]}")" ]; then
-            echo "Nothing changed: the night's archive already holds its final outcomes."
-            exit 0
+            # Nothing to commit or push. Its own branch, pushed by an earlier
+            # run whose PR create failed, still needs its PR (keel#149) while
+            # it holds what the default branch lacks.
+            if [ "$OWN" != 1 ] || [ -z "$(git diff --name-only "refs/remotes/origin/$BASE" HEAD -- "${PATHS[@]}")" ]; then
+              echo "Nothing changed: the night's archive already holds its final outcomes."
+              exit 0
+            fi
+            echo "Nothing changed since $BRANCH was pushed; making sure its PR is open."
+          else
+            git config user.name "keel-morning"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A -- "${PATHS[@]}"
+            git commit -q --only -m "keel night: $DAY, as it finished" -- "${PATHS[@]}"
+            # The branch is this workflow's alone; a rerun the same night
+            # replaces its own commit, so force is safe here and nowhere else.
+            git push --force origin "HEAD:refs/heads/keel-night/$DAY-final"
           fi
-          git config user.name "keel-morning"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A -- "${PATHS[@]}"
-          git commit -q --only -m "keel night: $DAY, as it finished" -- "${PATHS[@]}"
           git show --name-only --format= HEAD > "$RUNNER_TEMP/files.txt"
           node scripts/keel/pr-body.mjs --input "$RUNNER_TEMP/pr.json" --files "$RUNNER_TEMP/files.txt" > "$RUNNER_TEMP/body.md"
-          # The branch is this workflow's alone; a rerun the same night
-          # replaces its own commit, so force is safe here and nowhere else.
-          git push --force origin "HEAD:refs/heads/keel-night/$DAY-final"
           PR=$(gh pr list --state open --head "$BRANCH" --json number --jq '.[0].number')
           if [ -n "$PR" ]; then
             gh pr edit "$PR" --body-file "$RUNNER_TEMP/body.md"
@@ -177,6 +187,7 @@ jobs:
     permissions:
       contents: read
       issues: write
+      actions: read
     env:
       GH_TOKEN: ${{ github.token }}
       DAY: ${{ needs.decide.outputs.day }}
@@ -185,8 +196,25 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
+      - name: Restore production observations for the brief
+        id: production_restore
+        env:
+          BASE: ${{ github.event.repository.default_branch }}
+        run: |
+          code=0
+          node scripts/keel/production-night.mjs --restore-only || code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
       - name: Send the brief
         run: node scripts/keel/morning.mjs send --date "$DAY"
+      - name: Production restoration verdict
+        if: always()
+        env:
+          RESTORE_CODE: ${{ steps.production_restore.outputs.code }}
+        run: |
+          if [ "${RESTORE_CODE:-missing}" != 0 ]; then
+            echo "::error::Production restoration failed or did not report an outcome; the brief was still attempted."
+            exit 1
+          fi
 
   # The plan's live card, after each pass (keel phase 78): tonight's plan as
   # it stands (finalPlan: each item at its furthest tick), republished as the

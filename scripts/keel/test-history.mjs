@@ -24,7 +24,7 @@ const diagnostic = (repo, branch, at) => ({ version: 1, repo, branch, at, select
 
 // Check the entire central directory before inflating anything. ZIP64, encryption,
 // links, traversal, duplicate names and unsupported encodings fail closed.
-function archiveEntries(zip, remaining) {
+export function archiveEntries(zip, remaining) {
   if (!Buffer.isBuffer(zip) || zip.length > MAX.bytes || zip.length < 22) throw new Error('invalid or oversized ZIP');
   let end = -1;
   for (let i = zip.length - 22; i >= Math.max(0, zip.length - 65557); i--) {
@@ -59,7 +59,7 @@ function archiveEntries(zip, remaining) {
   if (ranges.some((r, i) => i && r[0] < ranges[i - 1][1])) throw new Error('overlapping ZIP entries');
   return { entries, bytes };
 }
-function unpack(zip, entry) {
+export function unpack(zip, entry) {
   const input = zip.subarray(entry.start, entry.start + entry.compressed);
   const data = entry.method === 0 ? input : inflateRawSync(input, { maxOutputLength: Math.max(1, entry.length) });
   if (data.length !== entry.length || crc32(data) !== entry.crc) throw new Error('ZIP length or checksum mismatch');
