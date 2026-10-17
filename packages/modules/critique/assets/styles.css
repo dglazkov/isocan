@@ -21,10 +21,11 @@
    overlay against the right edge, and its dialog — the crit classes above,
    and these few. */
 .room-card { width: min(380px, calc(100vw - 120px)); max-height: 70vh; overflow-y: auto; padding: 12px 14px; position: relative; }
+.module-overlay.is-sized .room-card { width: 100%; height: 100%; max-height: none; flex: 1; box-sizing: border-box; }
 .room-close { position: absolute; top: 8px; right: 10px; }
 .room-say { margin: 0; }
 .room-against { display: block; font-style: italic; }
 .room-starters { justify-content: flex-start; flex-wrap: wrap; }
 /* The read of the room draws nothing until the lenses have spoken; its
    overlay's frame then takes no room either. */
-.module-overlay:empty { display: none; }
+.module-overlay:empty, .module-overlay:not(:has(> :not(.float-handle))) { display: none; }
