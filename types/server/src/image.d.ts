@@ -32,6 +32,10 @@ export interface ImageOptions {
     /** Runs per badge per minute. Default `IMAGE_RUNS_PER_MINUTE`. */
     perMinute?: number;
     now?: () => number;
+    /** Optional seam for `POST /api/image/swatches` to load `sharp` (or fail in tests). */
+    loadSharp?: () => Promise<{
+        default: typeof import("sharp").default;
+    }>;
 }
 /** Where pictures are drawn. */
 export declare const IMAGE_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/interactions";

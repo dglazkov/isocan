@@ -16,9 +16,12 @@ texture, colour field, era, density, place, lettering), `moodModel`,
   image on the canvas beside the words (More like this).
 - `isocan mood keep <items...>` — moves kept candidate tile(s) into the
   **Mood** board (an area or canvas group marked `moodBoard=true`, created on
-  first Keep and reused after) and marks them `mood=kept`, all in one undo.
-  Keeping is a person's taste: `mood keep` refuses an agent harness or an
-  agent actor, so leave candidate tiles for the person to choose from.
+  first Keep and reused after), marks them `mood=kept`, and writes
+  `moodSwatches` (JSON: up to six `{hex, share}` swatches from `sharp`, or
+  `estimated: true` from a picture-capable text model when `sharp` is absent),
+  all in one undo. Keeping is a person's taste: `mood keep` refuses an agent
+  harness or an agent actor, so leave candidate tiles for the person to choose
+  from.
 - `isocan mood drop [items...] [--run <run>]` — moves named candidate tiles to
   the trash, or with `--run <run>` drops every remaining `mood=candidate` tile
   from that spread run in one undo (closing the tray while leaving `mood=kept`

@@ -31,7 +31,10 @@ second week.
   tray in one undo, branch any kept or dropped-in reference photo with **More
   like this** or **Push →** (`warmer`, `cooler`, `quieter`, `louder`, `older`,
   `newer`, `rougher`, `finer`), or run `isocan mood explore|keep|drop|more`
-  from the CLI. Keeping is for people only; agents are refused.
+  from the CLI. Every kept picture and dropped-in reference photo gets an
+  automatic colour swatch strip under it (click a chip to copy its hex), and
+  agents read the same swatches from the canvas without opening a browser.
+  Keeping is for people only; agents are refused.
 
 
 ## 15 October 2026

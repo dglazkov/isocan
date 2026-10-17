@@ -3664,6 +3664,7 @@ init_src();
 init_src();
 init_src();
 var imagePath = "/api/image";
+var swatchesPath = "/api/image/swatches";
 var summariesPath = (canvasId) => `/api/projects/${encodeURIComponent(canvasId)}/summaries`;
 var OPERATIONS_ROUTE = "/api/ops";
 var platformFetch = (input, init) => fetch(input, init);
@@ -4450,6 +4451,14 @@ var DaemonRoutes = class {
    */
   image(request) {
     return this.request("POST", imagePath, request);
+  }
+  /**
+   * **Read dominant colour swatches from an image item** (`POST /api/image/swatches`,
+   * moodboard phase 2): uses `sharp` when the home has it, or falls back to a
+   * picture-capable text model (`estimated: true`).
+   */
+  imageSwatches(request) {
+    return this.request("POST", swatchesPath, request);
   }
   /** Every slash command available here: built-ins under this home's own. */
   commands() {

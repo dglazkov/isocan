@@ -1,5 +1,7 @@
 import type { Actor, CanvasContents, Item } from "./model.js";
 import type { Operation } from "./ops.js";
+import { type MoodSwatch } from "./mood-swatches.js";
+export { deltaE, formatMoodSwatches, IMAGE_SWATCHES_UNAVAILABLE, parseMoodSwatches, rgbToLab, SWATCHES_ROUTE, swatchesFromRgba, type MoodSwatch, type SwatchesRequest, type SwatchesResponse, } from "./mood-swatches.js";
 /** The route's path. */
 export declare const IMAGE_ROUTE = "/api/image";
 /** The body is malformed: no canvas, no words, `n` out of range, an actor missing. */
@@ -94,6 +96,7 @@ export declare const MOOD_PROPS: {
     readonly axis: "moodAxis";
     readonly parent: "moodParent";
     readonly model: "moodModel";
+    readonly swatches: "moodSwatches";
     readonly run: "moodRun";
     readonly board: "moodBoard";
 };
@@ -174,6 +177,7 @@ export declare function moodKeepPlan(input: {
     itemIds: readonly string[];
     boardBlob?: MoodBoardBlob;
     newBoardId?: string;
+    swatchesByItem?: Readonly<Record<string, readonly MoodSwatch[]>>;
 }): {
     boardId: string;
     createdBoard: boolean;
@@ -207,4 +211,3 @@ interface MoodTrayRun {
 }
 /** Active candidate trays on the canvas, oldest first. */
 export declare function moodTrays(canvas: CanvasContents): MoodTrayRun[];
-export {};

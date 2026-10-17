@@ -1,7 +1,7 @@
 import type { ContextPiece } from "./context.js";
 import type { Actor, Canvas, CanvasContents, CommentThread, Item, ItemVersion } from "./model.js";
 import type { NodeCapabilities } from "./capabilities.js";
-import type { Operation } from "./ops.js";
+import type { Operation, Placement } from "./ops.js";
 import type { JudgmentRequest } from "./judgment.js";
 import type { TextRequest } from "./text.js";
 import type { CopyDeck, CopyEdit } from "./copy-deck.js";
@@ -842,6 +842,21 @@ export interface ModuleDrop {
     run: (facts: DropFacts) => Promise<readonly Operation[] | void>;
 }
 /**
+ * **What a module's `fileProperties` slot is handed** when a native file is
+ * dropped onto the canvas (moodboard phase 2: a reference photo dropped onto
+ * the Mood board wears `mood=reference` and `moodSwatches`).
+ */
+export interface FileDropFacts {
+    file: File;
+    mimeType: string;
+    placement: Placement;
+    destination: {
+        containerId?: string | null;
+        originGroupMode: "legacy" | "groups";
+    };
+    items: Readonly<Record<string, Item>> | undefined;
+}
+/**
  * **What a composer control draws with, and how it asks for the row**
  * (proposed: `composer`).
  *
@@ -987,6 +1002,12 @@ export interface WebModule<C, R = never, I = never, P = never, O = never, D = ne
     composer?: readonly ModuleComposer<X>[];
     /** Drags this module catches on the canvas, by mime. */
     drops?: readonly ModuleDrop[];
+    /**
+     * **Properties a loaded module adds to a dropped native file** (moodboard
+     * phase 2) — e.g. `mood=reference` and `moodSwatches` when an image is
+     * dropped onto the Mood board.
+     */
+    fileProperties?: (facts: FileDropFacts) => Promise<Record<string, string> | undefined>;
     /** Popups a person opens by a command or a palette entry. */
     dialogs?: readonly ModuleDialog<D>[];
     /** **Rows in an item's right-click menu** — only once the module's lazy half is loaded (`ModuleMenuFacts`). */

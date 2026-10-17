@@ -47,3 +47,18 @@
   background: var(--card); color: var(--ink); font: inherit; font-size: 11px; max-width: 110px;
 }
 .module-overlay:empty, .module-overlay:not(:has(> :not(.float-handle))) { display: none; }
+.mood-image-tile {
+  display: flex; flex-direction: column;
+  width: 100%; height: 100%; background: var(--chip); overflow: hidden;
+}
+.item.ink .mood-image-tile { background: transparent; }
+.mood-image-view {
+  width: 100%; flex: 1; min-height: 0;
+  object-fit: contain; display: block;
+}
+.mood-swatch-strip {
+  display: flex; width: 100%; height: 14px; flex: none;
+  border-top: 1px solid var(--line-soft); overflow: hidden;
+}
+.mood-swatch-chip { display: block; height: 100%; min-width: 6px; }
+.mood-swatch-chip.is-estimated { opacity: 0.88; }
