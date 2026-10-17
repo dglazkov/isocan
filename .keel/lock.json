@@ -1,5 +1,5 @@
 {
-  "practice": "0.8.30",
+  "practice": "0.8.31",
   "files": {
     ".agents/skills/keel/SKILL.md": {
       "practice": "agents-md",
@@ -15,7 +15,7 @@
     },
     ".github/workflows/keel-morning.yml": {
       "practice": "night",
-      "sha256": "086ec314839e1e2bd8a728467185b2163535d62932ece7ff1a906eebb9efb61d"
+      "sha256": "16d8625e0f782d2bcd6d53bf357970230006901ca0b17aa22c9d9c670e7baef1"
     },
     ".github/workflows/keel-night.yml": {
       "practice": "night",
