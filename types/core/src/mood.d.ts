@@ -1,15 +1,5 @@
-/**
- * **The mood board's shared vocabulary** — `POST /api/image`'s path, body and
- * refusal codes, the prompt template, the axes a spread reaches along, the
- * deny-list a request is checked against before anything is spent, the image
- * model's default id and price, and where a tray of tiles goes
- * (`docs/projects/moodboard/design.md` §1–§3, §6; moodboard phase 0).
- *
- * Pure, and a subpath of its own (`@isocan/core/mood`), never the barrel: the
- * server's route and the CLI's `isocan mood explore` both read it, the web
- * does not yet, and nothing here belongs in a first visit.
- */
-import type { CanvasContents } from "./model.js";
+import type { Actor, CanvasContents, Item } from "./model.js";
+import type { Operation } from "./ops.js";
 /** The route's path. */
 export declare const IMAGE_ROUTE = "/api/image";
 /** The body is malformed: no canvas, no words, `n` out of range, an actor missing. */
@@ -26,8 +16,18 @@ export declare const IMAGE_REFUSED = "image-refused";
 export declare const IMAGE_UPSTREAM = "image-upstream";
 /** Nine tiles a spread (design §8, Dion 16 Oct 2026). */
 export declare const MOOD_DEFAULT_N = 9;
+/** Four tiles for More like this / Push (journey Scene 1). */
+export declare const MOOD_MORE_N = 4;
 /** The per-run cap (design §2): twelve images, the way critique caps a critic per run. */
 export declare const MOOD_MAX_N = 12;
+/** The Mood board's title when created on first Keep. */
+export declare const MOOD_BOARD_TITLE: "Mood";
+/** Minimal card bytes for a new Mood board (the server refuses empty blobs). */
+export declare const MOOD_BOARD_BYTES = "\n";
+/** The eight Push dials (design §3, journey Scene 1). */
+export declare const MOOD_DIALS: readonly ["warmer", "cooler", "quieter", "louder", "older", "newer", "rougher", "finer"];
+export type MoodDial = (typeof MOOD_DIALS)[number];
+export declare function isMoodDial(value: unknown): value is MoodDial;
 /**
  * **The image model, and what one picture costs — the one place both are
  * written.** Read from Google's own pages on 16 Oct 2026:
@@ -73,9 +73,21 @@ export declare function spreadAxes(n: number): {
  * because the model's pull toward drawing an app screen is strong.
  */
 export declare function moodPrompt(words: string, reach: string): string;
+/**
+ * **A Push variation's prompt** (design §3, journey Scene 1): keeps the
+ * original subject words, adds the named dial's concrete material and lighting
+ * direction, and preserves the non-UI / safety clauses.
+ */
+export declare function moodPushPrompt(words: string, dial: MoodDial, reach: string): string;
+/**
+ * Extract the person's original subject words from a saved `moodPrompt` (either
+ * `moodPrompt` or `moodPushPrompt`), falling back to the raw string or the
+ * item's title when the tile came from a dropped reference image.
+ */
+export declare function moodWordsFromPrompt(prompt: string | undefined, fallbackTitle?: string): string;
 /** The refusal sentence for words the deny-list catches, or null. */
 export declare function deniedIn(words: string): string | null;
-/** The properties a tile carries (design §1). Not namespaced: the design names them, and the mood board owns them. */
+/** The properties a tile or Mood board carries (design §1). Not namespaced: the design names them, and the mood board owns them. */
 export declare const MOOD_PROPS: {
     readonly mood: "mood";
     readonly prompt: "moodPrompt";
@@ -83,6 +95,7 @@ export declare const MOOD_PROPS: {
     readonly parent: "moodParent";
     readonly model: "moodModel";
     readonly run: "moodRun";
+    readonly board: "moodBoard";
 };
 /** `POST /api/image`'s body. `prompt` is the person's own words; the template is the home's. */
 export interface ImageRequest {
@@ -97,6 +110,8 @@ export interface ImageRequest {
     n?: number;
     /** An image item whose picture goes in beside the words (More like this). */
     parent?: string;
+    /** A Push dial (warmer, cooler, quieter, louder, older, newer, rougher, finer). */
+    push?: MoodDial;
 }
 /** `POST /api/image`'s answer: the tiles added, in spread order, and the run they share. */
 export interface ImageResponse {
@@ -135,3 +150,61 @@ export declare function moodTray(canvas: CanvasContents, n: number, tile?: {
     x: number;
     y: number;
 }[];
+/** Whether `item` is the Mood board area/group (`properties.moodBoard === "true"`). */
+export declare function isMoodBoardItem(item: Item): boolean;
+/** The canvas's Mood board, if one already exists. */
+export declare function findMoodBoard(canvas: CanvasContents): Item | null;
+export interface MoodBoardBlob {
+    blobHash: string;
+    size: number;
+    mimeType?: string;
+    filename?: string;
+}
+/**
+ * **Keep tiles into the Mood board, as ops** — creates the Mood board on first
+ * Keep (`properties.moodBoard = "true"`), moves each kept tile into it, and
+ * marks `properties.mood = "kept"`. Works on both legacy (`kind = "area"` +
+ * `freeSpotIn`) and group-mode (`group.change` `{ kind: "create" }` /
+ * `{ kind: "reparent" }`) canvases, so the CLI and the web tray share one plan
+ * and one undo group.
+ */
+export declare function moodKeepPlan(input: {
+    canvas: CanvasContents;
+    groupMode: "legacy" | "groups";
+    itemIds: readonly string[];
+    boardBlob?: MoodBoardBlob;
+    newBoardId?: string;
+}): {
+    boardId: string;
+    createdBoard: boolean;
+    ops: Operation[];
+};
+/**
+ * **Drop candidate tiles to the trash, as ops** — either named tiles, or every
+ * remaining `mood: "candidate"` tile in a run (`--run <run>` / Close tray).
+ */
+export declare function moodDropOps(canvas: CanvasContents, opts: {
+    itemIds?: readonly string[];
+    run?: string;
+}): {
+    droppedIds: string[];
+    ops: Operation[];
+};
+/** One active candidate tray on the canvas (`moodRun` with at least one `mood: "candidate"` tile). */
+interface MoodTrayRun {
+    run: string;
+    words: string;
+    candidates: Item[];
+    kept: Item[];
+    createdAt: string;
+    createdBy: Actor;
+    box: {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+    };
+}
+/** Active candidate trays on the canvas, oldest first. */
+export declare function moodTrays(canvas: CanvasContents): MoodTrayRun[];
+export {};

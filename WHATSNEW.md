@@ -21,6 +21,19 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 17 October 2026
+
+- **Explore a look before drawing screens.** With **Mood board** on in
+  Settings → Experiments and a Gemini key set, open **Design systems → Explore
+  a look…** or type `/moodboard` to generate nine non-UI mood pictures across
+  light, material, texture, colour, era, density, place, and lettering. Keep
+  favourites into a **Mood** board on the canvas, drop the rest or close the
+  tray in one undo, branch any kept or dropped-in reference photo with **More
+  like this** or **Push →** (`warmer`, `cooler`, `quieter`, `louder`, `older`,
+  `newer`, `rougher`, `finer`), or run `isocan mood explore|keep|drop|more`
+  from the CLI. Keeping is for people only; agents are refused.
+
+
 ## 15 October 2026
 
 - **Make a person a pass admitted your machine's person.** `isocan setup

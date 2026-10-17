@@ -14,6 +14,22 @@ texture, colour field, era, density, place, lettering), `moodModel`,
   terminal and refuses everywhere else, with the cost — so an agent passes
   `--yes` only when the person said to spend it. `--from <item>` sends an
   image on the canvas beside the words (More like this).
+- `isocan mood keep <items...>` — moves kept candidate tile(s) into the
+  **Mood** board (an area or canvas group marked `moodBoard=true`, created on
+  first Keep and reused after) and marks them `mood=kept`, all in one undo.
+  Keeping is a person's taste: `mood keep` refuses an agent harness or an
+  agent actor, so leave candidate tiles for the person to choose from.
+- `isocan mood drop [items...] [--run <run>]` — moves named candidate tiles to
+  the trash, or with `--run <run>` drops every remaining `mood=candidate` tile
+  from that spread run in one undo (closing the tray while leaving `mood=kept`
+  tiles untouched).
+- `isocan mood more <item> [--push <dial>] [--n <count>] [--words "<words>"] [--yes]`
+  — draws four variations by default (`--n`, at most 12) from a kept or
+  reference image on the canvas, recording `moodParent=<item>`. With `--push`
+  (`warmer`, `cooler`, `quieter`, `louder`, `older`, `newer`, `rougher`,
+  `finer`), pushes the look along that dial and records `moodAxis` as
+  `push: <dial> · <axis>`; without `--push`, records `more: <axis>`. Prints the
+  dollar cost first and requires `--yes` when nobody can be asked at a TTY.
 - The words are a feeling, not a screen: the home wraps them in a template
   that rules out interfaces, text overlays, logos, brands, real people and
   living artists' styles, and refuses a request naming one before anything
