@@ -4,7 +4,7 @@ import { atLeast, newGroupId, newId, newItemId, newVersionId, sameActor, type Ac
 import { TEXT_BAD_REQUEST, TEXT_MAX_BYTES, TEXT_PICTURES_ROUTE, TEXT_RATE_LIMITED, TEXT_ROUTE, TEXT_TOO_LARGE, TEXT_UNAVAILABLE, type TextPictures, type TextRequest } from "@isocan/core/text";
 import { JUDGMENT_OWNER_ONLY, LIVE_TOKEN_BAD_REQUEST, LIVE_TOKEN_OWNER_ONLY, LIVE_TOKEN_RATE_LIMITED, LIVE_TOKEN_ROUTE, LIVE_TOKEN_UNAVAILABLE, ownerOnlySentence, TEXT_OWNER_ONLY } from "@isocan/core/keys";
 import { readKeyFile } from "@isocan/core/keystore";
-import { deniedIn, IMAGE_BAD_REQUEST, IMAGE_OWNER_ONLY, IMAGE_RATE_LIMITED, IMAGE_REFUSED, IMAGE_ROUTE, IMAGE_UNAVAILABLE, IMAGE_UPSTREAM, isMoodDial, MOOD_DEFAULT_N, MOOD_DIALS, MOOD_MAX_N, MOOD_PROPS, MOOD_TILE, moodPrompt, moodPushPrompt, moodTray, spreadAxes, type ImageRequest, type ImageResponse } from "@isocan/core/mood";
+import { deniedIn, IMAGE_BAD_REQUEST, IMAGE_OWNER_ONLY, IMAGE_RATE_LIMITED, IMAGE_REFUSED, IMAGE_ROUTE, IMAGE_UNAVAILABLE, IMAGE_UPSTREAM, isMoodDial, MOOD_DEFAULT_N, MOOD_DIALS, MOOD_MAX_N, MOOD_PROPS, MOOD_TILE, moodPrompt, moodPushPrompt, moodTray, spreadAxes, SWATCHES_ROUTE, type ImageRequest, type ImageResponse, type SwatchesRequest } from "@isocan/core/mood";
 import type { Desk } from "./desk.ts";
 import type { Engine } from "./engine.ts";
 import { capabilityIn, type ViewOnlyError } from "./grants.ts";
@@ -12,6 +12,7 @@ import type { RouteOptions } from "./http.ts";
 import { Judge } from "./judgment.ts";
 import { LiveTokens } from "./live-token.ts";
 import { ImageModel, type Drawn } from "./image.ts";
+import { extractMoodSwatches } from "./mood-swatches.ts";
 import { identityFile } from "./paths.ts";
 import { RefusedError, TakenDownError, type Refusals } from "./takedowns.ts";
 import { registerSummaryRoutes } from "./summaries.ts";
@@ -391,5 +392,50 @@ export function registerModelRoutes(app: FastifyInstance, scope: ModelRouteScope
       return reply.status(502).send({ error: answer.refused[0]?.why ?? "Google drew nothing", code: IMAGE_UPSTREAM });
     }
     return answer;
+  });
+  /**
+   * **`POST /api/image/swatches` — read up to six dominant colour swatches
+   * from an image item** (moodboard phase 2; `docs/projects/moodboard/design.md`
+   * §4). Uses `sharp` when the home has it, or falls back to the home's
+   * picture-capable text model (marking every swatch `estimated: true`).
+   */
+  app.post(SWATCHES_ROUTE, { bodyLimit: 4096 }, async (req, reply) => {
+    const body = req.body as Partial<SwatchesRequest> | null;
+    if (
+      !body ||
+      typeof body !== "object" ||
+      typeof body.canvasId !== "string" ||
+      !body.canvasId ||
+      typeof body.itemId !== "string" ||
+      !body.itemId
+    ) {
+      return reply.status(400).send({ error: "a swatches request names `canvasId` and `itemId`", code: IMAGE_BAD_REQUEST });
+    }
+    const { canvasId, itemId } = body;
+    await door(req, canvasId);
+    const home = homes?.for(canvasId) ?? null;
+    if (home) return home.personalRequest("POST", SWATCHES_ROUTE, { canvasId, itemId });
+    const snapshot = await engine.getSnapshot(canvasId);
+    const item = snapshot.canvas.items[itemId];
+    const version = item?.versions.find((v) => v.id === item.currentVersionId);
+    if (!item || !version || !version.mimeType.startsWith("image/")) {
+      return reply.status(400).send({ error: `${itemId} is not an image on this canvas`, code: IMAGE_BAD_REQUEST });
+    }
+    const stream = await store.openBlob(canvasId, version.blobHash);
+    if (!stream) {
+      return reply.status(404).send({ error: `the picture of ${itemId} is not at this home`, code: IMAGE_BAD_REQUEST });
+    }
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) chunks.push(Buffer.from(chunk as Uint8Array));
+    const bytes = Buffer.concat(chunks);
+    const result = await extractMoodSwatches({
+      bytes,
+      mimeType: version.mimeType,
+      loadSharpOption: options.image?.loadSharp,
+      textModel,
+      badgeId: req.badge!.badgeId,
+      notTheOwners: () => notTheOwners(req, textKeysHome),
+    });
+    return reply.status(result.status).send(result.body);
   });
 }

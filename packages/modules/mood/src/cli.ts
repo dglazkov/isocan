@@ -18,6 +18,7 @@ import {
   moodDropOps,
   moodKeepPlan,
   moodWordsFromPrompt,
+  type MoodSwatch,
 } from "@isocan/core/mood";
 import { moodModule } from "./core.ts";
 
@@ -135,6 +136,14 @@ function register(host: CliHost): void {
           );
         }
         const items = refs.map((ref) => host.resolveItem(snapshot, ref.replace(/^#/, "")));
+        const swatchesByItem: Record<string, readonly MoodSwatch[]> = {};
+        for (const item of items) {
+          if (item.properties[MOOD_PROPS.swatches]) continue;
+          const ver = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions.at(-1);
+          if (!ver?.mimeType.startsWith("image/")) continue;
+          const { swatches } = await ctx.client.imageSwatches({ canvasId: canvas.id, itemId: item.id });
+          if (swatches.length > 0) swatchesByItem[item.id] = swatches;
+        }
         const groupMode = snapshot.project.groupMode ?? "legacy";
         let boardBlob: { blobHash: string; size: number; mimeType: string; filename: string } | undefined;
         if (!findMoodBoard(snapshot.canvas)) {
@@ -148,6 +157,7 @@ function register(host: CliHost): void {
           groupMode,
           itemIds: items.map((i) => i.id),
           ...(boardBlob ? { boardBlob } : {}),
+          ...(Object.keys(swatchesByItem).length > 0 ? { swatchesByItem } : {}),
         });
         const group = newGroupId();
         for (const op of plan.ops) await host.sendOp(ctx, canvas.id, op, group);

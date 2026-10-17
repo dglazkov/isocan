@@ -26,7 +26,7 @@ import {
 } from "@isocan/core";
 import { uploadBlob } from "./api.ts";
 import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
-import { useUiStore } from "../stores/uiStore.ts";
+import { moduleFileProperties } from "../modules.ts";
 import { mimeTypeOf } from "./mime.ts";
 import { changeCanvasGroup, groupsEnabled } from "./canvasgroups.ts";
 import { creationDestination, sendCreatedItem } from "./groupplacement.ts";
@@ -112,24 +112,6 @@ export function addFailure(err: unknown, total: number, fallback: string): { lan
   return { landed: [], notice: err instanceof Error && err.message ? err.message : fallback };
 }
 
-function isMoodBoardDrop(
-  placement: Placement,
-  destination: { containerId?: string | null; originGroupMode: "legacy" | "groups" },
-): boolean {
-  const items = useCanvasStore.getState().canvas?.items;
-  if (!items) return false;
-  if (destination.containerId) return items[destination.containerId]?.properties?.moodBoard === "true";
-  if (destination.originGroupMode === "groups" || !("x" in placement)) return false;
-  return Object.values(items).some(
-    (i) =>
-      i.properties?.moodBoard === "true" &&
-      placement.x >= i.x &&
-      placement.x <= i.x + i.width &&
-      placement.y >= i.y &&
-      placement.y <= i.y + i.height,
-  );
-}
-
 export async function addFiles(
   canvasId: string,
   actor: Actor,
@@ -139,9 +121,6 @@ export async function addFiles(
 ): Promise<string[]> {
   // One drop is one act: however many files, one ⌘Z takes them back.
   const group = newGroupId();
-  const moodRef =
-    useUiStore.getState().experiments.includes("moodboard") &&
-    isMoodBoardDrop(placement, destination);
   /**
    * **Laid out in a row, not stacked on one point.**
    *
@@ -192,6 +171,13 @@ export async function addFiles(
       : placement;
     offsetX += width + FILE_GAP;
 
+    const extraProps = await moduleFileProperties({
+      file,
+      mimeType,
+      placement: at,
+      destination,
+      items: useCanvasStore.getState().canvas?.items,
+    });
     const itemId = newItemId();
     try {
       await sendCreatedItem(canvasId, actor, {
@@ -208,7 +194,7 @@ export async function addFiles(
         width,
         height,
         placement: at,
-        ...(moodRef && mimeType.startsWith("image/") ? { properties: { mood: "reference" } } : {}),
+        ...(extraProps ? { properties: extraProps } : {}),
       }, group);
     } catch (err) {
       throw new AddFilesError(

@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { CanvasContents, Item } from "../src/index.ts";
 import {
+  deltaE,
   deniedIn,
   findMoodBoard,
+  formatMoodSwatches,
   IMAGE_MODEL_DEFAULT,
   imageModel,
   isMoodBoardItem,
@@ -21,7 +23,10 @@ import {
   moodTray,
   moodTrays,
   moodWordsFromPrompt,
+  parseMoodSwatches,
+  rgbToLab,
   spreadAxes,
+  swatchesFromRgba,
 } from "../src/mood.ts";
 
 /**
@@ -247,5 +252,109 @@ describe("the Mood board, keep, drop, and tray runs", () => {
       { run: "mood_1", candidates: 2, kept: 1 },
       { run: "mood_2", candidates: 1, kept: 0 },
     ]);
+  });
+
+  it("writes moodSwatches alongside mood=kept in the same item.update op on both legacy and group canvases", () => {
+    const tile1 = makeItem("itm_s1", 100, 100, { [MOOD_PROPS.mood]: "candidate", [MOOD_PROPS.run]: "mood_1" });
+    const swatches = [
+      { hex: "#b5651d", share: 0.5 },
+      { hex: "#2f3e46", share: 0.3 },
+      { hex: "#f4f1ea", share: 0.2 },
+    ];
+    for (const groupMode of ["legacy", "groups"] as const) {
+      const plan = moodKeepPlan({
+        canvas: makeCanvas([tile1]),
+        groupMode,
+        itemIds: ["itm_s1"],
+        boardBlob: { blobHash: "hash_board", size: 1 },
+        newBoardId: "itm_board",
+        swatchesByItem: { itm_s1: swatches },
+      });
+      const updateOp = plan.ops.find((op) => op.type === "item.update" && op.itemId === "itm_s1");
+      expect(updateOp).toEqual({
+        type: "item.update",
+        itemId: "itm_s1",
+        patch: {
+          properties: {
+            [MOOD_PROPS.mood]: "kept",
+            [MOOD_PROPS.swatches]: formatMoodSwatches(swatches),
+          },
+        },
+      });
+    }
+  });
+});
+
+describe("mood swatches (pure k-means + CIE Lab ΔE)", () => {
+  const fillRows = (
+    rgba: Uint8Array,
+    width: number,
+    yStart: number,
+    yEnd: number,
+    rgb: [number, number, number],
+    alpha = 255,
+  ) => {
+    for (let y = yStart; y < yEnd; y++) {
+      for (let x = 0; x < width; x++) {
+        const i = (y * width + x) * 4;
+        rgba[i] = rgb[0];
+        rgba[i + 1] = rgb[1];
+        rgba[i + 2] = rgb[2];
+        rgba[i + 3] = alpha;
+      }
+    }
+  };
+
+  it("reads known colour fields (#b5651d crust, #2f3e46 slate, #f4f1ea flour) within ΔE <= 3 and orders by share", () => {
+    const width = 40;
+    const height = 40;
+    const rgba = new Uint8Array(width * height * 4);
+    // 20 rows crust (50%), 12 rows slate (30%), 8 rows flour (20%).
+    fillRows(rgba, width, 0, 20, [0xb5, 0x65, 0x1d]);
+    fillRows(rgba, width, 20, 32, [0x2f, 0x3e, 0x46]);
+    fillRows(rgba, width, 32, 40, [0xf4, 0xf1, 0xea]);
+
+    const swatches = swatchesFromRgba(rgba, width, height);
+    expect(swatches).toHaveLength(3);
+    expect(swatches.map((s) => s.share)).toEqual([0.5, 0.3, 0.2]);
+    expect(deltaE(swatches[0]!.hex, "#b5651d")).toBeLessThanOrEqual(3);
+    expect(deltaE(swatches[1]!.hex, "#2f3e46")).toBeLessThanOrEqual(3);
+    expect(deltaE(swatches[2]!.hex, "#f4f1ea")).toBeLessThanOrEqual(3);
+  });
+
+  it("merges near-duplicates within ΔE < 6, ignores alpha < 128, and is deterministic across runs", () => {
+    const width = 20;
+    const height = 20;
+    const rgba = new Uint8Array(width * height * 4);
+    // 10 rows #b5651d and 6 rows #b7671f (ΔE < 2), plus 4 transparent rows.
+    fillRows(rgba, width, 0, 10, [0xb5, 0x65, 0x1d], 255);
+    fillRows(rgba, width, 10, 16, [0xb7, 0x67, 0x1f], 255);
+    fillRows(rgba, width, 16, 20, [0x2f, 0x3e, 0x46], 40);
+
+    expect(deltaE("#b5651d", "#b7671f")).toBeLessThan(6);
+    const first = swatchesFromRgba(rgba, width, height);
+    const second = swatchesFromRgba(rgba, width, height);
+    expect(first).toEqual(second);
+    expect(first).toHaveLength(1);
+    expect(first[0]!.share).toBe(1);
+    expect(deltaE(first[0]!.hex, "#b5651d")).toBeLessThanOrEqual(3);
+  });
+
+  it("round-trips formatMoodSwatches and parseMoodSwatches, preserving estimated flags", () => {
+    const [l, a, b] = rgbToLab(181, 101, 29);
+    expect(l).toBeGreaterThan(45);
+    expect(a).toBeGreaterThan(20);
+    expect(b).toBeGreaterThan(40);
+
+    const raw = formatMoodSwatches([
+      { hex: "#B5651D", share: 0.51234 },
+      { hex: "#2f3e46", share: 0.48766, estimated: true },
+    ]);
+    expect(parseMoodSwatches(raw)).toEqual([
+      { hex: "#b5651d", share: 0.512 },
+      { hex: "#2f3e46", share: 0.488, estimated: true },
+    ]);
+    expect(parseMoodSwatches("not-json")).toEqual([]);
+    expect(parseMoodSwatches(undefined)).toEqual([]);
   });
 });

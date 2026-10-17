@@ -6,13 +6,17 @@ import {
   newGroupId,
   type CanvasContents,
   type DialogFacts,
+  type FileDropFacts,
   type Item,
   type ModuleMenuFacts,
   type ModuleMenuRow,
   type OverlayFacts,
+  type Placement,
+  type RendererFacts,
   type WebModule,
 } from "@isocan/core";
 import {
+  formatMoodSwatches,
   IMAGE_MODEL_DEFAULT,
   IMAGE_ROUTE,
   MOOD_BOARD_BYTES,
@@ -28,12 +32,87 @@ import {
   moodKeepPlan,
   moodTrays,
   moodWordsFromPrompt,
+  parseMoodSwatches,
+  swatchesFromRgba,
   type ImageRequest,
   type ImageResponse,
   type MoodBoardBlob,
   type MoodDial,
+  type MoodSwatch,
 } from "@isocan/core/mood";
 import { moodModule } from "./core.ts";
+
+const MOOD_IMAGE_MIMES = ["image/jpeg", "image/png", "image/webp", "image/gif"] as const;
+const SWATCH_MAX_SIDE = 64;
+
+async function swatchesFromImageSource(source: ImageBitmapSource): Promise<MoodSwatch[]> {
+  if (typeof createImageBitmap !== "function" || typeof document === "undefined") return [];
+  const bitmap = await createImageBitmap(source);
+  try {
+    const scale = Math.min(1, SWATCH_MAX_SIDE / Math.max(1, bitmap.width, bitmap.height));
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return [];
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    const { data } = ctx.getImageData(0, 0, width, height);
+    return swatchesFromRgba(data, width, height);
+  } finally {
+    bitmap.close();
+  }
+}
+
+async function readBrowserSwatches(blobUrl: string): Promise<MoodSwatch[]> {
+  try {
+    const res = await fetch(blobUrl);
+    if (!res.ok) return [];
+    const blob = await res.blob();
+    return await swatchesFromImageSource(blob);
+  } catch {
+    return [];
+  }
+}
+
+function isMoodBoardDrop(
+  placement: Placement,
+  destination: { containerId?: string | null; originGroupMode: "legacy" | "groups" },
+  items: Readonly<Record<string, Item>> | undefined,
+): boolean {
+  if (!items) return false;
+  if (destination.containerId) return items[destination.containerId]?.properties?.[MOOD_PROPS.board] === "true";
+  if (destination.originGroupMode === "groups" || !("x" in placement)) return false;
+  return Object.values(items).some(
+    (i) =>
+      i.properties?.[MOOD_PROPS.board] === "true" &&
+      placement.x >= i.x &&
+      placement.x <= i.x + i.width &&
+      placement.y >= i.y &&
+      placement.y <= i.y + i.height,
+  );
+}
+
+/**
+ * When a photo is dropped onto the Mood board while the `moodboard` experiment
+ * is on, returns `{ mood: "reference", moodSwatches?: ... }` (or `undefined`
+ * when the drop is outside the Mood board).
+ */
+async function moodDropReferenceProps({
+  file,
+  mimeType,
+  placement,
+  destination,
+  items,
+}: FileDropFacts): Promise<Record<string, string> | undefined> {
+  if (!mimeType.startsWith("image/") || !isMoodBoardDrop(placement, destination, items)) return undefined;
+  const swatches = await swatchesFromImageSource(file).catch(() => []);
+  return {
+    [MOOD_PROPS.mood]: "reference",
+    ...(swatches.length > 0 ? { [MOOD_PROPS.swatches]: formatMoodSwatches(swatches) } : {}),
+  };
+}
 
 /** Ask the home's image route to generate candidate tiles on this canvas. */
 export async function requestMoodImages(
@@ -213,7 +292,25 @@ function MoodTrayOverlay({ canvasId, canvas, host, groupMode }: OverlayFacts) {
       const put = await host.putBlob(blob, filename);
       boardBlob = { blobHash: put.blobHash, size: put.size, mimeType: AREA_MIME, filename };
     }
-    const plan = moodKeepPlan({ canvas, groupMode, itemIds: ids, ...(boardBlob ? { boardBlob } : {}) });
+    const swatchesByItem: Record<string, readonly MoodSwatch[]> = {};
+    await Promise.all(
+      ids.map(async (id) => {
+        const tile = canvas.items[id];
+        if (!tile || tile.properties[MOOD_PROPS.swatches]) return;
+        const ver = tile.versions.find((v) => v.id === tile.currentVersionId) ?? tile.versions.at(-1);
+        if (!ver?.mimeType.startsWith("image/")) return;
+        const url = `/api/projects/${encodeURIComponent(canvasId)}/blobs/${encodeURIComponent(ver.blobHash)}`;
+        const swatches = await readBrowserSwatches(url);
+        if (swatches.length > 0) swatchesByItem[id] = swatches;
+      }),
+    );
+    const plan = moodKeepPlan({
+      canvas,
+      groupMode,
+      itemIds: ids,
+      ...(boardBlob ? { boardBlob } : {}),
+      ...(Object.keys(swatchesByItem).length > 0 ? { swatchesByItem } : {}),
+    });
     if (plan.ops.length > 0) await host.send(plan.ops, newGroupId());
     setPicked((prev) => {
       const next = { ...prev };
@@ -382,6 +479,36 @@ function MoodTrayOverlay({ canvasId, canvas, host, groupMode }: OverlayFacts) {
   );
 }
 
+function MoodImageTile({ item, url, filename }: RendererFacts) {
+  const rawSwatches = item?.properties[MOOD_PROPS.swatches];
+  const swatches = useMemo(() => parseMoodSwatches(rawSwatches), [rawSwatches]);
+  if (swatches.length === 0) {
+    return <img className="img-view" src={url} alt={filename} draggable={false} />;
+  }
+  return (
+    <div className="mood-image-tile">
+      <img className="mood-image-view" src={url} alt={filename} draggable={false} />
+      <div className="mood-swatch-strip" role="list" aria-label="Colour swatches">
+        {swatches.map((s, i) => {
+          const pct = Math.round(s.share * 100);
+          const label = `${s.hex} · ${pct}%${s.estimated ? " (estimated)" : ""}`;
+          return (
+            <span
+              key={`${s.hex}-${i}`}
+              role="listitem"
+              className={`mood-swatch-chip${s.estimated ? " is-estimated" : ""}`}
+              style={{ background: s.hex, flexGrow: Math.max(0.01, s.share) }}
+              title={label}
+              aria-label={label}
+              data-swatch-hex={s.hex}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /** Item context menu: *More like this…* and *Push ▸* on a single kept or reference image. */
 export function moodMenu({ items, open }: ModuleMenuFacts): ModuleMenuRow[] {
   if (items.length !== 1) return [];
@@ -409,9 +536,10 @@ export function moodMenu({ items, open }: ModuleMenuFacts): ModuleMenuRow[] {
   ];
 }
 
+/** Browser half of the `@isocan/mood` module, gated behind the `moodboard` experiment. */
 export const moodWeb: WebModule<
   never,
-  never,
+  typeof MoodImageTile,
   never,
   never,
   typeof MoodTrayOverlay,
@@ -428,6 +556,8 @@ export const moodWeb: WebModule<
   ],
   dialogs: [{ id: "mood-explore", title: "Explore a look", wide: true, component: MoodExploreDialog }],
   overlays: [{ region: "right", label: "Mood tray", component: MoodTrayOverlay }],
+  renderers: [{ mimes: MOOD_IMAGE_MIMES, property: MOOD_PROPS.swatches, component: MoodImageTile }],
+  fileProperties: moodDropReferenceProps,
   menu: moodMenu,
 };
 

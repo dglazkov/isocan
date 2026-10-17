@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Headless Chrome journey for moodboard Phase 1: Keep, drop, more, push.
+ * Headless Chrome journey for moodboard Phases 1–2: Keep, drop, more, push, and swatches.
  * Run after `npm run build`: `node scripts/journey-moodboard.mjs`
  */
 import assert from "node:assert/strict";
@@ -8,6 +8,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { crc32, deflateSync } from "node:zlib";
 import { register } from "tsx/esm/api";
 
 register();
@@ -15,6 +16,7 @@ register();
 const repo = fileURLToPath(new URL("../", import.meta.url));
 const { startDaemon } = await import(pathToFileURL(path.join(repo, "packages/server/src/daemon.ts")).href);
 const { writeKey } = await import(pathToFileURL(path.join(repo, "packages/core/src/keystore.ts")).href);
+const { deltaE, parseMoodSwatches } = await import(pathToFileURL(path.join(repo, "packages/core/src/mood.ts")).href);
 const { writeBadge, adoptIdentity } = await import(pathToFileURL(path.join(repo, "packages/server/src/badge-store.ts")).href);
 const { DaemonClient } = await import(pathToFileURL(path.join(repo, "packages/api/src/client.ts")).href);
 const { BADGE_COOKIE, parseBadgeToken } = await import(pathToFileURL(path.join(repo, "packages/core/src/index.ts")).href);
@@ -22,8 +24,48 @@ const { browser, until } = await import(pathToFileURL(path.join(repo, "scripts/l
 const { click, navigate, enterName, screenshot } = await import(pathToFileURL(path.join(repo, "scripts/lib/personal-journey-fixture.mjs")).href);
 const { clickText, fill } = await import(pathToFileURL(path.join(repo, "scripts/lib/design-systems-browser.mjs")).href);
 
-/** A 1×1 PNG fixture returned by the stubbed image model. */
-const PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+function makeTricolorPng(width = 60, height = 60) {
+  const stride = width * 4;
+  const raw = Buffer.alloc(height * (stride + 1));
+  for (let y = 0; y < height; y++) {
+    const row = y * (stride + 1);
+    raw[row] = 0;
+    const [r, g, b] =
+      y < Math.floor(height * 0.5)
+        ? [0xb5, 0x65, 0x1d]
+        : y < Math.floor(height * 0.8)
+          ? [0x2f, 0x3e, 0x46]
+          : [0xf4, 0xf1, 0xea];
+    for (let x = 0; x < width; x++) {
+      const o = row + 1 + x * 4;
+      raw[o] = r;
+      raw[o + 1] = g;
+      raw[o + 2] = b;
+      raw[o + 3] = 255;
+    }
+  }
+  const pngChunk = (type, data) => {
+    const head = Buffer.alloc(8);
+    head.writeUInt32BE(data.length, 0);
+    head.write(type, 4, "ascii");
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(Buffer.concat([head.subarray(4), data])), 0);
+    return Buffer.concat([head, data, crc]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr.set([8, 6, 0, 0, 0], 8);
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk("IHDR", ihdr),
+    pngChunk("IDAT", deflateSync(raw)),
+    pngChunk("IEND", Buffer.alloc(0)),
+  ]);
+}
+
+/** A 60×60 synthetic tricolour PNG (#b5651d crust, #2f3e46 slate, #f4f1ea flour) returned by the stubbed image model. */
+const PNG_BASE64 = makeTricolorPng(60, 60).toString("base64");
 const GEMINI_KEY = "fake-gemini-acme-mood-journey-1234567890";
 const CANVAS_ID = "prj_acme_mood_journey";
 
@@ -151,11 +193,25 @@ try {
   assert.equal(boards.length, 1, "exactly one Mood board created and reused");
   const board = boards[0];
   assert.equal(board.title, "Mood");
+  const webSwatchesByItem = {};
   for (const id of firstThreeIds) {
     assert.equal(snap.canvas.items[id]?.properties.mood, "kept", `${id} marked kept`);
     assert.equal(snap.canvas.items[id]?.containerId, board.id, `${id} moved into Mood board`);
+    const rawSwatches = snap.canvas.items[id]?.properties.moodSwatches;
+    assert(rawSwatches, `${id} carries moodSwatches after browser Keep`);
+    webSwatchesByItem[id] = rawSwatches;
+    const swatches = parseMoodSwatches(rawSwatches);
+    assert(swatches.length >= 3, `${id} extracted at least 3 swatches`);
+    assert(deltaE(swatches[0].hex, "#b5651d") <= 3, `crust ΔE <= 3, got ${swatches[0].hex} (ΔE ${deltaE(swatches[0].hex, "#b5651d").toFixed(2)})`);
+    assert(deltaE(swatches[1].hex, "#2f3e46") <= 3, `slate ΔE <= 3, got ${swatches[1].hex} (ΔE ${deltaE(swatches[1].hex, "#2f3e46").toFixed(2)})`);
+    assert(deltaE(swatches[2].hex, "#f4f1ea") <= 3, `flour ΔE <= 3, got ${swatches[2].hex} (ΔE ${deltaE(swatches[2].hex, "#f4f1ea").toFixed(2)})`);
   }
-  checks.push("Keeping tiles creates the Mood board once and moves kept tiles into it.");
+  await until(
+    b,
+    `document.querySelectorAll(${JSON.stringify(`[data-item-id="${firstThreeIds[0]}"] .mood-swatch-strip .mood-swatch-chip`)}).length >= 3`,
+    "swatch strip rendered under kept tile on Mood board",
+  );
+  checks.push("Keeping tiles creates the Mood board once, writes moodSwatches within ΔE <= 3, and renders .mood-swatch-strip.");
 
   // 6. Drop 1 candidate tile with ✕ Drop.
   const dropId = await b.ev(`document.querySelector(".mood-tray .mood-tile")?.getAttribute("data-mood-tile")`);
@@ -230,7 +286,10 @@ try {
   }
   assert(refItem, "dropped photo received mood=reference");
   assert.equal(refItem.containerId, board.id, "reference photo landed inside Mood board");
-  await until(b, `document.querySelector(${JSON.stringify(`[data-item-id="${refItem.id}"]`)}) !== null`, "reference tile rendered");
+  const refSwatches = parseMoodSwatches(refItem.properties.moodSwatches);
+  assert(refSwatches.length >= 3, "dropped reference photo also carries moodSwatches");
+  assert(deltaE(refSwatches[0].hex, "#b5651d") <= 3, "reference photo crust ΔE <= 3");
+  await until(b, `document.querySelector(${JSON.stringify(`[data-item-id="${refItem.id}"] .mood-swatch-strip`)}) !== null`, "reference tile and swatch strip rendered");
 
   // Fit again after the drop and enter the Mood board group so right-clicking targets the child item, not the outer group.
   await click(b, ".zoom-pct");
@@ -287,8 +346,21 @@ try {
   );
   checks.push("Close tray removes remaining candidates in one undoable group, and one Undo restores them.");
 
-  await screenshot(b, path.join(output, "moodboard-phase1.png"));
+  await screenshot(b, path.join(output, "moodboard-phase2.png"));
   assert.deepEqual(b.takeErrors(), [], "no browser runtime errors");
+
+  // 10. Close the browser and verify CLI / client reads the exact same moodSwatches with no browser open.
+  await b.close();
+  const closedSnap = await client.snapshot(CANVAS_ID);
+  for (const id of firstThreeIds) {
+    assert.equal(
+      closedSnap.canvas.items[id]?.properties.moodSwatches,
+      webSwatchesByItem[id],
+      `kept tile ${id} read with browser closed holds exact web moodSwatches`,
+    );
+  }
+  checks.push("With the browser closed, reading the canvas shows the exact same moodSwatches the web wrote.");
+
   console.log(JSON.stringify({ ok: true, output, modelCalls: modelCalls.length, checks }, null, 2));
 } catch (err) {
   const diag = await b

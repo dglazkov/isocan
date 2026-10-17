@@ -2,11 +2,52 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { crc32, deflateSync } from "node:zlib";
 import { type Daemon } from "@isocan/server";
 import { startDaemon } from "@isocan/server/daemon";
 import { writeKey } from "@isocan/core/keystore";
-import { IMAGE_MODEL_DEFAULT, moodCostLine } from "@isocan/core/mood";
+import { deltaE, IMAGE_MODEL_DEFAULT, moodCostLine, parseMoodSwatches } from "@isocan/core/mood";
 import { cliEnv, runCli, type Run } from "./cli.ts";
+
+function makeTricolorPng(width = 60, height = 60): Buffer {
+  const stride = width * 4;
+  const raw = Buffer.alloc(height * (stride + 1));
+  for (let y = 0; y < height; y++) {
+    const row = y * (stride + 1);
+    raw[row] = 0;
+    const [r, g, b] =
+      y < Math.floor(height * 0.5)
+        ? [0xb5, 0x65, 0x1d]
+        : y < Math.floor(height * 0.8)
+          ? [0x2f, 0x3e, 0x46]
+          : [0xf4, 0xf1, 0xea];
+    for (let x = 0; x < width; x++) {
+      const o = row + 1 + x * 4;
+      raw[o] = r;
+      raw[o + 1] = g;
+      raw[o + 2] = b;
+      raw[o + 3] = 255;
+    }
+  }
+  const pngChunk = (type: string, data: Buffer) => {
+    const head = Buffer.alloc(8);
+    head.writeUInt32BE(data.length, 0);
+    head.write(type, 4, "ascii");
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(Buffer.concat([head.subarray(4), data])), 0);
+    return Buffer.concat([head, data, crc]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr.set([8, 6, 0, 0, 0], 8);
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk("IHDR", ihdr),
+    pngChunk("IDAT", deflateSync(raw)),
+    pngChunk("IEND", Buffer.alloc(0)),
+  ]);
+}
 
 /**
  * **`isocan mood explore`** (moodboard phase 0; design §2, §7), walked
@@ -26,7 +67,7 @@ import { cliEnv, runCli, type Run } from "./cli.ts";
 const KEY = "fake-gemini-acme_MOOD_CLI_DO_NOT_PRINT_";
 const nico = { id: "usr_nico", name: "Nico" };
 const WORDS = "a quiet bakery at dawn";
-const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+const PNG = makeTricolorPng(60, 60);
 
 let home: string;
 let daemon: Daemon;
@@ -177,9 +218,16 @@ describe("isocan mood keep, drop, and more", () => {
     const board = itemsNow.find((i) => i.id === res1.boardId);
     expect(board?.title).toBe("Mood");
     expect(board?.properties.moodBoard).toBe("true");
-    expect(itemsNow.find((i) => i.id === first!)?.properties.mood).toBe("kept");
+    const keptFirst = itemsNow.find((i) => i.id === first!);
+    expect(keptFirst?.properties.mood).toBe("kept");
     expect(itemsNow.find((i) => i.id === second!)?.properties.mood).toBe("kept");
     expect(itemsNow.find((i) => i.id === third!)).toBeUndefined();
+
+    const swatches = parseMoodSwatches(keptFirst?.properties.moodSwatches);
+    expect(swatches.length).toBeGreaterThanOrEqual(3);
+    expect(deltaE(swatches[0]!.hex, "#b5651d")).toBeLessThanOrEqual(3);
+    expect(deltaE(swatches[1]!.hex, "#2f3e46")).toBeLessThanOrEqual(3);
+    expect(deltaE(swatches[2]!.hex, "#f4f1ea")).toBeLessThanOrEqual(3);
   }, 60_000);
 
   it("draws four variations with mood more and pushes along a dial with --push", async () => {

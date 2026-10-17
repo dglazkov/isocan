@@ -16,6 +16,23 @@ import { newItemId, newVersionId } from "./ids.ts";
 import type { Actor, CanvasContents, Item } from "./model.ts";
 import type { Operation } from "./ops.ts";
 import { nearestFreeSpot, PLACEMENT_GAP } from "./placement.ts";
+import {
+  formatMoodSwatches,
+  type MoodSwatch,
+} from "./mood-swatches.ts";
+
+export {
+  deltaE,
+  formatMoodSwatches,
+  IMAGE_SWATCHES_UNAVAILABLE,
+  parseMoodSwatches,
+  rgbToLab,
+  SWATCHES_ROUTE,
+  swatchesFromRgba,
+  type MoodSwatch,
+  type SwatchesRequest,
+  type SwatchesResponse,
+} from "./mood-swatches.ts";
 
 /** The route's path. */
 export const IMAGE_ROUTE = "/api/image";
@@ -217,6 +234,7 @@ export const MOOD_PROPS = {
   axis: "moodAxis",
   parent: "moodParent",
   model: "moodModel",
+  swatches: "moodSwatches",
   run: "moodRun",
   board: "moodBoard",
 } as const;
@@ -316,10 +334,18 @@ export function moodKeepPlan(input: {
   itemIds: readonly string[];
   boardBlob?: MoodBoardBlob;
   newBoardId?: string;
+  swatchesByItem?: Readonly<Record<string, readonly MoodSwatch[]>>;
 }): { boardId: string; createdBoard: boolean; ops: Operation[] } {
   const uniqueIds = [...new Set(input.itemIds)];
   const items = uniqueIds.map((id) => input.canvas.items[id]).filter((item): item is Item => item !== undefined);
   if (items.length === 0) throw new Error("mood keep needs at least one live item on the canvas");
+  const keepProps = (itemId: string): Record<string, string> => {
+    const swatches = input.swatchesByItem?.[itemId];
+    return {
+      [MOOD_PROPS.mood]: "kept",
+      ...(swatches && swatches.length > 0 ? { [MOOD_PROPS.swatches]: formatMoodSwatches(swatches) } : {}),
+    };
+  };
   const existing = findMoodBoard(input.canvas);
   const createdBoard = existing === null;
   const boardId = existing?.id ?? input.newBoardId ?? newItemId();
@@ -372,7 +398,7 @@ export function moodKeepPlan(input: {
       ops.push({
         type: "item.update",
         itemId: item.id,
-        patch: { properties: { [MOOD_PROPS.mood]: "kept" } },
+        patch: { properties: keepProps(item.id) },
       });
     }
     return { boardId, createdBoard, ops };
@@ -455,7 +481,7 @@ export function moodKeepPlan(input: {
     ops.push({
       type: "item.update",
       itemId: item.id,
-      patch: { properties: { [MOOD_PROPS.mood]: "kept" } },
+      patch: { properties: keepProps(item.id) },
     });
   }
 

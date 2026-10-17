@@ -13,7 +13,7 @@ step, then the board as a critic.
 **Phase citations name their project**: `moodboard phase 2`, never a bare
 "phase 2".
 
-**Where we are, 17 Oct 2026:** phases 0 and 1 are built and PART-DONE — `POST /api/image`, `isocan mood explore|keep|drop|more`, and the web tray (`/moodboard`, *Explore a look*, keep, drop, *More like this*, *Push*, reference photo drops) pass unit, CLI, and headless Chrome proofs; their real-key runs wait on a Gemini key with billing. `moodboard phase 2` (swatches) is next. Dion decided the three open questions on 16 Oct 2026 ([`design.md`](design.md) §8): Flash by default, hosted homes allowed, nine tiles a spread.
+**Where we are, 17 Oct 2026:** phases 0 and 1 are PART-DONE and phase 2 is CLOSED — `POST /api/image`, `POST /api/image/swatches`, `isocan mood explore|keep|drop|more`, deterministic CIE L\*a\*b\* k-means swatches (`moodSwatches`), `.mood-swatch-strip` on kept and reference tiles, and the web tray (`/moodboard`, *Explore a look*, keep, drop, *More like this*, *Push*, reference photo drops) pass unit, CLI, and headless Chrome proofs; phases 0–1's real-key runs wait on a Gemini key with billing. `moodboard phase 3` (derive the system from the board) is next. Dion decided the three open questions on 16 Oct 2026 ([`design.md`](design.md) §8): Flash by default, hosted homes allowed, nine tiles a spread.
 
 ---
 
@@ -83,7 +83,7 @@ plus one real run by hand. Adds ≤ 0 bytes to the entry chunk beyond a gate.
 
 ## Phase 2 — Swatches
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 17 Oct 2026.** Deterministic CIE L\*a\*b\* k-means swatch extraction (`swatchesFromRgba`, `deltaE`, `rgbToLab` in `packages/core/src/mood-swatches.ts`) runs in the browser on keep and drop-in reference photos (`WebModule.fileProperties` in `packages/core/src/modules.ts` + `@isocan/mood/web`), and on the daemon at `POST /api/image/swatches` (`packages/server/src/mood-swatches.ts`, `sharp` decode with picture-model fallback marked `estimated: true`, or 503 `IMAGE_SWATCHES_UNAVAILABLE` when neither is available) so `isocan mood keep` writes the same `moodSwatches` without a browser. `@isocan/mood/web` claims image items carrying `moodSwatches` (`property: "moodSwatches"`) and draws `.mood-swatch-strip` under each kept or reference tile while moving the upload drop check out of `packages/web/src/lib/upload.ts`. Proved on synthetic colour-field PNGs within ΔE ≤ 3 across core (`packages/core/test/mood.test.ts`), server (`packages/server/test/image.test.ts`), CLI (`packages/cli/test/mood.test.ts`), and headless Chrome (`scripts/journey-moodboard.mjs`, 8 checks including cross-surface CLI readback with the browser closed).
 
 - On keep: browser k-means, or daemon `sharp`, or a model estimate marked
   `estimated`, writing `moodSwatches`. The board draws a palette strip under
