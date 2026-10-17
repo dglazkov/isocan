@@ -2,6 +2,8 @@ import type { Actor, CanvasContents, Item } from "./model.ts";
 import type { Grant } from "./grants.ts";
 import { COMMAND_NAME, findCommand, parseSlashCommand, type CommandMetadata } from "./commands.ts";
 import { EXTENSION_ACTOR_PREFIX, EXTENSION_COLORS, extensionColor, isExtensionActor } from "./identity.ts";
+import { INTERNAL_OP_TYPES, type Operation, type OperationType } from "./ops.ts";
+import { opWords } from "./opwords.ts";
 
 export { EXTENSION_ACTOR_PREFIX, EXTENSION_COLORS, extensionColor, isExtensionActor };
 
@@ -489,8 +491,174 @@ export function panelCapabilities(panel: PanelExtension): string[] {
     "renders as a sandboxed page served from the content origin — never isocan's own origin, so it holds no badge and cannot act as you",
     `paints in the ${panel.side} dock and nowhere else: not over the canvas, the top bar or another panel`,
     "cannot read what is selected yet: the selection message is not built in this phase",
-    "cannot send an operation: the door a panel asks through is not built, so nothing it contains can change this canvas",
+    "asks through a narrow versioned postMessage door as its own actor: may send operations in the vocabulary that its grant on this canvas permits, and receives only the operation result",
   ];
+}
+
+/**
+ * The narrow `postMessage` protocol version a hosted panel speaks to isocan
+ * (`docs/projects/extensions/phases.md`, phase 6).
+ */
+export const PANEL_BRIDGE_VERSION = 1 as const;
+
+/** Inbound `postMessage` type a hosted panel sends when asking to perform an operation. */
+export const PANEL_OP_MESSAGE_TYPE = "isocan:panel-op" as const;
+
+/** Outbound `postMessage` type the bridge answers a hosted panel with. */
+export const PANEL_OP_RESULT_TYPE = "isocan:panel-op-result" as const;
+
+/** Inbound `postMessage` payload a hosted panel sends through the narrow door. */
+export interface PanelOpMessage {
+  type: typeof PANEL_OP_MESSAGE_TYPE;
+  version: number;
+  requestId?: string;
+  op: Operation;
+}
+
+/**
+ * The ONLY object the narrow door ever hands back to a hosted panel frame
+ * (extensions phase 6) — never a store, a client, a badge or a snapshot.
+ */
+export type PanelOpResult =
+  | {
+      type: typeof PANEL_OP_RESULT_TYPE;
+      version: typeof PANEL_BRIDGE_VERSION;
+      requestId?: string;
+      ok: true;
+      seq: number;
+      id: string;
+    }
+  | {
+      type: typeof PANEL_OP_RESULT_TYPE;
+      version: typeof PANEL_BRIDGE_VERSION;
+      requestId?: string;
+      ok: false;
+      code: string;
+      error: string;
+    };
+
+/** Outcome of reading a raw `postMessage` body at the panel's narrow door. */
+export type PanelMessageRead =
+  | {
+      ok: true;
+      requestId?: string;
+      op: Operation;
+    }
+  | {
+      ok: false;
+      requestId?: string;
+      code: string;
+      error: string;
+    };
+
+const HOME_OR_BIRTH_OP_TYPES: ReadonlySet<OperationType> = new Set([
+  "actor.claim",
+  "actor.setColor",
+  "actor.setMark",
+  "actor.join",
+  "project.create",
+]);
+
+/**
+ * Validate an inbound `postMessage` payload at the panel's narrow door
+ * (extensions phase 6).
+ *
+ * Returns `null` when `raw` is not addressed to `isocan:panel-op`. When it is:
+ * - Refuses any `version` other than {@link PANEL_BRIDGE_VERSION} rather than
+ *   guessing at what an unknown version means.
+ * - Refuses any `op.type` outside the operation vocabulary, telling the panel
+ *   that proposing a new operation is proposing a product feature.
+ */
+export function readPanelOpMessage(raw: unknown): PanelMessageRead | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const msg = raw as Record<string, unknown>;
+  if (msg.type !== PANEL_OP_MESSAGE_TYPE) return null;
+  const requestId =
+    typeof msg.requestId === "string" && msg.requestId.length > 0 ? msg.requestId : undefined;
+  if (msg.version !== PANEL_BRIDGE_VERSION) {
+    return {
+      ok: false,
+      ...(requestId !== undefined ? { requestId } : {}),
+      code: "bad-version",
+      error: `panel protocol version ${JSON.stringify(msg.version)} is not supported (expected version ${PANEL_BRIDGE_VERSION}) — an unknown version is refused rather than guessed at`,
+    };
+  }
+  const op = msg.op;
+  if (!op || typeof op !== "object" || Array.isArray(op)) {
+    return {
+      ok: false,
+      ...(requestId !== undefined ? { requestId } : {}),
+      code: "bad-op",
+      error: "a panel message must carry an `op` object with a `type` string",
+    };
+  }
+  const type = (op as { type?: unknown }).type;
+  if (typeof type !== "string" || type.trim() === "") {
+    return {
+      ok: false,
+      ...(requestId !== undefined ? { requestId } : {}),
+      code: "bad-op",
+      error: "a panel message must carry an `op` object with a `type` string",
+    };
+  }
+  if (opWords(type) === undefined) {
+    return {
+      ok: false,
+      ...(requestId !== undefined ? { requestId } : {}),
+      code: "unknown-op",
+      error: `unknown operation "${type}" — an extension may only ask for an Operation in the vocabulary; a panel proposing a new op is proposing a product feature`,
+    };
+  }
+  if (INTERNAL_OP_TYPES.has(type as OperationType)) {
+    return {
+      ok: false,
+      ...(requestId !== undefined ? { requestId } : {}),
+      code: "internal-op",
+      error: `${type} is an internal undo/redo operation and is not in the public operation vocabulary — a panel proposing a new op is proposing a product feature`,
+    };
+  }
+  if (HOME_OR_BIRTH_OP_TYPES.has(type as OperationType)) {
+    return {
+      ok: false,
+      ...(requestId !== undefined ? { requestId } : {}),
+      code: "bad-op",
+      error: `${type} is a home-scoped or birth operation — a panel speaks as its own extension actor on the canvas it is on`,
+    };
+  }
+  return {
+    ok: true,
+    ...(requestId !== undefined ? { requestId } : {}),
+    op: op as unknown as Operation,
+  };
+}
+
+/**
+ * Construct the sanitized operation result sent back to a hosted panel frame —
+ * never carrying a store, client, badge, token or canvas state.
+ */
+export function panelOpResult(
+  outcome: { ok: true; seq: number; id: string } | { ok: false; code: string; error: string },
+  requestId?: string,
+): PanelOpResult {
+  const base = {
+    type: PANEL_OP_RESULT_TYPE,
+    version: PANEL_BRIDGE_VERSION,
+    ...(requestId !== undefined ? { requestId } : {}),
+  };
+  if (outcome.ok) {
+    return Object.freeze({
+      ...base,
+      ok: true as const,
+      seq: Number(outcome.seq),
+      id: String(outcome.id),
+    });
+  }
+  return Object.freeze({
+    ...base,
+    ok: false as const,
+    code: String(outcome.code),
+    error: String(outcome.error),
+  });
 }
 
 /** Deterministic actor id for a panel item on a canvas (`ext_<suffix>`). */

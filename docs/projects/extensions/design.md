@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-06
 see: extensions
-note: stages 1 and 2 built 6 Sep; phase 3 closed 18 Sep; phase 4 closed 14 Oct; phase 5 closed 15 Oct — a declarative tool as an item with `role=tool`, `does` limited to a slash command that exists, a closed icon set, reserved labels, and the capability list printed before `--yes`; `isocan tool list/add` and the rail render from ONE reader in core. The walk was re-cut 18 Sep and now lives in phases.md: the demand went to the other end of the list, so the hosted tier (stage 5, whose content-origin gate cleared 6 Sep) comes first as phases 3, 4 and 6, the extension actor (stage 4) follows as phase 5 because that is where it first has a subject, and declarative panels (stage 3) go last as phase 7, waiting on evidence rather than on work. Phase 3 closed 18 Sep: `role=panel` is an item whose manifest names a title, a slot and a `src` pointing at a page item on the same canvas, read by `readPanelExtension` beside the tool's reader and refused in prose naming the field; `isocan panel list/add` prints derived capabilities and adds nothing without `--yes`. Phase 4 closed 14 Oct: the left dock renders a panel as a sandboxed frame on `contentBase()`, wearing its own extension colour (`EXTENSION_COLORS`) and stating when its blob is missing. Phase 5 closed 15 Oct: each panel gets its own actor (`ext_…`) and `panel:<itemId>` grant on the identity desk, attributing its ops (`isocan activity <extension>`), isolating per-actor undo, expelling its badge on grant revocation through the existing door test, and carrying it in presence. Phase 6, the narrow door over `postMessage`, is next
+note: stages 1 and 2 built 6 Sep; phase 3 closed 18 Sep; phase 4 closed 14 Oct; phases 5 and 6 closed 15 Oct — a declarative tool as an item with `role=tool`, `does` limited to a slash command that exists, a closed icon set, reserved labels, and the capability list printed before `--yes`; `isocan tool list/add` and the rail render from ONE reader in core. The walk was re-cut 18 Sep and now lives in phases.md: the demand went to the other end of the list, so the hosted tier (stage 5, whose content-origin gate cleared 6 Sep) comes first as phases 3, 4 and 6, the extension actor (stage 4) follows as phase 5 because that is where it first has a subject, and declarative panels (stage 3) go last as phase 7, waiting on evidence rather than on work. Phase 3 closed 18 Sep: `role=panel` is an item whose manifest names a title, a slot and a `src` pointing at a page item on the same canvas, read by `readPanelExtension` beside the tool's reader and refused in prose naming the field; `isocan panel list/add` prints derived capabilities and adds nothing without `--yes`. Phase 4 closed 14 Oct: the left dock renders a panel as a sandboxed frame on `contentBase()`, wearing its own extension colour (`EXTENSION_COLORS`) and stating when its blob is missing. Phase 5 closed 15 Oct: each panel gets its own actor (`ext_…`) and `panel:<itemId>` grant on the identity desk, attributing its ops (`isocan activity <extension>`), isolating per-actor undo, expelling its badge on grant revocation through the existing door test, and carrying it in presence. Phase 6 closed 15 Oct: a hosted panel talks to isocan over a narrow versioned `postMessage` bridge (`isocan:panel-op`, `version: 1`) from the content origin only, stamping operations with the panel's actor, enforcing the panel's grant through `/api/ops`, refusing unknown ops and versions, and returning only a frozen `PanelOpResult`. Phase 7 (declarative panels) waits on evidence
 ---
 # Extending the canvas from inside it
 
@@ -239,9 +239,10 @@ falls.
    *(The content origin landed on prod 6 Sep, so this gate is clear — the two
    in front of it are not.)* **First in the walk, cut into three: phase 3 the
    manifest and its one reader, phase 4 the frame, phase 6 the narrow door**
-   (18 Sep). The two that were in front of it turned out not to be in front of
-   it: one has no demand and one has no subject until this lands. The gate this
-   stage names is the only one that was ever real, and it is clear.
+   (18 Sep; all three closed — 18 Sep and 15 Oct). The two that were in front of
+   it turned out not to be in front of it: one has no demand and one has no
+   subject until this lands. The gate this stage names is the only one that was
+   ever real, and it is clear.
 
 ## Open
 

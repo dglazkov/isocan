@@ -214,7 +214,7 @@ test rather than a new one. Presence carries the panel while it works.
 
 ## Phase 6 — The narrow door
 
-**Status: NOT STARTED.**
+**Status: CLOSED** (2026-10-15).
 
 **Outcome:** the panel talks to isocan over `postMessage`, and the API it gets
 is narrow, versioned, and made of operations — never a handle to internal
@@ -232,6 +232,21 @@ refused rather than guessed at. A test forbids the bridge handing the frame any
 object other than the operation result — no store, no client, no badge.
 Messages from any origin but the content origin are ignored. `npm test` and
 `npm run typecheck` whole.
+
+**Trajectory:**
+
+- **2026-10-15** — `readPanelOpMessage` and `panelOpResult` in
+  `packages/core/src/extensions.ts` define the versioned `isocan:panel-op` /
+  `isocan:panel-op-result` protocol (`version: 1`). Messages from an unknown
+  version are refused (`bad-version`), and operations outside the vocabulary are
+  refused (`unknown-op` / `internal-op`) with `unknownOperation` stating that
+  proposing a new operation is proposing a product feature. `bridgePanelFrame`
+  and `submitPanelOp` in `packages/web/src/lib/panelBridge.ts` ignore messages
+  from any origin other than `contentOrigin`, enroll the panel's own actor and
+  bearer credential via `panelActorRoute`, submit the operation through
+  `/api/ops` (so the existing door test and capability check enforce the panel's
+  grant identically to a person's), and reply to the frame with only the frozen
+  `PanelOpResult`.
 
 ## Phase 7 — Declarative panels
 
