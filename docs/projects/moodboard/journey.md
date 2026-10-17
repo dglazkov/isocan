@@ -1,8 +1,8 @@
 ---
-status: designed
+status: partial
 since: 2026-10-16
 see: design-partner, critique, keys, design-lint, design-competition
-note: specified 16 Oct 2026, nothing built. Starting a design system from buttons and fonts asks a person to decide the smallest things first. A mood board starts from the largest — what the thing should feel like — with generated images that are deliberately not UI (light, material, texture, colour, the room the product lives in). A person keeps what moves them; the kept board sits on the canvas as inspiration; and the design system is derived from it, every token citing the image it came from. Built from what exists — the `gemini` key in `isocan keys`, the daemon's owner-only model routes, design-partner's references, the DESIGN.md direction record and `/design-system`'s "derive it from what is already there" — with two things new: an image route, and swatches read from a kept image so the CLI can use colours it cannot decode.
+note: specified 16 Oct 2026; phase 0 PART-DONE the same day. Starting a design system from buttons and fonts asks a person to decide the smallest things first. A mood board starts from the largest — what the thing should feel like — with generated images that are deliberately not UI (light, material, texture, colour, the room the product lives in). A person keeps what moves them; the kept board sits on the canvas as inspiration; and the design system is derived from it, every token citing the image it came from. Built from what exists — the `gemini` key in `isocan keys`, the daemon's owner-only model routes, design-partner's references, the DESIGN.md direction record and `/design-system`'s "derive it from what is already there" — with two things new: an image route (`POST /api/image`, `isocan mood explore`), and swatches read from a kept image so the CLI can use colours it cannot decode. Phase 0 built the route and `mood explore` behind the `moodboard` experiment; its three real spreads wait on a Gemini key with billing. Phase 1 (keep, drop, more, push) is next.
 ---
 
 # Mood board

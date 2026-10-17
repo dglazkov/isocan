@@ -58,12 +58,13 @@ the first real calls taught one thing and stopped on another (below).
   id and per-image price recorded in this file.
 - `isocan mood explore "<words>" --n 9` adds nine `mood: candidate` image
   items with full provenance (`design.md` §1), and states the cost first.
-- **Proof:** on a scratch canvas with a real key, nine tiles for Scene 1's
-  words. Record latency per image, total cost, and **how many of the nine
-  are not UI**. The template passes at ≥ 8 of 9 across three different
-  briefs. Below that, the template is the work, not the UI.
-- A person looks at the three spreads and says whether they would keep
-  anything. If not, stop here and say so.
+
+**Proof:** on a scratch canvas with a real key, nine tiles for Scene 1's
+words. Record latency per image, total cost, and **how many of the nine
+are not UI**. The template passes at ≥ 8 of 9 across three different
+briefs. Below that, the template is the work, not the UI. A person looks
+at the three spreads and says whether they would keep anything. If not,
+stop here and say so.
 
 ## Phase 1 — Keep, drop, more, push
 
@@ -75,9 +76,10 @@ the first real calls taught one thing and stopped on another (below).
 - Web, behind `moodboard`, lazily loaded: *Explore a look* in the Design
   systems dialog and `/moodboard`; the tray; ✓ / ✕ / *More like this* /
   *Push*; a person's photo dropped on the board becomes `mood: reference`.
-- **Proof:** a browser journey on a scratch daemon with the image route
-  stubbed **at the model call only** (fixture PNGs), driving every action;
-  plus one real run by hand. Adds ≤ 0 bytes to the entry chunk beyond a gate.
+
+**Proof:** a browser journey on a scratch daemon with the image route
+stubbed **at the model call only** (fixture PNGs), driving every action;
+plus one real run by hand. Adds ≤ 0 bytes to the entry chunk beyond a gate.
 
 ## Phase 2 — Swatches
 
@@ -86,9 +88,10 @@ the first real calls taught one thing and stopped on another (below).
 - On keep: browser k-means, or daemon `sharp`, or a model estimate marked
   `estimated`, writing `moodSwatches`. The board draws a palette strip under
   each tile.
-- **Proof:** fixture images with known colour fields read back within ΔE 3
-  on both surfaces; a kept tile read by the CLI with no browser open shows the
-  same swatches the web wrote.
+
+**Proof:** fixture images with known colour fields read back within ΔE 3
+on both surfaces; a kept tile read by the CLI with no browser open shows the
+same swatches the web wrote.
 
 ## Phase 3 — Derive the system from the board
 
@@ -97,10 +100,11 @@ the first real calls taught one thing and stopped on another (below).
 - `isocan mood board --json`; `/design-system`'s board branch;
   `tokens.isocan.sources`; *Derive from the board* through the parked agent;
   hover a token to light its tile.
-- **Proof:** from Scene 3's board, a derived DESIGN.md where every palette
-  token and every direction field cites a kept tile (a check fails on any
-  uncited value not explained in `rationale`), and `design audit` runs
-  against it unchanged.
+
+**Proof:** from Scene 3's board, a derived DESIGN.md where every palette
+token and every direction field cites a kept tile (a check fails on any
+uncited value not explained in `rationale`), and `design audit` runs
+against it unchanged.
 
 ## Phase 4 — The board as a critic
 
@@ -110,6 +114,7 @@ the first real calls taught one thing and stopped on another (below).
   swatches: *does this screen feel like what was kept?* It is a critique
   persona generated from the board, so it lives on the canvas and can be
   edited.
-- **Proof:** Scene 4: a screen with an off-board colour gets a *Risk* note
-  naming the colour and that no tile holds it; a person's walk in
-  `docs/verify/` of the whole journey.
+
+**Proof:** Scene 4: a screen with an off-board colour gets a *Risk* note
+naming the colour and that no tile holds it; a person's walk in
+`docs/verify/` of the whole journey.
