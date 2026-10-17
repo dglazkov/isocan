@@ -23,9 +23,10 @@
 // config had canvas nightly publishing off is skipped; a never-ran receipt
 // sends recovery to the attempt before it; the artifact's provenance must
 // name exactly the attempt it came from. A night attempt with canvas on must
-// have left its artifact. A keel-morning attempt with none never reached its
-// card job (canvas not set for the card, or no plan): it is skipped, and its
-// run's earlier attempt, which may have, is read in its place (#151).
+// have left its artifact. A keel-morning attempt with none is skipped only
+// when its own job results show its card step never ran (canvas not set for
+// the card, or no plan; #152), and its run's earlier attempt, which may have,
+// is read in its place (#151); without that evidence it is refused.
 // gh is `gh`; GH_TOKEN is the job's own (actions: read, contents: read).
 import fs from 'node:fs';
 import path from 'node:path';
@@ -37,6 +38,9 @@ export const WRITERS = Object.freeze({
   'keel-night.yml': Object.freeze({ artifact: 'keel-canvas-night', events: Object.freeze(['schedule', 'workflow_dispatch']), required: true }),
   'keel-morning.yml': Object.freeze({ artifact: 'keel-canvas-card', events: Object.freeze(['schedule', 'workflow_dispatch', 'workflow_run']), required: false }),
 });
+
+/** keel-morning.yml's card job and the one step of it that writes the canvas. */
+export const CARD_JOB = 'card', CARD_STEP = 'Publish the plan card';
 
 class Refusal extends Error { constructor(message, code = 1) { super(message); this.code = code; } }
 const fail = (message, code = 1) => { throw new Refusal(message, code); };
@@ -69,6 +73,19 @@ export function chooseRecovery({ self, env = process.env, gh = 'gh' }) {
     const p = JSON.parse(fs.readFileSync(file, 'utf8')).provenance;
     if (p?.repo !== repo || p.workflow !== run.path || String(p.runId) !== String(run.id) || p.attempt !== run.run_attempt || p.headSha !== run.head_sha) fail('Recovery provenance does not match the selected attempt.');
   };
+  // Positive evidence, from the attempt's own complete job list, that its card step never ran: no
+  // card job ran in this attempt (none, or only one carried over from an earlier attempt), or it
+  // was skipped, or its publish step was. Anything else, unknown included, may have published.
+  const cardNeverRan = run => {
+    const listed = api(`repos/${repo}/actions/runs/${run.id}/attempts/${run.run_attempt}/jobs?per_page=100`);
+    if (!Array.isArray(listed?.jobs) || listed.total_count !== listed.jobs.length) return false;
+    const cards = listed.jobs.filter(j => j?.name === CARD_JOB && (j.run_attempt === undefined || j.run_attempt === run.run_attempt));
+    if (!cards.length) return true;
+    if (cards.length !== 1 || cards[0].status !== 'completed') return false;
+    if (cards[0].conclusion === 'skipped') return true;
+    const steps = (Array.isArray(cards[0].steps) ? cards[0].steps : []).filter(s => s?.name === CARD_STEP);
+    return steps.length === 1 && steps[0].status === 'completed' && steps[0].conclusion === 'skipped';
+  };
   const queue = [...eligible];
   while (queue.length) {
     const run = queue.shift();
@@ -85,10 +102,13 @@ export function chooseRecovery({ self, env = process.env, gh = 'gh' }) {
     const list = api(`repos/${repo}/actions/runs/${run.id}/artifacts?per_page=100`).artifacts;
     if (!Array.isArray(list)) fail('Cannot list the trusted night artifacts.');
     const found = list.filter(a => a.name === name && !a.expired && a.workflow_run?.id === run.id && a.workflow_run?.head_sha === run.head_sha && a.size_in_bytes > 0 && a.size_in_bytes <= 64 * 1024 * 1024);
-    // A keel-morning attempt that left no card artifact never reached its card job: it never touched the canvas.
-    // Its run's earlier attempt may have (a rerun of a failed send after the card published, #151):
-    // that attempt takes its place in time order, as after a never-ran receipt.
+    // A keel-morning attempt that left no card artifact is skipped only when its own job results show
+    // its card step never ran (#152): a card published and then a failed upload also leaves none, and
+    // restoring older state then would make a second card. Its run's earlier attempt may have run
+    // the card (a rerun of a failed send after the card published, #151): that attempt takes its
+    // place in time order, as after a never-ran receipt.
     if (!w.required && found.length === 0 && !list.some(a => a.name === name)) {
+      if (!cardNeverRan(run)) fail('A keel-morning attempt left no card journal, and its job results do not show that its card step never ran: it may have published the card. Manual recovery required; refusing older state.');
       if (run.run_attempt > 1) { queue.push({ ...api(`repos/${repo}/actions/runs/${run.id}/attempts/${run.run_attempt - 1}`), writer: run.writer }); queue.sort(newestFirst); }
       continue;
     }

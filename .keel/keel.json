@@ -14,7 +14,7 @@
   "phases": {
     "shape": "projects"
   },
-  "practice": "0.8.31",
+  "practice": "0.8.32",
   "practices": [
     "base",
     "agents-md",
@@ -39,7 +39,7 @@
       "Loop's own rank is kept only for comparison. Declined and stale findings are",
       "dismissed in Loop, and every decision is sent back to it as a context so its",
       "next pass knows why. `node scripts/loop.mjs pull` fetches; `decide <slug>",
-      "<decision>` decides \u2014 and deciding is a person's, because it is sent to a",
+      "<decision>` decides — and deciding is a person's, because it is sent to a",
       "workspace other people read."
     ],
     "hedge": true,

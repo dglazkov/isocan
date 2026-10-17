@@ -1,3 +1,4 @@
+import { status as productionStatus, productionLines } from './production.mjs';
 import { milestoneSource, readMilestones, milestoneSummary } from './milestones.mjs';
 import { Saving } from './quota.mjs';
 // keel improve, shipped: is the practice working here? Numbers first, one
@@ -64,7 +65,8 @@ import { Saving } from './quota.mjs';
 // Apache-2.0): time each Bash call from tool_use to tool_result, by kind. The
 // ratchet follows isocan's scripts/ratchet.mjs (Apache-2.0): bounds that only
 // report the wrong way.
-import { readCiUsage, readCiGate, ciOptions } from './ci.mjs';
+import { readCiUsage, ciOptions } from './ci.mjs';
+import { reusableGate } from './gate.mjs';
 import { hygieneOptions, draftsWaiting, longFiles } from './hygiene-measures.mjs';
 import { makeHygieneProposal, formatHygieneProposal, readHygieneProposals, hygieneRobotTargetReason } from './hygiene-proposals.mjs';
 import { readFile, readdir, writeFile, mkdir, stat } from 'node:fs/promises';
@@ -301,16 +303,18 @@ async function notes(ctx, dir) {
   catch (e) { if (['ENOENT', 'ENOTDIR'].includes(e.code)) return null; throw e; }
 }
 
-/** The project's gate, run once: { command, status, tests, ms }. */
+/**
+ * The project's gate, run once: { command, status, tests, ms }. CI's result
+ * for this exact clean commit stands in for it when gate.mjs's reusableGate
+ * finds one (the one rule every pass shares, phase 79): reused, it is not run here.
+ */
 const gateRun = ctx => once(ctx, 'gate', async () => {
   const command = ctx.config.check ?? CHECK;
   const named = gateWorkflowOf(ctx.config);
   if (named?.problem) throw new Error(named.problem);
   let reuse = { reused: false, reason: 'no explicitly configured CI workflow' };
   if (named && ctx.config.repo) {
-    let sha = '', clean = false;
-    try { sha = gitOut(ctx, ['rev-parse', 'HEAD']).trim(); clean = !gitOut(ctx, ['status', '--porcelain', '--untracked-files=all']).trim(); } catch { /* local gate remains available */ }
-    reuse = await readCiGate({ repo: ctx.config.repo, workflow: named.name, sha, clean, env: ctx.env, now: ctx.now });
+    reuse = await reusableGate({ root: ctx.root, config: ctx.config, env: stripTest(ctx.env), now: ctx.now });
     if (reuse.reused) return { command, ...reuse };
   }
   // Never a test runner's context (lesson 14); the project's .keel/keel.json `env` over it.
@@ -1517,7 +1521,7 @@ export const noProposal = results => results.some(r => r.state === 'outside')
 /** A row's bound as the page writes it; none (a value recorded only) is a dash. */
 const boundOf = r => (Number.isFinite(r.bound) ? `${r.better === 'higher' ? '≥' : '≤'} ${r.bound}` : '—');
 
-export function page({ config, date, results, proposal, tightened, by = COMMAND, climb = null, retire = [], tend = null, budget = null, remeasurements = [], night = null }) {
+export function page({ config, date, results, proposal, tightened, by = COMMAND, climb = null, retire = [], tend = null, budget = null, remeasurements = [], night = null, production = null }) {
   return [
     `# Health — ${date}`, '',
     `\`${by} --report\` on ${config.name ?? 'this project'}. Numbers first, one proposal last; this page changes nothing. Bounds live in \`${BOUNDS}\` and only tighten.`, '',
@@ -1536,6 +1540,7 @@ export function page({ config, date, results, proposal, tightened, by = COMMAND,
     ...(remeasurements.length ? ['## Time proposal remeasurement', '', ...remeasurements.map(r => `- ${r.instanceId}: ${r.state}; ${r.reasons?.join('; ') || 'fresh comparison against frozen evidence; merge alone is not acceptance'}`), ''] : []),
     // Tonight's plan (phase 73): each item and what became of it; a line when the working plan is not tonight's.
     ...(night?.plan ? planSection(night.plan, { record: night.record }) : night?.line ? ['## Tonight\'s plan', '', night.line, ''] : []),
+    ...productionLines(production).flatMap(line => [line, '']),
     '## Proposal', '',
     proposal?.hygieneMetadata ? formatHygieneProposal(proposal.hygieneMetadata) : proposal ? `**\`${proposal.id}\`** (${proposal.state}) — ${proposal.text}` : noProposal(results), '',
     ...(proposal?.metadata ? [formatTimeProposal(proposal.metadata), ''] : []),
@@ -1661,6 +1666,7 @@ export async function improve({ root, report = false, transcripts, prInput, date
   if (report) try { dir = healthDirIn(root, config); } catch (e) { throw new ImproveError(e.message, 2); }
   const stored = await readBounds(root);
   const results = await measure({ root, config, env, transcripts, date, bounds: stored ?? {}, measures, keel });
+  const production = await productionStatus({root,config});
   let history;
   try { history = await readTimeProposals({root,healthDir:healthDirOf(config)}); }
   catch(e) { history={proposals:[],gaps:[String(e.message)]}; }
@@ -1691,14 +1697,14 @@ export async function improve({ root, report = false, transcripts, prInput, date
     written = healthPage(dir, date);
     night = await nightPlan(root, date, results, written);
     await mkdir(join(root, dir), { recursive: true });
-    await writeHealthReport({root,path:written,generated:page({ config, date, results, proposal, tightened, by, climb, retire, tend, budget, remeasurements, night })});
+    await writeHealthReport({root,path:written,generated:page({ config, date, results, proposal, tightened, by, climb, retire, tend, budget, remeasurements, night, production })});
   }
   changedHistoricalHealthPaths.sort();
   const code = exitCode(results);
   if (prInput) await writeFile(prInput, `${JSON.stringify({...nightPr({ date, results, proposal, report: written ?? `${dir ?? HEALTH}/` }), changedHistoricalHealthPaths}, null, 2)}\n`);
   const counts = ['ok', 'outside', 'n/a', 'broken'].map(s => `${results.filter(r => r.state === s).length} ${s}`).join(', ');
   return {
-    data: { root, date, changedHistoricalHealthPaths, proposalCoverage: {gaps:[...history.gaps,...hygieneHistory.gaps]}, remeasurements, ok: code === 0, measures: strip(results), proposal, report: written, bounds: report ? BOUNDS : stored ? BOUNDS : null, tightened, climb, retire, tend, budget, nightRecord: night?.record ?? null, nightPlan: night?.plan ? { shapedBy: night.plan.shapedBy, items: night.plan.items.map(i => ({ id: i.id, kind: i.kind, status: i.status })) } : night?.line ? { line: night.line } : null },
+    data: { root, date, production, changedHistoricalHealthPaths, proposalCoverage: {gaps:[...history.gaps,...hygieneHistory.gaps]}, remeasurements, ok: code === 0, measures: strip(results), proposal, report: written, bounds: report ? BOUNDS : stored ? BOUNDS : null, tightened, climb, retire, tend, budget, nightRecord: night?.record ?? null, nightPlan: night?.plan ? { shapedBy: night.plan.shapedBy, items: night.plan.items.map(i => ({ id: i.id, kind: i.kind, status: i.status })) } : night?.line ? { line: night.line } : null },
     text: [table(results), '', counts,
       ...(tightened.length ? [`Ratchet: ${tightened.map(t => `${t.id} ${t.from} → ${t.to}`).join(', ')} (${BOUNDS})`] : []),
       proposal ? `Proposal (${proposal.id}): ${proposal.text}` : `Proposal: ${noProposal(results)}`,

@@ -434,7 +434,8 @@ export async function readRuns(root, dir = RUNS, { gates = false, stalls = false
       if(size>RETENTION.bytes-bytes || runs.length>=RETENTION.records) { skipped++; continue; }
       bytes+=size;
       const r = JSON.parse(await readFile(join(root, dir, name), 'utf8'));
-      if (isRun(r)) { if ((gates || r.kind !== 'gate') && (stalls || r.kind !== 'stalls')) runs.push({ ...r, id: name.slice(0, -5) }); } else skipped++;
+      // A docs-only skip (gate.mjs, kind gate-skip) ran nothing: read only with the gates, never as a test run.
+      if (isRun(r)) { if ((gates || (r.kind !== 'gate' && r.kind !== 'gate-skip')) && (stalls || r.kind !== 'stalls')) runs.push({ ...r, id: name.slice(0, -5) }); } else skipped++;
     } catch { skipped++; }
   }
   runs.sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
@@ -803,7 +804,8 @@ export function configHash({ env = process.env, preload = preloads(), configEnv 
 const settingNames = configEnv => [...new Set(['NODE_OPTIONS', ...configEnv])].sort();
 /** A NODE_OPTIONS that carries something secret-looking (token=, secret=, key=, password=) is hashed like a configEnv variable. */
 const SECRETISH = /(token|secret|key|password)=/i;
-const sha12 = v => createHash('sha256').update(v).digest('hex').slice(0, 12);
+/** A short stable hash: a gate record's commandHash is this of its command (scripts/keel/gate.mjs compares it). */
+export const sha12 = v => createHash('sha256').update(v).digest('hex').slice(0, 12);
 /** A variable recorded without its value: { name, set, hash } (hash null when unset). */
 const hidden = (name, v) => ({ name, set: v !== undefined, hash: v === undefined ? null : sha12(v) });
 
@@ -1312,6 +1314,8 @@ export async function junitRun({ junit, runner, status = null, cwd = process.cwd
       busy: busyBetween(start, await sample()),
       ...where(root, { exclude: shown === at ? [] : [shown] }), runner: kind, dir: here,
       config: configHash({ configEnv, preload: [], runner: kind }), setting: settingOf({ configEnv, preload: [] }),
+      // The gate invocation it ran under, as a node run's: gate.mjs reuses a CI result only with its test runs.
+      parentInvocationId: env.KEEL_GATE_INVOCATION ?? null,
       ...workflow, junit: hash, date: new Date().toISOString(), tests: parsed.tests,
     };
     const w = config?.tests?.window;

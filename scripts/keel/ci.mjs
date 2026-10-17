@@ -217,8 +217,13 @@ async function testEvidence(client, repo, run, jobs, sha) {
   return null;
 }
 
-/** Exact clean revision CI reuse. Explicit workflow selection is done by the caller. */
-export async function readCiGate({ repo, workflow, sha, clean, env, now = Date.now(), limits, request } = {}) {
+/**
+ * Exact clean revision CI reuse. Explicit workflow selection is done by the caller.
+ * `verify({ client, run, jobs })` replaces the job-name evidence below with the
+ * caller's own (gate.mjs reads the run's keel-test-runs records): evidence, or
+ * { reason } when the run is not one to reuse. `maxAgeMs` is the window (24 hours).
+ */
+export async function readCiGate({ repo, workflow, sha, clean, env, now = Date.now(), maxAgeMs = DAY, verify, limits, request } = {}) {
   const unavailable = reason => ({ reused: false, reason });
   if (!clean || !/^[0-9a-f]{40,64}$/i.test(sha ?? '')) return unavailable('revision is dirty or unavailable');
   const client = actionsClient({ repo, env, limits, request });
@@ -243,9 +248,10 @@ export async function readCiGate({ repo, workflow, sha, clean, env, now = Date.n
     if (jobs.some(j => j.conclusion !== 'skipped' && (!Number.isFinite(Date.parse(j.started_at)) || Date.parse(j.started_at) > Date.parse(j.completed_at)))) return unavailable('invalid job runtime');
     const completed = Math.max(...jobs.map(j => Date.parse(j.completed_at)).filter(Number.isFinite));
     const ageMs = now - completed;
-    if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > DAY) return unavailable('CI result outside 24-hour window');
-    const evidence = await testEvidence(client, repo, run, jobs, sha);
+    if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > maxAgeMs) return unavailable(maxAgeMs === DAY ? 'CI result outside 24-hour window' : 'CI result outside its window');
+    const evidence = verify ? await verify({ client, run, jobs }) : await testEvidence(client, repo, run, jobs, sha);
     if (!evidence) return unavailable('no test job or test-ledger run executed in the CI run');
+    if (evidence.reason) return unavailable(evidence.reason);
     return { reused: true, source: 'github-actions', workflow: matches[0].path, runId: run.id, attempt: run.run_attempt, sha, conclusion: run.conclusion, ageMs, ordering: 'run updated_at', updatedAt: run.updated_at, completedAt: new Date(completed).toISOString(), status: run.conclusion === 'success' ? 0 : 1, testEvidence: evidence, tests: null, ms: null };
   } catch { return unavailable('Actions API unavailable'); }
 }

@@ -48,6 +48,8 @@ concurrency:
 permissions:
   contents: write
   pull-requests: write
+  # Read-only: the gate step reuses CI's result for an unchanged commit.
+  actions: read
 
 jobs:
   loop:
@@ -152,11 +154,16 @@ jobs:
         if: steps.configured.outputs.ready == 'true'
         run: node scripts/loop.mjs pull
 
+      # The project's check through the night's scripts/keel/gate.mjs when it
+      # is here: a pull that changed nothing leaves the default branch's
+      # commit, clean, and CI's exact result for it stands (said in the log);
+      # a pull that changed findings is a dirty tree, never reused, so it runs.
       - name: Gate
         id: gate
         if: steps.configured.outputs.ready == 'true'
         run: |
-          if node scripts/loop.mjs render --check && npm test && npm run typecheck && node --test tests/loop.test.mjs; then
+          check() { if [ -f scripts/keel/gate.mjs ]; then node scripts/keel/gate.mjs; else npm test && npm run typecheck && node --test tests/loop.test.mjs; fi; }
+          if node scripts/loop.mjs render --check && check; then
             echo "gate=ok" >> "$GITHUB_OUTPUT"
           else
             echo "gate=failed" >> "$GITHUB_OUTPUT"
