@@ -13,11 +13,7 @@ step, then the board as a critic.
 **Phase citations name their project**: `moodboard phase 2`, never a bare
 "phase 2".
 
-**Where we are, 16 Oct 2026:** phase 0 is built and PART-DONE — its real
-spreads wait on a Gemini key with billing; phase 1 (keep, drop, more, push)
-is next. Dion decided the three open questions the same day
-([`design.md`](design.md) §8): Flash by default, hosted homes allowed, nine
-tiles a spread.
+**Where we are, 17 Oct 2026:** phases 0 and 1 are built and PART-DONE — `POST /api/image`, `isocan mood explore|keep|drop|more`, and the web tray (`/moodboard`, *Explore a look*, keep, drop, *More like this*, *Push*, reference photo drops) pass unit, CLI, and headless Chrome proofs; their real-key runs wait on a Gemini key with billing. `moodboard phase 2` (swatches) is next. Dion decided the three open questions on 16 Oct 2026 ([`design.md`](design.md) §8): Flash by default, hosted homes allowed, nine tiles a spread.
 
 ---
 
@@ -68,7 +64,7 @@ stop here and say so.
 
 ## Phase 1 — Keep, drop, more, push
 
-**Status: NOT STARTED.**
+**Status: PART-DONE, 17 Oct 2026 — built and proved in headless Chrome; the real-key hand run waits on a Gemini key with billing.** `moodKeepPlan`, `moodDropOps`, `moodTrays`, `findMoodBoard`, `MOOD_DIALS`, and `moodPushPrompt` live in `@isocan/core/mood` for both legacy (`kind: "area"`) and group-mode (`group.change` / `containerId`) canvases. `isocan mood keep|drop|more` ship in `@isocan/mood/cli`, with `keep` refusing agent actors. `@isocan/mood/web` adds `/moodboard`, *Explore a look* in the Design systems dialog, the candidate tray overlay (per-tile and multi-select keep/drop, *More like this*, *Push*, *Close tray* in one undoable group), item menu rows on kept and reference tiles, and `mood: "reference"` on photos dropped into the *Mood* board. Proved by `scripts/journey-moodboard.mjs` (7 browser checks, 21 stubbed model calls, 0 bytes added to the entry chunk).
 
 - `mood keep|drop|more [--push <dial>]`; the *Mood* board area; closing a
   tray removes its candidates as one undoable group; `keep` refused for an
@@ -80,6 +76,10 @@ stop here and say so.
 **Proof:** a browser journey on a scratch daemon with the image route
 stubbed **at the model call only** (fixture PNGs), driving every action;
 plus one real run by hand. Adds ≤ 0 bytes to the entry chunk beyond a gate.
+
+### Trajectory
+
+- **2026-10-17** — Open: run one real-key exploration, keep, *More like this*, and *Push* by hand. Waits on a Gemini API key with billing enabled.
 
 ## Phase 2 — Swatches
 

@@ -153,6 +153,29 @@ describe("the image route: a spread of pictures, never the key", () => {
     }
     const children = (await tiles()).filter((i) => i.properties.moodRun === more.json.run);
     expect(children.map((i) => i.properties.moodParent)).toEqual([parent, parent]);
+    expect(children.map((i) => i.properties.moodAxis)).toEqual(["more: light", "more: material"]);
+  });
+
+  it("wraps a Push dial in the template, records push: <dial> · <axis>, and refuses an unknown dial", async () => {
+    const bad = await explore(owner, { n: 1, push: "brighter" as never });
+    expect(bad.status).toBe(400);
+    expect(bad.json.code).toBe(IMAGE_BAD_REQUEST);
+    expect(bad.json.error).toMatch(/push.*must be one of/);
+    expect(calls).toHaveLength(0);
+
+    const first = await explore(owner, { n: 1 });
+    const parent = first.json.items[0]!.itemId;
+    calls = [];
+    const pushed = await explore(owner, { n: 2, parent, push: "warmer" });
+    expect(pushed.status, pushed.text).toBe(200);
+    expect(pushed.json.items.map((i) => i.axis)).toEqual(["push: warmer · light", "push: warmer · material"]);
+    for (const call of calls) {
+      const text = call.body.input.find((b) => b.type === "text")?.text ?? "";
+      expect(text).toContain("Push the look warmer:");
+    }
+    const children = (await tiles()).filter((i) => i.properties.moodRun === pushed.json.run);
+    expect(children.map((i) => i.properties.moodAxis)).toEqual(["push: warmer · light", "push: warmer · material"]);
+    expect(children.map((i) => i.properties.moodParent)).toEqual([parent, parent]);
   });
 
   it("refuses a collaborator while sharing is off — nothing reaches Google — and serves them once it is on", async () => {

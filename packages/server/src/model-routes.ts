@@ -4,7 +4,7 @@ import { atLeast, newGroupId, newId, newItemId, newVersionId, sameActor, type Ac
 import { TEXT_BAD_REQUEST, TEXT_MAX_BYTES, TEXT_PICTURES_ROUTE, TEXT_RATE_LIMITED, TEXT_ROUTE, TEXT_TOO_LARGE, TEXT_UNAVAILABLE, type TextPictures, type TextRequest } from "@isocan/core/text";
 import { JUDGMENT_OWNER_ONLY, LIVE_TOKEN_BAD_REQUEST, LIVE_TOKEN_OWNER_ONLY, LIVE_TOKEN_RATE_LIMITED, LIVE_TOKEN_ROUTE, LIVE_TOKEN_UNAVAILABLE, ownerOnlySentence, TEXT_OWNER_ONLY } from "@isocan/core/keys";
 import { readKeyFile } from "@isocan/core/keystore";
-import { deniedIn, IMAGE_BAD_REQUEST, IMAGE_OWNER_ONLY, IMAGE_RATE_LIMITED, IMAGE_REFUSED, IMAGE_ROUTE, IMAGE_UNAVAILABLE, IMAGE_UPSTREAM, MOOD_DEFAULT_N, MOOD_MAX_N, MOOD_PROPS, MOOD_TILE, moodPrompt, moodTray, spreadAxes, type ImageRequest, type ImageResponse } from "@isocan/core/mood";
+import { deniedIn, IMAGE_BAD_REQUEST, IMAGE_OWNER_ONLY, IMAGE_RATE_LIMITED, IMAGE_REFUSED, IMAGE_ROUTE, IMAGE_UNAVAILABLE, IMAGE_UPSTREAM, isMoodDial, MOOD_DEFAULT_N, MOOD_DIALS, MOOD_MAX_N, MOOD_PROPS, MOOD_TILE, moodPrompt, moodPushPrompt, moodTray, spreadAxes, type ImageRequest, type ImageResponse } from "@isocan/core/mood";
 import type { Desk } from "./desk.ts";
 import type { Engine } from "./engine.ts";
 import { capabilityIn, type ViewOnlyError } from "./grants.ts";
@@ -298,11 +298,21 @@ export function registerModelRoutes(app: FastifyInstance, scope: ModelRouteScope
     if (body.parent !== undefined && (typeof body.parent !== "string" || !body.parent)) {
       return reply.status(400).send({ error: "`parent` names the image item the spread varies", code: IMAGE_BAD_REQUEST });
     }
+    if (body.push !== undefined && !isMoodDial(body.push)) {
+      return reply.status(400).send({ error: `\`push\` must be one of ${MOOD_DIALS.join(", ")} — got ${JSON.stringify(body.push)}`, code: IMAGE_BAD_REQUEST });
+    }
     const denied = deniedIn(body.prompt);
     if (denied) return reply.status(422).send({ error: denied, code: IMAGE_REFUSED });
     const canvasId = body.canvasId;
     await door(req, canvasId);
-    const asked: ImageRequest = { canvasId, actor: { id: actor.id, name: actor.name }, prompt: body.prompt, n, ...(body.parent ? { parent: body.parent } : {}) };
+    const asked: ImageRequest = {
+      canvasId,
+      actor: { id: actor.id, name: actor.name },
+      prompt: body.prompt,
+      n,
+      ...(body.parent ? { parent: body.parent } : {}),
+      ...(body.push ? { push: body.push } : {}),
+    };
     const home = homes?.for(canvasId) ?? null;
     const source = images.keySource();
     const refused = source === "file" ? await notTheOwners(req, imageKeysHome) : null;
@@ -338,15 +348,20 @@ export function registerModelRoutes(app: FastifyInstance, scope: ModelRouteScope
     await Promise.all(Array.from({ length: Math.min(3, axes.length) }, async () => {
       while (next < axes.length) {
         const i = next++;
-        drawn[i] = await images.draw(moodPrompt(asked.prompt, axes[i]!.reach), parentImage);
+        const prompt = asked.push
+          ? moodPushPrompt(asked.prompt, asked.push, axes[i]!.reach)
+          : moodPrompt(asked.prompt, axes[i]!.reach);
+        drawn[i] = await images.draw(prompt, parentImage);
       }
     }));
     const answer: ImageResponse = { run: newId("mood"), model, group: newGroupId(), items: [], refused: [] };
     const spots = moodTray(snapshot.canvas, drawn.filter((d) => d.ok).length);
     for (const [i, result] of drawn.entries()) {
       const { axis, reach } = axes[i]!;
+      const axisLabel = asked.push ? `push: ${asked.push} · ${axis}` : asked.parent ? `more: ${axis}` : axis;
+      const prompt = asked.push ? moodPushPrompt(asked.prompt, asked.push, reach) : moodPrompt(asked.prompt, reach);
       if (!result.ok) {
-        answer.refused.push({ axis, why: result.why });
+        answer.refused.push({ axis: axisLabel, why: result.why });
         continue;
       }
       const filename = `mood-${axis.replace(/\W+/g, "-")}.${result.mimeType === "image/jpeg" ? "jpg" : result.mimeType.split("/")[1] ?? "png"}`;
@@ -359,18 +374,18 @@ export function registerModelRoutes(app: FastifyInstance, scope: ModelRouteScope
           version: { id: newVersionId(), blobHash: put.blobHash, mimeType: put.mimeType, filename, size: put.size },
           ...MOOD_TILE,
           placement: spots[answer.items.length]!,
-          title: `${asked.prompt.trim().slice(0, 60)} — ${axis}`,
+          title: `${asked.prompt.trim().slice(0, 60)} — ${axisLabel}`,
           properties: {
             [MOOD_PROPS.mood]: "candidate",
-            [MOOD_PROPS.prompt]: moodPrompt(asked.prompt, reach),
-            [MOOD_PROPS.axis]: axis,
+            [MOOD_PROPS.prompt]: prompt,
+            [MOOD_PROPS.axis]: axisLabel,
             [MOOD_PROPS.model]: model,
             [MOOD_PROPS.run]: answer.run,
             ...(asked.parent ? { [MOOD_PROPS.parent]: asked.parent } : {}),
           },
         },
       });
-      answer.items.push({ itemId, axis });
+      answer.items.push({ itemId, axis: axisLabel });
     }
     if (answer.items.length === 0) {
       return reply.status(502).send({ error: answer.refused[0]?.why ?? "Google drew nothing", code: IMAGE_UPSTREAM });

@@ -89,7 +89,7 @@ export const EXPERIMENTS: readonly Experiment[] = [
   {
     id: "moodboard",
     name: "Mood board",
-    what: "Explore how a thing should feel with generated pictures, drawn with your Gemini key. Nothing in the browser yet: the tray, keep and drop are not built — `isocan mood explore` draws a spread today, and its pictures are ordinary images.",
+    what: "Explore how a thing should feel with generated pictures, drawn with your Gemini key. Keep favourites into a Mood board, drop the rest from the candidate tray, branch with More like this or Push dials, and drop in reference photos.",
   },
   {
     id: "semantic.zoom",

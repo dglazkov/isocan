@@ -4,6 +4,8 @@ import { projectDesignSystem, readDesignSystem, reconcileDesignProjection, prepa
 import { designSystemIO } from "../lib/design-system.ts";
 import { designSystemDraftText, switchDesignSystemDraft, newDesignSystemDraft, readDesignSystemDraft, type DesignSystemDraft, type DirectionFields } from "../lib/design-system-draft.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
+import { useUiStore } from "../stores/uiStore.ts";
+import { moduleDialog } from "../modules.ts";
 import { useCanEdit } from "../lib/capability.ts";
 import { everyWhileVisible } from "../lib/whilevisible.ts";
 import { Modal } from "./Modal.tsx";
@@ -20,6 +22,9 @@ export function saveDesignFile(text: string, filename: string, type = "text/plai
 export function DesignSystemsDialog({ canvasId, actor, initialTarget, onClose }: { canvasId: string; actor: Actor; initialTarget: DesignSystemTarget; onClose: () => void }) {
   const [target, setTarget] = useState(initialTarget), body = useRef<HTMLDivElement>(null);
   const canvas = useCanvasStore((state) => state.canvas);
+  useUiStore((state) => state.modulesGeneration);
+  useUiStore((state) => state.experiments);
+  const moodExplore = moduleDialog("mood-explore");
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
     const controls = () => [...(body.current?.closest('[role="dialog"]')?.querySelectorAll<HTMLElement>('button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),summary') ?? [])].filter((element) => element.getClientRects().length > 0);
@@ -30,6 +35,7 @@ export function DesignSystemsDialog({ canvasId, actor, initialTarget, onClose }:
   const encoded = JSON.stringify(target);
   return <Modal label="Design system and references" title="Design system & references" onClose={onClose} wide><div className="design-systems" ref={body}>
     <label className="design-scope">Designing for<select aria-label="Design scope" value={encoded} onChange={(event) => setTarget(JSON.parse(event.target.value) as DesignSystemTarget)}><option value={JSON.stringify({ kind: "canvas" })}>Canvas · default and uncovered screens</option>{Object.values(canvas?.items ?? {}).filter(isGroupItem).map((item) => <option key={item.id} value={JSON.stringify({ kind: "group", groupId: item.id })}>Group · {item.title}</option>)}{Object.values(canvas?.items ?? {}).filter((item) => !isGroupItem(item)).map((item) => <option key={item.id} value={JSON.stringify({ kind: "item", itemId: item.id })}>Item · {item.title}</option>)}{target.kind === "point" && <option value={encoded}>Chosen canvas position</option>}</select></label>
+    {moodExplore && <div className="design-system-actions"><button type="button" className="btn secondary" onClick={() => { onClose(); useUiStore.getState().openModuleDialog("mood-explore", ""); }}>Explore a look…</button></div>}
     <SystemScope key={JSON.stringify([canvasId, actor.id, target])} canvasId={canvasId} actor={actor} target={target} />
   </div></Modal>;
 }

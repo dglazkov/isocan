@@ -1,6 +1,28 @@
 import { describe, expect, it } from "vitest";
 import type { CanvasContents, Item } from "../src/index.ts";
-import { deniedIn, IMAGE_MODEL_DEFAULT, imageModel, MOOD_AXES, MOOD_TILE, moodCostLine, moodPrompt, moodTray, spreadAxes } from "../src/mood.ts";
+import {
+  deniedIn,
+  findMoodBoard,
+  IMAGE_MODEL_DEFAULT,
+  imageModel,
+  isMoodBoardItem,
+  isMoodDial,
+  MOOD_AXES,
+  MOOD_BOARD_TITLE,
+  MOOD_DIALS,
+  MOOD_MORE_N,
+  MOOD_PROPS,
+  MOOD_TILE,
+  moodCostLine,
+  moodDropOps,
+  moodKeepPlan,
+  moodPrompt,
+  moodPushPrompt,
+  moodTray,
+  moodTrays,
+  moodWordsFromPrompt,
+  spreadAxes,
+} from "../src/mood.ts";
 
 /**
  * **The mood board's pure half** (moodboard phase 0; design §3, §6): the
@@ -93,5 +115,137 @@ describe("the tray", () => {
     for (const spot of spots) for (const it of items) expect(overlaps(spot, it)).toBe(false);
     const keys = spots.map((s) => `${s.x},${s.y}`);
     expect(new Set(keys).size).toBe(9);
+  });
+});
+
+describe("the push dials and word extraction", () => {
+  it("recognises the eight dials and refuses everything else", () => {
+    expect(MOOD_DIALS).toEqual(["warmer", "cooler", "quieter", "louder", "older", "newer", "rougher", "finer"]);
+    expect(MOOD_MORE_N).toBe(4);
+    for (const dial of MOOD_DIALS) expect(isMoodDial(dial)).toBe(true);
+    for (const bad of ["", "brighter", "warmer ", null, 7]) expect(isMoodDial(bad)).toBe(false);
+  });
+
+  it("wraps push directions with concrete visual terms and keeps the non-UI safety rules", () => {
+    for (const dial of MOOD_DIALS) {
+      const prompt = moodPushPrompt("a quiet bakery at dawn", dial, "the quality of the light");
+      expect(prompt).toContain("about: a quiet bakery at dawn.");
+      expect(prompt).toContain(`Push the look ${dial}:`);
+      expect(prompt).toContain("Reach for the quality of the light.");
+      expect(prompt).toContain("not a user interface, not a screen, no text overlays");
+      expect(prompt).toContain("No logos, no brands, no recognisable people");
+      expect(moodWordsFromPrompt(prompt)).toBe("a quiet bakery at dawn");
+    }
+    expect(moodWordsFromPrompt(moodPrompt("brushed steel watch workshop", "texture, seen up close"))).toBe("brushed steel watch workshop");
+    expect(moodWordsFromPrompt(undefined, "Acme studio photo — reference")).toBe("Acme studio photo");
+    expect(moodWordsFromPrompt("", "")).toBe("reference study");
+  });
+});
+
+describe("the Mood board, keep, drop, and tray runs", () => {
+  const maya = { id: "act_maya", name: "Acme Maya" };
+  const makeItem = (id: string, x: number, y: number, properties: Record<string, string> = {}, extra: Partial<Item> = {}): Item =>
+    ({
+      id,
+      title: `Tile ${id}`,
+      description: "",
+      x,
+      y,
+      width: 320,
+      height: 320,
+      properties,
+      versions: [{ id: `ver_${id}`, blobHash: `hash_${id}`, mimeType: "image/png", filename: `${id}.png`, size: 100, createdAt: "2026-10-17T10:00:00.000Z", createdBy: maya }],
+      currentVersionId: `ver_${id}`,
+      createdAt: "2026-10-17T10:00:00.000Z",
+      createdBy: maya,
+      updatedAt: "2026-10-17T10:00:00.000Z",
+      updatedBy: maya,
+      ...extra,
+    }) as Item;
+  const makeCanvas = (items: Item[]): CanvasContents =>
+    ({ items: Object.fromEntries(items.map((i) => [i.id, i])), threads: {}, trash: [], marks: {} }) as unknown as CanvasContents;
+
+  it("finds a Mood board on both legacy areas and group-mode groups", () => {
+    const legacyBoard = makeItem("itm_board_a", 0, 0, { kind: "area", [MOOD_PROPS.board]: "true" });
+    const groupBoard = makeItem("itm_board_g", 0, 0, { kind: "group", [MOOD_PROPS.board]: "true" });
+    const ordinary = makeItem("itm_plain", 0, 0, { kind: "area" });
+    expect(isMoodBoardItem(legacyBoard)).toBe(true);
+    expect(isMoodBoardItem(groupBoard)).toBe(true);
+    expect(isMoodBoardItem(ordinary)).toBe(false);
+    expect(findMoodBoard(makeCanvas([ordinary, legacyBoard]))?.id).toBe("itm_board_a");
+    expect(findMoodBoard(makeCanvas([ordinary]))).toBeNull();
+  });
+
+  it("creates the Mood board on first Keep and reuses it on later Keeps (legacy and group mode)", () => {
+    const tile1 = makeItem("itm_t1", 100, 100, { [MOOD_PROPS.mood]: "candidate", [MOOD_PROPS.run]: "mood_1" });
+    const tile2 = makeItem("itm_t2", 460, 100, { [MOOD_PROPS.mood]: "candidate", [MOOD_PROPS.run]: "mood_1" });
+    const legacy = moodKeepPlan({
+      canvas: makeCanvas([tile1, tile2]),
+      groupMode: "legacy",
+      itemIds: ["itm_t1", "itm_t2"],
+      boardBlob: { blobHash: "hash_board", size: 1 },
+      newBoardId: "itm_mood_board",
+    });
+    expect(legacy.createdBoard).toBe(true);
+    expect(legacy.boardId).toBe("itm_mood_board");
+    expect(legacy.ops[0]).toMatchObject({
+      type: "item.add",
+      itemId: "itm_mood_board",
+      title: MOOD_BOARD_TITLE,
+      properties: { kind: "area", [MOOD_PROPS.board]: "true" },
+    });
+    expect(legacy.ops.filter((op) => op.type === "item.update")).toEqual([
+      { type: "item.update", itemId: "itm_t1", patch: { properties: { [MOOD_PROPS.mood]: "kept" } } },
+      { type: "item.update", itemId: "itm_t2", patch: { properties: { [MOOD_PROPS.mood]: "kept" } } },
+    ]);
+
+    const grouped = moodKeepPlan({
+      canvas: makeCanvas([tile1, tile2]),
+      groupMode: "groups",
+      itemIds: ["itm_t1", "itm_t2"],
+      boardBlob: { blobHash: "hash_board", size: 1 },
+      newBoardId: "itm_group_board",
+    });
+    expect(grouped.createdBoard).toBe(true);
+    expect(grouped.ops[0]).toMatchObject({
+      type: "group.change",
+      action: { kind: "create", group: { id: "itm_group_board", title: MOOD_BOARD_TITLE, properties: { [MOOD_PROPS.board]: "true" } } },
+    });
+    expect(grouped.ops[1]).toMatchObject({
+      type: "group.change",
+      action: { kind: "reparent", containerId: "itm_group_board", itemIds: ["itm_t1", "itm_t2"], place: true },
+    });
+
+    const board = makeItem("itm_group_board", 900, 100, { kind: "group", [MOOD_PROPS.board]: "true" }, { width: 1200, height: 840 });
+    const reused = moodKeepPlan({
+      canvas: makeCanvas([board, tile1]),
+      groupMode: "groups",
+      itemIds: ["itm_t1"],
+    });
+    expect(reused.createdBoard).toBe(false);
+    expect(reused.boardId).toBe("itm_group_board");
+    expect(reused.ops.some((op) => op.type === "group.change" && op.action.kind === "create")).toBe(false);
+  });
+
+  it("drops named tiles or all remaining candidates in a run, leaving kept tiles untouched", () => {
+    const c1 = makeItem("itm_c1", 0, 0, { [MOOD_PROPS.mood]: "candidate", [MOOD_PROPS.run]: "mood_1" });
+    const c2 = makeItem("itm_c2", 340, 0, { [MOOD_PROPS.mood]: "candidate", [MOOD_PROPS.run]: "mood_1" });
+    const k1 = makeItem("itm_k1", 680, 0, { [MOOD_PROPS.mood]: "kept", [MOOD_PROPS.run]: "mood_1" });
+    const other = makeItem("itm_c3", 0, 400, { [MOOD_PROPS.mood]: "candidate", [MOOD_PROPS.run]: "mood_2" });
+    const canvas = makeCanvas([c1, c2, k1, other]);
+
+    const byRun = moodDropOps(canvas, { run: "mood_1" });
+    expect(byRun.droppedIds).toEqual(["itm_c1", "itm_c2"]);
+    expect(byRun.ops).toEqual([{ type: "items.delete", itemIds: ["itm_c1", "itm_c2"] }]);
+
+    const single = moodDropOps(canvas, { itemIds: ["itm_c3"] });
+    expect(single.droppedIds).toEqual(["itm_c3"]);
+    expect(single.ops).toEqual([{ type: "item.delete", itemId: "itm_c3" }]);
+
+    const trays = moodTrays(canvas);
+    expect(trays.map((t) => ({ run: t.run, candidates: t.candidates.length, kept: t.kept.length }))).toEqual([
+      { run: "mood_1", candidates: 2, kept: 1 },
+      { run: "mood_2", candidates: 1, kept: 0 },
+    ]);
   });
 });

@@ -57,12 +57,29 @@ function isocan(...args: string[]): Promise<Run> {
   return runCli(args, { cwd: home, env: cliEnv({ ISOCAN_HOME: home, ISOCAN_PORT: port, GEMINI_API_KEY: "", ISOCAN_IMAGE_MODEL: "" }) });
 }
 
-async function candidates(): Promise<Array<{ id: string; properties: Record<string, string> }>> {
+function isocanAsAgent(...args: string[]): Promise<Run> {
+  return runCli(args, {
+    cwd: home,
+    env: cliEnv({
+      ISOCAN_HOME: home,
+      ISOCAN_PORT: port,
+      GEMINI_API_KEY: "",
+      ISOCAN_IMAGE_MODEL: "",
+      CLAUDE_CODE_SESSION_ID: "sess_acme_mood_agent",
+    }),
+  });
+}
+
+async function allItems(): Promise<Array<{ id: string; title: string; containerId?: string; properties: Record<string, string> }>> {
   const run = await isocan("ls", "--json");
   expect(run.code, run.stderr).toBe(0);
-  const listed = JSON.parse(run.stdout) as Array<{ id: string; properties?: Record<string, string> }> | { items: Array<{ id: string; properties?: Record<string, string> }> };
+  const listed = JSON.parse(run.stdout) as Array<{ id: string; title: string; containerId?: string; properties?: Record<string, string> }> | { items: Array<{ id: string; title: string; containerId?: string; properties?: Record<string, string> }> };
   const items = Array.isArray(listed) ? listed : listed.items;
-  return items.filter((i) => i.properties?.mood === "candidate").map((i) => ({ id: i.id, properties: i.properties! }));
+  return items.map((i) => ({ id: i.id, title: i.title, ...(i.containerId ? { containerId: i.containerId } : {}), properties: i.properties ?? {} }));
+}
+
+async function candidates(): Promise<Array<{ id: string; properties: Record<string, string> }>> {
+  return (await allItems()).filter((i) => i.properties.mood === "candidate").map((i) => ({ id: i.id, properties: i.properties }));
 }
 
 describe("isocan mood explore", () => {
@@ -119,5 +136,76 @@ describe("isocan mood explore", () => {
     const run = await isocan("mood", "explore", WORDS, "--n", "13", "--yes");
     expect(run.code).not.toBe(0);
     expect(run.stderr).toMatch(/per-run cap is 12/);
+  }, 60_000);
+});
+
+describe("isocan mood keep, drop, and more", () => {
+  it("refuses mood keep when called from an agent harness", async () => {
+    const named = await isocanAsAgent("identity", "--session", "--name", "Acme Mood Agent");
+    expect(named.code, named.stderr).toBe(0);
+    const spread = await isocan("mood", "explore", "warm studio brass", "--n", "3", "--yes", "--json");
+    expect(spread.code, spread.stderr).toBe(0);
+    const { items } = JSON.parse(spread.stdout) as { items: Array<{ itemId: string }> };
+    const refused = await isocanAsAgent("mood", "keep", items[0]!.itemId);
+    expect(refused.code).not.toBe(0);
+    expect(refused.stderr).toMatch(/keeping is a person's taste/);
+  }, 60_000);
+
+  it("keeps tiles into the Mood board (creating it once and reusing it) and drops the remaining run", async () => {
+    const spread = await isocan("mood", "explore", "sunlit linen workshop", "--n", "3", "--yes", "--json");
+    expect(spread.code, spread.stderr).toBe(0);
+    const { run: runId, items } = JSON.parse(spread.stdout) as { run: string; items: Array<{ itemId: string }> };
+    const [first, second, third] = items.map((i) => i.itemId);
+
+    const kept1 = await isocan("mood", "keep", first!, "--json");
+    expect(kept1.code, kept1.stderr).toBe(0);
+    const res1 = JSON.parse(kept1.stdout) as { boardId: string; createdBoard: boolean; keptIds: string[] };
+    expect(res1.createdBoard).toBe(true);
+    expect(res1.keptIds).toEqual([first!]);
+
+    const kept2 = await isocan("mood", "keep", second!, "--json");
+    expect(kept2.code, kept2.stderr).toBe(0);
+    const res2 = JSON.parse(kept2.stdout) as { boardId: string; createdBoard: boolean; keptIds: string[] };
+    expect(res2.createdBoard).toBe(false);
+    expect(res2.boardId).toBe(res1.boardId);
+
+    const dropped = await isocan("mood", "drop", "--run", runId, "--json");
+    expect(dropped.code, dropped.stderr).toBe(0);
+    expect(JSON.parse(dropped.stdout)).toEqual({ droppedIds: [third!] });
+
+    const itemsNow = await allItems();
+    const board = itemsNow.find((i) => i.id === res1.boardId);
+    expect(board?.title).toBe("Mood");
+    expect(board?.properties.moodBoard).toBe("true");
+    expect(itemsNow.find((i) => i.id === first!)?.properties.mood).toBe("kept");
+    expect(itemsNow.find((i) => i.id === second!)?.properties.mood).toBe("kept");
+    expect(itemsNow.find((i) => i.id === third!)).toBeUndefined();
+  }, 60_000);
+
+  it("draws four variations with mood more and pushes along a dial with --push", async () => {
+    const itemsNow = await allItems();
+    const keptTile = itemsNow.find((i) => i.properties.mood === "kept")!;
+    expect(keptTile).toBeDefined();
+
+    // Without --yes in non-TTY, says the 4-tile cost and refuses.
+    const noYes = await isocan("mood", "more", keptTile.id);
+    expect(noYes.code).not.toBe(0);
+    expect(noYes.stderr).toContain(moodCostLine(4, IMAGE_MODEL_DEFAULT));
+
+    calls.length = 0;
+    const pushed = await isocan("mood", "more", keptTile.id, "--push", "warmer", "--n", "2", "--yes", "--json");
+    expect(pushed.code, pushed.stderr).toBe(0);
+    const answer = JSON.parse(pushed.stdout) as { run: string; items: Array<{ itemId: string; axis: string }> };
+    expect(answer.items).toHaveLength(2);
+    expect(answer.items.map((i) => i.axis)).toEqual(["push: warmer · light", "push: warmer · material"]);
+    expect(calls).toHaveLength(2);
+    for (const call of calls) {
+      expect(call.input.find((b) => b.type === "text")?.text).toContain("Push the look warmer:");
+      expect(call.input.some((b) => b.type === "image")).toBe(true);
+    }
+
+    const badDial = await isocan("mood", "more", keptTile.id, "--push", "sparkly", "--yes");
+    expect(badDial.code).not.toBe(0);
+    expect(badDial.stderr).toMatch(/--push must be one of/);
   }, 60_000);
 });
