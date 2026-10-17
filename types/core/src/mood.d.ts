@@ -1,5 +1,6 @@
 import type { Actor, CanvasContents, Item } from "./model.js";
 import type { Operation } from "./ops.js";
+import { type SpokenColour } from "./colour.js";
 import { type MoodSwatch } from "./mood-swatches.js";
 export { deltaE, formatMoodSwatches, IMAGE_SWATCHES_UNAVAILABLE, parseMoodSwatches, rgbToLab, SWATCHES_ROUTE, swatchesFromRgba, type MoodSwatch, type SwatchesRequest, type SwatchesResponse, } from "./mood-swatches.js";
 /** The route's path. */
@@ -211,3 +212,81 @@ interface MoodTrayRun {
 }
 /** Active candidate trays on the canvas, oldest first. */
 export declare function moodTrays(canvas: CanvasContents): MoodTrayRun[];
+/** One kept or reference tile on the Mood board, ready for `/design-system` or `isocan mood board`. */
+export interface MoodBoardTile {
+    itemId: string;
+    title: string;
+    mood: "kept" | "reference";
+    axis: string | null;
+    prompt: string | null;
+    words: string;
+    swatches: MoodSwatch[];
+}
+/** Snapshot of the canvas's Mood board (`moodBoardRead`). */
+export interface MoodBoardRead {
+    boardId: string | null;
+    words: string[];
+    tiles: MoodBoardTile[];
+}
+/**
+ * **Read the canvas's Mood board** (`isocan mood board --json`, design §5) —
+ * returns the board's `itemId`, every `kept` or `reference` tile on it in
+ * reading order (top-to-bottom, left-to-right), each tile's swatches and
+ * provenance, and the distinct subject `words` across kept tiles.
+ */
+export declare function moodBoardRead(canvas: CanvasContents, groupMode?: "legacy" | "groups"): MoodBoardRead;
+/** A `board` critic draft built from the Mood board's kept tiles (`boardCriticDraft`). */
+export interface BoardCriticDraft {
+    name: "board";
+    agentName: "Board";
+    credit: string;
+    color: string;
+    line: string;
+    lens: {
+        questions: string[];
+        looksFor: string;
+        ranks: string;
+    };
+}
+/**
+ * **The Mood board as a critic** (moodboard phase 4, design §5) — builds the
+ * `board` critic card draft (`agentName: "Board"`) from the canvas's kept and
+ * reference tiles and their swatches, or `null` when no tile sits on the Mood
+ * board yet.
+ */
+export declare function boardCriticDraft(canvas: CanvasContents, groupMode?: "legacy" | "groups"): BoardCriticDraft | null;
+/** A chromatic colour on a screen with no match within ΔE on the Mood board (`findOffBoardColours`). */
+export interface OffBoardColour {
+    hex: string;
+    spoken: SpokenColour | null;
+    nearestSwatch: string;
+    nearestTileId: string;
+    nearestTileTitle: string;
+    deltaE: number;
+}
+/**
+ * **Colours on a screen that came from nowhere on the Mood board** — extracts
+ * `#rgb` and `#rrggbb` literals from `html` (ignoring pure `#ffffff` and
+ * `#000000`), compares each against all swatches on `board.tiles` via CIELAB
+ * `deltaE`, and returns every colour whose nearest board swatch is further than
+ * `maxDeltaE` (default `18`).
+ */
+export declare function findOffBoardColours(html: string, board: MoodBoardRead, maxDeltaE?: number): OffBoardColour[];
+/** Deterministic note suggestion comparing a screen's palette against the Mood board (`boardCritiqueNotes`). */
+export interface BoardCritiqueSuggestion {
+    kind: "working" | "risk";
+    question: 1 | 2;
+    hex: string;
+    spoken: SpokenColour | null;
+    tileId: string;
+    tileTitle: string;
+    deltaE: number;
+    text: string;
+}
+/**
+ * **Deterministic `Board` critique notes from a screen's HTML** — pairs at most
+ * one `working` note for the strongest chromatic swatch match on the Mood board
+ * with one `risk` note for every off-board colour (`deltaE > maxDeltaE`), each
+ * ending in a concrete move (`Leave it.` or `Replace <off> with <on>.`).
+ */
+export declare function boardCritiqueNotes(html: string, board: MoodBoardRead, maxDeltaE?: number): BoardCritiqueSuggestion[];

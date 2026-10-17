@@ -20,7 +20,16 @@ interface DesignFinding {
     /** What to do, when there is a single obvious answer. */
     fix?: string;
 }
-export declare function checkDesign(doc: DesignDoc): DesignFinding[];
+/**
+ * **Read board tile citations from `tokens.isocan.sources`** (moodboard phase 3,
+ * design §5) — maps token paths (`colors.<name>`) and direction fields
+ * (`direction.<field>`, `direction.treatments.<name>`) to the `itemId` of the
+ * kept or reference tile each came from. Returns `{}` when absent or malformed.
+ */
+export declare function readDesignSources(doc: DesignDoc | undefined | null): Record<string, string>;
+export declare function checkDesign(doc: DesignDoc, options?: {
+    boardTileIds?: ReadonlySet<string>;
+}): DesignFinding[];
 /** Worst first, so a report leads with what matters. */
 export declare function bySeverity(findings: DesignFinding[]): DesignFinding[];
 export {};

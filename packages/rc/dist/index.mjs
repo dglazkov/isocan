@@ -2427,12 +2427,21 @@ var init_design_contract = __esm({
   }
 });
 
+// packages/core/src/design-direction.ts
+var init_design_direction = __esm({
+  "packages/core/src/design-direction.ts"() {
+    "use strict";
+    init_designmd();
+  }
+});
+
 // packages/core/src/designcheck.ts
 var init_designcheck = __esm({
   "packages/core/src/designcheck.ts"() {
     "use strict";
     init_design_contract();
     init_contrast();
+    init_design_direction();
     init_designmd();
   }
 });

@@ -30,11 +30,17 @@ second week.
   favourites into a **Mood** board on the canvas, drop the rest or close the
   tray in one undo, branch any kept or dropped-in reference photo with **More
   like this** or **Push →** (`warmer`, `cooler`, `quieter`, `louder`, `older`,
-  `newer`, `rougher`, `finer`), or run `isocan mood explore|keep|drop|more`
+  `newer`, `rougher`, `finer`), or run `isocan mood explore|keep|drop|more|board`
   from the CLI. Every kept picture and dropped-in reference photo gets an
   automatic colour swatch strip under it (click a chip to copy its hex), and
-  agents read the same swatches from the canvas without opening a browser.
-  Keeping is for people only; agents are refused.
+  **Design systems → Derive from the board** (or `/design-system`) derives a
+  `DESIGN.md` whose palette and direction cite the kept pictures in
+  `isocan.sources` — hover any token to light up the picture it came from on
+  the canvas. Once you build screens, open **Crit with the room…** (or
+  **Critique with…**) to add the **Board** critic (`isocan critic add board`,
+  `isocan critique <item> --by board`), which checks whether every colour and
+  surface on the screen feels like what you kept. Keeping is for people only;
+  agents are refused.
 
 
 ## 15 October 2026
