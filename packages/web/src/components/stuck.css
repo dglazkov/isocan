@@ -13,11 +13,12 @@
   color: var(--ink);
   border: 1px solid var(--glass-border); border-radius: var(--radius); box-shadow: var(--shadow-glass);
 }
-.stuck-card h3 { margin: 0 24px 4px 0; font-size: 13px; }
+.stuck-card h3 { margin: 0 32px 4px 0; font-size: 13px; }
 .stuck-card h4 { margin: 12px 0 4px; font-size: 11px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .stuck-list { margin: 0; padding-left: 18px; }
 .stuck-quiet { color: var(--ink-muted); }
-.stuck-close { position: absolute; top: 8px; right: 8px; border: none; background: none; color: var(--ink-muted); font: inherit; cursor: pointer; }
+.stuck-close { position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; padding: 0; border: none; border-radius: 999px; display: inline-grid; place-items: center; background: none; color: var(--ink-soft); font: inherit; cursor: pointer; }
+.stuck-close:hover { background: var(--glass-chip-hover); color: var(--ink); }
 .stuck-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .stuck-axis { font-weight: 600; }
 .stuck-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }

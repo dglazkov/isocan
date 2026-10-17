@@ -14,10 +14,11 @@
   color: var(--ink);
   border: 1px solid var(--glass-border); border-radius: var(--radius); box-shadow: var(--shadow-glass);
 }
-.walk-panel h3 { margin: 0 24px 8px 0; font-size: 13px; }
+.walk-panel h3 { margin: 0 32px 8px 0; font-size: 13px; }
 .walk-panel h4 { margin: 0 0 4px; font-size: 11px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .walk-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
-.walk-close { position: absolute; top: 8px; right: 8px; border: none; background: none; color: var(--ink-muted); font: inherit; cursor: pointer; }
+.walk-close { position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; padding: 0; border: none; border-radius: 999px; display: inline-grid; place-items: center; background: none; color: var(--ink-soft); font: inherit; cursor: pointer; }
+.walk-close:hover { background: var(--glass-chip-hover); color: var(--ink); }
 .walk-notice { margin: 0 0 8px; padding: 6px 8px; border-left: 3px solid var(--warn); background: var(--chip); color: var(--ink); }
 .walk-quiet { color: var(--ink-muted); }
 .walk-setup { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; margin: 8px 0; }

@@ -82,9 +82,6 @@ function ChatBar({ canvasId, actor }: { canvasId: string; actor: Actor }) {
 
   const controls = (
     <div className="chat-bar-controls">
-      <span className="chat-bar-grip" title="Drag to move the Chat" aria-hidden>
-        ⠿
-      </span>
       <button
         type="button"
         className="chat-bar-btn"
@@ -95,20 +92,23 @@ function ChatBar({ canvasId, actor }: { canvasId: string; actor: Actor }) {
       >
         {/* ▴ / ▾, drawn: the text glyphs are a few pixels tall at this size. */}
         <svg viewBox="0 0 16 16" width={14} height={14} aria-hidden fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
-          <path d={open ? "M4 6.5l4 4 4-4" : "M4 9.5l4-4 4 4"} />
+          <path d={open ? "M4 6l4 4 4-4" : "M4 10l4-4 4 4"} />
         </svg>
       </button>
       <button
         type="button"
-        className="chat-bar-btn"
-        title="Dock on the left"
-        aria-label="Dock the Chat on the left"
-        onClick={() => placeChat(canvasId, "left")}
+        className="chat-bar-grip"
+        title="Drag to move · Double-click to dock on the left"
+        aria-label="Drag to move, or double-click to dock on the left"
+        onDoubleClick={() => placeChat(canvasId, "left")}
+        onKeyDown={(e: KeyboardEvent<HTMLButtonElement>) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            placeChat(canvasId, "left");
+          }
+        }}
       >
-        <svg viewBox="0 0 16 16" width={13} height={13} aria-hidden fill="none" stroke="currentColor" strokeWidth={1.5}>
-          <rect x="1.5" y="2.5" width="13" height="11" rx="2" />
-          <path d="M5 5.5v5" />
-        </svg>
+        ⠿
       </button>
     </div>
   );
@@ -133,9 +133,9 @@ function ChatBar({ canvasId, actor }: { canvasId: string; actor: Actor }) {
       // the bar has to see them on the way down.
       onPointerDownCapture={(e: PointerEvent<HTMLElement>) => {
         // The bar's own surface is its header: anything you can type in,
-        // press or read is left alone.
+        // press or read is left alone. The grip button stays draggable.
         if (e.button !== 0) return;
-        if ((e.target as Element).closest("button, a, textarea, input, select, .main-scroll, .mention-backdrop")) return;
+        if ((e.target as Element).closest("button:not(.chat-bar-grip), a, textarea, input, select, .main-scroll, .mention-backdrop")) return;
         e.preventDefault();
         dragChat(canvasId, { x: e.clientX, y: e.clientY }, ref.current);
       }}

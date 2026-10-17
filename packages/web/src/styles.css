@@ -1417,8 +1417,18 @@ img { height: auto; }
   outline-width: calc(3px / var(--scale, 1));
   outline-style: solid;
 }
-/* Pointing at a row in the files panel points at the thing itself. */
-.item.peeked { outline: calc(2px / var(--scale, 1)) dashed var(--accent); outline-offset: calc(3px / var(--scale, 1)); }
+/* Pointing at a pill or row lights up the thing itself on the canvas: solid
+   accent frame, outer halo, and a soft accent wash across the card. */
+.item.peeked {
+  outline: calc(2px / var(--scale, 1)) solid var(--accent);
+  outline-offset: 0;
+  box-shadow: 0 0 0 calc(4px / var(--scale, 1)) var(--accent-glow), 0 0 calc(20px / var(--scale, 1)) var(--accent-glow), var(--shadow-item);
+  z-index: 2;
+}
+.item.peeked > .item-content::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 2;
+  background: var(--accent-glow);
+}
 .item.peeked .item-titlebar { opacity: 1; }
 /* The name floats ABOVE the card rather than inside it: the item is the
    content, and a label that sits on top of it is a label, not a chrome bar.
@@ -2621,9 +2631,10 @@ html[data-flip="prev"]::view-transition-new(slide) { animation-name: deck-enter-
    three times before it was believed, which is its own lesson: a casing
    difference is not cosmetic when it is the same word twice. */
 .main-close {
-  background: none; border: none; color: var(--ink-soft); font-size: 11px; padding: 2px 4px;
+  display: inline-grid; place-items: center; width: 26px; height: 26px; padding: 0; flex: none;
+  background: none; border: none; border-radius: 999px; color: var(--ink-soft); font-size: 12px; line-height: 1;
 }
-.main-close:hover { color: var(--ink); }
+.main-close:hover { color: var(--ink); background: var(--glass-chip-hover); }
 .main-scroll { flex: 1; overflow-y: auto; overscroll-behavior: contain; display: flex; }
 /* Bottom-anchored like a chat: a short thread sits at the composer, a long
    one scrolls. min-height makes the margin-auto trick and scrolling coexist. */
@@ -3282,7 +3293,7 @@ button.mt-card:hover { border-color: var(--accent); }
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
   animation: attached-in 0.14s cubic-bezier(0.2, 0.8, 0.3, 1);
 }
-.attached-chip:hover { border-color: var(--chip-line); }
+.attached-chip:hover { border-color: var(--accent); }
 @keyframes attached-in {
   from { opacity: 0; transform: translateY(3px) scale(0.96); }
   to { opacity: 1; transform: none; }
@@ -3304,7 +3315,7 @@ button.mt-card:hover { border-color: var(--accent); }
 .attached-chip b {
   font-size: 12.5px; font-weight: 500; color: var(--ink);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  max-width: 140px; line-height: 1.2;
+  max-width: 140px; min-width: 0; line-height: 1.2;
 }
 .attached-chip button {
   display: inline-flex; align-items: center; justify-content: center;

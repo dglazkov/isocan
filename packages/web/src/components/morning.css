@@ -29,4 +29,5 @@
 }
 .away-panel .phone-digest { max-height: none; border-bottom: none; }
 .away-panel .phone-digest summary { min-height: 0; }
-.away-close { position: absolute; top: 8px; right: 8px; border: none; background: none; color: var(--ink-muted); font: inherit; cursor: pointer; }
+.away-close { position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; padding: 0; border: none; border-radius: 999px; display: inline-grid; place-items: center; background: none; color: var(--ink-soft); font: inherit; cursor: pointer; }
+.away-close:hover { background: var(--glass-chip-hover); color: var(--ink); }

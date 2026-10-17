@@ -205,14 +205,18 @@ export function RoomOverlay({ canvas, host }: OverlayFacts) {
 
   return (
     <section className="crit-dialog room-card" data-room-read={ask.commentId} aria-label="Read of the room">
-      <button type="button" className="crit-link room-close" aria-label="Close" onClick={() => setDismissed(ask.commentId)}>×</button>
+      <button type="button" className="room-close" aria-label="Close" onClick={() => setDismissed(ask.commentId)}>
+        <svg viewBox="0 0 16 16" width={14} height={14} aria-hidden fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round">
+          <path d="M4 4l8 8M12 4l-8 8" />
+        </svg>
+      </button>
       {reads.map((r) => {
         const item = canvas.items[r.itemId]!;
         const posted = postedRoomRead(canvas, ask, r.itemId);
         const { agree, split, blocker, alone } = r.read;
         return (
           <div key={r.itemId} className="crit-dialog" data-room-screen={r.itemId}>
-            <div>
+            <div className="room-head">
               <h3>Read of the room — “{item.title || "Untitled"}”</h3>
               <p className="crit-note">{ask.critics.map((c) => card(c)?.title ?? c).join(" · ")}</p>
             </div>
