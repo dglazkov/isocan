@@ -53,8 +53,8 @@ function isValidSourcesMap(value: unknown): value is Record<string, string> {
  * (`direction.<field>`, `direction.treatments.<name>`) to the `itemId` of the
  * kept or reference tile each came from. Returns `{}` when absent or malformed.
  */
-export function readDesignSources(doc: DesignDoc): Record<string, string> {
-  if (!isPlainObject(doc.tokens.isocan)) return {};
+export function readDesignSources(doc: DesignDoc | undefined | null): Record<string, string> {
+  if (!doc?.tokens || !isPlainObject(doc.tokens.isocan)) return {};
   const raw = doc.tokens.isocan.sources;
   if (!isValidSourcesMap(raw)) return {};
   const out: Record<string, string> = {};

@@ -380,4 +380,23 @@ Editorial serif display over clean sans.
     expect(okCheck.code, okCheck.stderr).toBe(0);
     expect(okCheck.stderr).toContain("nothing to fix");
   }, 60_000);
+
+  it("Phase 4: critic add board builds the Board critic card from the kept Mood board tiles", async () => {
+    const lsBefore = await isocan("critic", "ls", "--json");
+    expect(lsBefore.code, lsBefore.stderr).toBe(0);
+    const parsedBefore = JSON.parse(lsBefore.stdout) as { lenses: Array<{ id: string; agentName: string }>; critics: Array<{ name: string }> };
+    expect(parsedBefore.lenses.some((l) => l.id === "board" && l.agentName === "Board")).toBe(true);
+
+    const added = await isocan("critic", "add", "board", "--json");
+    expect(added.code, added.stderr).toBe(0);
+    const card = JSON.parse(added.stdout) as { itemId: string; name: string; agentName: string; on: boolean };
+    expect(card).toMatchObject({ name: "board", agentName: "Board", on: true });
+
+    const got = await isocan("get", card.itemId);
+    expect(got.code, got.stderr).toBe(0);
+    expect(got.stdout).toContain("name: board");
+    expect(got.stdout).toContain("agentName: Board");
+    expect(got.stdout).toContain("#b5651d");
+    expect(got.stdout).toContain("ΔE 18");
+  }, 60_000);
 });

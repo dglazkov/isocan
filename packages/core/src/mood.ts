@@ -16,9 +16,12 @@ import { newItemId, newVersionId } from "./ids.ts";
 import type { Actor, CanvasContents, Item } from "./model.ts";
 import type { Operation } from "./ops.ts";
 import { nearestFreeSpot, PLACEMENT_GAP } from "./placement.ts";
+import { spokenColour, type SpokenColour } from "./colour.ts";
 import {
+  deltaE,
   formatMoodSwatches,
   parseMoodSwatches,
+  rgbToLab,
   type MoodSwatch,
 } from "./mood-swatches.ts";
 
@@ -572,6 +575,13 @@ export interface MoodBoardTile {
   swatches: MoodSwatch[];
 }
 
+/** Snapshot of the canvas's Mood board (`moodBoardRead`). */
+export interface MoodBoardRead {
+  boardId: string | null;
+  words: string[];
+  tiles: MoodBoardTile[];
+}
+
 /**
  * **Read the canvas's Mood board** (`isocan mood board --json`, design §5) —
  * returns the board's `itemId`, every `kept` or `reference` tile on it in
@@ -581,7 +591,7 @@ export interface MoodBoardTile {
 export function moodBoardRead(
   canvas: CanvasContents,
   groupMode: "legacy" | "groups" = "legacy",
-): { boardId: string | null; words: string[]; tiles: MoodBoardTile[] } {
+): MoodBoardRead {
   const board = findMoodBoard(canvas);
   if (!board) return { boardId: null, words: [], tiles: [] };
   const inGroup = groupMode === "groups" || isGroupItem(board);
@@ -609,4 +619,237 @@ export function moodBoardRead(
     if (!words.includes(tile.words)) words.push(tile.words);
   }
   return { boardId: board.id, words, tiles };
+}
+
+/** A `board` critic draft built from the Mood board's kept tiles (`boardCriticDraft`). */
+export interface BoardCriticDraft {
+  name: "board";
+  agentName: "Board";
+  credit: string;
+  color: string;
+  line: string;
+  lens: {
+    questions: string[];
+    looksFor: string;
+    ranks: string;
+  };
+}
+
+/** Maximum number of tiles listed verbatim on a `Board` critic card so it stays under the enrolment cap. */
+const BOARD_CARD_MAX_TILES = 20;
+
+/**
+ * **The Mood board as a critic** (moodboard phase 4, design §5) — builds the
+ * `board` critic card draft (`agentName: "Board"`) from the canvas's kept and
+ * reference tiles and their swatches, or `null` when no tile sits on the Mood
+ * board yet.
+ */
+export function boardCriticDraft(
+  canvas: CanvasContents,
+  groupMode: "legacy" | "groups" = "legacy",
+): BoardCriticDraft | null {
+  const board = moodBoardRead(canvas, groupMode);
+  if (!board.boardId || board.tiles.length === 0) return null;
+  const firstSwatch = board.tiles.flatMap((t) => t.swatches)[0]?.hex;
+  const color = firstSwatch && /^#[0-9a-fA-F]{6}$/.test(firstSwatch) ? firstSwatch.toLowerCase() : "#b5651d";
+  const shown = board.tiles.slice(0, BOARD_CARD_MAX_TILES);
+  const tileLines = shown.map((tile) => {
+    const meta = [tile.axis, tile.words].filter(Boolean).join(", ");
+    const swatches = tile.swatches.length
+      ? tile.swatches.map((s) => `${s.hex} (${Math.round(s.share * 100)}%)`).join(", ")
+      : "no swatches yet";
+    return `- "${tile.title}"${meta ? ` (${meta})` : ""}: ${swatches}`;
+  });
+  if (board.tiles.length > shown.length) {
+    tileLines.push(`- …and ${board.tiles.length - shown.length} more tile(s) on the Mood board`);
+  }
+  const looksFor = [
+    ...tileLines,
+    "",
+    "Every background, border, text, and button colour on the screen, compared against the swatches on the Mood board; any colour further than ΔE 18 from every kept swatch must name which tile justified it or be flagged as off-board. Every material, surface finish, typographic tone, and spacing rhythm the kept tiles establish.",
+  ].join("\n");
+  return {
+    name: "board",
+    agentName: "Board",
+    credit: "from this canvas's kept tiles; original, not affiliated with anyone",
+    color,
+    line: "Does this screen feel like what was kept on the Mood board?",
+    lens: {
+      questions: [
+        "Does this screen feel like the tiles kept on the Mood board?",
+        "Which colours, materials, and proportions come from those tiles, and which came from nowhere on the board?",
+        "Where did the screen drift from the warmth, texture, or restraint the kept tiles share?",
+      ],
+      looksFor,
+      ranks:
+        "Colours and finishes with no anchor on the Mood board rank first as risks; proportions and spacing that break the kept tiles' mood rank second; kept hues and material cues that land cleanly rank as working.",
+    },
+  };
+}
+
+/** Normalize `#rgb` or `#rrggbb` to lowercase `#rrggbb`, or `null` when invalid. */
+function normalizeHexLiteral(raw: string): string | null {
+  const clean = raw.trim().toLowerCase();
+  if (/^#[0-9a-f]{6}$/.test(clean)) return clean;
+  if (/^#[0-9a-f]{3}$/.test(clean)) {
+    const r = clean[1]!;
+    const g = clean[2]!;
+    const b = clean[3]!;
+    return `#${r}${r}${g}${g}${b}${b}`;
+  }
+  return null;
+}
+
+/** Distinct `#rgb` / `#rrggbb` literals in `html`, normalized to `#rrggbb`, skipping pure `#ffffff` and `#000000`. */
+function extractScreenHexes(html: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const match of html.matchAll(/#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b/g)) {
+    const hex = normalizeHexLiteral(match[0]);
+    if (!hex || hex === "#ffffff" || hex === "#000000" || seen.has(hex)) continue;
+    seen.add(hex);
+    out.push(hex);
+  }
+  return out;
+}
+
+/** Closest swatch on the Mood board to `hex`, or `null` when the board has no swatches. */
+function nearestBoardSwatch(
+  hex: string,
+  board: MoodBoardRead,
+): { hex: string; tileId: string; tileTitle: string; deltaE: number } | null {
+  let best: { hex: string; tileId: string; tileTitle: string; deltaE: number } | null = null;
+  for (const tile of board.tiles) {
+    for (const swatch of tile.swatches) {
+      const swatchHex = normalizeHexLiteral(swatch.hex);
+      if (!swatchHex) continue;
+      const dist = deltaE(hex, swatchHex);
+      if (!best || dist < best.deltaE) {
+        best = {
+          hex: swatchHex,
+          tileId: tile.itemId,
+          tileTitle: tile.title,
+          deltaE: Math.round(dist * 10) / 10,
+        };
+      }
+    }
+  }
+  return best;
+}
+
+/** A chromatic colour on a screen with no match within ΔE on the Mood board (`findOffBoardColours`). */
+export interface OffBoardColour {
+  hex: string;
+  spoken: SpokenColour | null;
+  nearestSwatch: string;
+  nearestTileId: string;
+  nearestTileTitle: string;
+  deltaE: number;
+}
+
+/**
+ * **Colours on a screen that came from nowhere on the Mood board** — extracts
+ * `#rgb` and `#rrggbb` literals from `html` (ignoring pure `#ffffff` and
+ * `#000000`), compares each against all swatches on `board.tiles` via CIELAB
+ * `deltaE`, and returns every colour whose nearest board swatch is further than
+ * `maxDeltaE` (default `18`).
+ */
+export function findOffBoardColours(
+  html: string,
+  board: MoodBoardRead,
+  maxDeltaE = 18,
+): OffBoardColour[] {
+  const out: OffBoardColour[] = [];
+  for (const hex of extractScreenHexes(html)) {
+    const nearest = nearestBoardSwatch(hex, board);
+    if (!nearest || nearest.deltaE <= maxDeltaE) continue;
+    out.push({
+      hex,
+      spoken: spokenColour(hex),
+      nearestSwatch: nearest.hex,
+      nearestTileId: nearest.tileId,
+      nearestTileTitle: nearest.tileTitle,
+      deltaE: nearest.deltaE,
+    });
+  }
+  return out;
+}
+
+/** Deterministic note suggestion comparing a screen's palette against the Mood board (`boardCritiqueNotes`). */
+export interface BoardCritiqueSuggestion {
+  kind: "working" | "risk";
+  question: 1 | 2;
+  hex: string;
+  spoken: SpokenColour | null;
+  tileId: string;
+  tileTitle: string;
+  deltaE: number;
+  text: string;
+}
+
+/** CIE L*a*b* chroma (`sqrt(a*² + b*²)`) of a normalized `#rrggbb` string. */
+function hexChroma(hex: string): number {
+  const r = Number.parseInt(hex.slice(1, 3), 16);
+  const g = Number.parseInt(hex.slice(3, 5), 16);
+  const b = Number.parseInt(hex.slice(5, 7), 16);
+  const [, aStar, bStar] = rgbToLab(r, g, b);
+  return Math.hypot(aStar, bStar);
+}
+
+/**
+ * **Deterministic `Board` critique notes from a screen's HTML** — pairs at most
+ * one `working` note for the strongest chromatic swatch match on the Mood board
+ * with one `risk` note for every off-board colour (`deltaE > maxDeltaE`), each
+ * ending in a concrete move (`Leave it.` or `Replace <off> with <on>.`).
+ */
+export function boardCritiqueNotes(
+  html: string,
+  board: MoodBoardRead,
+  maxDeltaE = 18,
+): BoardCritiqueSuggestion[] {
+  const suggestions: BoardCritiqueSuggestion[] = [];
+  let bestWorking: BoardCritiqueSuggestion | null = null;
+  let bestWorkingChromatic = false;
+  let bestWorkingChroma = -1;
+  for (const hex of extractScreenHexes(html)) {
+    const nearest = nearestBoardSwatch(hex, board);
+    if (!nearest) continue;
+    const spoken = spokenColour(hex);
+    if (nearest.deltaE <= maxDeltaE) {
+      const chroma = hexChroma(hex);
+      const chromatic = spoken !== null && spoken !== "white" && spoken !== "black" && spoken !== "grey" && chroma >= 18;
+      const candidate: BoardCritiqueSuggestion = {
+        kind: "working",
+        question: 1,
+        hex,
+        spoken,
+        tileId: nearest.tileId,
+        tileTitle: nearest.tileTitle,
+        deltaE: nearest.deltaE,
+        text: `The ${spoken ?? hex} accent (${hex}) comes straight from kept tile "${nearest.tileTitle}" (${nearest.hex}). Leave it.`,
+      };
+      if (
+        !bestWorking ||
+        (chromatic && !bestWorkingChromatic) ||
+        (chromatic === bestWorkingChromatic &&
+          (Math.abs(chroma - bestWorkingChroma) > 4 ? chroma > bestWorkingChroma : nearest.deltaE < bestWorking.deltaE))
+      ) {
+        bestWorking = candidate;
+        bestWorkingChromatic = chromatic;
+        bestWorkingChroma = chroma;
+      }
+      continue;
+    }
+    suggestions.push({
+      kind: "risk",
+      question: 2,
+      hex,
+      spoken,
+      tileId: nearest.tileId,
+      tileTitle: nearest.tileTitle,
+      deltaE: nearest.deltaE,
+      text: `The ${spoken ?? hex} (${hex}) is on no tile on the Mood board — nearest is ${nearest.hex} on "${nearest.tileTitle}" (ΔE ${nearest.deltaE}). Replace ${hex} with ${nearest.hex}.`,
+    });
+  }
+  return bestWorking ? [bestWorking, ...suggestions] : suggestions;
 }

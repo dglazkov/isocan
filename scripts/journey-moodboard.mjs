@@ -16,10 +16,11 @@ register();
 const repo = fileURLToPath(new URL("../", import.meta.url));
 const { startDaemon } = await import(pathToFileURL(path.join(repo, "packages/server/src/daemon.ts")).href);
 const { writeKey } = await import(pathToFileURL(path.join(repo, "packages/core/src/keystore.ts")).href);
-const { deltaE, parseMoodSwatches } = await import(pathToFileURL(path.join(repo, "packages/core/src/mood.ts")).href);
+const { boardCritiqueNotes, deltaE, moodBoardRead, parseMoodSwatches } = await import(pathToFileURL(path.join(repo, "packages/core/src/mood.ts")).href);
 const { writeBadge, adoptIdentity } = await import(pathToFileURL(path.join(repo, "packages/server/src/badge-store.ts")).href);
 const { DaemonClient } = await import(pathToFileURL(path.join(repo, "packages/api/src/client.ts")).href);
-const { BADGE_COOKIE, designSystemProperties, newItemId, newVersionId, parseBadgeToken, serializeDesign } = await import(pathToFileURL(path.join(repo, "packages/core/src/index.ts")).href);
+const { anchorAtFraction, BADGE_COOKIE, designSystemProperties, newCommentId, newItemId, newThreadId, newVersionId, parseBadgeToken, serializeDesign } = await import(pathToFileURL(path.join(repo, "packages/core/src/index.ts")).href);
+const { noteBody } = await import(pathToFileURL(path.join(repo, "packages/modules/critique/src/core.ts")).href);
 const { browser, until } = await import(pathToFileURL(path.join(repo, "scripts/lib/browser.mjs")).href);
 const { click, navigate, enterName, screenshot } = await import(pathToFileURL(path.join(repo, "scripts/lib/personal-journey-fixture.mjs")).href);
 const { clickText, fill } = await import(pathToFileURL(path.join(repo, "scripts/lib/design-systems-browser.mjs")).href);
@@ -138,8 +139,8 @@ try {
     groupMode: "groups",
   });
 
-  // 2. Enable moodboard experiment and open the canvas.
-  await b.ev(`localStorage.setItem("isocan.experiments", JSON.stringify(["moodboard"]))`);
+  // 2. Enable moodboard + critique experiments and open the canvas.
+  await b.ev(`localStorage.setItem("isocan.experiments", JSON.stringify(["moodboard", "critique"]))`);
   await navigate(b, `${base}/p/${CANVAS_ID}`);
   await until(b, `document.querySelector(".canvas-page") !== null`, "canvas page loaded");
 
@@ -465,9 +466,94 @@ try {
   checks.push("Governing DESIGN.md shows source tile citations, and hovering a palette token lights its source tile on the canvas.");
 
   await screenshot(b, path.join(output, "moodboard-phase3.png"));
-  assert.deepEqual(b.takeErrors(), [], "no browser runtime errors");
+  assert.deepEqual(b.takeErrors(), [], "no browser runtime errors after phase 3");
 
-  // 12. Close the browser and verify CLI / client reads the exact same moodSwatches with no browser open.
+  // 12. Phase 4 (Scene 4): Add a Checkout screen with kept crust (#b5651d) and off-board blue (#2563eb),
+  // add the Board critic from Critics in the room, and pin its working + risk notes.
+  if (await b.ev(`document.querySelector('[data-testid="group-scope"] button') !== null`)) {
+    await clickText(b, "Canvas", '[data-testid="group-scope"] button');
+  }
+  const checkoutHtml = [
+    `<main style="font-family:Public Sans,sans-serif;background:#f4f1ea;color:#2f3e46;padding:32px">`,
+    `<header style="border-bottom:2px solid #b5651d;padding-bottom:12px"><span style="color:#b5651d;font-weight:700">Oven stamp</span></header>`,
+    `<section style="margin-top:24px"><button style="background:#2563eb;color:#ffffff;padding:12px 20px;border:none">Place order</button></section>`,
+    `</main>`,
+  ].join("");
+  const checkoutUpload = await client.uploadBlob(CANVAS_ID, Buffer.from(checkoutHtml, "utf8"), "text/html", "checkout.html");
+  const checkoutId = newItemId();
+  await client.sendOp(CANVAS_ID, maya, {
+    type: "item.add",
+    itemId: checkoutId,
+    version: { id: newVersionId(), blobHash: checkoutUpload.blobHash, mimeType: "text/html", filename: "checkout.html", size: checkoutUpload.size },
+    width: 420,
+    height: 560,
+    placement: { x: -1200, y: 0, chosen: true },
+    title: "Acme Checkout",
+  });
+  await until(b, `document.querySelector(${JSON.stringify(`[data-item-id="${checkoutId}"]`)}) !== null`, "Acme Checkout screen rendered on canvas");
+
+  // Fit canvas and open Critics in the room from Acme Checkout's context menu.
+  await click(b, ".zoom-pct");
+  await clickText(b, "Zoom to Fit", ".zoom-menu-row > span:first-child");
+  await b.ev(`new Promise(requestAnimationFrame)`);
+
+  await b.ev(`(() => {
+    const el = document.querySelector(${JSON.stringify(`[data-item-id="${checkoutId}"]`)});
+    if (!el) throw new Error("Acme Checkout DOM element missing");
+    const rect = el.getBoundingClientRect();
+    el.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: rect.left + Math.min(20, rect.width / 2), clientY: rect.top + Math.min(20, rect.height / 2), button: 2 }));
+  })()`);
+  await until(b, `document.querySelector(".context-menu") !== null`, "context menu open on Acme Checkout");
+  await clickText(b, "Crit with the room…", ".context-menu button");
+  await until(b, `document.querySelector("[data-critics-room]") !== null`, "Critics in the room dialog opened");
+  await until(b, `document.querySelector('[data-critic-add="board"]') !== null`, "Board button offered under Add a lens");
+
+  // Add the Board critic from the web UI and verify its card lands on the canvas.
+  await click(b, '[data-critic-add="board"]');
+  await until(b, `document.querySelector('[data-critic="board"]') !== null`, "Board row appeared in Critics in the room");
+  snap = await client.snapshot(CANVAS_ID);
+  const boardCriticItem = Object.values(snap.canvas.items).find((i) => i.properties["critique.critic"] === "board");
+  assert(boardCriticItem, "Board critic card added to canvas with critique.critic=board");
+  const boardCardBytes = (await client.downloadBlob(CANVAS_ID, boardCriticItem.versions[0].blobHash)).toString("utf8");
+  assert(boardCardBytes.includes("agentName: Board"), "Board card carries agentName: Board");
+  assert(boardCardBytes.includes("#b5651d"), "Board card quotes kept crust swatch #b5651d");
+
+  await clickText(b, "Close", "[data-critics-room] button");
+  await until(b, `document.querySelector("[data-critics-room]") === null`, "Critics in the room closed");
+
+  // Pin Board's working (#b5651d) and risk (#2563eb) notes on Acme Checkout and verify they render as pins.
+  const boardRead = moodBoardRead(snap.canvas, "groups");
+  const notes = boardCritiqueNotes(checkoutHtml, boardRead);
+  assert.equal(notes.length, 2, "boardCritiqueNotes returns working + risk notes");
+  assert.equal(notes[0].kind, "working");
+  assert.equal(notes[1].kind, "risk");
+  assert(notes[1].text.includes("#2563eb") && notes[1].text.includes("blue"), "risk note names #2563eb / blue");
+  const checkoutItem = snap.canvas.items[checkoutId];
+  const questions = [
+    "Does this screen feel like the tiles kept on the Mood board?",
+    "Which colours, materials, and proportions come from those tiles, and which came from nowhere on the board?",
+  ];
+  for (const [idx, n] of notes.entries()) {
+    const pt = idx === 0 ? { x: 0.3, y: 0.2 } : { x: 0.5, y: 0.65 };
+    const offset = anchorAtFraction(checkoutItem, pt);
+    await client.sendOp(CANVAS_ID, maya, {
+      type: "thread.create",
+      threadId: newThreadId(),
+      ...offset,
+      anchorItemId: checkoutId,
+      comment: {
+        id: newCommentId(),
+        body: noteBody({ kind: n.kind, question: n.question, questionText: questions[n.question - 1], text: n.text }),
+        persona: "board",
+      },
+    });
+  }
+  await until(b, `document.querySelectorAll('button.pin[title^="Board"]').length === 2`, "Board critique pins rendered on Acme Checkout");
+  await screenshot(b, path.join(output, "moodboard-phase4.png"));
+  assert.deepEqual(b.takeErrors(), [], "no browser runtime errors after phase 4");
+  checks.push("Board critic added from Critics in the room quotes kept swatches and pins working (#b5651d) and risk (#2563eb) notes on Acme Checkout.");
+
+  // 13. Close the browser and verify CLI / client reads the exact same moodSwatches with no browser open.
   await b.close();
   const closedSnap = await client.snapshot(CANVAS_ID);
   for (const id of firstThreeIds) {

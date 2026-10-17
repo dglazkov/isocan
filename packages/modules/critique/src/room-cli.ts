@@ -3,7 +3,9 @@ import {
   critiqueCannot,
   mainThread,
   newCommentId,
+  newItemId,
   newThreadId,
+  newVersionId,
   nightLead,
   type Actor,
   type Canvas,
@@ -12,22 +14,29 @@ import {
   type NewComment,
   type NightSeen,
 } from "@isocan/core";
+import { boardCriticDraft } from "@isocan/core/mood";
 import type { CliHost, Ctx } from "@isocan/cli/modulehost";
 import {
+  CRITIC_CARD,
   CRITIC_PROP,
   NOTE_KINDS,
   criticItems,
+  criticMarkdown,
   critiqueRead,
   findCritic,
   noteBody,
   readCritic,
   readNote,
   readWords,
+  refuseJoin,
   type CanvasCritic,
+  type CriticDraft,
   type CritiqueNote,
   type NoteKind,
 } from "./core.ts";
 import {
+  CRITIC_COLOR,
+  CRITIC_ON,
   LOUDNESS,
   WHENS,
   bothAsked,
@@ -106,6 +115,29 @@ export async function criticSet(host: CliHost, ctx: Ctx, ref: string, opts: { on
   console.log(`${hit.critic.agentName}: ${s.on ? "on" : "off"} · ${LOUDNESS[s.loud].label.toLowerCase()} · ${WHENS[s.when].toLowerCase()}${Object.keys(patch).length ? "" : " (unchanged)"}`);
 }
 
+const NO_BOARD_TILES_ERROR = "no kept tiles on the Mood board yet — explore with `isocan mood explore` and keep tiles first";
+
+const isBoardRef = (ref: string): boolean => ref.trim().replace(/^@/, "").toLowerCase() === "board";
+
+/** Place a critic card switched on in its colour (`critic add`'s write, for `--as board`). */
+async function placeRoomCard(host: CliHost, ctx: Ctx, canvasId: string, snapshot: CanvasSnapshotResponse, draft: CriticDraft): Promise<string> {
+  const text = criticMarkdown(draft);
+  const filename = `${draft.name}.md`;
+  const upload = await ctx.client.uploadBlob(canvasId, Buffer.from(text, "utf8"), "text/markdown", filename);
+  const itemId = newItemId();
+  await host.sendOp(ctx, canvasId, {
+    type: "item.add",
+    itemId,
+    version: { id: newVersionId(), blobHash: upload.blobHash, mimeType: "text/markdown", filename, size: upload.size },
+    width: CRITIC_CARD.width,
+    height: CRITIC_CARD.height,
+    placement: host.placementFor(snapshot, {}, CRITIC_CARD),
+    title: draft.agentName,
+    properties: { [CRITIC_PROP]: draft.name, [CRITIC_ON]: "on", ...(draft.color ? { [CRITIC_COLOR]: draft.color } : {}) },
+  } as never);
+  return itemId;
+}
+
 /**
  * `isocan critique <item> [--as <critic>…]` — the person asks the room. The
  * lenses named, or every critic switched on; the lead is asked in the Chat
@@ -114,16 +146,32 @@ export async function criticSet(host: CliHost, ctx: Ctx, ref: string, opts: { on
  */
 export async function askRoom(host: CliHost, ctx: Ctx, ref: string, as: readonly string[]): Promise<void> {
   const canvas = await host.resolveCanvas(ctx);
-  const snapshot = await ctx.client.snapshot(canvas.id);
+  let snapshot = await ctx.client.snapshot(canvas.id);
   const item = host.resolveItem(snapshot, ref.replace(/^#/, ""));
   if (item.properties[CRITIC_PROP] !== undefined) throw new Error(`${item.title} is a critic's card — a crit is of a screen`);
-  const on = await cardsOn(ctx, canvas.id, snapshot);
-  const picked = as.length ? [...new Map(as.map((r) => oneCritic(on, r, canvas.title)).map((c) => [c.itemId, c])).values()] : on.filter((c) => roomSettings(c.item).on);
-  if (!picked.length) throw new Error(`no critic is switched on in ${canvas.title} — \`isocan critic set <critic> --on\`, or name them: \`isocan critique ${item.id} --as reductionist,brand-voice\``);
+  let on = await cardsOn(ctx, canvas.id, snapshot);
+  const needsBoard = as.some(isBoardRef) && !findCritic(on, "board", []);
+  const boardDraft = needsBoard ? boardCriticDraft(snapshot.canvas, snapshot.project.groupMode ?? "legacy") : null;
+  if (needsBoard) {
+    if (!boardDraft) throw new Error(NO_BOARD_TILES_ERROR);
+    const refused = refuseJoin(on, boardDraft);
+    if (refused) throw new Error(refused);
+  }
+  const checkRefs = boardDraft ? as.filter((r) => !isBoardRef(r)) : as;
+  let picked = as.length
+    ? [...new Map(checkRefs.map((r) => oneCritic(on, r, canvas.title)).map((c) => [c.itemId, c])).values()]
+    : on.filter((c) => roomSettings(c.item).on);
+  if (!picked.length && !boardDraft) throw new Error(`no critic is switched on in ${canvas.title} — \`isocan critic set <critic> --on\`, or name them: \`isocan critique ${item.id} --as reductionist,brand-voice\``);
   const off = picked.filter((c) => !roomSettings(c.item).on);
   if (off.length) throw new Error(`${off.map((c) => c.critic.agentName).join(" and ")} ${off.length === 1 ? "is" : "are"} switched off — \`isocan critic set ${off[0]!.critic.name} --on\` first`);
   const { lead, cannot } = await leadFor(ctx, canvas, snapshot);
   if (cannot || !lead) throw new Error(`nothing can wear the critics here: ${cannot ?? "no lead"}. Nothing was asked.`);
+  if (boardDraft) {
+    await placeRoomCard(host, ctx, canvas.id, snapshot, boardDraft);
+    snapshot = await ctx.client.snapshot(canvas.id);
+    on = await cardsOn(ctx, canvas.id, snapshot);
+    picked = [...new Map(as.map((r) => oneCritic(on, r, canvas.title)).map((c) => [c.itemId, c])).values()];
+  }
   const lenses = picked.map((c) => ({ name: c.critic.name, agentName: c.critic.agentName, loud: roomSettings(c.item).loud }));
   const commentId = await inChat(host, ctx, canvas.id, snapshot, {
     id: newCommentId(),

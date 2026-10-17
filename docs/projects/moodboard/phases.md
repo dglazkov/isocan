@@ -13,7 +13,7 @@ step, then the board as a critic.
 **Phase citations name their project**: `moodboard phase 2`, never a bare
 "phase 2".
 
-**Where we are, 17 Oct 2026:** phases 0 and 1 are PART-DONE and phases 2 and 3 are CLOSED — `POST /api/image`, `POST /api/image/swatches`, `isocan mood explore|keep|drop|more|board`, deterministic CIE L\*a\*b\* k-means swatches (`moodSwatches`), `.mood-swatch-strip` on kept and reference tiles, `/design-system`'s board branch with `tokens.isocan.sources` citation checking in `checkDesign`, and *Derive from the board* plus hover-token-to-peek-tile in the web app pass unit, CLI, and headless Chrome proofs; phases 0–1's real-key runs wait on a Gemini key with billing. `moodboard phase 4` (the board as a critic) is next. Dion decided the three open questions on 16 Oct 2026 ([`design.md`](design.md) §8): Flash by default, hosted homes allowed, nine tiles a spread.
+**Where we are, 17 Oct 2026:** every phase is built. Phases 2 and 3 are CLOSED; phases 0, 1 and 4 are PART-DONE, waiting on a person with a billing-enabled Gemini key to walk [`docs/verify/2026-10-17-moodboard.md`](../../verify/2026-10-17-moodboard.md) — nothing is waiting on code. `POST /api/image`, `POST /api/image/swatches`, `isocan mood explore|keep|drop|more|board`, deterministic CIE L\*a\*b\* k-means swatches (`moodSwatches`, `.mood-swatch-strip`), `/design-system`'s board branch with `tokens.isocan.sources` citation checking in `checkDesign`, *Derive from the board* plus hover-token-to-peek-tile, and the built-in `board` critic (`isocan critic add board`, `isocan critique --by board` / `--as board`, *Critics in the room*) all pass unit, CLI, and headless Chrome proofs (`scripts/journey-moodboard.mjs`). Dion decided the three open questions on 16 Oct 2026 ([`design.md`](design.md) §8): Flash by default, hosted homes allowed, nine tiles a spread.
 
 ---
 
@@ -108,7 +108,7 @@ against it unchanged.
 
 ## Phase 4 — The board as a critic
 
-**Status: NOT STARTED.**
+**Status: PART-DONE, 17 Oct 2026 — built and proved in headless Chrome; the person's walk in [`docs/verify/2026-10-17-moodboard.md`](../../verify/2026-10-17-moodboard.md) is owed.** `boardCriticDraft`, `findOffBoardColours`, and `boardCritiqueNotes` (`packages/core/src/mood.ts`) turn the canvas's kept and reference tiles and their swatches into a real critique persona card (`critique.critic = "board"`, `agentName: "Board"`). In `@isocan/critique/cli` (`packages/modules/critique/src/cli.ts` and `room-cli.ts`), `isocan critic ls` offers `board` under starter lenses when tiles sit on the Mood board, `isocan critic add board` places the card, and `isocan critique <item> --by board` (and `--as board`) places the card on the fly before asking. In `@isocan/critique/web` (`packages/modules/critique/src/web.tsx` and `room-web.tsx`), *Critique with…* shows a **Board** row and *Critics in the room* shows a **Board** button under *Add a lens*. Proved in `packages/core/test/mood.test.ts`, `packages/modules/critique/test/cli.test.ts`, `packages/cli/test/mood.test.ts`, and `scripts/journey-moodboard.mjs` (11 headless Chrome checks, including Scene 4 pinning a `working` note on `#b5651d` and a `risk` note naming `#2563eb` / `blue` on `Acme Checkout`).
 
 - A built-in critic, `board`, whose lens is the kept tiles and their
   swatches: *does this screen feel like what was kept?* It is a critique
@@ -118,3 +118,7 @@ against it unchanged.
 **Proof:** Scene 4: a screen with an off-board colour gets a *Risk* note
 naming the colour and that no tile holds it; a person's walk in
 `docs/verify/` of the whole journey.
+
+### Trajectory
+
+- **2026-10-17** — Open: run the end-to-end human walk in [`docs/verify/2026-10-17-moodboard.md`](../../verify/2026-10-17-moodboard.md) with a billing-enabled Gemini API key.

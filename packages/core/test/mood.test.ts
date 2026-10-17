@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { CanvasContents, Item } from "../src/index.ts";
+import { homageNameProblems, type CanvasContents, type Item } from "../src/index.ts";
 import {
+  boardCriticDraft,
+  boardCritiqueNotes,
   deltaE,
   deniedIn,
   findMoodBoard,
+  findOffBoardColours,
   formatMoodSwatches,
   IMAGE_MODEL_DEFAULT,
   imageModel,
@@ -28,7 +31,11 @@ import {
   rgbToLab,
   spreadAxes,
   swatchesFromRgba,
+  type BoardCriticDraft,
+  type BoardCritiqueSuggestion,
+  type MoodBoardRead,
   type MoodBoardTile,
+  type OffBoardColour,
 } from "../src/mood.ts";
 
 /**
@@ -465,5 +472,162 @@ describe("moodBoardRead", () => {
         words: "Acme studio wall",
       });
     }
+  });
+});
+
+describe("boardCriticDraft, findOffBoardColours, and boardCritiqueNotes", () => {
+  const maya = { id: "act_maya", name: "Acme Maya", kind: "user" as const };
+  const makeItem = (
+    id: string,
+    x: number,
+    y: number,
+    props: Record<string, string>,
+    extra: Partial<Item> = {},
+  ): Item =>
+    ({
+      id,
+      x,
+      y,
+      width: 300,
+      height: 300,
+      title: extra.title ?? id,
+      currentVersionId: "ver_1",
+      versions: [{ id: "ver_1", blobHash: "hash_1", mimeType: "image/png", filename: "tile.png", size: 100 }],
+      properties: props,
+      createdAt: "2026-10-17T10:00:00.000Z",
+      createdBy: maya,
+      updatedAt: "2026-10-17T10:00:00.000Z",
+      updatedBy: maya,
+      ...extra,
+    }) as Item;
+  const makeCanvas = (items: Item[]): CanvasContents =>
+    ({ items: Object.fromEntries(items.map((i) => [i.id, i])), threads: {}, trash: [], marks: {} }) as unknown as CanvasContents;
+
+  it("returns null when the canvas has no Mood board or no kept/reference tiles", () => {
+    const emptyCanvas = makeCanvas([]);
+    expect(boardCriticDraft(emptyCanvas, "legacy")).toBeNull();
+
+    const boardOnly = makeCanvas([
+      makeItem("itm_board", 0, 0, { kind: "area", [MOOD_PROPS.board]: "true" }, { width: 1200, height: 840 }),
+      makeItem("itm_cand", 40, 40, { [MOOD_PROPS.mood]: "candidate" }),
+    ]);
+    expect(boardCriticDraft(boardOnly, "legacy")).toBeNull();
+  });
+
+  it("builds a Board critic draft whose name, credit, and lens pass the homage rule and quote kept tiles", () => {
+    const swatches1 = formatMoodSwatches([
+      { hex: "#b5651d", share: 0.5 },
+      { hex: "#e8dcc8", share: 0.3 },
+    ]);
+    const swatches2 = formatMoodSwatches([{ hex: "#8a3b2e", share: 0.6 }]);
+    const board = makeItem(
+      "itm_board",
+      0,
+      0,
+      { kind: "group", [MOOD_PROPS.board]: "true" },
+      { width: 1200, height: 840, title: MOOD_BOARD_TITLE },
+    );
+    const tile1 = makeItem(
+      "itm_tile1",
+      40,
+      40,
+      {
+        [MOOD_PROPS.mood]: "kept",
+        [MOOD_PROPS.axis]: "light",
+        [MOOD_PROPS.prompt]: moodPrompt("a quiet bakery at dawn", "the quality of the light"),
+        [MOOD_PROPS.swatches]: swatches1,
+      },
+      { title: "loaf, 6 a.m.", containerId: "itm_board" },
+    );
+    const tile2 = makeItem(
+      "itm_tile2",
+      380,
+      40,
+      {
+        [MOOD_PROPS.mood]: "kept",
+        [MOOD_PROPS.axis]: "material",
+        [MOOD_PROPS.prompt]: moodPrompt("a quiet bakery at dawn", "material and surface"),
+        [MOOD_PROPS.swatches]: swatches2,
+      },
+      { title: "waxed stamp", containerId: "itm_board" },
+    );
+
+    const draft: BoardCriticDraft | null = boardCriticDraft(makeCanvas([board, tile1, tile2]), "groups");
+    expect(draft).not.toBeNull();
+    expect(draft!.name).toBe("board");
+    expect(draft!.agentName).toBe("Board");
+    expect(draft!.color).toBe("#b5651d");
+    expect(draft!.credit).toContain("not affiliated");
+    expect(draft!.lens.questions).toHaveLength(3);
+    expect(draft!.lens.looksFor).toContain('"loaf, 6 a.m."');
+    expect(draft!.lens.looksFor).toContain("#b5651d (50%)");
+    expect(draft!.lens.looksFor).toContain('"waxed stamp"');
+    expect(draft!.lens.looksFor).toContain("#8a3b2e (60%)");
+    expect(draft!.lens.looksFor).toContain("ΔE 18");
+    expect(draft!.lens.ranks.length).toBeGreaterThan(20);
+
+    const homageProblems = homageNameProblems(
+      {
+        agentName: draft!.agentName,
+        person: "from this canvas's kept tiles",
+        affiliation: draft!.credit,
+      },
+      { noun: "critic", subject: "the critic", line: "the credit line" },
+    );
+    expect(homageProblems).toEqual([]);
+  });
+
+  it("flags off-board blue (#2563eb) while allowing on-board crust/stamp hues and pure white/black", () => {
+    const boardRead: MoodBoardRead = {
+      boardId: "itm_board",
+      words: ["a quiet bakery at dawn"],
+      tiles: [
+        {
+          itemId: "itm_tile1",
+          title: "loaf, 6 a.m.",
+          mood: "kept",
+          axis: "light",
+          prompt: null,
+          words: "a quiet bakery at dawn",
+          swatches: [
+            { hex: "#b5651d", share: 0.5 },
+            { hex: "#e8dcc8", share: 0.5 },
+          ],
+        },
+        {
+          itemId: "itm_tile2",
+          title: "waxed stamp",
+          mood: "kept",
+          axis: "material",
+          prompt: null,
+          words: "a quiet bakery at dawn",
+          swatches: [{ hex: "#8a3b2e", share: 1 }],
+        },
+      ],
+    };
+
+    const html = `
+      <section style="background: #e8dcc8; color: #000000; border-color: #fff">
+        <span style="background: #8a3b2e">Fresh batch</span>
+        <button style="background: #2563eb; color: #ffffff">Place order</button>
+      </section>
+    `;
+
+    const off: OffBoardColour[] = findOffBoardColours(html, boardRead);
+    expect(off).toHaveLength(1);
+    expect(off[0]!.hex).toBe("#2563eb");
+    expect(off[0]!.spoken).toBe("blue");
+    expect(off[0]!.deltaE).toBeGreaterThan(18);
+    expect(off[0]!.nearestTileTitle).toBeTruthy();
+
+    const suggestions: BoardCritiqueSuggestion[] = boardCritiqueNotes(html, boardRead);
+    expect(suggestions.map((s) => s.kind)).toEqual(["working", "risk"]);
+    expect(suggestions[0]!.hex).toBe("#8a3b2e");
+    expect(suggestions[0]!.text).toContain('"waxed stamp"');
+    expect(suggestions[0]!.text).toMatch(/Leave it\.$/);
+    expect(suggestions[1]!.hex).toBe("#2563eb");
+    expect(suggestions[1]!.spoken).toBe("blue");
+    expect(suggestions[1]!.text).toContain("on no tile on the Mood board");
+    expect(suggestions[1]!.text).toMatch(/Replace #2563eb with #[0-9a-f]{6}\.$/);
   });
 });

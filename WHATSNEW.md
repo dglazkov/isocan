@@ -36,7 +36,11 @@ second week.
   **Design systems → Derive from the board** (or `/design-system`) derives a
   `DESIGN.md` whose palette and direction cite the kept pictures in
   `isocan.sources` — hover any token to light up the picture it came from on
-  the canvas. Keeping is for people only; agents are refused.
+  the canvas. Once you build screens, open **Crit with the room…** (or
+  **Critique with…**) to add the **Board** critic (`isocan critic add board`,
+  `isocan critique <item> --by board`), which checks whether every colour and
+  surface on the screen feels like what you kept. Keeping is for people only;
+  agents are refused.
 
 
 ## 15 October 2026

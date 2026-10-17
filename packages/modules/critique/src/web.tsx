@@ -20,6 +20,7 @@ import {
   type RendererFacts,
   type WebModule,
 } from "@isocan/core";
+import { boardCriticDraft } from "@isocan/core/mood";
 import {
   CRITIC_CARD,
   CRITIC_PROP,
@@ -57,6 +58,7 @@ import {
   type Lens,
   type RosterEntry,
 } from "./core.ts";
+import { CRITIC_COLOR, CRITIC_ON } from "./room.ts";
 import { RoomBothDialog, RoomDialog, RoomOverlay } from "./room-web.tsx";
 
 /**
@@ -144,7 +146,7 @@ function cardPlacement(canvas: CanvasContents) {
 }
 
 /** One critic card: one blob, one `item.add`, the property beside it — `place`'s twin. */
-async function placeCard(host: DialogHost, draft: CriticDraft): Promise<string> {
+async function placeCard(host: DialogHost, draft: CriticDraft, extra: Record<string, string> = {}): Promise<string> {
   const text = criticMarkdown(draft);
   const filename = `${draft.name}.md`;
   const put = await host.putBlob(new Blob([text], { type: "text/markdown" }), filename);
@@ -157,7 +159,7 @@ async function placeCard(host: DialogHost, draft: CriticDraft): Promise<string> 
     height: CRITIC_CARD.height,
     placement: cardPlacement(host.getCanvas()),
     title: draft.agentName,
-    properties: { [CRITIC_PROP]: draft.name },
+    properties: { [CRITIC_PROP]: draft.name, ...extra },
   } as Operation]);
   return itemId;
 }
@@ -344,10 +346,11 @@ function CriticsDialog({ canvas, canEdit, host }: DialogFacts) {
  * bytes, and the rc applies the card's budget and colour), capped at notes,
  * and then ONE thread on the screen mentions them all.
  */
-function CritiqueWithDialog({ args, canvasId, canvas, rcParked, canEdit, host }: DialogFacts) {
+function CritiqueWithDialog({ args, canvasId, canvas, groupMode, rcParked, canEdit, host }: DialogFacts) {
   const screen = canvas.items[args.trim()];
   const [on, setOn] = useState<CanvasCritic[] | null>(null);
   const [chosen, setChosen] = useState<string[]>([]);
+  const [boardChosen, setBoardChosen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   useEffect(() => {
@@ -362,6 +365,8 @@ function CritiqueWithDialog({ args, canvasId, canvas, rcParked, canEdit, host }:
   const clashes = new Map(canvasClashes(on ?? []).map((c) => [c.id, c.problem]));
   const problemsOf = (c: CanvasCritic) => [...criticProblems(c.critic), ...(clashes.has(c.critic.name) ? [clashes.get(c.critic.name)!] : [])];
   const picked = (on ?? []).filter((c) => chosen.includes(c.itemId));
+  const boardDraft = (on ?? []).some((c) => c.critic.name === "board") ? null : boardCriticDraft(canvas, groupMode);
+  const totalPicked = picked.length + (boardDraft && boardChosen ? 1 : 0);
 
   const ask = async () => {
     setBusy(true);
@@ -371,8 +376,20 @@ function CritiqueWithDialog({ args, canvasId, canvas, rcParked, canEdit, host }:
         const problems = problemsOf(c);
         if (problems.length) throw new Error(`${c.critic.agentName}'s card needs fixing first — ${problems.join("; ")}`);
       }
+      const toAsk: CanvasCritic[] = [...picked];
+      if (boardDraft && boardChosen) {
+        const refused = refuseJoin(on ?? [], boardDraft);
+        if (refused) throw new Error(refused);
+        const boardItemId = await placeCard(host, boardDraft, {
+          [CRITIC_ON]: "on",
+          ...(boardDraft.color ? { [CRITIC_COLOR]: boardDraft.color } : {}),
+        });
+        const boardCritic = readCritic(criticMarkdown(boardDraft), `${boardDraft.name}.md`);
+        if (!boardCritic) throw new Error("Board critic card failed to parse.");
+        toAsk.push({ itemId: boardItemId, critic: boardCritic });
+      }
       const asked: { name: string; actorId: string }[] = [];
-      for (const c of picked) {
+      for (const c of toAsk) {
         const before = agentOf(host.getCanvas(), c.critic.agentName);
         const text = await host.readText(current(host.getCanvas().items[c.itemId]!)!.blobHash);
         const { actorId } = await host.enrol({ name: c.critic.agentName, template: CRITIC_TEMPLATE, args: enrolArgs(text, canvasId, c.itemId), reuse: true });
@@ -410,11 +427,22 @@ function CritiqueWithDialog({ args, canvasId, canvas, rcParked, canEdit, host }:
       <p className="crit-note">They pin notes on <b>{screen.title}</b> and change nothing. Each runs on your parked runner, bounded by the budget on its card.</p>
       {!rcParked ? (
         <p className="crit-problem" role="status">Nobody&rsquo;s runner is parked on this canvas — start <code>isocan rc</code> there, then ask again. Nothing was enrolled.</p>
-      ) : on === null ? <p className="crit-note">Reading the cards…</p> : on.length === 0 ? (
+      ) : on === null ? <p className="crit-note">Reading the cards…</p> : on.length === 0 && !boardDraft ? (
         <p className="crit-note">No critics on this canvas yet — open <b>Critics</b> from the palette (⌘K) to add some.</p>
       ) : (
         <fieldset className="crit-pick">
           <legend>Critics</legend>
+          {boardDraft && (
+            <label className="crit-row" data-critic-board>
+              <input type="checkbox" checked={boardChosen} disabled={!canEdit}
+                onChange={(e) => setBoardChosen(e.target.checked)} />
+              <span className="crit-dot" aria-hidden style={{ background: boardDraft.color }} />
+              <span className="crit-name">
+                <b>Board</b>
+                <small>from your kept tiles on the Mood board</small>
+              </span>
+            </label>
+          )}
           {on.map((c) => {
             const problems = problemsOf(c);
             return (
@@ -435,8 +463,8 @@ function CritiqueWithDialog({ args, canvasId, canvas, rcParked, canEdit, host }:
       {problem && <p className="crit-problem" role="alert">{problem}</p>}
       <div className="crit-actions">
         <button type="button" className="btn" onClick={host.close}>Cancel</button>
-        <button type="button" className="btn primary" disabled={!rcParked || !canEdit || picked.length === 0 || busy} onClick={() => void ask()}>
-          {busy ? "Asking…" : picked.length > 1 ? `Ask ${picked.length} critics` : "Ask"}
+        <button type="button" className="btn primary" disabled={!rcParked || !canEdit || totalPicked === 0 || busy} onClick={() => void ask()}>
+          {busy ? "Asking…" : totalPicked > 1 ? `Ask ${totalPicked} critics` : "Ask"}
         </button>
       </div>
     </div>
