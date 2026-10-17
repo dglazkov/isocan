@@ -11,9 +11,11 @@
   flex-direction: column;
   padding: 0;
   border-radius: 12px;
-  background: var(--card);
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow-pop);
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-glass);
   color: var(--ink);
   font-size: 12px;
   overflow: hidden;
@@ -25,8 +27,8 @@
   align-items: center;
   gap: 6px;
   padding: 8px 10px;
-  border-bottom: 1px solid var(--line-soft);
-  background: var(--chip);
+  border-bottom: 1px solid var(--glass-border);
+  background: var(--glass-chip);
   cursor: grab;
 }
 
@@ -53,8 +55,8 @@
 .ui-devtools-pick {
   padding: 2px 8px;
   border-radius: 999px;
-  border: 1px solid var(--line);
-  background: var(--card);
+  border: 1px solid var(--glass-border);
+  background: var(--glass-chip);
   color: var(--ink);
   font-size: 11px;
   font-weight: 600;
@@ -76,7 +78,7 @@
   flex-wrap: wrap;
   gap: 4px;
   padding: 6px 8px;
-  border-bottom: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--glass-border);
 }
 
 .ui-devtools-tab {
@@ -90,13 +92,13 @@
 }
 
 .ui-devtools-tab:hover {
-  background: var(--chip);
+  background: var(--glass-chip-hover);
   color: var(--ink);
 }
 
 .ui-devtools-tab.active {
-  background: var(--chip);
-  border-color: var(--line);
+  background: var(--glass-chip);
+  border-color: var(--glass-border);
   color: var(--ink);
   font-weight: 600;
 }
@@ -116,7 +118,7 @@
   color: var(--ink-soft);
   font-size: 11px;
   line-height: 1.4;
-  border-bottom: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--glass-border);
 }
 
 .ui-devtools-body {
@@ -262,8 +264,8 @@
   align-items: center;
   gap: 6px;
   padding: 8px 10px;
-  border-top: 1px solid var(--line-soft);
-  background: var(--chip);
+  border-top: 1px solid var(--glass-border);
+  background: var(--glass-chip);
 }
 
 .ui-devtools-foot .btn {

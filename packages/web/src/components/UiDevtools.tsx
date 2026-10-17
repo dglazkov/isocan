@@ -22,6 +22,7 @@ import {
 import { flashNotice, sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
 import { canEditNow } from "../lib/capability.ts";
 import { browserClipboard, copyToClipboard } from "../lib/copy.ts";
+import { FloatingHandles, useFloatingBox } from "../lib/floatingbox.tsx";
 import {
   UI_TWEAKS_STORAGE_KEY,
   closeUiDevtools,
@@ -179,11 +180,11 @@ export default function UiDevtools({ canvasId, actor }: { canvasId: string; acto
   const pieceInfo = findUiPiece(activePiece) ?? UI_PIECES[0]!;
   const knobs = useMemo(() => knobsForPiece(activePiece), [activePiece]);
 
-  const [pos, setPos] = useState<{ x: number; y: number }>(() => ({
+  const [pos] = useState<{ x: number; y: number }>(() => ({
     x: typeof window !== "undefined" ? Math.max(20, window.innerWidth - 376) : 20,
     y: 68,
   }));
-  const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
+  const float = useFloatingBox<HTMLElement>({ minWidth: 280, minHeight: 220 });
   const [hovered, setHovered] = useState<HoveredPiece | null>(null);
   const [glow, setGlow] = useState<{ seq: number; pieceId: UiPieceId; boxes: GlowBox[] } | null>(null);
   const glowTimerRef = useRef<number | null>(null);
@@ -358,24 +359,6 @@ export default function UiDevtools({ canvasId, actor }: { canvasId: string; acto
     flashNotice(serialized ? "Saved UI customizations to canvas" : "Cleared UI customizations from canvas");
   }
 
-  function onHeadPointerDown(e: React.PointerEvent<HTMLDivElement>): void {
-    if ((e.target as HTMLElement).closest("button")) return;
-    e.currentTarget.setPointerCapture(e.pointerId);
-    dragRef.current = { startX: e.clientX, startY: e.clientY, origX: pos.x, origY: pos.y };
-  }
-
-  function onHeadPointerMove(e: React.PointerEvent<HTMLDivElement>): void {
-    const drag = dragRef.current;
-    if (!drag) return;
-    const nextX = Math.max(8, Math.min(window.innerWidth - 348, drag.origX + (e.clientX - drag.startX)));
-    const nextY = Math.max(8, Math.min(window.innerHeight - 80, drag.origY + (e.clientY - drag.startY)));
-    setPos({ x: nextX, y: nextY });
-  }
-
-  function onHeadPointerUp(): void {
-    dragRef.current = null;
-  }
-
   const totalChanged = Object.keys(merged).length;
   const pieceHasChanges = (id: UiPieceId) => UI_KNOBS.some((k) => k.piece === id && merged[k.key] !== undefined);
   const canEdit = canEditNow();
@@ -416,17 +399,18 @@ export default function UiDevtools({ canvasId, actor }: { canvasId: string; acto
         </div>
       )}
       <aside
+        ref={float.ref}
         className="ui-devtools"
-        style={{ left: pos.x, top: pos.y }}
+        style={{ left: pos.x, top: pos.y, ...float.style }}
         aria-label="UI Devtools"
         onPointerDown={(e) => e.stopPropagation()}
         onContextMenu={(e) => e.stopPropagation()}
       >
+        <FloatingHandles box={float} />
         <div
           className="ui-devtools-head"
-          onPointerDown={onHeadPointerDown}
-          onPointerMove={onHeadPointerMove}
-          onPointerUp={onHeadPointerUp}
+          onPointerDown={float.onDragPointerDown}
+          onDoubleClick={float.reset}
         >
           <span className="ui-devtools-title">UI Devtools</span>
           {totalChanged > 0 && (

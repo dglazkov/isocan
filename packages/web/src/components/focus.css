@@ -73,9 +73,11 @@
   overflow-y: auto;
   padding: 6px;
   border-radius: var(--radius);
-  border: 1px solid var(--line);
-  background: var(--panel);
-  box-shadow: var(--shadow-pop);
+  border: 1px solid var(--glass-border);
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+  box-shadow: var(--shadow-glass);
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -98,7 +100,7 @@
 }
 
 .focus-version-row:hover {
-  background: var(--chip-hover);
+  background: var(--glass-chip-hover);
 }
 
 .focus-version-row.current {

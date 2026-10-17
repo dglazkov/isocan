@@ -4,10 +4,14 @@
    is the accent's fill line, so a guess not taken still reads as the guess. */
 .stuck-card {
   position: absolute; top: 96px; left: 50%; transform: translateX(-50%); z-index: var(--z-float);
-  width: min(560px, calc(100vw - 32px)); max-height: calc(100% - 200px); overflow-y: auto;
+  width: min(560px, calc(100vw - 32px)); max-height: calc(100% - 200px);
+  display: flex; flex-direction: column; overflow: hidden;
   padding: 12px; font-size: 12.5px; line-height: 1.45;
-  background: var(--card); color: var(--ink);
-  border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-pop);
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+  color: var(--ink);
+  border: 1px solid var(--glass-border); border-radius: var(--radius); box-shadow: var(--shadow-glass);
 }
 .stuck-card h3 { margin: 0 24px 4px 0; font-size: 13px; }
 .stuck-card h4 { margin: 12px 0 4px; font-size: 11px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.04em; }

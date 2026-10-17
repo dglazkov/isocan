@@ -22,6 +22,7 @@ import {
 } from "@isocan/core";
 import { checkFrameable, exportDoc, listCanvases } from "../lib/api.ts";
 import { classifyAddableDraft, siteDraftWords } from "../lib/adddraft.ts";
+import { FloatingHandles, useFloatingBox } from "../lib/floatingbox.tsx";
 import { BROWSER_SIZE, addAreaItem, addBrowserItem, addCanvasItem, addDocumentItem } from "../lib/upload.ts";
 import { placeableArea, spotInView } from "../lib/spot.ts";
 import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
@@ -79,11 +80,16 @@ export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; act
   const [inherit, setInherit] = useState(false);
   const canvas = useCanvasStore((s) => s.canvas);
   const nowMs = Date.now();
+  const float = useFloatingBox<HTMLFormElement>({ minWidth: 280, minHeight: 200 });
+  const resetFloat = float.reset;
 
   // Read the list when the popover opens, not when the rail mounts: a person
   // who never places a canvas pays nothing for the option.
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      resetFloat();
+      return;
+    }
     setQueued(false);
     let live = true;
     setCanvases(null);
@@ -97,7 +103,7 @@ export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; act
     return () => {
       live = false;
     };
-  }, [open]);
+  }, [open, resetFloat]);
 
   // Files is a picker, not a field: choosing the row opens it and closes this.
   useEffect(() => {
@@ -282,7 +288,8 @@ export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; act
         </svg>
       </button>
       {open && adding !== "file" && (
-        <form className="site-popover canvas-picker add-popover" onSubmit={submit}>
+        <form ref={float.ref} className="site-popover canvas-picker add-popover" style={float.style} onSubmit={submit}>
+          <FloatingHandles box={float} />
           <input
             className="text-input"
             autoFocus

@@ -19,9 +19,13 @@
    top-left under the top bar. */
 .away-panel {
   position: fixed; top: 64px; left: 16px; z-index: var(--z-float);
-  width: min(360px, calc(100% - 32px)); max-height: calc(100% - 200px); overflow-y: auto;
-  background: var(--card); color: var(--ink);
-  border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-pop);
+  width: min(360px, calc(100% - 32px)); max-height: calc(100% - 200px);
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+  color: var(--ink);
+  border: 1px solid var(--glass-border); border-radius: var(--radius); box-shadow: var(--shadow-glass);
 }
 .away-panel .phone-digest { max-height: none; border-bottom: none; }
 .away-panel .phone-digest summary { min-height: 0; }

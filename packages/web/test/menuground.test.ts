@@ -92,19 +92,41 @@ function menuBackground(): string {
   return declared![1]!.trim();
 }
 
+/** The `background` a hovered menu row declares. */
+function menuHoverBackground(): string {
+  const rule = rules().find((r) => selectorsOf(r).includes(".context-item:hover:enabled"));
+  expect(rule, ".context-item:hover:enabled must have a rule").toBeTruthy();
+  const declared = /background:\s*([^;]+);/.exec(rule!.body);
+  expect(declared, ".context-item:hover:enabled must set its background").toBeTruthy();
+  return declared![1]!.trim();
+}
+
+/** First `rgba(...)` stop in a `--glass` gradient token. */
+function glassStop(scope: RegExp): string {
+  const raw = token(scope, "glass");
+  const stop = /rgba\([^)]+\)/.exec(raw);
+  expect(stop, `--glass must contain an rgba() stop: ${raw}`).toBeTruthy();
+  return stop![0]!;
+}
+
+function rgbToHex(rgb: Rgb): string {
+  return `#${rgb.map((v) => Math.round(v).toString(16).padStart(2, "0")).join("")}`;
+}
+
 /** Both spellings of the menu: the panel and the children that hang off it
  *  wear one class, so one ground covers both. */
 const MENU_CLASS = "context-menu";
 
-describe("the right-click menu paints its own ground", () => {
-  it("ends its background in an opaque colour", () => {
-    /* The bottom layer is what decides whether anything behind the menu can
-       reach the eye. A translucent one hands the answer to the canvas. */
-    const base = /var\(--([a-z-]+)\)\s*$/.exec(menuBackground());
-    expect(base, `the menu's background must end in an opaque token: ${menuBackground()}`).toBeTruthy();
+describe("the right-click menu wears glass with a translucent hover", () => {
+  it("uses the shared --glass surface and --glass-chip-hover row highlight", () => {
+    expect(menuBackground()).toBe("var(--glass)");
+    expect(menuHoverBackground()).toBe("var(--glass-chip-hover)");
     for (const [theme, scope] of [["light", LIGHT], ["dark", DARK]] as const) {
-      const value = token(scope, base![1]!);
-      expect(parse(value).alpha, `--${base![1]} is translucent in ${theme}: ${value}`).toBe(1);
+      const hoverVal = token(scope, "glass-chip-hover");
+      expect(
+        parse(hoverVal).alpha,
+        `--glass-chip-hover must stay translucent in ${theme}: ${hoverVal}`,
+      ).toBeLessThan(0.5);
     }
   });
 
@@ -125,31 +147,32 @@ describe("the right-click menu paints its own ground", () => {
     );
   });
 
-  it("shows a hovered row as clearly as every other row in the app", () => {
+  it("keeps hovered rows visible over both white and black canvas grounds", () => {
     for (const [theme, scope] of [["light", LIGHT], ["dark", DARK]] as const) {
-      const card = token(scope, "card");
-      const hover = parse(token(scope, "chip-hover")).rgb;
-      /* Where a hover is read everywhere else: `.btn`, `.share-link-row`. */
-      const elsewhere = ratio(hover, parse(card).rgb);
-      const onMenu = ratio(hover, over(token(scope, "panel"), card));
-      expect(onMenu, `${theme}: a menu row's hover must read like a button's`).toBeGreaterThanOrEqual(
-        elsewhere * 0.98,
-      );
+      const glass = glassStop(scope);
+      const hover = token(scope, "glass-chip-hover");
+      for (const ground of ["#ffffff", "#000000"] as const) {
+        const menuRgb = over(glass, ground);
+        const hoveredRgb = over(hover, rgbToHex(menuRgb));
+        expect(
+          ratio(hoveredRgb, menuRgb),
+          `${theme} over ${ground}: hover must stay clearly visible`,
+        ).toBeGreaterThanOrEqual(1.12);
+      }
     }
   });
 
-  it("is the thing that was wrong: a borrowed ground cancels the hover out", () => {
-    /* The worst ground each theme can be opened over — a black starfield under
-       the light theme, a white photograph under the dark one. Both are grounds
-       a person can actually set, which is why this was reported rather than
-       theorised. */
+  it("is the thing that was wrong: an opaque hover cancels out on a borrowed ground", () => {
+    /* The negative control: pairing a translucent menu ground with opaque
+       `--chip-hover` cancels the highlight out when the canvas behind it is
+       dark in light mode or bright in dark mode. */
     for (const [theme, scope, worst] of [
       ["light", LIGHT, "#000000"],
       ["dark", DARK, "#ffffff"],
     ] as const) {
       const hover = parse(token(scope, "chip-hover")).rgb;
       const borrowed = over(token(scope, "panel"), worst);
-      expect(ratio(hover, borrowed), `${theme}: the hover would still have been visible`).toBeLessThan(1.1);
+      expect(ratio(hover, borrowed), `${theme}: the opaque hover would still have cancelled out`).toBeLessThan(1.1);
     }
   });
 });

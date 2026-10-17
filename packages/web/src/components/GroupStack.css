@@ -37,8 +37,12 @@
 .stack-open-scrim { position: absolute; inset: 0; background: var(--overlay); }
 .stack-open-panel {
   position: relative; width: min(960px, 100%); box-sizing: border-box; max-height: 80vh; overflow: auto;
-  padding: 16px; border-radius: 12px; background: var(--card); color: var(--ink);
-  border: 1px solid var(--line); box-shadow: var(--shadow-pop);
+  padding: 16px; border-radius: 12px;
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+  color: var(--ink);
+  border: 1px solid var(--glass-border); box-shadow: var(--shadow-glass);
 }
 .stack-open-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
 .stack-open-head small { color: var(--ink-muted); }

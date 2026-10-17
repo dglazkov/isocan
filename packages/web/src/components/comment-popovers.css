@@ -5,10 +5,11 @@
    elements at equal specificity, so moving them after it changes no
    cascade. */
 .thread-comments {
-  overflow-y: auto; overscroll-behavior: contain; min-height: 0;
+  flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; min-height: 0;
   /* Bleed into the padding so the scrollbar rides the popover's edge. */
   margin: -10px -12px 0; padding: 10px 12px 0;
 }
+.float-drag-bar + .thread-comments { margin-top: 0; padding-top: 0; }
 
 .thread-popover .thread-actions { display: flex; justify-content: space-between; margin-top: 6px; flex: none; }
 .thread-popover .thread-actions button {

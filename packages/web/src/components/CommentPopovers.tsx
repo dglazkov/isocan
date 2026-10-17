@@ -27,6 +27,7 @@ import { CommentFold, CommentWhen } from "./CommentWhen.tsx";
 import { messageContextRoots, useMessageContext, useMessageSend, withMessageContext } from "../lib/messagecontext.ts";
 import { ContextManifestView, MessageContextPreview } from "./LazyGroupContext.tsx";
 import { usePresentation } from "../lib/canvasPresentation.ts";
+import { FloatingHandles, useFloatingBox } from "../lib/floatingbox.tsx";
 import { presentedOffset } from "../lib/presentation.ts";
 import { makeComment } from "./CommentLayer.tsx";
 
@@ -50,7 +51,7 @@ const TOOLBAR_H = 48; // popovers must clear the toolbar
  * clamped so it never leaves the window.
  */
 function usePopoverPlacement(anchor: { x: number; y: number }, dx: number, dy: number) {
-  const ref = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState({ width: 240, height: 0 });
 
   useLayoutEffect(() => {
@@ -113,6 +114,7 @@ export function ThreadPopover({
     [candidates, actor.id, itemRoster.candidates],
   );
   const { ref, style } = usePopoverPlacement(screen, 30, -16);
+  const float = useFloatingBox<HTMLDivElement>({ minWidth: 220, minHeight: 140 });
   const canEdit = useCanEdit();
   // Open is read — including replies that land while you are looking at it.
   useEffect(() => markRead(thread.id), [thread.id, thread.comments.length]);
@@ -123,11 +125,15 @@ export function ThreadPopover({
   }
   return (
     <div
-      ref={ref}
+      ref={(node) => {
+        ref.current = node;
+        float.ref.current = node;
+      }}
       className="thread-popover"
-      style={embedded ? undefined : style}
+      style={embedded ? undefined : { ...style, ...float.style }}
       onPointerDown={(e) => e.stopPropagation()}
     >
+      {!embedded && <FloatingHandles box={float} />}
       <div
         className="thread-comments"
         onClick={(e) => {
@@ -296,14 +302,19 @@ export function ComposePopover({
   }
   const screen = worldToScreen(viewport, wx, wy);
   const { ref, style } = usePopoverPlacement(screen, 0, 0);
+  const float = useFloatingBox<HTMLDivElement>({ minWidth: 220, minHeight: 140 });
 
   return (
     <div
-      ref={ref}
+      ref={(node) => {
+        ref.current = node;
+        float.ref.current = node;
+      }}
       className="thread-popover compose-popover"
-      style={embedded ? undefined : style}
+      style={embedded ? undefined : { ...style, ...float.style }}
       onPointerDown={(e) => e.stopPropagation()}
     >
+      {!embedded && <FloatingHandles box={float} />}
       <form
         onKeyDown={submitOnCmdEnter}
         onSubmit={async (e) => {

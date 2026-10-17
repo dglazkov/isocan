@@ -33,6 +33,7 @@ import { canEditNow } from "../lib/capability.ts";
 import { postToMain } from "../lib/mainthread.ts";
 import { revealItem } from "../lib/zoomactions.ts";
 import { flashNotice, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
+import { FloatingHandles, useFloatingBox } from "../lib/floatingbox.tsx";
 import "./walk.css";
 
 /**
@@ -85,6 +86,7 @@ const THUMB = 132;
 const OUTCOME_LABEL: Record<string, string> = { "made it": "Made it", stumbled: "Stumbled", "gave up": "Gave up" };
 
 function WalkPanel({ canvasId, actor, itemId, onClose }: WalkRequest & { onClose: () => void }) {
+  const float = useFloatingBox<HTMLElement>({ minWidth: 360, minHeight: 240 });
   const canvas = useCanvasStore((s) => s.canvas);
   const [texts, setTexts] = useState<Record<string, string>>({});
   const [task, setTask] = useState("");
@@ -196,53 +198,56 @@ function WalkPanel({ canvasId, actor, itemId, onClose }: WalkRequest & { onClose
 
   // One filter at the words' own size (the swatches), and one per thumbnail scale.
   const scales = [...new Set([1, ...(screens ?? []).map((sc) => THUMB / sc.read.viewport.width)])];
-  return <aside className="walk-panel" data-walk-panel={itemId} aria-label="Walk it as someone else">
+  return <aside ref={float.ref} className="walk-panel" style={float.style} data-walk-panel={itemId} aria-label="Walk it as someone else">
+    <FloatingHandles box={float} />
     <svg className="walk-defs" aria-hidden="true" focusable="false">
       {scales.map((k) => <LowVision key={k} scale={k} />)}
     </svg>
     <button className="walk-close" aria-label="Close" onClick={onClose}>✕</button>
-    <h3>Walk it as someone else{ask ? ` — “${ask.task}”` : ""}</h3>
-    <p className="walk-notice" data-walk-notice role="note">{WALK_NOTICE}</p>
-    {flow && "refused" in flow && <p className="walk-quiet">{flow.refused}</p>}
-    {flow && !("refused" in flow) && <p className="walk-quiet" data-walk-flow={flow.via}>
-      {flow.screens.length} {flow.screens.length === 1 ? "screen" : "screens"}{flow.via === "prototype" ? ", the prototype's path" : flow.via === "group" ? ", in reading order" : ""}: {flow.screens.map(title).join(" → ")}
-      {flow.unreached.length > 0 && ` · no link reaches ${flow.unreached.map(title).join(", ")}`}
-    </p>}
+    <div className="float-scroll">
+      <h3>Walk it as someone else{ask ? ` — “${ask.task}”` : ""}</h3>
+      <p className="walk-notice" data-walk-notice role="note">{WALK_NOTICE}</p>
+      {flow && "refused" in flow && <p className="walk-quiet">{flow.refused}</p>}
+      {flow && !("refused" in flow) && <p className="walk-quiet" data-walk-flow={flow.via}>
+        {flow.screens.length} {flow.screens.length === 1 ? "screen" : "screens"}{flow.via === "prototype" ? ", the prototype's path" : flow.via === "group" ? ", in reading order" : ""}: {flow.screens.map(title).join(" → ")}
+        {flow.unreached.length > 0 && ` · no link reaches ${flow.unreached.map(title).join(", ")}`}
+      </p>}
 
-    {!ask && flow && !("refused" in flow) && <form className="walk-setup" onSubmit={(e) => { e.preventDefault(); void walk(); }}>
-      <label className="walk-task">The task<input data-walk-task value={task} placeholder="order a loaf for Saturday" onChange={(e) => setTask(e.target.value)} /></label>
-      <fieldset className="walk-walkers">
-        <legend>Who walks it</legend>
-        {WALKERS.map((w) => <label key={w.id} title={`${w.situation}; ${w.constraint}`}>
-          <input type="checkbox" data-walk-walker={w.id} checked={picked.includes(w.id)} onChange={(e) => setPicked((p) => (e.target.checked ? [...p, w.id] : p.filter((x) => x !== w.id)))} />
-          {w.name}
-        </label>)}
-        <input className="walk-describe" aria-label="Describe a walker" placeholder="Or describe one: commuter: one hand on a strap, on a moving bus" value={described} onChange={(e) => setDescribed(e.target.value)} />
-        {describedRefused && <span className="walk-quiet">{describedRefused}</span>}
-      </fieldset>
-      <button type="submit" className="btn primary" data-walk-go disabled={busy || !screens || !walkers.length}>Walk</button>
-    </form>}
+      {!ask && flow && !("refused" in flow) && <form className="walk-setup" onSubmit={(e) => { e.preventDefault(); void walk(); }}>
+        <label className="walk-task">The task<input data-walk-task value={task} placeholder="order a loaf for Saturday" onChange={(e) => setTask(e.target.value)} /></label>
+        <fieldset className="walk-walkers">
+          <legend>Who walks it</legend>
+          {WALKERS.map((w) => <label key={w.id} title={`${w.situation}; ${w.constraint}`}>
+            <input type="checkbox" data-walk-walker={w.id} checked={picked.includes(w.id)} onChange={(e) => setPicked((p) => (e.target.checked ? [...p, w.id] : p.filter((x) => x !== w.id)))} />
+            {w.name}
+          </label>)}
+          <input className="walk-describe" aria-label="Describe a walker" placeholder="Or describe one: commuter: one hand on a strap, on a moving bus" value={described} onChange={(e) => setDescribed(e.target.value)} />
+          {describedRefused && <span className="walk-quiet">{describedRefused}</span>}
+        </fieldset>
+        <button type="submit" className="btn primary" data-walk-go disabled={busy || !screens || !walkers.length}>Walk</button>
+      </form>}
 
-    {showing && !record && <p className="walk-waits" data-walk-waits>
-      {ask
-        ? lead?.cannot || !lead?.lead ? `The walk waits: ${lead?.cannot ?? "nothing leads here"}.` : `Asked ${lead.lead.name} — the stumbles and outcomes have not come yet.`
-        : !task.trim() ? "Measured only — say the task to ask the lead to walk it." : lead?.cannot || !lead?.lead ? `The walk waits: ${lead?.cannot ?? "nothing leads here"}. The lanes are measured; nobody has walked them.` : "Asking…"}
-    </p>}
+      {showing && !record && <p className="walk-waits" data-walk-waits>
+        {ask
+          ? lead?.cannot || !lead?.lead ? `The walk waits: ${lead?.cannot ?? "nothing leads here"}.` : `Asked ${lead.lead.name} — the stumbles and outcomes have not come yet.`
+          : !task.trim() ? "Measured only — say the task to ask the lead to walk it." : lead?.cannot || !lead?.lead ? `The walk waits: ${lead?.cannot ?? "nothing leads here"}. The lanes are measured; nobody has walked them.` : "Asking…"}
+      </p>}
 
-    {showing && screens && lanes.map((lane) => <Lane key={lane.walker.id} lane={lane} screens={screens} htmlOf={htmlOf} />)}
-    {showing && !screens && <p className="walk-quiet">Reading the screens…</p>}
+      {showing && screens && lanes.map((lane) => <Lane key={lane.walker.id} lane={lane} screens={screens} htmlOf={htmlOf} />)}
+      {showing && !screens && <p className="walk-quiet">Reading the screens…</p>}
 
-    {showing && (shared || both.length > 0) && <section className="walk-shared" data-walk-shared={shared?.itemId ?? both[0]!.itemId}>
-      <h4>Several walkers stumbled here</h4>
-      {shared
-        ? <p>“{title(shared.itemId)}”: {shared.sentence}{record?.fix && <> <button className="walk-link" data-walk-fix={record.fix} onClick={() => revealItem(record.fix!)}>Show the fix</button></>}</p>
-        : <p>{both.map((b) => `“${title(b.itemId)}” (${b.walkers.join(", ")})`).join("; ")}</p>}
-    </section>}
+      {showing && (shared || both.length > 0) && <section className="walk-shared" data-walk-shared={shared?.itemId ?? both[0]!.itemId}>
+        <h4>Several walkers stumbled here</h4>
+        {shared
+          ? <p>“{title(shared.itemId)}”: {shared.sentence}{record?.fix && <> <button className="walk-link" data-walk-fix={record.fix} onClick={() => revealItem(record.fix!)}>Show the fix</button></>}</p>
+          : <p>{both.map((b) => `“${title(b.itemId)}” (${b.walkers.join(", ")})`).join("; ")}</p>}
+      </section>}
 
-    <details className="walk-sources">
-      <summary>Where the numbers come from</summary>
-      <ul>{Object.entries(WALK_PARAMETERS).map(([k, p]) => <li key={k}>{p.source}.</li>)}</ul>
-    </details>
+      <details className="walk-sources">
+        <summary>Where the numbers come from</summary>
+        <ul>{Object.entries(WALK_PARAMETERS).map(([k, p]) => <li key={k}>{p.source}.</li>)}</ul>
+      </details>
+    </div>
   </aside>;
 }
 

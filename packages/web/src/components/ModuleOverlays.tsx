@@ -1,8 +1,43 @@
-import type { Actor, OverlayRegion } from "@isocan/core";
+import type { Actor, CanvasContents, OverlayRegion, WebHost } from "@isocan/core";
 import { modules } from "../modules.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
+import { FloatingHandles, useFloatingBox } from "../lib/floatingbox.tsx";
 import { useWebHost } from "../lib/modulehost.ts";
+
+type ShellOverlay = NonNullable<ReturnType<typeof modules>[number]["overlays"]>[number];
+
+function ModuleOverlayCard({
+  overlay,
+  canvasId,
+  canvas,
+  host,
+  groupMode,
+}: {
+  overlay: ShellOverlay;
+  canvasId: string;
+  canvas: CanvasContents;
+  host: WebHost;
+  groupMode: "legacy" | "groups";
+}) {
+  const float = useFloatingBox<HTMLDivElement>({ minWidth: 260, minHeight: 160 });
+  const Body = overlay.component;
+  return (
+    <div
+      ref={float.ref}
+      /* `floats` is the rule for anything that floats over the
+         canvas — one ground, one hairline, one radius, one
+         shadow — so a module's tray looks like the app's own
+         chrome rather than like a module's idea of chrome. */
+      className={`module-overlay floats${float.isSized ? " is-sized" : ""}`}
+      style={float.style}
+      aria-label={overlay.label}
+    >
+      <FloatingHandles box={float} />
+      <Body canvasId={canvasId} canvas={canvas} host={host} groupMode={groupMode} />
+    </div>
+  );
+}
 
 /**
  * **Screen-space chrome a module contributes** (#156, 9 Sep 2026).
@@ -53,22 +88,16 @@ export function ModuleOverlays({ canvasId, actor }: { canvasId: string; actor: A
         if (here.length === 0) return null;
         return (
           <div key={region} className={`module-overlays module-overlays-${region}`}>
-            {here.map(({ module, overlay }) => {
-              const Body = overlay.component;
-              return (
-                <div
-                  key={`${module}:${overlay.label}`}
-                  /* `floats` is the rule for anything that floats over the
-                     canvas — one ground, one hairline, one radius, one
-                     shadow — so a module's tray looks like the app's own
-                     chrome rather than like a module's idea of chrome. */
-                  className="module-overlay floats"
-                  aria-label={overlay.label}
-                >
-                  <Body canvasId={canvasId} canvas={canvas} host={host} groupMode={project?.groupMode ?? "legacy"} />
-                </div>
-              );
-            })}
+            {here.map(({ module, overlay }) => (
+              <ModuleOverlayCard
+                key={`${module}:${overlay.label}`}
+                overlay={overlay}
+                canvasId={canvasId}
+                canvas={canvas}
+                host={host}
+                groupMode={project?.groupMode ?? "legacy"}
+              />
+            ))}
           </div>
         );
       })}

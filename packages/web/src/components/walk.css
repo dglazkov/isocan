@@ -5,10 +5,14 @@
    notice that these are simulations wears the warn rule, and stays. */
 .walk-panel {
   position: fixed; top: 64px; right: 16px; z-index: var(--z-float);
-  width: min(880px, calc(100% - 32px)); max-height: calc(100% - 80px); overflow-y: auto;
+  width: min(880px, calc(100% - 32px)); max-height: calc(100% - 80px);
+  display: flex; flex-direction: column; overflow: hidden;
   padding: 12px; font-size: 12.5px; line-height: 1.45;
-  background: var(--card); color: var(--ink);
-  border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-pop);
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+  color: var(--ink);
+  border: 1px solid var(--glass-border); border-radius: var(--radius); box-shadow: var(--shadow-glass);
 }
 .walk-panel h3 { margin: 0 24px 8px 0; font-size: 13px; }
 .walk-panel h4 { margin: 0 0 4px; font-size: 11px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.04em; }

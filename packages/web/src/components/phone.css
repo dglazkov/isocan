@@ -35,8 +35,8 @@
 .edge-down { left: calc(50% - 22px); bottom: 54px; }
 .phone-thread-toggle { flex-shrink: 0; margin: 4px 8px; }
 .phone-empty { padding: 24px; }
-.phone-sheet { position: absolute; inset: max(70px, 18dvh) 0 0; z-index: var(--z-popover); display: flex; flex-direction: column; background: var(--card); border: 1px solid var(--line); border-radius: 18px 18px 0 0; box-shadow: var(--shadow-pop); overflow: hidden; padding-bottom: env(safe-area-inset-bottom); }
-.phone-sheet .thread-popover { position: relative; inset: auto; width: 100%; max-width: none; min-height: 0; flex: 1; border: 0; border-radius: 0; box-shadow: none; overflow-y: auto; display: flex; flex-direction: column; }
+.phone-sheet { position: absolute; inset: max(70px, 18dvh) 0 0; z-index: var(--z-popover); display: flex; flex-direction: column; background: var(--glass); -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter); border: 1px solid var(--glass-border); border-radius: 18px 18px 0 0; box-shadow: var(--shadow-glass); overflow: hidden; padding-bottom: env(safe-area-inset-bottom); }
+.phone-sheet .thread-popover { position: relative; inset: auto; width: 100%; max-width: none; min-height: 0; flex: 1; border: 0; border-radius: 0; box-shadow: none; background: none; -webkit-backdrop-filter: none; backdrop-filter: none; overflow-y: auto; display: flex; flex-direction: column; }
 .phone-sheet .thread-comments { max-height: none; flex: 1; }
 .phone-plan-surface { position: absolute; inset: 0; }
 .phone-plan-surface .canvas-viewport { position: absolute; inset: 0; }
@@ -55,7 +55,7 @@
    document of its own, and the walk leaves both alone (lib/touchnavigation.ts). */
 .phone-artifact > *, .phone-node .md-view { touch-action: pan-y; }
 
-.phone-more-menu { position: absolute; top: 56px; right: 110px; z-index: var(--z-popover); padding: 8px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-pop); }
+.phone-more-menu { position: absolute; top: 56px; right: 110px; z-index: var(--z-popover); padding: 8px; background: var(--glass); -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter); border: 1px solid var(--glass-border); border-radius: var(--radius); box-shadow: var(--shadow-glass); }
 .phone-context-sheet { inset: 56px 0 60px; border-radius: 0; padding: 0; }
 .phone-context-sheet .context-panel { display: flex; position: static; width: 100% !important; height: 100%; max-height: none; min-height: 0; border: 0; box-shadow: none; }
 .phone-context-sheet .panel-resizer { display: none; }

@@ -89,12 +89,14 @@
   z-index: var(--z-popover);
   width: 220px;
   padding: 6px 8px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius);
-  background: var(--panel);
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
   color: var(--ink);
   font-size: 12px;
-  box-shadow: var(--shadow-pop);
+  box-shadow: var(--shadow-glass);
   visibility: hidden;
 }
 .proposal-term:hover .proposal-term-def,
@@ -131,12 +133,14 @@
   gap: 8px;
   width: min(420px, calc(100vw - 32px));
   padding: 10px 12px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius);
-  background: var(--panel);
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
   color: var(--ink);
   font-size: 13px;
-  box-shadow: var(--shadow-pop);
+  box-shadow: var(--shadow-glass);
 }
 .proposal-toast p { margin: 0; }
 .proposal-toast-row { display: flex; gap: 6px; }

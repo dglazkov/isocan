@@ -72,7 +72,7 @@ export const UI_PIECES: readonly UiPiece[] = [
     id: "glass",
     name: "Floating Glass",
     summary: "Frosted background opacity, blur, saturation, rim border, corner radius, and screen inset.",
-    selector: ".floats, .sketch-bar, .ink-well, .react-picker",
+    selector: ".floats, .sketch-bar, .ink-well, .react-picker, .identity-popover, .hover-card, .modal-card, .context-menu, .thread-popover, .palette",
   },
   {
     id: "toolbar",
@@ -990,6 +990,7 @@ export function compileUiTweaksCss(input: UiTweaks): string {
   if (glassBlur !== undefined || glassSaturate !== undefined) {
     const b = glassBlur ?? 6;
     const s = glassSaturate ?? 1.45;
+    rootVars.push(`--glass-filter: blur(${b}px) saturate(${s});`);
     rules.push(
       `.floats, .minimap, .marks, .sketch-bar, .ink-well, .react-picker { -webkit-backdrop-filter: blur(${b}px) saturate(${s}); backdrop-filter: blur(${b}px) saturate(${s}); }`,
     );

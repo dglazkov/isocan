@@ -42,7 +42,7 @@ const ALLOWED = [
  * literal in any other sheet fails the case below.
  */
 const MODULE_LITERALS: Record<string, number> = {
-  "packages/modules/anatomy/src/style.css": 14,
+  "packages/modules/anatomy/src/style.css": 13,
   "packages/modules/wireframe/assets/styles.css": 7,
   // The mic's pulse, a blue no theme moves.
   "packages/modules/talk/src/web.tsx": 3,
