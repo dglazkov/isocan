@@ -39,7 +39,7 @@
       "Loop's own rank is kept only for comparison. Declined and stale findings are",
       "dismissed in Loop, and every decision is sent back to it as a context so its",
       "next pass knows why. `node scripts/loop.mjs pull` fetches; `decide <slug>",
-      "<decision>` decides — and deciding is a person's, because it is sent to a",
+      "<decision>` decides \u2014 and deciding is a person's, because it is sent to a",
       "workspace other people read."
     ],
     "hedge": true,
@@ -58,5 +58,26 @@
   "migrations": [
     "0004-test-ledger",
     "0005-test-ledger-reach"
-  ]
+  ],
+  "production": {
+    "version": 1,
+    "enabled": true,
+    "sources": [
+      {
+        "id": "isocan-production",
+        "provider": "gcp",
+        "project": "isocan-io-prod",
+        "service": "isocan",
+        "environment": "production",
+        "windowMinutes": 1440,
+        "maxEvents": 1000,
+        "maxBytes": 1048576,
+        "timeoutMs": 30000,
+        "threshold": 3,
+        "site": "https://isocan.io",
+        "region": "us-west1"
+      }
+    ],
+    "since": "2026-10-17T00:00:00Z"
+  }
 }
