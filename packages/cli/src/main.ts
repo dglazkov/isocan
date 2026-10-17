@@ -16,6 +16,7 @@ import { registerQuestionnaires } from "./questionnaire.ts";
 import { registerDesignSystems } from "./design-system.ts";
 import { designGovernsNotes, designReleasedNotes } from "./design-scope-notes.ts";
 import { designUnuse, designUse, ownDesignSystemAt } from "@isocan/core/design-use";
+import { moodBoardRead } from "@isocan/core/mood";
 import { cleanupNoun, cleanupOps, cleanupSelection, parseBefore, type CommentFilter } from "@isocan/core/chatclean";
 import { registerDesignRequests } from "./design-request.ts";
 import { registerDesignDecisions } from "./design-decision.ts";
@@ -11477,7 +11478,21 @@ style
       const scope = designScope(snapshot, opts.in);
       const { governing } = await readDesignSystem(designSystemPort(ctx), { canvasId: p.id, ...(scope.at ? { target: { kind: "item", itemId: scope.at.id } } : {}) });
       if (governing.status !== "available") throw new Error(governing.reason);
-      const findings = bySeverity(checkDesign(governing.document));
+      const boardRead = moodBoardRead(snapshot.canvas, snapshot.project.groupMode ?? "legacy");
+      const isocanExt = governing.document.tokens.isocan;
+      const hasSources =
+        isocanExt !== null &&
+        typeof isocanExt === "object" &&
+        !Array.isArray(isocanExt) &&
+        "sources" in isocanExt;
+      const findings = bySeverity(
+        checkDesign(
+          governing.document,
+          boardRead.boardId || hasSources
+            ? { boardTileIds: new Set(boardRead.tiles.map((t) => t.itemId)) }
+            : undefined,
+        ),
+      );
       if (ctx.json) return printJson(opts.provenance ? { findings, governing } : findings);
       console.error(`${governing.title} · ${governing.selection.reason}${governing.exempt ? " · requirement exempt; incumbent retained" : ""}`);
       if (findings.length === 0) return console.error(`${governing.title}: nothing to fix`);

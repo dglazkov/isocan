@@ -257,3 +257,127 @@ describe("isocan mood keep, drop, and more", () => {
     expect(badDial.stderr).toMatch(/--push must be one of/);
   }, 60_000);
 });
+
+describe("isocan mood board and style check", () => {
+  it("mood board --json returns kept tiles with swatches, axis, prompt, and words", async () => {
+    const run = await isocan("mood", "board", "--json");
+    expect(run.code, run.stderr).toBe(0);
+    const read = JSON.parse(run.stdout) as {
+      boardId: string | null;
+      words: string[];
+      tiles: Array<{
+        itemId: string;
+        title: string;
+        mood: string;
+        axis: string | null;
+        prompt: string | null;
+        words: string;
+        swatches: Array<{ hex: string; share: number }>;
+      }>;
+    };
+    expect(read.boardId).toBeTruthy();
+    expect(read.words).toContain("sunlit linen workshop");
+    expect(read.tiles.length).toBeGreaterThanOrEqual(2);
+    for (const tile of read.tiles) {
+      expect(tile.mood).toBe("kept");
+      expect(tile.axis).toBeTruthy();
+      expect(tile.prompt).toContain("sunlit linen workshop");
+      expect(tile.words).toBe("sunlit linen workshop");
+      expect(tile.swatches.length).toBeGreaterThanOrEqual(3);
+    }
+
+    const human = await isocan("mood", "board");
+    expect(human.code, human.stderr).toBe(0);
+    expect(human.stdout).toContain(`tiles on Mood (${read.boardId})`);
+  }, 60_000);
+
+  it("style check fails on uncited colours or off-board tile citations, and passes when every colour and direction field cites a kept tile", async () => {
+    const boardRes = await isocan("mood", "board", "--json");
+    expect(boardRes.code, boardRes.stderr).toBe(0);
+    const { tiles } = JSON.parse(boardRes.stdout) as { tiles: Array<{ itemId: string }> };
+    const [t1, t2] = tiles.map((t) => t.itemId);
+    expect(t1).toBeTruthy();
+    expect(t2).toBeTruthy();
+
+    const writeDesign = async (sources: Record<string, string>, extraColor = false) => {
+      const docPath = path.join(home, "DESIGN.md");
+      const doc = `---
+name: Acme Sunlit Linen
+colors:
+  primary: "#2F3E46"
+  neutral: "#F4F1EA"
+  tertiary: "#8A4216"${extraColor ? '\n  cobalt: "#1E40AF"' : ""}
+typography:
+  body-md:
+    fontFamily: Public Sans
+    fontSize: 16px
+isocan:
+  direction:
+    version: 1
+    stage: provisional
+    rationale: 'Nico asked for "sunlit linen workshop". Kept tiles hold warm flour ground, slate ink, and crust highlights.'
+    taskHierarchy:
+      - Inspect daily batches
+    layout: Two-column workbench sheet.
+    density: Unhurried rows.
+    typography: Editorial serif display over clean sans body.
+    palettePurpose: Flour ground, slate text, crust primary actions.
+    treatments:
+      - name: BatchRow
+        guidance: Quiet row highlighting active batch counts.
+        states:
+          - default
+          - focused
+  sources:
+${Object.entries(sources)
+  .map(([k, v]) => `    ${k}: "${v}"`)
+  .join("\n")}
+---
+
+## Overview
+
+Sunlit linen workshop.
+
+## Colors
+
+Warm flour ground, slate ink, crust highlights.
+
+## Typography
+
+Editorial serif display over clean sans.
+`;
+      await fs.writeFile(docPath, doc, "utf8");
+      const setRun = await isocan("style", "set", docPath);
+      expect(setRun.code, setRun.stderr).toBe(0);
+    };
+
+    const goodSources: Record<string, string> = {
+      "colors.primary": t1!,
+      "colors.neutral": t1!,
+      "colors.tertiary": t2!,
+      "direction.layout": t1!,
+      "direction.density": t1!,
+      "direction.typography": t2!,
+      "direction.palettePurpose": t1!,
+      "direction.treatments.BatchRow": t2!,
+    };
+
+    // 1. Fails when an extra colour is uncited and not explained in rationale.
+    await writeDesign(goodSources, true);
+    const uncitedCheck = await isocan("style", "check");
+    expect(uncitedCheck.code).not.toBe(0);
+    expect(uncitedCheck.stdout).toContain("colors.cobalt");
+
+    // 2. Fails when a cited itemId is not on the Mood board.
+    await writeDesign({ ...goodSources, "colors.tertiary": "itm_ghost_tile" }, false);
+    const ghostCheck = await isocan("style", "check");
+    expect(ghostCheck.code).not.toBe(0);
+    expect(ghostCheck.stdout).toContain("isocan.sources.colors.tertiary");
+
+    // 3. Passes when every colour and direction field cites a kept tile on the board.
+    await writeDesign(goodSources, false);
+    const okCheck = await isocan("style", "check");
+    expect(okCheck.code, okCheck.stderr).toBe(0);
+    expect(okCheck.stderr).toContain("nothing to fix");
+  }, 60_000);
+});

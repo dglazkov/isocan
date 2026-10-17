@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { isGroupItem, newOpId, newVersionId, type Actor } from "@isocan/core";
+import { isGroupItem, newOpId, newVersionId, readDesignSources, type Actor } from "@isocan/core";
+import { moodBoardRead } from "@isocan/core/mood";
 import { projectDesignSystem, readDesignSystem, reconcileDesignProjection, prepareDesignReconciliation, parseDesignProjection, type DesignSystemRead, type DesignSystemTarget } from "@isocan/api/design-system";
 import { designSystemIO } from "../lib/design-system.ts";
 import { designSystemDraftText, switchDesignSystemDraft, newDesignSystemDraft, readDesignSystemDraft, type DesignSystemDraft, type DirectionFields } from "../lib/design-system-draft.ts";
+import { goodnightLead } from "../lib/goodnight.ts";
+import { postToMain } from "../lib/mainthread.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { moduleDialog } from "../modules.ts";
@@ -22,9 +25,49 @@ export function saveDesignFile(text: string, filename: string, type = "text/plai
 export function DesignSystemsDialog({ canvasId, actor, initialTarget, onClose }: { canvasId: string; actor: Actor; initialTarget: DesignSystemTarget; onClose: () => void }) {
   const [target, setTarget] = useState(initialTarget), body = useRef<HTMLDivElement>(null);
   const canvas = useCanvasStore((state) => state.canvas);
+  const record = useCanvasStore((state) => state.record);
+  const past = useCanvasStore((state) => state.past);
+  const permitted = useCanEdit();
   useUiStore((state) => state.modulesGeneration);
   useUiStore((state) => state.experiments);
   const moodExplore = moduleDialog("mood-explore");
+  const editable = permitted && !past;
+  const groupMode = record?.groupMode ?? "legacy";
+  const boardRead = useMemo(
+    () => (moodExplore && canvas ? moodBoardRead(canvas, groupMode) : null),
+    [moodExplore, canvas, groupMode],
+  );
+  const [moodNotice, setMoodNotice] = useState("");
+  const [deriving, setDeriving] = useState(false);
+  const deriveFromBoard = async () => {
+    if (deriving || !boardRead?.boardId || boardRead.tiles.length === 0) return;
+    setDeriving(true);
+    setMoodNotice("");
+    try {
+      const { lead, cannot } = await goodnightLead(canvasId, actor.id);
+      if (!lead || cannot) {
+        setMoodNotice("No agent is parked on this canvas — start isocan rc or park an agent, then derive from the board. Nothing was written.");
+        return;
+      }
+      const sent = await postToMain(
+        canvasId,
+        actor,
+        `@${lead.name} /design-system`,
+        [boardRead.boardId],
+        undefined,
+        { mentions: [lead.id] },
+      );
+      if (sent.status === "refused") {
+        setMoodNotice(sent.message ?? "The Chat refused the message.");
+        return;
+      }
+      setMoodNotice(`Asked ${lead.name} to derive the design system from the Mood board.`);
+    } catch (error) {
+      setMoodNotice(error instanceof Error ? error.message : "Could not ask an agent to derive from the Mood board.");
+    } finally {
+      setDeriving(false);
+    }
+  };
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
     const controls = () => [...(body.current?.closest('[role="dialog"]')?.querySelectorAll<HTMLElement>('button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),summary') ?? [])].filter((element) => element.getClientRects().length > 0);
@@ -35,13 +78,15 @@ export function DesignSystemsDialog({ canvasId, actor, initialTarget, onClose }:
   const encoded = JSON.stringify(target);
   return <Modal label="Design system and references" title="Design system & references" onClose={onClose} wide><div className="design-systems" ref={body}>
     <label className="design-scope">Designing for<select aria-label="Design scope" value={encoded} onChange={(event) => setTarget(JSON.parse(event.target.value) as DesignSystemTarget)}><option value={JSON.stringify({ kind: "canvas" })}>Canvas · default and uncovered screens</option>{Object.values(canvas?.items ?? {}).filter(isGroupItem).map((item) => <option key={item.id} value={JSON.stringify({ kind: "group", groupId: item.id })}>Group · {item.title}</option>)}{Object.values(canvas?.items ?? {}).filter((item) => !isGroupItem(item)).map((item) => <option key={item.id} value={JSON.stringify({ kind: "item", itemId: item.id })}>Item · {item.title}</option>)}{target.kind === "point" && <option value={encoded}>Chosen canvas position</option>}</select></label>
-    {moodExplore && <div className="design-system-actions"><button type="button" className="btn secondary" onClick={() => { onClose(); useUiStore.getState().openModuleDialog("mood-explore", ""); }}>Explore a look…</button></div>}
+    {moodExplore && <div className="design-system-actions"><button type="button" className="btn secondary" onClick={() => { onClose(); useUiStore.getState().openModuleDialog("mood-explore", ""); }}>Explore a look…</button>{editable && boardRead && boardRead.tiles.length > 0 && <button type="button" className="btn secondary" disabled={deriving} onClick={() => void deriveFromBoard()}>{deriving ? "Asking…" : "Derive from the board"}</button>}</div>}
+    {moodNotice && <p role="status" className="design-system-notice" data-testid="mood-derive-notice">{moodNotice}</p>}
     <SystemScope key={JSON.stringify([canvasId, actor.id, target])} canvasId={canvasId} actor={actor} target={target} />
   </div></Modal>;
 }
 
 function SystemScope({ canvasId, actor, target }: { canvasId: string; actor: Actor; target: DesignSystemTarget }) {
   const io = useMemo(() => designSystemIO(actor), [actor]);
+  const canvas = useCanvasStore((state) => state.canvas);
   const seq = useCanvasStore((state) => state.lastSeq), past = useCanvasStore((state) => state.past), permitted = useCanEdit();
   const [read, setRead] = useState<DesignSystemRead | null>(null), [checking, setChecking] = useState(true), [readError, setReadError] = useState("");
   const [revision, setRevision] = useState(0), refresh = useCallback(() => setRevision((value) => value + 1), []);
@@ -49,6 +94,16 @@ function SystemScope({ canvasId, actor, target }: { canvasId: string; actor: Act
   const [restoring, setRestoring] = useState(true), [corrupt, setCorrupt] = useState(false), [storageError, setStorageError] = useState("");
   const [archived, setArchived] = useState<string[]>([]);
   const [busy, setBusy] = useState(false), busyRef = useRef(false), [notice, setNotice] = useState("");
+  const peekedRef = useRef<string | null>(null);
+  const setPeek = useCallback((itemId: string | null) => {
+    peekedRef.current = itemId;
+    useUiStore.getState().setPeeked(itemId);
+  }, []);
+  useEffect(() => () => {
+    if (peekedRef.current && useUiStore.getState().peekedItemId === peekedRef.current) {
+      useUiStore.getState().setPeeked(null);
+    }
+  }, []);
   const storageKey = `isocan.design.system.v1:${JSON.stringify([canvasId, actor.id, target])}`;
   const keep = useCallback((next: DesignSystemDraft | null) => { draftRef.current = next; setDraft(next); try { if (next) localStorage.setItem(storageKey, JSON.stringify(next)); else localStorage.removeItem(storageKey); setStorageError(""); } catch { setStorageError("This working draft could not be kept for refresh. Keep this page open."); } }, [storageKey]);
   useEffect(() => { try { setArchived(Object.keys(localStorage).filter((key) => key.startsWith(`${storageKey}:archive:`)).sort().reverse()); } catch { setStorageError("Saved draft history could not be read."); } }, [storageKey]);
@@ -85,6 +140,11 @@ function SystemScope({ canvasId, actor, target }: { canvasId: string; actor: Act
   // each one used to disable every action here and flash the status. What
   // stops a save is having no reading, a failed one, or a stale draft (RH-5, 27 Sep 2026).
   const healthy = !settling && !readError;
+  const sources = useMemo(
+    () => (governing?.status === "available" ? readDesignSources(governing.document) : {}),
+    [governing],
+  );
+  const sourceEntries = Object.entries(sources);
   return <>
     {settling && <p role="status">Checking this scope’s design…</p>}{readError && <p role="alert">{readError} <button className="btn secondary" onClick={refresh}>Retry read</button></p>}
     {governing && <section className="design-scope-summary" aria-label="Governing design"><h3>{governing.status === "available" ? governing.title : governing.status === "unavailable" ? "Design context unavailable" : "No governing design document"}</h3><p>{governing.status === "available" ? governing.selection.reason : governing.reason}</p>{governing.exempt && <p>No written system is required on this canvas.{governing.artifact ? " The existing system still governs this scope." : " You can still record an optional direction."}</p>}
@@ -92,6 +152,7 @@ function SystemScope({ canvasId, actor, target }: { canvasId: string; actor: Act
       {governing.selection.candidates.length > 1 && <p role="status">Multiple documents share the winning scope. The existing newest-document rule selects the one above.</p>}
       {read?.direction.status === "valid" && <div className="design-direction-summary"><strong>{read.direction.direction.stage === "accepted" ? "Accepted treatments · authored record" : "Provisional direction"}</strong><p>{read.direction.direction.rationale}</p><ol>{read.direction.direction.taskHierarchy.map((line, index) => <li key={index}>{line}</li>)}</ol><small>Written by {read.author?.name ?? "an unknown author"}. This declared stage is design documentation.</small><details><summary>Reusable treatments</summary>{read.direction.direction.treatments.map((treatment) => <p key={treatment.name}><strong>{treatment.name}</strong> · {treatment.guidance}<br /><small>{treatment.states.join(" · ")}</small></p>)}</details></div>}
       {read?.direction.status === "malformed" && <p role="alert">The direction could not be read: {read.direction.problems.join(" ")}</p>}
+      {governing.status === "available" && sourceEntries.length > 0 && <div className="design-sources" aria-label="Sources on the Mood board"><h4>Sources on the Mood board</h4><ul className="design-source-list">{sourceEntries.map(([path, itemId]) => { const isColor = path.startsWith("colors."); const colorName = isColor ? path.slice("colors.".length) : ""; const hex = isColor ? governing.document.tokens.colors?.[colorName] : undefined; const label = isColor ? `${colorName}${hex ? ` ${String(hex)}` : ""}` : path.replace(/^direction\./, ""); const tileTitle = canvas?.items[itemId]?.title ?? itemId; return <li key={path} className="design-source-chip" data-source-path={path} data-source-item={itemId} tabIndex={0} onPointerEnter={() => setPeek(itemId)} onMouseEnter={() => setPeek(itemId)} onFocus={() => setPeek(itemId)} onPointerLeave={() => setPeek(null)} onMouseLeave={() => setPeek(null)} onBlur={() => setPeek(null)}>{hex && <i className="design-source-swatch" aria-hidden style={{ background: String(hex) }} />}<span>{label} — from “{tileTitle}”</span></li>; })}</ul></div>}
       <details><summary>Selection and exact source</summary><p>Winning level: {governing.selection.level}</p>{governing.selection.candidates.map((one) => <p key={one.artifact.itemId}>{one.title} · version {one.artifact.versionId}</p>)}{governing.artifact && <code>{JSON.stringify(governing.artifact, null, 2)}</code>}{governing.refusedSources.map((one) => <p key={`${one.canvasId}:${one.itemId}`}>{one.reason}</p>)}</details>
       {governing.status === "available" && !draft && !restoring && !corrupt && <div className="design-system-actions"><button className="btn secondary" disabled={!healthy || busy} onClick={() => void capture("document")}>Open working document</button>{editable && <button className="btn secondary" disabled={!healthy || busy || read?.direction.status === "malformed"} onClick={() => void capture("direction")}>{read?.direction.status === "valid" ? "Edit reusable direction" : "Record provisional direction"}</button>}</div>}
     </section>}

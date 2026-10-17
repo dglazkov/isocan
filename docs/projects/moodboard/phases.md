@@ -13,7 +13,7 @@ step, then the board as a critic.
 **Phase citations name their project**: `moodboard phase 2`, never a bare
 "phase 2".
 
-**Where we are, 17 Oct 2026:** phases 0 and 1 are PART-DONE and phase 2 is CLOSED — `POST /api/image`, `POST /api/image/swatches`, `isocan mood explore|keep|drop|more`, deterministic CIE L\*a\*b\* k-means swatches (`moodSwatches`), `.mood-swatch-strip` on kept and reference tiles, and the web tray (`/moodboard`, *Explore a look*, keep, drop, *More like this*, *Push*, reference photo drops) pass unit, CLI, and headless Chrome proofs; phases 0–1's real-key runs wait on a Gemini key with billing. `moodboard phase 3` (derive the system from the board) is next. Dion decided the three open questions on 16 Oct 2026 ([`design.md`](design.md) §8): Flash by default, hosted homes allowed, nine tiles a spread.
+**Where we are, 17 Oct 2026:** phases 0 and 1 are PART-DONE and phases 2 and 3 are CLOSED — `POST /api/image`, `POST /api/image/swatches`, `isocan mood explore|keep|drop|more|board`, deterministic CIE L\*a\*b\* k-means swatches (`moodSwatches`), `.mood-swatch-strip` on kept and reference tiles, `/design-system`'s board branch with `tokens.isocan.sources` citation checking in `checkDesign`, and *Derive from the board* plus hover-token-to-peek-tile in the web app pass unit, CLI, and headless Chrome proofs; phases 0–1's real-key runs wait on a Gemini key with billing. `moodboard phase 4` (the board as a critic) is next. Dion decided the three open questions on 16 Oct 2026 ([`design.md`](design.md) §8): Flash by default, hosted homes allowed, nine tiles a spread.
 
 ---
 
@@ -95,7 +95,7 @@ same swatches the web wrote.
 
 ## Phase 3 — Derive the system from the board
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 17 Oct 2026.** `moodBoardRead` (`packages/core/src/mood.ts`) and `isocan mood board [--json]` (`packages/modules/mood/src/cli.ts`) read kept and reference tiles on legacy and group-mode Mood boards with their `axis`, `prompt`, `words`, and `swatches`. `/design-system` (`packages/core/src/command-bodies.ts`) gains the Mood board branch instructing the agent to derive `DESIGN.md` from `isocan mood board --json` and record every palette token and direction choice in `tokens.isocan.sources`. `readDesignSources` and `checkDesign(doc, { boardTileIds })` (`packages/core/src/designcheck.ts`, wired into `isocan style check` in `packages/cli/src/main.ts`) fail on any uncited palette token or direction field not explained in `direction.rationale`, or any source citing an item not on the Mood board, while `auditScreen` (`isocan design audit`) runs unchanged. In the web app, `DesignSystemsDialog.tsx` adds *Derive from the board* (dispatching `@<lead> /design-system` with `[boardId]` or showing a one-sentence notice when no agent is parked) and renders source tile chips; hovering or focusing a cited token in `DesignSystemsDialog.tsx` or `DesignSystemView.tsx` sets `setPeeked(itemId)` to light its source tile on the canvas. Proved in `packages/core/test/mood.test.ts`, `packages/core/test/designcheck.test.ts`, `packages/cli/test/mood.test.ts`, and `scripts/journey-moodboard.mjs` (10 headless Chrome checks).
 
 - `isocan mood board --json`; `/design-system`'s board branch;
   `tokens.isocan.sources`; *Derive from the board* through the parked agent;

@@ -19,7 +19,7 @@ const { writeKey } = await import(pathToFileURL(path.join(repo, "packages/core/s
 const { deltaE, parseMoodSwatches } = await import(pathToFileURL(path.join(repo, "packages/core/src/mood.ts")).href);
 const { writeBadge, adoptIdentity } = await import(pathToFileURL(path.join(repo, "packages/server/src/badge-store.ts")).href);
 const { DaemonClient } = await import(pathToFileURL(path.join(repo, "packages/api/src/client.ts")).href);
-const { BADGE_COOKIE, parseBadgeToken } = await import(pathToFileURL(path.join(repo, "packages/core/src/index.ts")).href);
+const { BADGE_COOKIE, designSystemProperties, newItemId, newVersionId, parseBadgeToken, serializeDesign } = await import(pathToFileURL(path.join(repo, "packages/core/src/index.ts")).href);
 const { browser, until } = await import(pathToFileURL(path.join(repo, "scripts/lib/browser.mjs")).href);
 const { click, navigate, enterName, screenshot } = await import(pathToFileURL(path.join(repo, "scripts/lib/personal-journey-fixture.mjs")).href);
 const { clickText, fill } = await import(pathToFileURL(path.join(repo, "scripts/lib/design-systems-browser.mjs")).href);
@@ -346,10 +346,128 @@ try {
   );
   checks.push("Close tray removes remaining candidates in one undoable group, and one Undo restores them.");
 
-  await screenshot(b, path.join(output, "moodboard-phase2.png"));
+  // 10. Phase 3: With no agent parked, clicking Derive from the board shows the one-sentence notice and writes nothing.
+  await click(b, '[aria-label="Design system and references"]');
+  await until(b, `document.querySelector(".design-systems") !== null`, "Design systems dialog open for Derive check");
+  await clickText(b, "Derive from the board", ".design-systems button");
+  await until(
+    b,
+    `document.querySelector('[data-testid="mood-derive-notice"]') !== null`,
+    "Derive from the board notice shown when no agent is parked",
+  );
+  const deriveNotice = await b.ev(`document.querySelector('[data-testid="mood-derive-notice"]')?.textContent?.trim()`);
+  assert(
+    deriveNotice?.includes("No agent is parked on this canvas") && deriveNotice?.includes("Nothing was written."),
+    `expected no-agent notice, got: ${deriveNotice}`,
+  );
+  snap = await client.snapshot(CANVAS_ID);
+  assert.equal(
+    Object.values(snap.canvas.items).some((i) => i.properties.role === "design-system"),
+    false,
+    "nothing written when Derive from the board is clicked with no parked agent",
+  );
+  await click(b, '[aria-label="Design system and references"] button[aria-label="Close"]');
+  await until(b, `document.querySelector(".design-systems") === null`, "Design systems dialog closed");
+  checks.push("Clicking Derive from the board with no parked agent shows a one-sentence notice and writes nothing.");
+
+  // 11. Phase 3: Governing DESIGN.md with isocan.direction + isocan.sources shows source citations and lights the tile on hover.
+  const designText = serializeDesign(
+    {
+      name: "Acme Dawn Bakery",
+      colors: {
+        primary: "#2F3E46",
+        neutral: "#F4F1EA",
+        tertiary: "#8A4216",
+      },
+      typography: {
+        "body-md": { fontFamily: "Public Sans", fontSize: "16px" },
+      },
+      isocan: {
+        direction: {
+          version: 1,
+          stage: "provisional",
+          rationale:
+            'Maya asked for "a quiet bakery at dawn". Kept tiles carry warm flour ground, slate ink, and toasted crust.',
+          taskHierarchy: ["Read morning inventory", "Adjust loaf batch counts"],
+          layout: "Wide two-column sheet with generous linen margins.",
+          density: "Unhurried rows with clear breathing room.",
+          typography: "Editorial serif headings over clean tabular sans.",
+          palettePurpose: "Warm flour surface, deep slate ink, and crust highlights.",
+          treatments: [
+            { name: "BatchRow", guidance: "Quiet row that highlights active counts.", states: ["default", "focused"] },
+          ],
+        },
+        sources: {
+          "colors.primary": firstThreeIds[0],
+          "colors.neutral": firstThreeIds[1],
+          "colors.tertiary": firstThreeIds[2],
+          "direction.layout": firstThreeIds[0],
+          "direction.density": firstThreeIds[1],
+          "direction.typography": firstThreeIds[2],
+          "direction.palettePurpose": refItem.id,
+          "direction.treatments.BatchRow": firstThreeIds[0],
+        },
+      },
+    },
+    "## Overview\n\nWarm bakery morning.\n\n## Colors\n\nCrust and slate on flour.\n\n## Typography\n\nWorkhorse serif and sans.\n",
+  );
+  const uploadedDesign = await client.uploadBlob(CANVAS_ID, Buffer.from(designText, "utf8"), "text/markdown", "DESIGN.md");
+  await client.sendOp(CANVAS_ID, maya, {
+    type: "item.add",
+    itemId: newItemId(),
+    version: { id: newVersionId(), blobHash: uploadedDesign.blobHash, mimeType: "text/markdown", filename: "DESIGN.md", size: uploadedDesign.size },
+    width: 480,
+    height: 640,
+    placement: { x: -640, y: 0, chosen: true },
+    title: "DESIGN.md",
+    properties: designSystemProperties(),
+  });
+
+  await click(b, '[aria-label="Design system and references"]');
+  await until(
+    b,
+    `document.querySelectorAll(".design-sources .design-source-chip").length >= 8`,
+    "Sources on the Mood board chips rendered in Design systems dialog",
+  );
+  const firstTileTitle = snap.canvas.items[firstThreeIds[0]]?.title ?? "";
+  const primaryChipText = await b.ev(`document.querySelector('[data-source-path="colors.primary"]')?.textContent?.trim()`);
+  assert(
+    primaryChipText?.includes(firstTileTitle),
+    `expected colors.primary chip to cite "${firstTileTitle}", got: ${primaryChipText}`,
+  );
+
+  // Hover the colors.primary chip and verify the kept tile lights up as .item.peeked on the canvas.
+  await b.ev(`(() => {
+    const chip = document.querySelector('[data-source-path="colors.primary"]');
+    if (!chip) throw new Error("colors.primary chip missing");
+    chip.dispatchEvent(new PointerEvent("pointerenter", { bubbles: true }));
+    chip.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+    chip.focus();
+  })()`);
+  await until(
+    b,
+    `document.querySelector(${JSON.stringify(`.item.peeked[data-item-id="${firstThreeIds[0]}"]`)}) !== null`,
+    "hovering colors.primary citation sets .item.peeked on its source Mood tile",
+  );
+  await b.ev(`(() => {
+    const chip = document.querySelector('[data-source-path="colors.primary"]');
+    chip?.blur();
+    chip?.dispatchEvent(new PointerEvent("pointerleave", { bubbles: true }));
+    chip?.dispatchEvent(new MouseEvent("mouseleave", { bubbles: true }));
+  })()`);
+  await until(
+    b,
+    `document.querySelector(".item.peeked") === null`,
+    "leaving citation clears .item.peeked",
+  );
+  await click(b, '[aria-label="Design system and references"] button[aria-label="Close"]');
+  await until(b, `document.querySelector(".design-systems") === null`, "Design systems dialog closed after hover check");
+  checks.push("Governing DESIGN.md shows source tile citations, and hovering a palette token lights its source tile on the canvas.");
+
+  await screenshot(b, path.join(output, "moodboard-phase3.png"));
   assert.deepEqual(b.takeErrors(), [], "no browser runtime errors");
 
-  // 10. Close the browser and verify CLI / client reads the exact same moodSwatches with no browser open.
+  // 12. Close the browser and verify CLI / client reads the exact same moodSwatches with no browser open.
   await b.close();
   const closedSnap = await client.snapshot(CANVAS_ID);
   for (const id of firstThreeIds) {

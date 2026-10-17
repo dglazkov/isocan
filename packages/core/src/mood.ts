@@ -10,7 +10,7 @@
  * does not yet, and nothing here belongs in a first visit.
  */
 import { annotationsOf } from "./annotation.ts";
-import { AREA_FILENAME, AREA_MIME, AREA_PROPERTIES, freeSpotIn } from "./area.ts";
+import { AREA_FILENAME, AREA_MIME, AREA_PROPERTIES, freeSpotIn, inArea } from "./area.ts";
 import { isGroupItem } from "./canvas-group-kit.ts";
 import { newItemId, newVersionId } from "./ids.ts";
 import type { Actor, CanvasContents, Item } from "./model.ts";
@@ -18,6 +18,7 @@ import type { Operation } from "./ops.ts";
 import { nearestFreeSpot, PLACEMENT_GAP } from "./placement.ts";
 import {
   formatMoodSwatches,
+  parseMoodSwatches,
   type MoodSwatch,
 } from "./mood-swatches.ts";
 
@@ -558,4 +559,54 @@ export function moodTrays(canvas: CanvasContents): MoodTrayRun[] {
     });
   }
   return trays.sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.run.localeCompare(b.run));
+}
+
+/** One kept or reference tile on the Mood board, ready for `/design-system` or `isocan mood board`. */
+export interface MoodBoardTile {
+  itemId: string;
+  title: string;
+  mood: "kept" | "reference";
+  axis: string | null;
+  prompt: string | null;
+  words: string;
+  swatches: MoodSwatch[];
+}
+
+/**
+ * **Read the canvas's Mood board** (`isocan mood board --json`, design §5) —
+ * returns the board's `itemId`, every `kept` or `reference` tile on it in
+ * reading order (top-to-bottom, left-to-right), each tile's swatches and
+ * provenance, and the distinct subject `words` across kept tiles.
+ */
+export function moodBoardRead(
+  canvas: CanvasContents,
+  groupMode: "legacy" | "groups" = "legacy",
+): { boardId: string | null; words: string[]; tiles: MoodBoardTile[] } {
+  const board = findMoodBoard(canvas);
+  if (!board) return { boardId: null, words: [], tiles: [] };
+  const inGroup = groupMode === "groups" || isGroupItem(board);
+  const onBoard = (item: Item): boolean => {
+    if (item.id === board.id) return false;
+    const mood = item.properties[MOOD_PROPS.mood];
+    if (mood !== "kept" && mood !== "reference") return false;
+    return inGroup ? item.containerId === board.id : inArea(board, item);
+  };
+  const items = Object.values(canvas.items)
+    .filter(onBoard)
+    .sort((a, b) => a.y - b.y || a.x - b.x || a.id.localeCompare(b.id));
+  const tiles: MoodBoardTile[] = items.map((item) => ({
+    itemId: item.id,
+    title: item.title,
+    mood: item.properties[MOOD_PROPS.mood] as "kept" | "reference",
+    axis: item.properties[MOOD_PROPS.axis] ?? null,
+    prompt: item.properties[MOOD_PROPS.prompt] ?? null,
+    words: moodWordsFromPrompt(item.properties[MOOD_PROPS.prompt], item.title),
+    swatches: parseMoodSwatches(item.properties[MOOD_PROPS.swatches]),
+  }));
+  const words: string[] = [];
+  for (const tile of tiles) {
+    if (tile.mood !== "kept" || !tile.words) continue;
+    if (!words.includes(tile.words)) words.push(tile.words);
+  }
+  return { boardId: board.id, words, tiles };
 }

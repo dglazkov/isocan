@@ -15,6 +15,7 @@ import {
   MOOD_MORE_N,
   MOOD_PROPS,
   MOOD_TILE,
+  moodBoardRead,
   moodCostLine,
   moodDropOps,
   moodKeepPlan,
@@ -27,6 +28,7 @@ import {
   rgbToLab,
   spreadAxes,
   swatchesFromRgba,
+  type MoodBoardTile,
 } from "../src/mood.ts";
 
 /**
@@ -356,5 +358,112 @@ describe("mood swatches (pure k-means + CIE Lab ΔE)", () => {
     ]);
     expect(parseMoodSwatches("not-json")).toEqual([]);
     expect(parseMoodSwatches(undefined)).toEqual([]);
+  });
+});
+
+describe("moodBoardRead", () => {
+  const maya = { id: "act_maya", name: "Acme Maya" };
+  const makeItem = (id: string, x: number, y: number, properties: Record<string, string> = {}, extra: Partial<Item> = {}): Item =>
+    ({
+      id,
+      title: `Tile ${id}`,
+      description: "",
+      x,
+      y,
+      width: 320,
+      height: 320,
+      properties,
+      versions: [{ id: `ver_${id}`, blobHash: `hash_${id}`, mimeType: "image/png", filename: `${id}.png`, size: 100, createdAt: "2026-10-17T10:00:00.000Z", createdBy: maya }],
+      currentVersionId: `ver_${id}`,
+      createdAt: "2026-10-17T10:00:00.000Z",
+      createdBy: maya,
+      updatedAt: "2026-10-17T10:00:00.000Z",
+      updatedBy: maya,
+      ...extra,
+    }) as Item;
+  const makeCanvas = (items: Item[]): CanvasContents =>
+    ({ items: Object.fromEntries(items.map((i) => [i.id, i])), threads: {}, trash: [], marks: {} }) as unknown as CanvasContents;
+
+  it("returns empty reading when no Mood board exists", () => {
+    const plain = makeItem("itm_plain", 0, 0, { kind: "area" });
+    expect(moodBoardRead(makeCanvas([plain]), "legacy")).toEqual({ boardId: null, words: [], tiles: [] });
+  });
+
+  it("reads kept and reference tiles in reading order on both legacy and group-mode canvases, ignoring candidates", () => {
+    const swatches = formatMoodSwatches([{ hex: "#b5651d", share: 0.5 }, { hex: "#2f3e46", share: 0.5 }]);
+    const prompt1 = moodPrompt("a quiet bakery at dawn", "the quality of the light");
+    const prompt2 = moodPushPrompt("a quiet bakery at dawn", "warmer", "material and surface");
+
+    for (const groupMode of ["legacy", "groups"] as const) {
+      const board = makeItem(
+        "itm_board",
+        100,
+        100,
+        { kind: groupMode === "groups" ? "group" : "area", [MOOD_PROPS.board]: "true" },
+        { width: 1200, height: 900 },
+      );
+      const containerPatch = groupMode === "groups" ? { containerId: "itm_board" } : {};
+
+      const keptTopRight = makeItem(
+        "itm_k_tr",
+        500,
+        140,
+        { [MOOD_PROPS.mood]: "kept", [MOOD_PROPS.axis]: "material", [MOOD_PROPS.prompt]: prompt2, [MOOD_PROPS.swatches]: swatches },
+        { title: "linen table", ...containerPatch },
+      );
+      const keptTopLeft = makeItem(
+        "itm_k_tl",
+        140,
+        140,
+        { [MOOD_PROPS.mood]: "kept", [MOOD_PROPS.axis]: "light", [MOOD_PROPS.prompt]: prompt1, [MOOD_PROPS.swatches]: swatches },
+        { title: "loaf, 6 a.m.", ...containerPatch },
+      );
+      const refBottom = makeItem(
+        "itm_ref",
+        140,
+        520,
+        { [MOOD_PROPS.mood]: "reference", [MOOD_PROPS.swatches]: swatches },
+        { title: "Acme studio wall — reference", ...containerPatch },
+      );
+      const candidateInside = makeItem(
+        "itm_cand",
+        140,
+        140,
+        { [MOOD_PROPS.mood]: "candidate", [MOOD_PROPS.axis]: "crop", [MOOD_PROPS.prompt]: prompt1 },
+        { ...containerPatch },
+      );
+      const keptOutside = makeItem(
+        "itm_outside",
+        2000,
+        2000,
+        { [MOOD_PROPS.mood]: "kept", [MOOD_PROPS.axis]: "time", [MOOD_PROPS.prompt]: moodPrompt("midnight neon", "a time of day or weather") },
+      );
+
+      const read = moodBoardRead(makeCanvas([board, keptTopRight, keptTopLeft, refBottom, candidateInside, keptOutside]), groupMode);
+      expect(read.boardId).toBe("itm_board");
+      expect(read.words).toEqual(["a quiet bakery at dawn"]);
+      const ids = read.tiles.map((t: MoodBoardTile) => t.itemId);
+      expect(ids).toEqual(["itm_k_tl", "itm_k_tr", "itm_ref"]);
+
+      expect(read.tiles[0]).toEqual({
+        itemId: "itm_k_tl",
+        title: "loaf, 6 a.m.",
+        mood: "kept",
+        axis: "light",
+        prompt: prompt1,
+        words: "a quiet bakery at dawn",
+        swatches: [
+          { hex: "#b5651d", share: 0.5 },
+          { hex: "#2f3e46", share: 0.5 },
+        ],
+      });
+      expect(read.tiles[2]).toMatchObject({
+        itemId: "itm_ref",
+        mood: "reference",
+        axis: null,
+        prompt: null,
+        words: "Acme studio wall",
+      });
+    }
   });
 });

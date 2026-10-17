@@ -14,6 +14,7 @@ import {
   MOOD_MAX_N,
   MOOD_MORE_N,
   MOOD_PROPS,
+  moodBoardRead,
   moodCostLine,
   moodDropOps,
   moodKeepPlan,
@@ -243,6 +244,33 @@ function register(host: CliHost): void {
         console.log(`${answer.items.length} of ${n} drawn by ${answer.model}, run ${answer.run} — one undo takes them all back`);
         for (const tile of answer.items) console.log(`  ${tile.itemId}  ${tile.axis}`);
         for (const r of answer.refused) console.log(`  not drawn (${r.axis}): ${r.why}`);
+      }),
+    );
+
+  mood
+    .command("board")
+    .description("Read the kept and reference tiles on the Mood board, with their axes, prompts, words, and swatches")
+    .option("--canvas <canvas>")
+    .action(
+      host.run(async (_opts: KeepOpts, cmd: Command) => {
+        const ctx = await host.ctxOf(cmd);
+        const canvas = await host.resolveCanvas(ctx);
+        const snapshot = await ctx.client.snapshot(canvas.id);
+        const read = moodBoardRead(snapshot.canvas, snapshot.project.groupMode ?? "legacy");
+        if (ctx.json) return host.printJson(read);
+        if (read.boardId === null) {
+          console.log("No Mood board on this canvas — explore with `isocan mood explore` and keep tiles first.");
+          return;
+        }
+        console.log(`${read.tiles.length} tile${read.tiles.length === 1 ? "" : "s"} on Mood (${read.boardId})`);
+        for (const tile of read.tiles) {
+          const swatchText = tile.swatches
+            .map((s) => `${s.hex} ${Math.round(s.share * 100)}%${s.estimated ? " (est.)" : ""}`)
+            .join(", ");
+          console.log(
+            `  ${tile.itemId}  ${tile.mood}  ${tile.title}${tile.axis ? `  [${tile.axis}]` : ""}${tile.words ? `  "${tile.words}"` : ""}${swatchText ? `  ${swatchText}` : ""}`,
+          );
+        }
       }),
     );
 }
