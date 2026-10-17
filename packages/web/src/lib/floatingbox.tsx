@@ -1,17 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MutableRefObject, PointerEvent as ReactPointerEvent } from "react";
 
-/** Edge or corner direction for interactive popup resizing. */
-export type ResizeDir = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
+type ResizeDir = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 
-/** Minimum dimensions enforced while resizing a floating popup. */
-export interface FloatingBoxOptions {
+interface FloatingBoxOptions {
   minWidth?: number;
   minHeight?: number;
 }
 
-/** State and pointer handlers returned by {@link useFloatingBox}. */
-export interface FloatingBoxControls<T extends HTMLElement = HTMLElement> {
+interface FloatingBoxControls<T extends HTMLElement = HTMLElement> {
   ref: MutableRefObject<T | null>;
   style: CSSProperties;
   isMoved: boolean;
