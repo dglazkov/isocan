@@ -38,8 +38,9 @@
 # finalization or card turns the run red, and GitHub emails: a guard fires
 # into a room someone is in.
 #
-# Started by each pass finishing (keel-night, keel-climb, keel-robot; one that
-# is not installed never starts it), and once a day at 17:07 UTC, just after
+# Started by each pass finishing (keel-night, keel-climb, keel-robot; render
+# names keel-climb and keel-robot only where the climb practice installs
+# them), and once a day at 17:07 UTC, just after
 # the default readyBy, to catch "readyBy has passed" when no pass finishes
 # after it. A plan whose readyBy is another time is caught by the next pass
 # to finish or the next daily run, whichever comes first; one whose readyBy
@@ -50,7 +51,7 @@ name: keel-morning
 
 on:
   workflow_run:
-    workflows: [keel-night, keel-climb, keel-robot]
+    workflows: [keel-night]
     types: [completed]
   schedule:
     # 17:07 UTC, just after the default readyBy (17:00 UTC).
