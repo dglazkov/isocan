@@ -1,1 +1,0 @@
-import{g as r,b7 as i,b8 as c,A as d,b9 as p}from"./index-DLaEl6JD.js";function u(a,o){const e=r.getState();if(e.canvasId!==a)return;const t=e.canvas?.threads[o];if(t?.main)i(a,!0);else if(t&&e.canvas){const s=c(e.canvas,t),n=d.getState();n.setViewport(p(n.viewport,s.x,s.y,window.innerWidth,window.innerHeight)),n.setOpenThread(t.id)}}export{u as openConversation};

@@ -101,3 +101,21 @@ export declare function groundColour(canvas: {
 export declare function toneOfGround(canvas: {
     properties?: Record<string, string>;
 } | null, app: "light" | "dark", sampled?: string): GroundTone;
+/**
+ * **The ink that reads best on a ground no ink family holds** (smart
+ * contrast phase 3, design §3) — what a `mid` ground draws where a plate
+ * cannot go: a chromeless note's words, and the ring around a card.
+ *
+ * The candidates are the two sets' ink for the role, and for words pure white
+ * and black too, because the decision on 19 Oct was "the higher ink", and on
+ * Desert that is black: `#000000` 5.11, `#ffffff` 4.11, `#23262b` 3.70,
+ * `#e7e9ec` 3.38. If even the best misses `floor`, it is walked toward the
+ * pole on its own side until it clears — the nearest colour that does, rather
+ * than one that does not. Desert's ring is the case: the light accent
+ * `#18288a` measures 2.99 there, one hundredth short of `CONTRAST_UI`.
+ */
+export declare function bestInk(ground: string, role: GroundInkRole, floor?: number): string;
+/** The one-pixel halo behind `bestInk`'s words: the pole opposite the ink,
+ *  white behind dark words and black behind light ones. WCAG does not count
+ *  a halo; it is there for the busy patches of a ground, not for the ratio. */
+export declare function haloOf(ink: string): string;

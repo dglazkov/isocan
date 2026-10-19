@@ -2440,6 +2440,14 @@ var init_groundtone = __esm({
   }
 });
 
+// packages/core/src/groundsample.ts
+var init_groundsample = __esm({
+  "packages/core/src/groundsample.ts"() {
+    "use strict";
+    init_theme();
+  }
+});
+
 // packages/core/src/design-contract.ts
 var sides, corners, ownedProperties;
 var init_design_contract = __esm({
@@ -3307,6 +3315,7 @@ var init_src = __esm({
     init_colour();
     init_textcolour();
     init_groundtone();
+    init_groundsample();
     init_shortcut();
     init_designcheck();
     init_tokens();
