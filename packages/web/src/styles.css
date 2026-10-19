@@ -4209,11 +4209,8 @@ button.mt-card:hover { border-color: var(--accent); }
   overflow: hidden;
   /* Snow, with a lit centre so the name reads at any size. */
   background-color: var(--arrival-ground);
-  background-image:
-    radial-gradient(ellipse 60% 48% at 50% 48%, var(--arrival-wash), transparent 72%),
-    url(/grounds/snow.jpg);
-  background-size: auto, 640px 640px;
-  background-position: center, 0 0;
+  background-image: url(/grounds/snow.jpg);
+  background-size: 640px 640px;
   color: var(--ink);
   opacity: 1;
   transform: none;
@@ -4224,20 +4221,34 @@ button.mt-card:hover { border-color: var(--accent); }
 :root[data-theme="dark"] .canvas-finding {
   /* Night: the sky's stars and the horizon's lanterns sit above the name, the
      grass under it; a dusk wash behind the words keeps them off the grass. */
-  background-image:
-    radial-gradient(ellipse 58% 44% at 50% 50%, var(--arrival-wash), transparent 74%),
-    url(/grounds/night.jpg);
-  background-size: auto, cover;
-  background-position: center, center 30%;
+  background-image: url(/grounds/night.jpg);
+  background-size: cover;
+  background-position: center 30%;
+}
+/* The living ground, when it runs (`CanvasFinding`), is the same layer a
+   canvas wears, pinned to the window. Its flat colour is dropped here so the
+   still keeps showing until the first frame is drawn — no flash of flat blue
+   or black between the picture and the field. */
+.canvas-finding .canvas-theme { background: none; }
+/* The wash that lights the name: over the ground (still or living), under the
+   words. A layer of its own because a WebGL canvas covers any background. */
+.canvas-finding-wash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse 60% 48% at 50% 48%, var(--arrival-wash), transparent 72%);
 }
 /* The drifting lights: snowflakes falling in light, fireflies rising in dark.
    Two layers of gradient dots, each an oversized box sliding by exactly one
    tile, so the loop is seamless and the whole effect is two composited
    transforms and no script. The tiles differ in size and speed — one layer
    alone repeats on a grid the eye finds at once; two out of step read as
-   depth: the near layer bigger and faster. */
-.canvas-finding::before,
-.canvas-finding::after {
+   depth: the near layer bigger and faster. They are the stand-in for a living
+   ground — shown while it loads, under reduced motion, without WebGL2 — and
+   the living ground brings its own flakes and fireflies. */
+.canvas-finding-motes { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.canvas-finding-motes::before,
+.canvas-finding-motes::after {
   content: "";
   position: absolute;
   left: 0;
@@ -4245,7 +4256,7 @@ button.mt-card:hover { border-color: var(--accent); }
   pointer-events: none;
   will-change: transform;
 }
-.canvas-finding::before {
+.canvas-finding-motes::before {
   top: -360px;
   bottom: 0;
   background-image:
@@ -4259,7 +4270,7 @@ button.mt-card:hover { border-color: var(--accent); }
   filter: drop-shadow(0 0 1.5px var(--arrival-mote-glow));
   animation: canvas-finding-fall-far 22s linear infinite;
 }
-.canvas-finding::after {
+.canvas-finding-motes::after {
   top: -620px;
   bottom: 0;
   background-image:
@@ -4272,8 +4283,8 @@ button.mt-card:hover { border-color: var(--accent); }
   animation: canvas-finding-fall-near 13s linear infinite;
 }
 /* Fireflies: fewer, smaller, glowing harder, rising, and blinking. */
-:root[data-theme="dark"] .canvas-finding::before,
-:root[data-theme="dark"] .canvas-finding::after {
+:root[data-theme="dark"] .canvas-finding-motes::before,
+:root[data-theme="dark"] .canvas-finding-motes::after {
   background-image:
     radial-gradient(circle at 14% 30%, var(--arrival-mote) 0 1.5px, transparent 3.5px),
     radial-gradient(circle at 40% 70%, var(--arrival-mote) 0 1px, transparent 3px),
@@ -4281,12 +4292,12 @@ button.mt-card:hover { border-color: var(--accent); }
     radial-gradient(circle at 82% 58%, var(--arrival-mote) 0 1px, transparent 3px);
   filter: drop-shadow(0 0 6px var(--arrival-mote-glow));
 }
-:root[data-theme="dark"] .canvas-finding::before {
+:root[data-theme="dark"] .canvas-finding-motes::before {
   top: 0;
   bottom: -360px;
   animation: canvas-finding-rise-far 30s linear infinite, canvas-finding-blink 3.7s ease-in-out infinite;
 }
-:root[data-theme="dark"] .canvas-finding::after {
+:root[data-theme="dark"] .canvas-finding-motes::after {
   top: 0;
   bottom: -620px;
   animation: canvas-finding-rise-near 21s linear infinite, canvas-finding-blink 2.9s ease-in-out -1.3s infinite;
@@ -4298,6 +4309,7 @@ button.mt-card:hover { border-color: var(--accent); }
 }
 .canvas-finding-inner {
   position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -4411,8 +4423,8 @@ button.mt-card:hover { border-color: var(--accent); }
 }
 @media (prefers-reduced-motion: reduce) {
   .canvas-finding,
-  .canvas-finding::before,
-  .canvas-finding::after,
+  .canvas-finding-motes::before,
+  .canvas-finding-motes::after,
   .canvas-finding-inner,
   .canvas-finding-card-back,
   .canvas-finding-card-front,

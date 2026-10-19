@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
@@ -26,5 +26,14 @@ describe("the arrival screen's look (19 Oct 2026)", () => {
     for (const still of ["snow", "night"]) {
       expect(existsSync(fileURLToPath(new URL(`../public/grounds/${still}.jpg`, import.meta.url)))).toBe(true);
     }
+  });
+
+  it("leaves the presence feed to the board's own ground", () => {
+    // The veil's living ground answers this viewer's pointer only; the
+    // `groundCursors.feed` singleton is the canvas's ground's.
+    const source = readFileSync(fileURLToPath(new URL("../src/components/CanvasFinding.tsx", import.meta.url)), "utf8");
+    const mounts = source.split("\n").filter((line) => line.includes("<Living "));
+    expect(mounts.length).toBeGreaterThan(0);
+    for (const line of mounts) expect(line).toContain("cursors={false}");
   });
 });

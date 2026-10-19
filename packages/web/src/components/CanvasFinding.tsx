@@ -1,6 +1,35 @@
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { readRecents } from "../lib/recents.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
+
+/**
+ * **The arrival screen's ground answers the pointer** (19 Oct 2026).
+ *
+ * Dion: "can we also have it so the cursor effect works on top as though on
+ * the canvas itself?" So the veil wears the living ground itself — Snow takes
+ * footprints and swirls its flakes, Night's cursor is a firefly — through the
+ * same `LivingGround` and chunk a canvas wearing that ground uses, pinned to
+ * the window. It never takes the presence feed (`cursors={false}`): that
+ * belongs to the board underneath.
+ *
+ * The painted still stays the screen's own background, so it shows while the
+ * chunk arrives, under reduced motion, without WebGL2 and if the host gives
+ * up; in all of those the CSS motes drift over it instead, which is also what
+ * `Suspense` shows while the living layer loads.
+ */
+const Living = lazy(() =>
+  import("./themes/LivingGround.tsx").then((m) => ({ default: m.LivingGround })),
+);
+
+function Motes() {
+  return <div className="canvas-finding-motes" aria-hidden="true" />;
+}
+
+/** Whether this browser should get the living layer at all: motion allowed,
+ *  and WebGL2 present (jsdom and old browsers have neither). */
+function canLive(): boolean {
+  return typeof window !== "undefined" && typeof window.WebGL2RenderingContext === "function" && !reducedMotion();
+}
 
 /**
  * **The arrival screen while a canvas is being found and opened.**
@@ -18,6 +47,10 @@ export function CanvasFinding({
   fadingOut?: boolean;
 }) {
   const recentTitle = readRecents().find((entry) => entry.id === canvasId)?.title ?? null;
+  // Read once: the veil is up for seconds, and the stylesheet follows a
+  // mid-arrival flip on its own; only the living layer's choice is frozen.
+  const [dark] = useState(() => typeof document !== "undefined" && document.documentElement.dataset.theme === "dark");
+  const [live] = useState(canLive);
 
   return (
     <div
@@ -26,6 +59,14 @@ export function CanvasFinding({
       aria-live="polite"
       aria-hidden={fadingOut || undefined}
     >
+      {live ? (
+        <Suspense fallback={<Motes />}>
+          <Living theme={dark ? "night" : "snow"} anchor="window" still={<Motes />} cursors={false} />
+        </Suspense>
+      ) : (
+        <Motes />
+      )}
+      <div className="canvas-finding-wash" aria-hidden="true" />
       <div className="canvas-finding-inner">
         <svg
           className="canvas-finding-emblem"
