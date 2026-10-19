@@ -1,8 +1,8 @@
 ---
-status: designed
+status: partial
 since: 2026-10-19
 see: living-grounds, design-lint
-note: "Smart contrast: everything isocan draws straight onto the canvas ground — an item's name, its kind icon, a selected name, a speaker note's caption, a chromeless text node — takes its ink from the ground it is standing on, not from the app's light/dark theme. Change the ground and the ink follows. Scenes here; the mechanism is design.md; the walk is phases.md."
+note: "Smart contrast: everything isocan draws straight onto the canvas ground — an item's name, its kind icon, a selected name, a speaker note's caption, a chromeless text node — takes its ink from the ground it is standing on, not from the app's light/dark theme. Change the ground and the ink follows. Phase 0 (a selected name reads in dark mode) is built; the tone, the tier, the plate and both surfaces follow. Scenes here; the mechanism is design.md; the walk is phases.md."
 ---
 
 # Smart contrast — the scenes

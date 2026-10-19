@@ -9,7 +9,7 @@ note: "the walk: the one-line selected-name fix, the tone function and the guard
 
 **19 October 2026.** Held to [journey.md](journey.md) and [design.md](design.md).
 
-**Where we are, 19 Oct 2026: designed, nothing built. Phase 0 is next, and it is one line.**
+**Where we are, 19 Oct 2026: phase 0 is CLOSED — a selected name reads in dark mode (8.41:1 on the dot grid, was 3.32). Phase 1, the tone and the guard, is next.**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -24,7 +24,7 @@ Rules for every phase, on top of `AGENTS.md`:
 
 ## Phase 0 — The selected name reads
 
-**Status: NOT STARTED**
+**Status: CLOSED** (19 Oct 2026) — `.item.selected .item-titlebar` wears `--accent-text`; headless Chrome read #1f3fd0 in light (7.56, unchanged) and #8fa8ff in dark (8.41), and `groundaccent.test.ts` fails on the old line.
 
 `.item.selected .item-titlebar { color: var(--accent) }` becomes
 `var(--accent-text)` in `styles.css`. In light the two tokens are the same
@@ -36,6 +36,10 @@ any of the machinery exists.
 stands on the ground (the seed of phase 1's inventory guard); computed colour
 of a selected titlebar read in headless Chrome in both app themes; `npm run
 test:deep`.
+
+**Trajectory**
+
+- **2026-10-19** — The bug was already known and ratcheted: `accent.test.ts` listed `.item.selected .item-titlebar` in `KNOWN_UNREADABLE_IN_DARK`. It let it through because that guard forgives a rule that sets a chip under its text, and a name on the canvas has none, so the new guard asks where the text stands, not what else the rule sets.
 
 ## Phase 1 — The tone, and the guard
 

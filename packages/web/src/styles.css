@@ -1493,7 +1493,11 @@ img { height: auto; }
 .item:hover .item-titlebar,
 .item.selected .item-titlebar,
 .item.renaming .item-titlebar { opacity: 1; }
-.item.selected .item-titlebar { color: var(--accent); }
+/* The selected name is TEXT standing on the ground, so it wears the accent's
+   ink, not its fill. `--accent` is a fill colour; in dark it measured 3.32 on
+   the dot grid as a name, and `--accent-text` measures 8.41 there. In light
+   the two tokens are the same cobalt, so nothing moves (`groundaccent.test.ts`). */
+.item.selected .item-titlebar { color: var(--accent-text); }
 /* The star lives at the end of the label row, so it appears with the name and
    goes away with it — nothing sitting on the canvas waiting to be noticed. */
 

@@ -114,9 +114,11 @@ function paintsAccentText(): string[] {
  * `.main-glyph, .main-pill-glyph` and `.shelf-glyph` left it on 27 Sep 2026
  * without being fixed: nothing rendered them any more, and BC-3 deleted the
  * rules (`deadrules.test.ts`).
+ *
+ * `.item.selected .item-titlebar` left it fixed (smart-contrast phase 0), and
+ * `groundaccent.test.ts` now holds every name on the ground to the same rule.
  */
 const KNOWN_UNREADABLE_IN_DARK = [
-  ".item.selected .item-titlebar",
   ".thread-popover .thread-actions button.promote",
   ".mt-glyph",
   ".mention-dot.command-dot",
