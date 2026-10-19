@@ -86,6 +86,7 @@ export type { DesignTypography, DesignTokens, DesignDoc, DesignSurface } from ".
 export * from "./contrast.js";
 export * from "./colour.js";
 export * from "./textcolour.js";
+export * from "./groundtone.js";
 export * from "./shortcut.js";
 export * from "./designcheck.js";
 export * from "./tokens.js";

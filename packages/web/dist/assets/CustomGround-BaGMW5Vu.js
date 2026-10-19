@@ -1,0 +1,1 @@
+import{j as s,e7 as r,e8 as c}from"./index-C4PR_HcX.js";function n({canvasId:a,hash:e}){return s.jsxs("div",{className:"canvas-theme canvas-theme-custom",children:[s.jsx("div",{className:"canvas-ground-picture",style:{backgroundImage:`url(${r(a,e)})`}}),s.jsx("div",{className:"canvas-ground-scrim",style:{opacity:c}})]})}export{n as CustomGround};

@@ -2415,6 +2415,23 @@ var init_textcolour = __esm({
   }
 });
 
+// packages/core/src/theme.ts
+var init_theme = __esm({
+  "packages/core/src/theme.ts"() {
+    "use strict";
+  }
+});
+
+// packages/core/src/groundtone.ts
+var init_groundtone = __esm({
+  "packages/core/src/groundtone.ts"() {
+    "use strict";
+    init_contrast();
+    init_textcolour();
+    init_theme();
+  }
+});
+
 // packages/core/src/design-contract.ts
 var sides, corners, ownedProperties;
 var init_design_contract = __esm({
@@ -3040,13 +3057,6 @@ var init_shelf = __esm({
   }
 });
 
-// packages/core/src/theme.ts
-var init_theme = __esm({
-  "packages/core/src/theme.ts"() {
-    "use strict";
-  }
-});
-
 // packages/core/src/sprint.ts
 var PHASES;
 var init_sprint = __esm({
@@ -3288,6 +3298,7 @@ var init_src = __esm({
     init_contrast();
     init_colour();
     init_textcolour();
+    init_groundtone();
     init_shortcut();
     init_designcheck();
     init_tokens();
