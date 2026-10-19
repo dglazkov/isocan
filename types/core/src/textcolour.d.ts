@@ -68,13 +68,29 @@ export type TextColourValue = TextColour | `#${string}`;
  * own ink — or null, so the caller can refuse with the list rather than guess.
  */
 export declare function textColourFrom(value: string): TextColourValue | "auto" | null;
+/** A canvas as far as its ground goes — any record with properties. */
+type OnCanvas = {
+    properties?: Record<string, string>;
+} | null | undefined;
 /**
  * **Where a colour will not read**, as sentences — empty when it reads
- * everywhere it can land. A name is always empty, by the test above; a hex is
- * measured against the ground in both themes, or against its paper in both
- * when it is on one.
+ * everywhere it can land.
+ *
+ * On paper, a hex is measured against that paper in both themes, as it always
+ * was. On the dot grid, against the app's ground in both themes — the dot
+ * grid is the app's. On a canvas with a ground of its own (smart contrast,
+ * phase 4) there is ONE surface, the colour that ground is drawn in
+ * (`groundColour`), and the warning names it — "on Night" — rather than
+ * measuring against two app grounds the canvas does not have.
+ *
+ * A name never warns where its shade holds, which is everywhere on paper and
+ * the dot grid (4.5:1, by `textcolour.test.ts`). On a ground of its own a
+ * named shade is held at 3:1, WCAG's large-text floor (`GROUND_TEXT_SHADES`);
+ * where even that is out of reach — brown on Ocean or a picture, a name on
+ * Desert — it is said, so an agent choosing "brown" for a note on Ocean
+ * hears it the way it would hear a hex.
  */
-export declare function textColourWarnings(colour: TextColourValue | null, paper: Paper | null): string[];
+export declare function textColourWarnings(colour: TextColourValue | null, paper: Paper | null, canvas?: OnCanvas): string[];
 /**
  * Everything that decides how a text node looks. Null means the default;
  * the colour and the font may also be left out, which leaves whatever the
@@ -115,12 +131,13 @@ export declare function textFontChoice(value: string): TextFont | null;
  * removal rather than a word, anything else is refused with the list. A font
  * writes its face beside it (`textLookPatch`'s rule); a face set on its own
  * lets go of a font, the way choosing a face on the bar does. The colour's
- * warnings are measured against the paper the node will have.
+ * warnings are measured against the paper the node will have, or the
+ * canvas's own ground when it has one and the node no paper.
  */
 export declare function textPropsPatch(item: Item, patch: {
     properties?: Record<string, string>;
     removeProperties?: string[];
-}): {
+}, canvas?: OnCanvas): {
     properties?: Record<string, string>;
     removeProperties?: string[];
     warnings: string[];
