@@ -176,3 +176,24 @@ describe("the right-click menu wears glass with a translucent hover", () => {
     }
   });
 });
+
+describe("a submenu can escape the menu it hangs off", () => {
+  it("keeps containing-block properties off the menu box, so a fixed child is placed in the viewport", () => {
+    /* 19 Oct 2026: Background ▸ and Groups ▸ stopped opening. The submenu is a
+       `position: fixed` panel placed in viewport coordinates, and any of these
+       on an ancestor makes THAT ancestor its containing block — the glass
+       unification put `backdrop-filter` on `.context-menu`, so the child landed
+       ~1000px right of the menu's own box and was clipped by its scroll. The
+       frost lives on `.context-menu::before`, where it contains nothing. */
+    const boxes = rules().filter((r) =>
+      selectorsOf(r).some((s) => s === ".context-menu" || s === ".context-submenu"),
+    );
+    expect(boxes.length, ".context-menu must have a rule").toBeGreaterThan(0);
+    for (const rule of boxes) {
+      expect(rule.body).not.toMatch(/(^|[;\s{])(-webkit-)?(backdrop-filter|filter|transform|perspective|contain|will-change|container-type)\s*:/);
+    }
+    const layer = rules().find((r) => selectorsOf(r).includes(".context-menu::before"));
+    expect(layer, "the frost must still be drawn, on a layer").toBeTruthy();
+    expect(layer!.body).toMatch(/backdrop-filter:\s*var\(--glass-filter\)/);
+  });
+});

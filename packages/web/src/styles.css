@@ -5250,11 +5250,24 @@ button.mt-card:hover { border-color: var(--accent); }
    * (`menuground.test.ts`).
    */
   background: var(--glass);
-  -webkit-backdrop-filter: var(--glass-filter);
-  backdrop-filter: var(--glass-filter);
   border: 1px solid var(--glass-border); border-radius: 10px;
   box-shadow: var(--shadow-glass);
   display: flex; flex-direction: column; gap: 1px;
+}
+/* **The blur is a layer, not the menu** (19 Oct 2026).
+   A `backdrop-filter` (like `filter`, `transform`, `contain`) makes its element
+   the containing block for every `position: fixed` descendant — and the
+   submenu IS a fixed panel placed in viewport coordinates. Unifying the glass
+   put the filter on `.context-menu` itself, and Background ▸ and Groups ▸
+   opened ~1000px to the right of the menu's own box, clipped by its
+   `overflow-y: auto`: open, and invisible. On a pseudo-element the filter
+   contains nothing, so the frost stays and the children escape again
+   (`menuground.test.ts`). */
+.context-menu::before {
+  content: ""; position: absolute; inset: 0; z-index: -1;
+  border-radius: inherit; pointer-events: none;
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
 }
 /* **One text column.**
 
