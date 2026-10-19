@@ -130,6 +130,7 @@ export * from "./contextmark.ts";
 export * from "./context-source.ts";
 export * from "./context-pin.ts";
 export * from "./slides.ts";
+export * from "./morph.ts";
 export * from "./slidewrites.ts";
 export * from "./deckexport.ts";
 export * from "./shelf.ts";

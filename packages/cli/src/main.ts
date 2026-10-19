@@ -377,6 +377,13 @@ import {
   slidePatch,
   slides,
   SLIDE_EMOJI,
+  DECK_TRANSITIONS,
+  deckTransitionHint,
+  deckTransitionLabel,
+  deckTransitionOf,
+  deckTransitionPatch,
+  isDeckTransition,
+  isDeckTransition3d,
   deckPages,
   deckHtml,
   isNote,
@@ -10642,6 +10649,45 @@ slidesCmd
       console.log(itemUrl(origin, p.id, deck[0]!.id));
       console.log(`The deck on paper (Save as PDF, or download one file that plays it):`);
       console.log(deckUrl(origin, p.id));
+      const motion = deckTransitionOf(p);
+      console.log(`Flips with: ${deckTransitionLabel(motion)} — ${deckTransitionHint(motion)} (isocan slides transition)`);
+    }),
+  );
+
+/**
+ * **How the deck moves between slides** — the canvas's choice, so the
+ * presenter and every viewer see the same motion. A canvas property sent as
+ * one `project.update` (`deckTransitionPatch`), the same op the app's
+ * "Slide transition" menu and full screen's Transition button send, so the
+ * two surfaces cannot disagree about what a transition is. No argument is a
+ * question: it says what the deck flips with now and lists the rest.
+ */
+slidesCmd
+  .command("transition [motion]")
+  .description(`How full screen moves between slides, for everybody watching: ${DECK_TRANSITIONS.join(", ")}`)
+  .option("--canvas <canvas>")
+  .action(
+    run(async (motion: string | undefined, opts: { canvas?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      if (opts.canvas) ctx.canvasRef = opts.canvas;
+      const p = await resolveCanvas(ctx);
+      const now = deckTransitionOf(p);
+      if (motion === undefined) {
+        if (ctx.json) return printJson({ transition: now, choices: [...DECK_TRANSITIONS] });
+        console.log(`${deckTransitionLabel(now)} (${now}) — ${deckTransitionHint(now)}\n`);
+        for (const one of DECK_TRANSITIONS) {
+          console.log(`${one === now ? "●" : " "} ${one.padEnd(6)} ${isDeckTransition3d(one) ? "3D  " : "    "}${deckTransitionHint(one)}`);
+        }
+        return;
+      }
+      const wanted = motion === "none" ? "cut" : motion;
+      if (!isDeckTransition(wanted)) {
+        throw new Error(`not a transition: ${motion} — ${DECK_TRANSITIONS.join(", ")}`);
+      }
+      if (wanted === now) return console.log(`the deck already flips with ${deckTransitionLabel(now)}`);
+      await sendOp(ctx, p.id, { type: "project.update", patch: deckTransitionPatch(wanted) });
+      if (ctx.json) return printJson({ transition: wanted });
+      console.log(`the deck flips with ${deckTransitionLabel(wanted)} — ${deckTransitionHint(wanted)}`);
     }),
   );
 

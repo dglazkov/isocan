@@ -7,6 +7,8 @@ import {
   anchorPatch,
   cursorOf,
   cursorPatch,
+  deckTransitionOf,
+  deckTransitionPatch,
   groundOf,
   groundPatch,
   noCursorPatch,
@@ -177,6 +179,13 @@ export function Toolbar({
                     await sendEchoed(canvas.id, actor, {
                       type: "project.update",
                       patch: cursor === null ? noCursorPatch() : cursorPatch(cursor),
+                    });
+                  },
+                  deckTransition: deckTransitionOf(canvas),
+                  setDeckTransition: async (transition) => {
+                    await sendEchoed(canvas.id, actor, {
+                      type: "project.update",
+                      patch: deckTransitionPatch(transition),
                     });
                   },
                   canEdit,

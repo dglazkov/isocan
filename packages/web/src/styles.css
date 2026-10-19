@@ -1488,7 +1488,41 @@ img { height: auto; }
    here", which is what the item is. */
 .item.away { border-style: dashed; border-color: var(--away); }
 .item.away:hover { box-shadow: var(--shadow-item), 0 0 0 1px var(--away); }
-.item.selected { outline: calc(2px / var(--scale, 1)) solid var(--ground-ring); z-index: 1; }
+/* **Selected: the ring is the outermost edge, and nothing else is** (19 Oct
+   2026, Dion, after a version stack read as "thin blue line => grey => more
+   see-through grey"). Figma's rule, read off its canvas at several zooms:
+   selection is the node's bounds and the last mark on it. Three things used
+   to sit outside or under the ring, and each now gets out of its way:
+
+   - The ring steps one SCREEN pixel inward, over the hairline, so it goes
+     from blue straight to content. One screen pixel rather than one world
+     pixel (the border's width) because a world pixel is 0.4 of a screen one
+     at 40%, which puts the ring between pixels and smears it; up to 100% one
+     screen pixel covers the whole border. Past that the border is wider than
+     the step, so it turns accent too and nothing grey is left outside.
+   - The plies step out (`.item.selected > .ply`, beside `.ply`): two sheets
+     peeking past the ring are what made it look like a line drawn through
+     the middle of the thing. The ×N badge still says there are versions.
+   - The resting halo flattens to the contact shadow, as a selected FigJam
+     sticky does: once the ring says where the edge is, a 64px halo past it
+     is a second edge. `.item.lifted` comes after this and still lifts.
+
+   Kinds that wear no card (ink, text, areas) keep their `box-shadow: none`:
+   their rules come later at the same weight. Paper restates it, below. */
+.item.selected { outline: calc(2px / var(--scale, 1)) solid var(--ground-ring);
+  outline-offset: calc(-1px / var(--scale, 1));
+  border-color: var(--ground-ring);
+  box-shadow: var(--shadow-card);
+  z-index: 1;
+}
+/* The one border the ring does not cover: a slide's and a doorway's. Those
+   are a COLOUR that says what the item is, not the grey hairline every card
+   wears, and a selected slide shows both (`slidelook.test.ts`) — so the ring
+   steps back outside it, as it used to sit for everything. Outweighs the
+   `:hover` halo above, so a pointed-at selection stays flat too. */
+.item.slide.selected, .item.away.selected { outline-offset: 0; box-shadow: var(--shadow-card); }
+.item.slide.selected { border-color: var(--slide); }
+.item.away.selected { border-color: var(--away); }
 /* An item whose render threw (`ItemBoundary`): its own box, drawn as a gap
    rather than a card, so the layout holds and nobody mistakes it for content.
    Dashed in the plain line colour — not `--danger`: nothing the person did is
@@ -1523,6 +1557,9 @@ img { height: auto; }
      reads it as steady. `alternate` rather than a loop, so there is no jump
      from the end of the cycle back to the start. */
   animation: running-breathe 2.8s ease-in-out infinite alternate;
+  /* The edge under the ring follows the ring's colour, for the reason it
+     turns accent under selection. */
+  border-color: var(--running);
 }
 @keyframes running-breathe {
   from { outline-color: var(--running); }
@@ -1563,7 +1600,7 @@ img { height: auto; }
 .item.ink { background: transparent; border-color: transparent; box-shadow: none; }
 .item.ink .item-content { border-radius: var(--radius); }
 .item.ink .img-view { background: transparent; }
-.item.ink .ply { background: transparent; border-color: var(--line-soft); }
+.item.ink .ply { --ply-edge: var(--line-soft); background: transparent; }
 /* Pointing at an item shows the box you would get, in the accent color that
    means "this one" everywhere else — a dashed preview of the solid outline a
    click would give it. NOT `:hover` since groups-by-hand phase 2: `:hover`
@@ -1583,9 +1620,17 @@ img { height: auto; }
 
      Kept at 1px rather than matched to selection's 2px: hover is a preview of
      what a click would give you, and a preview as heavy as the thing it
-     previews stops being one. */
+     previews stops being one.
+
+     INSIDE the selection ring's footprint (19 Oct 2026), not 2px outside
+     it: the dashed preview used to sit beyond the box and the solid ring on
+     it, so clicking moved the line inward instead of filling it in. Now the
+     dashes are the ring's outer pixel and a click makes them solid.
+     Offset 0 rather than the ring's one pixel in: an outline is painted
+     under the item's content, so a 1px line pushed inward is half hidden by
+     it — measured at 40%, it came out at a third of its colour. */
   outline: calc(1px / var(--scale, 1)) dashed var(--ground-ring);
-  outline-offset: calc(2px / var(--scale, 1));
+  outline-offset: 0;
 }
 .canvas-viewport:not(.pen) .item.selected.hover-target { outline: calc(2px / var(--scale, 1)) solid var(--ground-ring); }
 /* ⌘ held: the item it reaches is the target above; its group is drawn faint
@@ -1611,7 +1656,7 @@ img { height: auto; }
    accent frame, outer halo, and a soft accent wash across the card. */
 .item.peeked {
   outline: calc(2px / var(--scale, 1)) solid var(--ground-ring);
-  outline-offset: 0;
+  outline-offset: calc(-1px / var(--scale, 1));
   box-shadow: 0 0 0 calc(4px / var(--scale, 1)) var(--accent-glow), 0 0 calc(20px / var(--scale, 1)) var(--accent-glow), var(--shadow-item);
   z-index: 2;
 }
@@ -1751,11 +1796,36 @@ img { height: auto; }
 .item-content { flex: 1; overflow: hidden; position: relative; border-radius: calc(var(--radius) - 1px); }
 .item-content.inert { pointer-events: none; user-select: none; -webkit-user-select: none; }
 
-/* version stack plies (the 0.5D) */
+/* version stack plies (the 0.5D)
+
+   **Opaque, and a fixed distance on screen** (19 Oct 2026). They were white
+   cards at 75% and 45% opacity, offset 5 and 10 WORLD pixels. Both halves
+   failed somewhere:
+
+   - Opacity let the ground through, which is the look they were designed
+     for on vellum and mud everywhere else — over a photo or a painted ground
+     the back sheet was a grey smear. So each sheet is mixed toward `--ground`
+     by the same amounts instead: identical on the theme's own ground, and a
+     solid sheet over any other.
+   - World offsets made the fact zoom-dependent: one or two screen pixels at
+     20%, so "this has versions" vanished on exactly the zoomed-out board you
+     scan, and 15/30px bands at 300%. Each step is now 5 world pixels held
+     between 3 and 6 on screen.
+
+   A kind that changes the sheet sets `--ply-face` / `--ply-edge` and leaves
+   the mixing and the offset here. */
 .item .ply {
-  content: ""; position: absolute; inset: 0; background: var(--card);
-  border: 1px solid var(--line); border-radius: var(--radius); z-index: -1;
+  content: ""; position: absolute; inset: 0;
+  --ply-step: clamp(3px / var(--scale, 1), 5px, 6px / var(--scale, 1));
+  background: color-mix(in srgb, var(--ply-face, var(--card)) var(--ply-mix, 75%), var(--ground));
+  border: 1px solid color-mix(in srgb, var(--ply-edge, var(--line)) var(--ply-mix, 75%), var(--ground));
+  border-radius: var(--radius); z-index: -1;
+  transform: translate(calc(var(--ply-n, 1) * var(--ply-step)), calc(var(--ply-n, 1) * var(--ply-step)));
 }
+.item .ply-1 { --ply-n: 1; --ply-mix: 75%; }
+.item .ply-2 { --ply-n: 2; --ply-mix: 45%; }
+/* Selected, the ring is the edge: see `.item.selected`. */
+.item.selected > .ply { display: none; }
 /* The version count is chrome, so it holds its size as the canvas zooms
    (ItemView counter-scales it). It no longer moves: see the position rule
    below for why the corner-yielding rule was retired with the corner. */
@@ -2268,7 +2338,7 @@ img { height: auto; }
 }
 .fullscreen-back:hover { border-color: var(--accent); color: var(--accent-text); }
 /* The item itself, and everything left over is its. `view-transition-name`
-   is the deck flip's handle on it — see the block below. */
+   is the deck flip's handle on it — see `presentation.css`. */
 .fullscreen-stage {
   flex: 1; min-height: 0; position: relative; overflow: auto;
   view-transition-name: slide;
@@ -2279,37 +2349,10 @@ img { height: auto; }
 }
 .fullscreen-stage > * { width: 100%; height: 100%; }
 
-/* ---------- the deck flip ---------- */
-/* A flip PUSHES (lib/deckflip.ts): the new slide slides in from the side the
-   key named while the old one — a view-transition snapshot, so its scripts
-   are not run twice — recedes a quarter of the way and lets go. 220ms with a
-   hard ease-out reads as snappy rather than staged; anything longer is fun
-   exactly twice. The name is on `.fullscreen-stage` — one per document,
-   whichever face of the deck is up — so only the slide travels: everything
-   else (the bar, the chrome) is pinned still by the `root` rule below, which
-   is scoped to `data-flip` so no future view transition inherits it.
-
-   No reduced-motion block: deckflip.ts never starts a transition for someone
-   who asked for reduced motion, so there is nothing here to switch off. */
-html[data-flip]::view-transition-old(root),
-html[data-flip]::view-transition-new(root) { animation: none; }
-html[data-flip]::view-transition-old(slide),
-html[data-flip]::view-transition-new(slide) {
-  animation-duration: 220ms;
-  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
-}
-html[data-flip="next"]::view-transition-old(slide) { animation-name: deck-recede-left; }
-html[data-flip="next"]::view-transition-new(slide) { animation-name: deck-enter-right; }
-html[data-flip="prev"]::view-transition-old(slide) { animation-name: deck-recede-right; }
-html[data-flip="prev"]::view-transition-new(slide) { animation-name: deck-enter-left; }
-/* The recede scales to 0.98 on its way out — a faint depth cue that says the
-   old slide fell behind, at no cost in time. */
-@keyframes deck-recede-left { to { transform: translateX(-25%) scale(0.98); opacity: 0; } }
-@keyframes deck-recede-right { to { transform: translateX(25%) scale(0.98); opacity: 0; } }
-/* The enter replaces the default cross-fade entirely: it arrives opaque,
-   because a push that also fades is a slide you watch appear twice. */
-@keyframes deck-enter-right { from { transform: translateX(100%); } }
-@keyframes deck-enter-left { from { transform: translateX(-100%); } }
+/* ---------- the deck flip ----------
+   Lives in `components/presentation.css`, which ships with the two faces of
+   the deck (`FullScreen`, `Viewer`) — the only places a slide is flipped — so
+   its keyframes cost a first visit nothing. */
 
 /* The way IN, beside the size chip under a selected item. A chip, not a
    titlebar button: the title row's width belongs to the name (lib/chrome.ts),
@@ -4745,7 +4788,7 @@ button.mt-card:hover { border-color: var(--accent); }
    is not supposed to have. Ink solved this first (`.item.ink .ply`); the
    second wording of a note brought the same card back for the same reason,
    so it takes the same hairline. */
-.item.textnode .ply { background: transparent; border-color: var(--line-soft); }
+.item.textnode .ply { --ply-edge: var(--line-soft); background: transparent; }
 
 /* ---------- paper: the same words, on something you could pick up ----------
 
@@ -4770,12 +4813,20 @@ button.mt-card:hover { border-color: var(--accent); }
 /* Paper is something you could pick up, so it lifts like a card. A bare
    caption and ink do not: they wear no card, and a lifted shadow would draw
    the box they deliberately do not have. */
+/* Selected paper flattens like any selected card (`.item.selected`); this
+   rule outweighs that one, so it says so again. Before `.lifted`, which wins. */
+.item.textnode.paper.selected { border-color: var(--ground-ring); box-shadow: var(--shadow-card); }
 .item.textnode.paper.lifted { box-shadow: var(--shadow-lift); }
-.item.textnode.paper .item-content { background: transparent; }
+/* The paper's colour on the CONTENT too, not only on the card. A ply is
+   `z-index: -1` inside the item's own stacking context, which paints it over
+   the item's background — so on a second version the sheet underneath showed
+   through the words as a paler inner card with its own edge. A screen never
+   showed it because its content is opaque; now paper's is as well. */
+.item.textnode.paper .item-content { background: var(--paper); }
 /* The ply reads as a second sheet under the first, which for paper is
    exactly right — so it takes the paper's own colour rather than the
    hairline a chromeless note needs. */
-.item.textnode.paper .ply { background: var(--paper); border-color: var(--paper-edge); }
+.item.textnode.paper .ply { --ply-face: var(--paper); --ply-edge: var(--paper-edge); background: color-mix(in srgb, var(--ply-face) var(--ply-mix, 75%), var(--ground)); }
 /* Words on paper stop borrowing the canvas's ink: a note is its own surface,
    and light ink on a pale tint is what makes a sticky note unreadable in
    dark mode. */

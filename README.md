@@ -598,6 +598,17 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   under the slide says where you are ("2 / 12"); Notes (or N) open as a
   sheet; where the browser allows it (Android Chrome, not iPhone Safari) one
   button hands the slide the whole screen; and Back leaves the presentation.
+- **Slide transitions**: how the deck moves between slides is a canvas setting,
+  so the presenter and every viewer see the same motion — Push (the default),
+  Fade, Zoom, None, and four that leave the glass: **Morph** (the slide comes
+  apart — its pieces lift off the page, the ones both slides share fly to
+  their new places, and everything settles flat as the next slide; name a
+  piece `data-morph="…"` on both slides to pair it by hand), **Depth** (the
+  slide lifts into 3D, glides to the next one and lands flat again), **Cube**
+  and **Flip**.
+  Pick it from full screen's *Transition* button, the canvas menu's *Slide
+  transition*, or `isocan slides transition depth`. Screens turn as live
+  pages, not pictures of them.
 - **The design sprint**: type `/sprint` in the Chat and an agent facilitates a
   Knapp-style sprint — people and agents sketch as peers, one person decides.
   The facilitator calls phases (`/sprint crazy8s 8m`), and a clock chip shows
