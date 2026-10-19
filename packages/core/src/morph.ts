@@ -57,14 +57,14 @@ export interface MorphScene {
 }
 
 /** One sample of a piece's motion, as CSS the runtime can hand to `animate`. */
-export interface MorphKeyframe {
+interface MorphKeyframe {
   offset: number;
   transform: string;
   opacity: number;
 }
 
 /** Everything one slide's runtime plays: its pieces and its ground. */
-export interface MorphSide {
+interface MorphSide {
   tracks: Array<{ i: number; frames: MorphKeyframe[] }>;
   /** The slide's own background, as a layer of its own: it drops away
    *  beneath the pieces as they lift, which is most of what makes them read
@@ -73,7 +73,7 @@ export interface MorphSide {
 }
 
 /** Both sides, and the tilt the surface puts on the two frames together. */
-export interface MorphPlan {
+interface MorphPlan {
   out: MorphSide;
   in: MorphSide;
   scene: Array<{ offset: number; transform: string }>;
