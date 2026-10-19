@@ -28,7 +28,7 @@ import { type CanvasTheme, THEMES, groundOf, themeOf } from "@isocan/core";
  * The names are not derivable from each other (`galaxy` paints `--theme-space`,
  * `mountains` paints `--theme-rock`), so it is a real table — and a table that
  * is missing a row is a fade that silently falls back to the app's ground,
- * which is the bug this fixes. `groundtone.test.ts` requires a row for every
+ * which is the bug this fixes. `groundtoken.test.ts` requires a row for every
  * name in `THEMES`. It earned that keep within a day: farm and desert
  * landed on 8 Sep and the guard is what said this table had to grow.
  *
@@ -37,7 +37,7 @@ import { type CanvasTheme, THEMES, groundOf, themeOf } from "@isocan/core";
  * bytes a first visit downloads. Every ground since Ocean paints with
  * `--theme-<its id>`, so that is the rule and the table holds the three that
  * break it. The guard is unchanged and now carries the whole weight: it asks
- * `groundTone` for every name in `THEMES` and requires the token to be
+ * `groundToken` for every name in `THEMES` and requires the token to be
  * declared and to be the one the ground's own rule paints with.
  */
 const TONE: Partial<Record<CanvasTheme, string>> = {
@@ -58,7 +58,7 @@ const TONE: Partial<Record<CanvasTheme, string>> = {
  * slightly darker than the picture reads as the ground, one much lighter
  * reads as a bar.
  */
-export function groundTone(canvas: { properties?: Record<string, string> } | null): string | null {
+export function groundToken(canvas: { properties?: Record<string, string> } | null): string | null {
   if (canvas === null) return null;
   if (groundOf(canvas) !== null) return "--ground-under";
   const theme = themeOf(canvas);
@@ -66,4 +66,4 @@ export function groundTone(canvas: { properties?: Record<string, string> } | nul
 }
 
 /** Every ground this build can stand a canvas on, for the guard. */
-export const TONED = THEMES;
+export const TOKENED = THEMES;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { THEMES, groundPatch, themePatch } from "@isocan/core";
 
-import { TONED, groundTone } from "../src/lib/groundtone.ts";
+import { TOKENED, groundToken } from "../src/lib/groundtoken.ts";
 import { css, rules, selectorsOf, sheets } from "./cssrules.ts";
 
 /**
@@ -28,9 +28,9 @@ describe("the wash over a canvas knows what it is washing", () => {
     /* Not `TONE`'s own keys — that would be the table agreeing with itself.
        The list is core's, so adding a theme there and forgetting this fails
        here rather than in a screenshot. */
-    expect(TONED).toEqual(THEMES);
+    expect(TOKENED).toEqual(THEMES);
     for (const theme of THEMES) {
-      const tone = groundTone({ properties: themePatch(theme).properties as Record<string, string> });
+      const tone = groundToken({ properties: themePatch(theme).properties as Record<string, string> });
       expect(tone, `${theme} has no ground colour`).not.toBeNull();
       expect(declared(tone!), `${theme} names ${tone}, which the stylesheet does not declare`).toBe(true);
     }
@@ -44,7 +44,7 @@ describe("the wash over a canvas knows what it is washing", () => {
      * `--theme-ocean` and both the sea and the bar above it change.
      */
     for (const theme of THEMES) {
-      const tone = groundTone({ properties: themePatch(theme).properties as Record<string, string> })!;
+      const tone = groundToken({ properties: themePatch(theme).properties as Record<string, string> })!;
       /* Every rule that names the class, not the first: the painted grounds
          share one rule for the tile and take a line each for their colour, so
          "the first rule matching" is a fact about source order rather than
@@ -64,7 +64,7 @@ describe("the wash over a canvas knows what it is washing", () => {
        to the side that reads as ground rather than as a bar. */
     /* A real content address: `groundOf` insists on the sha256 shape, so a
        short fixture would test the parse rather than the tone. */
-    const tone = groundTone({ properties: groundPatch("a".repeat(64)).properties as Record<string, string> });
+    const tone = groundToken({ properties: groundPatch("a".repeat(64)).properties as Record<string, string> });
     expect(tone).toBe("--ground-under");
     expect(declared(tone!)).toBe(true);
   });
@@ -74,7 +74,7 @@ describe("the wash over a canvas knows what it is washing", () => {
        for every canvas before grounds existed and is still right here. A tone
        invented for a plain canvas would be a third answer to a settled
        question. */
-    expect(groundTone({})).toBeNull();
-    expect(groundTone(null)).toBeNull();
+    expect(groundToken({})).toBeNull();
+    expect(groundToken(null)).toBeNull();
   });
 });
