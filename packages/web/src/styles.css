@@ -284,6 +284,12 @@
   --syn-fn: #0f5f8a;
   --syn-type: #7130c3;
   --syn-punct: #646d76;
+  /* The arrival screen's ground (19 Oct 2026): Snow's base, the wash that
+     lights the name, and the drifting motes with their glow. Dark is Night. */
+  --arrival-ground: #e9eef8;
+  --arrival-wash: rgba(255, 255, 255, 0.78);
+  --arrival-mote: #ffffff;
+  --arrival-mote-glow: rgba(110, 130, 180, 0.6);
 }
 
 /* Dark: a graphite ground under the same dot grid, slate cards, a brighter
@@ -291,6 +297,10 @@
    since a soft gray one is invisible on a dark surface. */
 :root[data-theme="dark"] {
   color-scheme: dark;
+  --arrival-ground: #05060c;
+  --arrival-wash: rgba(10, 12, 24, 0.62);
+  --arrival-mote: #ffdf9a;
+  --arrival-mote-glow: rgba(255, 210, 120, 0.85);
   --good: #56b06a;
   /* Lifted for the dark ground, like every other hue here: 6.30:1 on `--card`,
      7.22:1 on `--ground`. The light value would sit at 2.69 and disappear. */
@@ -4174,6 +4184,21 @@ button.mt-card:hover { border-color: var(--accent); }
 .page-note-hint { font-size: 12.5px; color: var(--ink-soft); max-width: 46ch; line-height: 1.45; }
 
 /* ---------- canvas arrival / finding screen ---------- */
+/* **The arrival is a title card on a ground** (19 Oct 2026).
+
+   Dion: "have the NAME of the canvas very large so you quickly can see it" and
+   "use a nice fun background — Night in dark mode, something fun with a light
+   background in light mode". So the name is the headline at poster size and
+   everything else is measured from it (`em` on `.canvas-finding-inner`, whose
+   font-size IS the title's), and the screen wears a seeded ground's painted
+   still: Night in dark, Snow in light.
+
+   The stills, not the living grounds: this screen is up exactly while the
+   canvas is still loading, so it gets a cached JPEG and a CSS layer of drifting
+   lights rather than a WebGL context and a ground's chunk racing the snapshot.
+   The theme comes from `data-theme`, so it follows the OS like everything
+   else; the canvas's OWN ground is not known yet (the snapshot has not landed),
+   so this is the app's welcome, not the board's. */
 .canvas-finding {
   position: fixed;
   inset: 0;
@@ -4181,8 +4206,14 @@ button.mt-card:hover { border-color: var(--accent); }
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: var(--ground);
-  background-image: radial-gradient(circle 340px at 50% 45%, var(--accent-wash), transparent 72%);
+  overflow: hidden;
+  /* Snow, with a lit centre so the name reads at any size. */
+  background-color: var(--arrival-ground);
+  background-image:
+    radial-gradient(ellipse 60% 48% at 50% 48%, var(--arrival-wash), transparent 72%),
+    url(/grounds/snow.jpg);
+  background-size: auto, 640px 640px;
+  background-position: center, 0 0;
   color: var(--ink);
   opacity: 1;
   transform: none;
@@ -4190,23 +4221,98 @@ button.mt-card:hover { border-color: var(--accent); }
     opacity 360ms cubic-bezier(0.2, 0.8, 0.2, 1),
     transform 360ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
+:root[data-theme="dark"] .canvas-finding {
+  /* Night: the sky's stars and the horizon's lanterns sit above the name, the
+     grass under it; a dusk wash behind the words keeps them off the grass. */
+  background-image:
+    radial-gradient(ellipse 58% 44% at 50% 50%, var(--arrival-wash), transparent 74%),
+    url(/grounds/night.jpg);
+  background-size: auto, cover;
+  background-position: center, center 30%;
+}
+/* The drifting lights: snowflakes falling in light, fireflies rising in dark.
+   Two layers of gradient dots, each an oversized box sliding by exactly one
+   tile, so the loop is seamless and the whole effect is two composited
+   transforms and no script. The tiles differ in size and speed — one layer
+   alone repeats on a grid the eye finds at once; two out of step read as
+   depth: the near layer bigger and faster. */
+.canvas-finding::before,
+.canvas-finding::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  will-change: transform;
+}
+.canvas-finding::before {
+  top: -360px;
+  bottom: 0;
+  background-image:
+    radial-gradient(circle at 12% 18%, var(--arrival-mote) 0 1.5px, transparent 2.5px),
+    radial-gradient(circle at 34% 62%, var(--arrival-mote) 0 1px, transparent 2px),
+    radial-gradient(circle at 58% 31%, var(--arrival-mote) 0 2px, transparent 3px),
+    radial-gradient(circle at 77% 74%, var(--arrival-mote) 0 1.5px, transparent 2.5px),
+    radial-gradient(circle at 91% 43%, var(--arrival-mote) 0 1px, transparent 2px),
+    radial-gradient(circle at 23% 89%, var(--arrival-mote) 0 1.5px, transparent 2.5px);
+  background-size: 360px 360px;
+  filter: drop-shadow(0 0 1.5px var(--arrival-mote-glow));
+  animation: canvas-finding-fall-far 22s linear infinite;
+}
+.canvas-finding::after {
+  top: -620px;
+  bottom: 0;
+  background-image:
+    radial-gradient(circle at 18% 36%, var(--arrival-mote) 0 3px, transparent 4.5px),
+    radial-gradient(circle at 47% 81%, var(--arrival-mote) 0 2.5px, transparent 4px),
+    radial-gradient(circle at 71% 12%, var(--arrival-mote) 0 3.5px, transparent 5px),
+    radial-gradient(circle at 88% 59%, var(--arrival-mote) 0 2.5px, transparent 4px);
+  background-size: 620px 620px;
+  filter: drop-shadow(0 0 3px var(--arrival-mote-glow));
+  animation: canvas-finding-fall-near 13s linear infinite;
+}
+/* Fireflies: fewer, smaller, glowing harder, rising, and blinking. */
+:root[data-theme="dark"] .canvas-finding::before,
+:root[data-theme="dark"] .canvas-finding::after {
+  background-image:
+    radial-gradient(circle at 14% 30%, var(--arrival-mote) 0 1.5px, transparent 3.5px),
+    radial-gradient(circle at 40% 70%, var(--arrival-mote) 0 1px, transparent 3px),
+    radial-gradient(circle at 63% 22%, var(--arrival-mote) 0 2px, transparent 4px),
+    radial-gradient(circle at 82% 58%, var(--arrival-mote) 0 1px, transparent 3px);
+  filter: drop-shadow(0 0 6px var(--arrival-mote-glow));
+}
+:root[data-theme="dark"] .canvas-finding::before {
+  top: 0;
+  bottom: -360px;
+  animation: canvas-finding-rise-far 30s linear infinite, canvas-finding-blink 3.7s ease-in-out infinite;
+}
+:root[data-theme="dark"] .canvas-finding::after {
+  top: 0;
+  bottom: -620px;
+  animation: canvas-finding-rise-near 21s linear infinite, canvas-finding-blink 2.9s ease-in-out -1.3s infinite;
+}
 .canvas-finding.fading-out {
   opacity: 0;
   transform: scale(1.015);
   pointer-events: none;
 }
 .canvas-finding-inner {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  /* The title's size, and the unit for everything around it. */
+  font-size: clamp(40px, 7.5vw, 112px);
+  gap: 0.14em;
   text-align: center;
   padding: 24px;
   animation: canvas-finding-enter 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 .canvas-finding-emblem {
+  width: max(48px, 0.8em);
+  height: max(48px, 0.8em);
   color: var(--ink-soft);
-  margin-bottom: 4px;
+  margin-bottom: 0.04em;
 }
 .canvas-finding-card-back {
   fill: var(--card);
@@ -4223,30 +4329,33 @@ button.mt-card:hover { border-color: var(--accent); }
   animation: canvas-finding-front 2.4s ease-in-out infinite;
 }
 .canvas-finding-eyebrow {
-  font-size: 10.5px;
+  font-size: max(12px, 0.16em);
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--accent-text);
 }
 .canvas-finding-title {
-  font-size: 26px;
-  font-weight: 600;
-  letter-spacing: -0.025em;
-  line-height: 1.2;
+  font-size: 1em;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.02;
   color: var(--ink);
-  max-width: 28ch;
+  max-width: 18ch;
+  text-wrap: balance;
+  overflow-wrap: break-word;
 }
+:root[data-theme="dark"] .canvas-finding-title { text-shadow: 0 2px 24px var(--arrival-ground); }
 .canvas-finding-sub {
-  font-size: 13px;
+  font-size: max(12px, 0.16em);
   line-height: 1.45;
   color: var(--ink-muted);
   max-width: 42ch;
 }
 .canvas-finding-bar {
-  width: 120px;
-  height: 2px;
-  margin-top: 8px;
+  width: max(120px, 2.4em);
+  height: max(2px, 0.03em);
+  margin-top: 0.12em;
   border-radius: 999px;
   background: var(--line-soft);
   overflow: hidden;
@@ -4257,6 +4366,14 @@ button.mt-card:hover { border-color: var(--accent); }
   border-radius: 999px;
   background: var(--accent);
   animation: canvas-finding-glide 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+@keyframes canvas-finding-fall-far { to { transform: translateY(360px); } }
+@keyframes canvas-finding-fall-near { to { transform: translateY(620px); } }
+@keyframes canvas-finding-rise-far { to { transform: translateY(-360px); } }
+@keyframes canvas-finding-rise-near { to { transform: translateY(-620px); } }
+@keyframes canvas-finding-blink {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
 }
 @keyframes canvas-finding-enter {
   from {
@@ -4294,6 +4411,8 @@ button.mt-card:hover { border-color: var(--accent); }
 }
 @media (prefers-reduced-motion: reduce) {
   .canvas-finding,
+  .canvas-finding::before,
+  .canvas-finding::after,
   .canvas-finding-inner,
   .canvas-finding-card-back,
   .canvas-finding-card-front,
