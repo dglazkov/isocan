@@ -130,6 +130,7 @@ export * from "./contextmark.js";
 export * from "./context-source.js";
 export * from "./context-pin.js";
 export * from "./slides.js";
+export * from "./morph.js";
 export * from "./slidewrites.js";
 export * from "./deckexport.js";
 export * from "./shelf.js";

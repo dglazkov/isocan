@@ -1,0 +1,1 @@
+import{j as i,L as o}from"./index-D9Gt9EDL.js";import{PublicCatalogue as r}from"./PublicCatalogue-CQP5GcfP.js";import"./api-access-DxT34c1m.js";import"./grants-6jdC12ib.js";import"./public-mdnhMvOj.js";function p(){return i.jsxs("main",{className:"public-page",children:[i.jsx(o,{to:"/",children:"← isocan home"}),i.jsx(r,{page:!0})]})}export{p as PublicPage};

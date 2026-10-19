@@ -3049,6 +3049,13 @@ var init_slides = __esm({
   }
 });
 
+// packages/core/src/morph.ts
+var init_morph = __esm({
+  "packages/core/src/morph.ts"() {
+    "use strict";
+  }
+});
+
 // packages/core/src/slidewrites.ts
 var init_slidewrites = __esm({
   "packages/core/src/slidewrites.ts"() {
@@ -3360,6 +3367,7 @@ var init_src = __esm({
     init_context_source();
     init_context_pin();
     init_slides();
+    init_morph();
     init_slidewrites();
     init_deckexport();
     init_shelf();

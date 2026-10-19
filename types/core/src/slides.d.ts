@@ -1,4 +1,5 @@
 import type { CanvasContents, Item } from "./model.js";
+import type { MetaPatch } from "./ops.js";
 /**
  * **The slide deck** (#87): mark items as slides, and full screen flips
  * through just those.
@@ -81,3 +82,52 @@ export declare function noteTarget(item: Item): string | null;
  * exist), a flip steps INTO it: forward to the first slide, back to the last.
  */
 export declare function deckStep(canvas: CanvasContents, currentId: string, delta: 1 | -1): Item | null;
+/**
+ * **How the deck moves from one slide to the next — a fact about the canvas,
+ * not about a slide or a viewer.**
+ *
+ * A canvas property (`project.update`), so it is zero new op types for
+ * `SLIDE_PROP`'s reason: it replicates, it undoes, and everybody watching
+ * the talk sees the motion the presenter picked — a viewer's flip and the
+ * presenter's flip are the same flip. Not per-slide: a deck that changes
+ * its motion on every slide is a deck that looks unfinished, and "the deck's
+ * transition" is the setting people actually reach for. A later version can
+ * let one slide override it without unsetting any canvas.
+ *
+ * `push` is the default and the one stored as an absence, so every canvas
+ * made before this existed keeps flipping exactly as it did.
+ *
+ * Four of these are 3D, and they are the fun ones on purpose: a talk is a
+ * show. `morph` is the one that takes the slide APART — its pieces lift off
+ * the page, travel to their places on the next slide, and come together flat
+ * (`morph.ts`); depth, cube and flip turn the slide whole.
+ * They cost time, which is why the web's rapid-flip rule still cuts when
+ * somebody hammers → to reach slide 14.
+ */
+export declare const DECK_TRANSITION_PROP = "deckTransition";
+/** The motions this build can draw, in the order a menu offers them. A
+ *  closed list for `CURSORS`' reason: a canvas naming a motion nothing can
+ *  draw would flip as a cut and nobody would know why. */
+export declare const DECK_TRANSITIONS: readonly ["push", "fade", "zoom", "morph", "depth", "cube", "flip", "cut"];
+/** One of the motions this build can draw — not a string, so a surface
+ *  cannot offer or store a name the other cannot draw. */
+export type DeckTransition = (typeof DECK_TRANSITIONS)[number];
+/** What a flip does when nobody has chosen. */
+export declare const DEFAULT_DECK_TRANSITION: DeckTransition;
+/** The parse both surfaces use, so the CLI refuses exactly what the app
+ *  would not draw. */
+export declare function isDeckTransition(value: string): value is DeckTransition;
+/** Does this one leave the flat plane? The 3D ones are the slow, showy
+ *  ones, and the menu says so beside their names. */
+export declare function isDeckTransition3d(transition: DeckTransition): boolean;
+/** What a motion is called where somebody picks it. */
+export declare function deckTransitionLabel(transition: DeckTransition): string;
+/** One line on what it looks like, for the CLI listing and the menu's tip. */
+export declare function deckTransitionHint(transition: DeckTransition): string;
+/** The motion this canvas's deck flips with. */
+export declare function deckTransitionOf(canvas: {
+    properties?: Record<string, string>;
+}): DeckTransition;
+/** Choose one. The default is stored as an absence, so choosing it is the
+ *  same patch as clearing the choice. */
+export declare function deckTransitionPatch(transition: DeckTransition): MetaPatch;
