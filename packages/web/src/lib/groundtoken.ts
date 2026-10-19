@@ -1,4 +1,4 @@
-import { type CanvasTheme, THEMES, groundOf, themeOf } from "@isocan/core";
+import { type CanvasTheme, type GroundTone, THEMES, groundOf, hasGround, themeOf, toneOfGround } from "@isocan/core";
 
 /**
  * **What colour the canvas is standing on** (8 Sep 2026).
@@ -67,3 +67,19 @@ export function groundToken(canvas: { properties?: Record<string, string> } | nu
 
 /** Every ground this build can stand a canvas on, for the guard. */
 export const TOKENED = THEMES;
+
+/**
+ * **What `data-ground-tone` says on `.canvas-page`** (smart contrast): core's
+ * `toneOfGround` for a canvas standing on a ground of its own, and nothing at
+ * all for one on the dot grid — so the plain canvas is untouched by
+ * construction rather than by the tier happening to resolve to the app's
+ * tokens.
+ *
+ * No app theme is asked for, on purpose: the app's theme only ever decides
+ * the dot grid's colour, and the dot grid gets no attribute. A ground of its
+ * own has the same tone in either theme (`core/test/groundtone.test.ts`), so
+ * the page need not subscribe to the theme to stamp it.
+ */
+export function groundToneAttr(canvas: { properties?: Record<string, string> } | null): GroundTone | undefined {
+  return canvas !== null && hasGround(canvas) ? toneOfGround(canvas, "dark") : undefined;
+}

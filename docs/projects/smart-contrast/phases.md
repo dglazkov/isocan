@@ -9,7 +9,7 @@ note: "the walk: the one-line selected-name fix, the tone function and the guard
 
 **19 October 2026.** Held to [journey.md](journey.md) and [design.md](design.md).
 
-**Where we are, 19 Oct 2026: phases 0–1 are CLOSED. A selected name reads in dark mode, and core decides every ground's tone (`toneOfGround`), held by `groundcontrast.test.ts`. Phase 2, the ink following the ground, is next.**
+**Where we are, 19 Oct 2026: phases 0–2 are CLOSED. The ink on the canvas follows the ground: names, kind icons, text notes, captions and the selection ring take a ground tier switched by `data-ground-tone`, crossfading, while cards and the dot grid are unchanged. Phase 3, the plate for Desert and sampled pictures, is next.**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -69,7 +69,7 @@ stylesheet.
 
 ## Phase 2 — The ink follows the ground
 
-**Status: NOT STARTED**
+**Status: CLOSED** (19 Oct 2026) — `scripts/journey-smart-contrast.mjs` passes 15 checks in headless Chrome: every ratio at its floor on Galaxy, Ocean, Snow and Zen in both themes, cards unchanged, the Snow → Night crossfade mid-way at 80ms and instant under reduced motion, and the dot grid identical to HEAD.
 
 - The five-token tier, defaulting to the app's tokens on `.canvas-page` and
   re-declared under `[data-ground-tone="dark"|"light"]` (design §2).
@@ -85,6 +85,12 @@ note and its speaker-note caption, read off computed style on Galaxy, Ocean,
 Snow, Zen and the dot grid, in both app themes — every ratio at its floor,
 cards' computed colours identical to before. Switching Snow → Night with the
 menu crossfades, and a reduced-motion run does not. Screenshots in the report.
+
+**Trajectory**
+
+- **2026-10-19** — No named text colour reaches 4.5:1 on Zen, Ocean or a bright picture (paper shades ~3.3 on Zen), and lifting one far enough renames it (red goes pink). So named shades are held at 3:1, WCAG's large-text floor, on every ground, and at 4.5 on the dot grid as before.
+- **2026-10-19** — Brown is excused on Ocean (2.39) and the brightest picture (2.10). A brown that reaches 3:1 there is ochre (#cb8f00 was tried), which `spokenColour` would not call brown. Red is lifted in the ground tier only (`GROUND_TEXT_SHADES`, #f2727c), so the dot grid's shades are untouched.
+- **2026-10-19** — The attribute takes no app theme. A ground of its own has the same tone in both themes, and the dot grid gets no attribute, so the page need not subscribe to the theme. Subscribing broke a jsdom test that has no `matchMedia`.
 
 ## Phase 3 — The plate, and pictures
 

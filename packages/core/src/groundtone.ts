@@ -1,5 +1,6 @@
 import { CONTRAST_BODY, CONTRAST_UI, contrastRatio } from "./contrast.ts";
-import { TEXT_SURFACES } from "./textcolour.ts";
+import type { TEXT_COLOURS } from "./textnode.ts";
+import { TEXT_SURFACES } from "./textsurfaces.ts";
 import { type CanvasTheme, GROUND_SCRIM, groundOf, themeOf } from "./theme.ts";
 
 /**
@@ -43,6 +44,34 @@ export type GroundInkRole = "ink" | "muted" | "soft" | "accent";
 export const GROUND_INK: Record<"dark" | "light", Record<GroundInkRole, string>> = {
   dark: { ink: "#e7e9ec", muted: "#b8bec8", soft: "#b8bec8", accent: "#b4c4ff" },
   light: { ink: "#23262b", muted: "#383d44", soft: "#383d44", accent: "#18288a" },
+};
+
+/**
+ * **A named text colour on a chromeless note, on a dark ground** (smart
+ * contrast phase 2). The dark theme's shades (`TEXT_COLOUR_SHADES.dark`),
+ * except where one had to lift: on a ground of its own a named colour is held
+ * at 3:1, WCAG's large-text floor, because no hue reaches 4.5 on the brightest
+ * picture and still says its name. Here and not in the app's shades, so the
+ * dot grid keeps exactly the colours it had. On a light ground a note takes
+ * the paper shades, which already clear 3:1 there.
+ *
+ * - red `#f2707a` → `#f2727c`: 2.97 → 3.01 on the brightest picture.
+ * - brown stays `#c76300`, and is excused on Ocean (2.39) and the brightest
+ *   picture (2.10): no brown reaches 3:1 there without turning ochre, which
+ *   `spokenColour` would not call brown (`web/test/groundcontrast.test.ts`).
+ *
+ * The stylesheet carries these as `--ground-dark-text-<name>`, held equal.
+ */
+export const GROUND_TEXT_SHADES: Record<(typeof TEXT_COLOURS)[number], string> = {
+  red: "#f2727c",
+  orange: "#f59042",
+  yellow: "#e8c547",
+  green: "#5cc672",
+  blue: "#6ea8f0",
+  purple: "#b98ce8",
+  pink: "#ec7fbd",
+  brown: "#c76300",
+  grey: "#9aa0a8",
 };
 
 /** The contrast each role must clear on a ground of its side: text at

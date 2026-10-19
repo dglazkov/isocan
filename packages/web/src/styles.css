@@ -155,6 +155,32 @@
   --paper-text-pink: #9e1c61;
   --paper-text-brown: #7a491f;
   --paper-text-grey: #50555b;
+  /* The ground tier's two ink sets (smart contrast) — the same in both app
+     themes, because a canvas's ground is the same picture in either: the set
+     for a dark ground and the set for a light one, core's `GROUND_INK`, held
+     equal by `groundcontrast.test.ts`. `.canvas-page[data-ground-tone]` picks
+     one; the dot grid picks neither. With them, the dark shades of the named
+     text colours, for a chromeless note on a dark ground whatever the app's
+     theme (a light ground takes the paper shades above) — core's
+     `GROUND_TEXT_SHADES`, which differ from `--text-*` only where a shade had
+     to lift to clear 3:1 on the dark grounds (red). */
+  --ground-dark-ink: #e7e9ec;
+  --ground-dark-ink-muted: #b8bec8;
+  --ground-dark-ink-soft: #b8bec8;
+  --ground-dark-accent: #b4c4ff;
+  --ground-light-ink: #23262b;
+  --ground-light-ink-muted: #383d44;
+  --ground-light-ink-soft: #383d44;
+  --ground-light-accent: #18288a;
+  --ground-dark-text-red: #f2727c;
+  --ground-dark-text-orange: #f59042;
+  --ground-dark-text-yellow: #e8c547;
+  --ground-dark-text-green: #5cc672;
+  --ground-dark-text-blue: #6ea8f0;
+  --ground-dark-text-purple: #b98ce8;
+  --ground-dark-text-pink: #ec7fbd;
+  --ground-dark-text-brown: #c76300;
+  --ground-dark-text-grey: #9aa0a8;
   /* RUNNING: an item you have stepped inside, whose scripts are live and whose
      links work. Green because it is the one thing on this canvas that is not a
      picture of software but software — the same green a build goes when it
@@ -313,6 +339,32 @@
   --paper-text-pink: #9e1c61;
   --paper-text-brown: #7a491f;
   --paper-text-grey: #50555b;
+  /* The ground tier's two ink sets (smart contrast) — the same in both app
+     themes, because a canvas's ground is the same picture in either: the set
+     for a dark ground and the set for a light one, core's `GROUND_INK`, held
+     equal by `groundcontrast.test.ts`. `.canvas-page[data-ground-tone]` picks
+     one; the dot grid picks neither. With them, the dark shades of the named
+     text colours, for a chromeless note on a dark ground whatever the app's
+     theme (a light ground takes the paper shades above) — core's
+     `GROUND_TEXT_SHADES`, which differ from `--text-*` only where a shade had
+     to lift to clear 3:1 on the dark grounds (red). */
+  --ground-dark-ink: #e7e9ec;
+  --ground-dark-ink-muted: #b8bec8;
+  --ground-dark-ink-soft: #b8bec8;
+  --ground-dark-accent: #b4c4ff;
+  --ground-light-ink: #23262b;
+  --ground-light-ink-muted: #383d44;
+  --ground-light-ink-soft: #383d44;
+  --ground-light-accent: #18288a;
+  --ground-dark-text-red: #f2727c;
+  --ground-dark-text-orange: #f59042;
+  --ground-dark-text-yellow: #e8c547;
+  --ground-dark-text-green: #5cc672;
+  --ground-dark-text-blue: #6ea8f0;
+  --ground-dark-text-purple: #b98ce8;
+  --ground-dark-text-pink: #ec7fbd;
+  --ground-dark-text-brown: #c76300;
+  --ground-dark-text-grey: #9aa0a8;
   --live-wash: rgba(86, 176, 106, 0.22);
   --accent-wash: rgba(76, 110, 245, 0.14);
   --accent-glow: rgba(76, 110, 245, 0.26);
@@ -924,7 +976,75 @@ img { height: auto; }
    panel at --z-float covered the comment toasts' close buttons. Without it the
    page's chrome and the body's panels meet on the one scale above
    (layers.test.ts holds this rule to it). */
-.canvas-page { position: absolute; inset: 0; overflow: hidden; }
+.canvas-page {
+  position: absolute; inset: 0; overflow: hidden;
+  /* The ground tier crossfades on the element whose value changes (below). */
+  transition: --ground-ink 0.2s ease, --ground-ink-muted 0.2s ease, --ground-ink-soft 0.2s ease,
+    --ground-accent 0.2s ease, --ground-ring 0.2s ease;
+}
+/* ---------- the ground tier: ink that follows the ground (smart contrast) ----------
+   Chrome drawn straight onto the canvas — names, kind icons, a chromeless
+   note's words, the selection ring — took the APP's ink, and a canvas's ground
+   does not follow the app's theme: in dark mode on Snow a note measured 1.19,
+   and the dark app's muted name 3.07 on Ocean. So everything on the ground
+   (the inventory in `test/groundtext.ts`) paints with these five tokens, and
+   only these (`groundcontrast.test.ts`, "the inventory holds").
+
+   With no ground of its own a canvas has no `data-ground-tone`, and each token
+   IS the app's token — the dot grid is byte-for-byte what it was. Declared on
+   the document root, not on `.canvas-page` (one block per class,
+   `oneblock.test.ts`): the properties inherit, so the page and everything off
+   it — a kind icon in a panel on the body — read the same default, never the
+   registration's initial value (transparent). `--ground-accent` is the accent as words and
+   `--ground-ring` the accent as a line, because today they are different
+   tokens (`--accent-text` and `--accent`), and only a ground of its own makes
+   them one colour.
+
+   On a ground, `CanvasPage` stamps core's `toneOfGround` and the tone's set
+   (`--ground-dark-*`, `--ground-light-*` in the theme blocks: core's
+   `GROUND_INK`, held equal by the guard) replaces them. Each is the
+   nearest to today's ink that passes on the worst ground of its side: on-dark
+   bound by the brightest picture (muted 4.52, accent 4.94), on-light by Zen
+   (muted 4.86, accent 5.46). `mid` (Desert) declares nothing here; its plate
+   is phase 3's. Cards do not move: their ink is the app's, on the app's card.
+
+   Registered as colours so a change of ground crossfades them over 200ms
+   rather than snapping (design §5): the transition sits in `.canvas-page`'s
+   own rule above, on the element whose value changes, and the rest inherit
+   the moving value. Under reduced motion the ink changes in the
+   frame the ground does. */
+@property --ground-ink { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --ground-ink-muted { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --ground-ink-soft { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --ground-accent { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --ground-ring { syntax: "<color>"; inherits: true; initial-value: transparent; }
+:root {
+  --ground-ink: var(--ink);
+  --ground-ink-muted: var(--ink-muted);
+  --ground-ink-soft: var(--ink-soft);
+  --ground-accent: var(--accent-text);
+  --ground-ring: var(--accent);
+}
+.canvas-page[data-ground-tone="dark"] {
+  --ground-ink: var(--ground-dark-ink);
+  --ground-ink-muted: var(--ground-dark-ink-muted);
+  --ground-ink-soft: var(--ground-dark-ink-soft);
+  --ground-accent: var(--ground-dark-accent);
+  --ground-ring: var(--ground-dark-accent);
+}
+.canvas-page[data-ground-tone="light"] {
+  --ground-ink: var(--ground-light-ink);
+  --ground-ink-muted: var(--ground-light-ink-muted);
+  --ground-ink-soft: var(--ground-light-ink-soft);
+  --ground-accent: var(--ground-light-accent);
+  --ground-ring: var(--ground-light-accent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .canvas-page { transition: none; }
+  /* The name row's own colour ease too, or the ink would still drift for
+     120ms after the ground changed. Its fade in and out on hover stays. */
+  .canvas-page .item-titlebar { transition: opacity 0.12s ease; }
+}
 .canvas-viewport {
   position: absolute; inset: 0;
   background: var(--ground);
@@ -1298,7 +1418,7 @@ img { height: auto; }
    here", which is what the item is. */
 .item.away { border-style: dashed; border-color: var(--away); }
 .item.away:hover { box-shadow: var(--shadow-item), 0 0 0 1px var(--away); }
-.item.selected { outline: calc(2px / var(--scale, 1)) solid var(--accent); z-index: 1; }
+.item.selected { outline: calc(2px / var(--scale, 1)) solid var(--ground-ring); z-index: 1; }
 /* An item whose render threw (`ItemBoundary`): its own box, drawn as a gap
    rather than a card, so the layout holds and nobody mistakes it for content.
    Dashed in the plain line colour — not `--danger`: nothing the person did is
@@ -1394,19 +1514,19 @@ img { height: auto; }
      Kept at 1px rather than matched to selection's 2px: hover is a preview of
      what a click would give you, and a preview as heavy as the thing it
      previews stops being one. */
-  outline: calc(1px / var(--scale, 1)) dashed var(--accent);
+  outline: calc(1px / var(--scale, 1)) dashed var(--ground-ring);
   outline-offset: calc(2px / var(--scale, 1));
 }
-.canvas-viewport:not(.pen) .item.selected.hover-target { outline: calc(2px / var(--scale, 1)) solid var(--accent); }
+.canvas-viewport:not(.pen) .item.selected.hover-target { outline: calc(2px / var(--scale, 1)) solid var(--ground-ring); }
 /* ⌘ held: the item it reaches is the target above; its group is drawn faint
    and SOLID — "inside this", not "this" — and over a frame's open space the
    members a selection box would reach are drawn dimly. */
 .canvas-viewport:not(.pen) .item.reach-inside:not(.selected) {
-  outline: calc(1px / var(--scale, 1)) solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline: calc(1px / var(--scale, 1)) solid color-mix(in srgb, var(--ground-ring) 45%, transparent);
   outline-offset: calc(2px / var(--scale, 1));
 }
 .canvas-viewport:not(.pen) .item.reach-among:not(.selected) {
-  outline: calc(1px / var(--scale, 1)) dashed color-mix(in srgb, var(--accent) 45%, transparent);
+  outline: calc(1px / var(--scale, 1)) dashed color-mix(in srgb, var(--ground-ring) 45%, transparent);
   outline-offset: calc(2px / var(--scale, 1));
 }
 /* …and pointing at a running item does not turn it back into a selected one. */
@@ -1420,7 +1540,7 @@ img { height: auto; }
 /* Pointing at a pill or row lights up the thing itself on the canvas: solid
    accent frame, outer halo, and a soft accent wash across the card. */
 .item.peeked {
-  outline: calc(2px / var(--scale, 1)) solid var(--accent);
+  outline: calc(2px / var(--scale, 1)) solid var(--ground-ring);
   outline-offset: 0;
   box-shadow: 0 0 0 calc(4px / var(--scale, 1)) var(--accent-glow), 0 0 calc(20px / var(--scale, 1)) var(--accent-glow), var(--shadow-item);
   z-index: 2;
@@ -1458,7 +1578,7 @@ img { height: auto; }
      the gap would drift by a border width across the zoom range. */
   bottom: calc(100% + 1px + 6px / var(--scale, 1));
   display: flex; align-items: flex-end; justify-content: space-between; gap: 6px;
-  padding: 0; font-size: 11px; color: var(--ink-muted);
+  padding: 0; font-size: 11px; color: var(--ground-ink-muted);
   line-height: 1.4; cursor: grab; user-select: none; -webkit-user-select: none;
   opacity: 0; transition: opacity 0.12s ease, color 0.12s ease;
 }
@@ -1496,8 +1616,10 @@ img { height: auto; }
 /* The selected name is TEXT standing on the ground, so it wears the accent's
    ink, not its fill. `--accent` is a fill colour; in dark it measured 3.32 on
    the dot grid as a name, and `--accent-text` measures 8.41 there. In light
-   the two tokens are the same cobalt, so nothing moves (`groundaccent.test.ts`). */
-.item.selected .item-titlebar { color: var(--accent-text); }
+   the two tokens are the same cobalt, so nothing moves (`groundaccent.test.ts`).
+   Since smart contrast it is `--ground-accent`, which IS `--accent-text`
+   until the canvas stands on a ground of its own (the tier, at `.canvas-page`). */
+.item.selected .item-titlebar { color: var(--ground-accent); }
 /* The star lives at the end of the label row, so it appears with the name and
    goes away with it — nothing sitting on the canvas waiting to be noticed. */
 
@@ -1510,7 +1632,7 @@ img { height: auto; }
      hold its size, so "100%" is 100% of the item's row in WORLD units — at
      24% zoom that is a quarter of the room the text needs, and the title
      crops from the left. The measured width IS the text; let it be that. */
-  font: inherit; color: var(--ink);
+  font: inherit; color: var(--ground-ink);
   /* A text input still paints its own native field behind a transparent
      background — that is where the white box came from, not from any rule
      here. Turning the control's appearance off is what stops it. */
@@ -1540,7 +1662,7 @@ img { height: auto; }
    is a statement about the file, not a control. */
 .kind-icon {
   flex: none; width: 13px; height: 13px; display: block;
-  color: var(--ink-soft); pointer-events: none;
+  color: var(--ground-ink-soft); pointer-events: none;
   /* The strokes are drawn on a 24 grid and shown at 13 — measured against 12,
      which lost the stand under the monitor and the sun inside the frame. `vector-effect` keeps it there: this icon sits
      inside counter-scaled chrome, and without it a stroke would be scaled by
@@ -1693,25 +1815,25 @@ img { height: auto; }
 .browser-slow a:hover { text-decoration: underline; }
 .browser-reload {
   flex: none; background: none; border: none; padding: 0 2px;
-  color: var(--ink-muted); font-size: 12px; line-height: 1; cursor: pointer;
+  color: var(--ground-ink-muted); font-size: 12px; line-height: 1; cursor: pointer;
 }
-.browser-reload:hover { color: var(--ink); }
+.browser-reload:hover { color: var(--ground-ink); }
 /* A Google Doc's Live | Words switch on its strip: a word, not a glyph,
    because the two states are unlike things and a glyph would make you guess
    which one you are looking at. */
 .doc-live-toggle {
   flex: none; padding: 0 6px; border-radius: 999px; border: 1px solid var(--line);
-  background: none; color: var(--ink-muted); font-size: 10.5px; line-height: 16px; cursor: pointer;
+  background: none; color: var(--ground-ink-muted); font-size: 10.5px; line-height: 16px; cursor: pointer;
 }
-.doc-live-toggle:hover { color: var(--ink); border-color: var(--ink-soft); }
+.doc-live-toggle:hover { color: var(--ground-ink); border-color: var(--ground-ink-soft); }
 /* The memory mark on a canvas card's strip (memory phase 3): a word, lit
    when the other canvas's context is read here, and the switch for it. */
 .memory-mark {
   flex: none; padding: 0 6px; border-radius: 999px; border: 1px solid var(--line);
-  background: none; color: var(--ink-muted); font-size: 10.5px; line-height: 16px; cursor: pointer;
+  background: none; color: var(--ground-ink-muted); font-size: 10.5px; line-height: 16px; cursor: pointer;
 }
-.memory-mark:hover { color: var(--ink); border-color: var(--ink-soft); }
-.memory-mark.active { background: var(--accent-wash, var(--chip)); color: var(--accent-text); border-color: transparent; }
+.memory-mark:hover { color: var(--ground-ink); border-color: var(--ground-ink-soft); }
+.memory-mark.active { background: var(--accent-wash, var(--chip)); color: var(--ground-accent); border-color: transparent; }
 /* Arrival motion (motion note, recommendation 2): an item from somebody
    else comes in rather than popping. The settled state IS the base state —
    the keyframes are only an entrance, so a throttled tab still shows the
@@ -1724,7 +1846,7 @@ img { height: auto; }
 @media (prefers-reduced-motion: reduce) {
   .item.arrived { animation: none; }
 }
-.doc-live-toggle.active { background: var(--accent-wash, var(--chip)); color: var(--accent-text); border-color: transparent; }
+.doc-live-toggle.active { background: var(--accent-wash, var(--chip)); color: var(--ground-accent); border-color: transparent; }
 /* "double-click to interact" is an instruction, not part of the document — so
    it hangs UNDER the item rather than lying across the bottom of it, and only
    while you are pointing at the thing it is talking about. Same bargain as the
@@ -3898,7 +4020,7 @@ button.mt-card:hover { border-color: var(--accent); }
 /* ---------- marquee ---------- */
 /* Alignment guides (drag): hairlines in the accent color, over the items but
    under the panels — they are feedback about the gesture, not furniture. */
-.guide { position: absolute; z-index: calc(var(--z-canvas) + 1); pointer-events: none; background: var(--accent); }
+.guide { position: absolute; z-index: calc(var(--z-canvas) + 1); pointer-events: none; background: var(--ground-ring); }
 .guide-v { top: 0; bottom: 0; width: 1px; }
 .guide-h { left: 0; right: 0; height: 1px; }
 
@@ -3920,7 +4042,7 @@ button.mt-card:hover { border-color: var(--accent); }
 
 .marquee {
   position: absolute; z-index: var(--z-canvas); pointer-events: none;
-  border: 1px solid var(--accent);
+  border: 1px solid var(--ground-ring);
   background: var(--accent-wash);
   border-radius: 2px;
 }
@@ -4483,10 +4605,10 @@ button.mt-card:hover { border-color: var(--accent); }
    one that takes a colour; the rest are quiet. */
 .file-mark {
   flex: none; width: 7px; height: 7px; border-radius: 2px;
-  border: 1px solid var(--ink-soft); background: none;
+  border: 1px solid var(--ground-ink-soft); background: none;
 }
 /* Written: solid, the way a filled checkbox reads. */
-.file-mark.written { background: var(--ink-soft); border-color: var(--ink-soft); }
+.file-mark.written { background: var(--ground-ink-soft); border-color: var(--ground-ink-soft); }
 /* Absent: hollow — it has a place and has not been put there. */
 .file-mark.absent { background: none; }
 /* Behind: the file is there and holds an older version of THIS item — the
@@ -4494,7 +4616,7 @@ button.mt-card:hover { border-color: var(--accent); }
    own. Present but not current, so it is filled and quiet. Deliberately not
    `--warn`: this is a catch-up, not somebody's work about to be lost, and
    colouring it like drift is how the two came to be confused. */
-.file-mark.behind { background: var(--chip); border-color: var(--ink-soft); }
+.file-mark.behind { background: var(--chip); border-color: var(--ground-ink-soft); }
 /* Drifted: the disk and the canvas disagree, and saving would overwrite
    somebody's work. The one state that should catch an eye. */
 .file-mark.drifted { background: var(--warn); border-color: var(--warn); }
@@ -4684,7 +4806,7 @@ button.mt-card:hover { border-color: var(--accent); }
 .item-open-source {
   display: inline-flex; align-items: center; justify-content: center;
   width: 18px; height: 18px; border-radius: 4px;
-  color: var(--ink-muted); text-decoration: none; font-size: 12px; line-height: 1;
+  color: var(--ground-ink-muted); text-decoration: none; font-size: 12px; line-height: 1;
 }
 .item-open-source:hover { background: var(--chip); color: var(--ink); }
 /* A grid on the sheet (sprint phase 5): hairlines between cells and a
@@ -4750,6 +4872,9 @@ button.mt-card:hover { border-color: var(--accent); }
   color: var(--ink-muted);
   user-select: none;
 }
+/* A chromeless note's opening words stand on the ground; on paper they keep
+   the rule above. */
+.item.textnode:not(.paper) .text-mark { color: var(--ground-ink-muted); }
 .item.textnode .md-view {
   padding: 4px 6px;
   /* Both supplied per node by `ItemView` — the ladder step's world size and
@@ -4761,7 +4886,7 @@ button.mt-card:hover { border-color: var(--accent); }
   line-height: 1.5;
   /* A colour the node names (`core/textcolour.ts`) — a token for a name, so
      the theme picks the shade — or the theme's own ink. */
-  color: var(--text-ink, var(--ink));
+  color: var(--text-ink, var(--ground-ink));
   /* Words on a canvas are read, not scrolled: a node that outgrew its box
      should be re-fitted (⇧F), not given a scrollbar the size of a sentence. */
   overflow: hidden;
@@ -4769,6 +4894,38 @@ button.mt-card:hover { border-color: var(--accent); }
      the right edge and being clipped — the one way a title could still be
      cut once the box is measured to the words (`core/textnode.ts`, textBox). */
   overflow-wrap: anywhere;
+}
+/* **A named colour on a chromeless note follows the ground** (smart
+   contrast). The node names a token (`--text-ink: var(--text-red)`, set on
+   the item), so re-declaring the token on the same element is enough: on a
+   dark ground the dark theme's shades, on a light ground the paper shades —
+   already chosen for pale surfaces, and the same in both themes. Paper keeps
+   its own (`--paper-text-*`), and so does the composer's palette on glass.
+   Held at 3:1 on every seeded ground and the brightest picture (brown
+   excused on Ocean and the picture, with its reason, in
+   `groundcontrast.test.ts`); the dark values are core's `GROUND_TEXT_SHADES`,
+   held equal there. The dot grid keeps the app's own shades. */
+.canvas-page[data-ground-tone="dark"] .item.textnode:not(.paper) {
+  --text-red: var(--ground-dark-text-red);
+  --text-orange: var(--ground-dark-text-orange);
+  --text-yellow: var(--ground-dark-text-yellow);
+  --text-green: var(--ground-dark-text-green);
+  --text-blue: var(--ground-dark-text-blue);
+  --text-purple: var(--ground-dark-text-purple);
+  --text-pink: var(--ground-dark-text-pink);
+  --text-brown: var(--ground-dark-text-brown);
+  --text-grey: var(--ground-dark-text-grey);
+}
+.canvas-page[data-ground-tone="light"] .item.textnode:not(.paper) {
+  --text-red: var(--paper-text-red);
+  --text-orange: var(--paper-text-orange);
+  --text-yellow: var(--paper-text-yellow);
+  --text-green: var(--paper-text-green);
+  --text-blue: var(--paper-text-blue);
+  --text-purple: var(--paper-text-purple);
+  --text-pink: var(--paper-text-pink);
+  --text-brown: var(--paper-text-brown);
+  --text-grey: var(--paper-text-grey);
 }
 /* **A text node's headings are sized in em, from its own words.**
    The card renderer's `.md-view h1` is a fixed 18px against a 13px card, and
@@ -4926,7 +5083,7 @@ button.mt-card:hover { border-color: var(--accent); }
   width: 100%;
   box-sizing: border-box;
   padding: 4px 6px;
-  border: 1px solid var(--accent);
+  border: 1px solid var(--ground-ring);
   border-radius: var(--radius);
   /* Transparent, because you are typing ONTO the canvas: a caption wears no
      card (`.item.textnode`), so the field editing one must not either — a
@@ -4934,7 +5091,7 @@ button.mt-card:hover { border-color: var(--accent); }
      that box inside the selected item. The accent hairline is the one thing
      that says where the box is; the words are otherwise the canvas's own. */
   background: transparent;
-  color: var(--text-ink, var(--ink));
+  color: var(--text-ink, var(--ground-ink));
   font: inherit;
   font-size: 16px;
   line-height: 1.5;
@@ -5420,7 +5577,7 @@ button.mt-card:hover { border-color: var(--accent); }
    the words, in world units like the words. */
 .item.textnode .note-of {
   position: absolute; left: 0; bottom: 100%; margin-bottom: 4px;
-  font-size: 11px; line-height: 1; white-space: nowrap; color: var(--ink-soft);
+  font-size: 11px; line-height: 1; white-space: nowrap; color: var(--ground-ink-soft);
   pointer-events: none;
 }
 /* In full screen: under the stage, never over it. */
@@ -5501,11 +5658,11 @@ button.mt-card:hover { border-color: var(--accent); }
 .fullscreen-stage .text-comment-actions { top: 64px; }
 
 /* Explicit groups keep their world-space header and leave interiors available to tools. */
-.item.canvas-group .area-title { color: var(--ink); }
-.item.group-drop-target { outline: 3px solid var(--accent); }
+.item.canvas-group .area-title { color: var(--ground-ink); }
+.item.group-drop-target { outline: 3px solid var(--ground-ring); }
 .group-drop-label.out { border-style: dashed; }
 .group-drop-label { position: absolute; right: 12px; top: 8px; padding: 4px 8px; background: var(--card); color: var(--accent-text); border: 1px solid var(--accent); border-radius: 6px; pointer-events: none; }
-.group-column-label, .group-row-label { position: absolute; padding: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-muted); box-sizing: border-box; }
+.group-column-label, .group-row-label { position: absolute; padding: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ground-ink-muted); box-sizing: border-box; }
 .group-grid-cell { position: absolute; border: 1px dashed var(--line); box-sizing: border-box; }
 .text-composer-status { position: absolute; top: 100%; padding: 8px; background: var(--card); color: var(--ink); font-size: 13px; }
 .item.canvas-group:not(.renaming) .item-titlebar { display: none; }

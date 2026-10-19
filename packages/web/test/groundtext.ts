@@ -50,6 +50,7 @@ export const GROUND_INVENTORY: readonly OnTheGround[] = [
   { selector: ".item.textnode:not(.paper) .md-view", ink: "text", why: "a chromeless note's words" },
   { selector: ".item.textnode:not(.paper) .text-mark", ink: "text", why: "a far-away note's opening words" },
   { selector: ".note-of", ink: "text", why: "the speaker-note caption, above the note even on paper" },
+  { selector: ".text-composer:not(.on-paper) textarea", ink: "text", why: "a note being typed, onto the canvas: a transparent field" },
   // Groups: the frame is a 40% wash, the band label stands on it.
   { selector: ".item.canvas-group .area-title", ink: "text", why: "a group's band label" },
   { selector: ".stack-band", ink: "text", why: "a stacked group's band; the stacked frame is transparent" },
@@ -136,6 +137,43 @@ export function fillAccentOnGround(all: Rule[]): string[] {
     for (const selector of selectorsOf(rule)) {
       const hit = GROUND_INVENTORY.find((e) => e.ink !== "line" && reaches(selector, e.selector));
       if (hit) out.push(`${selector}  (reaches ${hit.selector})`);
+    }
+  }
+  return out;
+}
+
+/** The app's own inks — measured against the app's surfaces, not the ground.
+ *  Exact names: `--accent-wash`, `--ink-on-x` and friends are other tokens. */
+const APP_INK = /var\(--(ink|ink-muted|ink-soft|accent|accent-text)\)/;
+
+/** The properties whose colour is ink: the text colour, and every way a
+ *  border or outline can be given one (the shorthands included). */
+const INK_PROPERTY = /^(color|outline|outline-color|border|border-color|border-(top|right|bottom|left)(-color)?)$/;
+
+/** A rule that gives its element an opaque fill of its own — a hovered ↗ on
+ *  `--chip`, say — has stepped off the ground for that state, and its ink is
+ *  measured against the fill. The tokens are the opaque surfaces only. */
+const OWN_FILL = /(^|[;\s])background(-color)?\s*:\s*var\(--(chip|card|panel|accent|paper)\)/;
+
+/**
+ * **The inventory holds** (design §6): every rule that reaches something on
+ * the ground and names one of the app's inks for its colour, border or
+ * outline, as `selector  property: value`. Only the ground tier
+ * (`--ground-ink*`, `--ground-accent`, `--ground-ring`) may paint there — the
+ * same shape as `dimmed.test.ts`, which refuses faded text on sight.
+ */
+export function appInkOnGround(all: Rule[]): string[] {
+  const out: string[] = [];
+  for (const rule of all) {
+    if (OWN_FILL.test(rule.body)) continue;
+    const inked = rule.body
+      .split(";")
+      .map((d) => d.split(/:(.*)/s).map((s) => s.trim()))
+      .filter(([prop, value]) => prop && value && INK_PROPERTY.test(prop) && APP_INK.test(value));
+    if (inked.length === 0) continue;
+    for (const selector of selectorsOf(rule)) {
+      if (!onTheGround(selector)) continue;
+      for (const [prop, value] of inked) out.push(`${selector}  ${prop}: ${value}`);
     }
   }
   return out;

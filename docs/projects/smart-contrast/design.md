@@ -110,8 +110,14 @@ cards:
 | `--ground-ink` | chromeless text node words, a name being renamed | `#e7e9ec` | `#23262b` |
 | `--ground-ink-muted` | item names, speaker-note captions | `#b8bec8` | `#383d44` |
 | `--ground-ink-soft` | kind icons, quiet glyphs (non-text, 3:1) | `#b8bec8` | `#383d44` |
-| `--ground-accent` | a selected name, the selection ring and hover dash | `#b4c4ff` | `#18288a` |
-| `--text-<name>-ground` | a named text colour on a chromeless node | the dark shades | the light shades |
+| `--ground-accent` | a selected name | `#b4c4ff` | `#18288a` |
+| `--ground-ring` | the selection ring, hover dash, marquee, guides (non-text, 3:1) | `#b4c4ff` | `#18288a` |
+| `--text-<name>` re-declared on a chromeless node | a named text colour | `GROUND_TEXT_SHADES` (the dark shades, red lifted) | the paper shades |
+
+Two accent tokens, not one (phase 2). On the dot grid the name wears
+`--accent-text` and the ring `--accent`, and the dot grid must render as it
+did, so each defaults to its own app token. Under a tone both take the same
+lifted accent.
 
 The values are proposals; the guard (§6) is what pins them. Each was picked as
 the nearest colour to today's that passes on the *worst* ground of its side:

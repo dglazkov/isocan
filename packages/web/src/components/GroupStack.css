@@ -2,9 +2,9 @@
    `GroupStack.tsx`, so it ships with that chunk and only a canvas with a
    stack downloads it. `--tint` is set per card from a token (`tintOf`). */
 .group-stack { position: absolute; inset: 0; }
-.stack-band { display: flex; align-items: center; gap: 12px; padding: 0 4px; box-sizing: border-box; color: var(--ink); cursor: grab; user-select: none; white-space: nowrap; }
+.stack-band { display: flex; align-items: center; gap: 12px; padding: 0 4px; box-sizing: border-box; color: var(--ground-ink); cursor: grab; user-select: none; white-space: nowrap; }
 .stack-title { font-size: 22px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.stack-band .group-member-count { margin-left: 0; padding-left: 0; color: var(--ink-muted); }
+.stack-band .group-member-count { margin-left: 0; padding-left: 0; color: var(--ground-ink-muted); }
 .stack-pile { position: absolute; cursor: pointer; }
 .stack-card {
   position: absolute; inset: 0; box-sizing: border-box; overflow: hidden;

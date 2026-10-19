@@ -86,7 +86,7 @@ describe("the stylesheet draws core's shades", () => {
   });
 
   it("colours a caption's words, on paper and off, with the theme's ink as the fallback", () => {
-    expect(css).toMatch(/\.item\.textnode \.md-view \{[^}]*color: var\(--text-ink, var\(--ink\)\)/);
+    expect(css).toMatch(/\.item\.textnode \.md-view \{[^}]*color: var\(--text-ink, var\(--ground-ink\)\)/);
     expect(css).toMatch(/\.item\.textnode\.paper \.md-view \{ color: var\(--text-ink, var\(--paper-ink\)\); \}/);
   });
 });

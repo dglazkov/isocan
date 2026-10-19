@@ -42,7 +42,7 @@ import { checkForUpdate, mayReloadUnseen } from "../lib/appversion.ts";
 import { arriveSketch, placeSketch } from "../lib/sketch.ts";
 import { CanvasViewport } from "../components/CanvasViewport.tsx";
 import { pageTitle } from "../lib/title.ts";
-import { groundToken } from "../lib/groundtoken.ts";
+import { groundToken, groundToneAttr } from "../lib/groundtoken.ts";
 import { itemThread } from "../components/CommentLayer.tsx";
 
 /**
@@ -287,6 +287,11 @@ function CanvasSurface({
      top controls is the colour of what it is washing. Null on a canvas with
      no ground, where the stylesheet's `--ground` fallback is right. */
   const fadeTone = useCanvasStore((s) => groundToken(s.record ?? null));
+  /* Which ink the canvas's ground takes — dark, light or mid — stamped on
+     the page so the ground tier in styles.css switches with one attribute
+     (smart contrast). Absent on the dot grid. Derived in every browser from
+     the ground it draws; nothing is written for it. */
+  const groundTone = useCanvasStore((s) => groundToneAttr(s.record ?? null));
   /* Stuck (proactive-agent phase 7): the card loads only while this person has said something in the last
      fifteen minutes (core's STUCK_WINDOW_MS, restated so the entry chunk does not carry the module). */
   const recentlyAsked = useCanvasStore((s) => {
@@ -1202,6 +1207,7 @@ function CanvasSurface({
     // one step of opening and wrong for a width changing every frame.
     <div
       className={`canvas-page${phone ? " phone-layout" : ""}${panelResizing ? " resizing-panel" : ""}${canEdit ? "" : " read-only"}`}
+      data-ground-tone={groundTone}
       onContextMenu={chromeTweakMenu}
     >
       {/* Covered, the canvas keeps its state and stops its paint:
