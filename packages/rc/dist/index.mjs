@@ -2406,11 +2406,19 @@ var init_colour = __esm({
   }
 });
 
+// packages/core/src/textsurfaces.ts
+var init_textsurfaces = __esm({
+  "packages/core/src/textsurfaces.ts"() {
+    "use strict";
+  }
+});
+
 // packages/core/src/textcolour.ts
 var init_textcolour = __esm({
   "packages/core/src/textcolour.ts"() {
     "use strict";
     init_contrast();
+    init_textsurfaces();
     init_textnode();
   }
 });
@@ -2427,7 +2435,7 @@ var init_groundtone = __esm({
   "packages/core/src/groundtone.ts"() {
     "use strict";
     init_contrast();
-    init_textcolour();
+    init_textsurfaces();
     init_theme();
   }
 });

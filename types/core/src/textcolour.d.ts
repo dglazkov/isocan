@@ -1,3 +1,4 @@
+import { TEXT_SURFACES } from "./textsurfaces.js";
 import type { Item } from "./model.js";
 import { TEXT_COLOURS, type Paper, type TextFace, type TextFont, type TextStyle } from "./textnode.js";
 /**
@@ -55,22 +56,10 @@ export declare const TEXT_COLOUR_SHADES: Record<TextColour, {
     dark: string;
     paper: string;
 }>;
-/**
- * The surfaces words land on, by theme — the stylesheet's `--ground` and the
- * five papers. Copied here (and held equal to `styles.css` by
- * `web/test/textcolour.test.ts`) so the CLI can say where a hex will not
- * read without a browser.
- */
-export declare const TEXT_SURFACES: {
-    light: {
-        ground: string;
-        papers: Record<Paper, string>;
-    };
-    dark: {
-        ground: string;
-        papers: Record<Paper, string>;
-    };
-};
+/** The surfaces words land on — in `textsurfaces.ts` since smart contrast, so
+ *  the ground's tone can read the app's ground without bringing the shades
+ *  and the parser into the entry chunk; re-exported here where it began. */
+export { TEXT_SURFACES };
 /** A text colour as a property holds it: a name, or a lowercase `#rrggbb`. */
 export type TextColourValue = TextColour | `#${string}`;
 /**
@@ -136,4 +125,3 @@ export declare function textPropsPatch(item: Item, patch: {
     removeProperties?: string[];
     warnings: string[];
 };
-export {};

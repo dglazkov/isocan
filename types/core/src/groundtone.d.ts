@@ -1,3 +1,4 @@
+import type { TEXT_COLOURS } from "./textnode.js";
 import { type CanvasTheme } from "./theme.js";
 /**
  * **Smart contrast: what the ink on the ground has to be** (19 Oct 2026).
@@ -35,6 +36,23 @@ export type GroundInkRole = "ink" | "muted" | "soft" | "accent";
  * quiet glyphs) and its floor is `CONTRAST_UI`.
  */
 export declare const GROUND_INK: Record<"dark" | "light", Record<GroundInkRole, string>>;
+/**
+ * **A named text colour on a chromeless note, on a dark ground** (smart
+ * contrast phase 2). The dark theme's shades (`TEXT_COLOUR_SHADES.dark`),
+ * except where one had to lift: on a ground of its own a named colour is held
+ * at 3:1, WCAG's large-text floor, because no hue reaches 4.5 on the brightest
+ * picture and still says its name. Here and not in the app's shades, so the
+ * dot grid keeps exactly the colours it had. On a light ground a note takes
+ * the paper shades, which already clear 3:1 there.
+ *
+ * - red `#f2707a` → `#f2727c`: 2.97 → 3.01 on the brightest picture.
+ * - brown stays `#c76300`, and is excused on Ocean (2.39) and the brightest
+ *   picture (2.10): no brown reaches 3:1 there without turning ochre, which
+ *   `spokenColour` would not call brown (`web/test/groundcontrast.test.ts`).
+ *
+ * The stylesheet carries these as `--ground-dark-text-<name>`, held equal.
+ */
+export declare const GROUND_TEXT_SHADES: Record<(typeof TEXT_COLOURS)[number], string>;
 /** The contrast each role must clear on a ground of its side: text at
  *  `CONTRAST_BODY` (4.5), the soft glyphs at `CONTRAST_UI` (3). */
 export declare const GROUND_INK_FLOOR: Record<GroundInkRole, number>;
