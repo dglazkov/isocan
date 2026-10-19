@@ -1261,7 +1261,6 @@
    HTML Screen Studio (`ScreenFocus.tsx`)
    ========================================================================== */
 
-.screen-focus-view,
 .screen-focus-edit {
   display: flex;
   flex-direction: column;
@@ -1290,7 +1289,6 @@
 
 .screen-viewport-btn,
 .screen-state-btn,
-.screen-info-btn,
 .screen-inline-edit-btn,
 .screen-save-copy-btn {
   font: inherit;
@@ -1305,14 +1303,12 @@
 
 .screen-viewport-btn.active,
 .screen-state-btn.active,
-.screen-info-btn.active,
 .screen-focus-toolbar .screen-save-copy-btn {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--accent-ink);
 }
 
-.screen-governing-badge,
 .screen-status-note {
   font-size: 12px;
   color: var(--ink-soft);

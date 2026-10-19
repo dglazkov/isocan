@@ -127,11 +127,12 @@ Workbench (`/p/:canvasId/w/:itemId`)**:
 
 ### 4.1 Screens (`text/html` — `caps: { view, edit, enter, file }`)
 
-- **VIEW Focus (`/i/:itemId`):** Full-bleed live iframe (`entered=true`) with
-  responsive viewport pills (`Mobile 390` · `Tablet 768` · `Desktop 1440` ·
-  `Fit`), clickable prototype hotspots, and a collapsible Info Rail (`I`)
-  showing governing `DESIGN.md` compliance, version timeline (`v1…vN`), speaker
-  notes (`N`), and node-anchored comment threads.
+- **VIEW Focus (`/i/:itemId`):** Full-bleed live iframe (`entered=true`) and
+  nothing else — no toolbar of its own, so the floating `FocusHeader` is the
+  only chrome and a slide fills the screen (19 Oct 2026: a viewport/Info bar
+  shipped here sat *under* the header and cost the content its top strip).
+  Speaker notes, version and chat are the header's; viewport pills live in
+  Edit.
 - **EDIT Focus (`/w/:itemId`):**
   - *Studio:* Direct in-place copy/text editing (`TextEditFrame` + `isocan
     words` copy-deck roles), element selector loupe, state simulator (`default`
