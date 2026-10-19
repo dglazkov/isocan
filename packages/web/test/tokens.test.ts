@@ -251,7 +251,7 @@ describe("every token used is a token defined", () => {
       // same reason `--scale` is not in one.
       "--mark",
       // `--canvas-ground` is the colour THIS canvas is standing on, which is a
-      // canvas property (`lib/groundtone.ts`) rather than anything a
+      // canvas property (`lib/groundtoken.ts`) rather than anything a
       // stylesheet knows. Read as `var(--canvas-ground, var(--ground))`, so a
       // canvas with no ground of its own falls back to the app's page ground
       // and the declaration never drops.

@@ -9,7 +9,7 @@ note: "the walk: the one-line selected-name fix, the tone function and the guard
 
 **19 October 2026.** Held to [journey.md](journey.md) and [design.md](design.md).
 
-**Where we are, 19 Oct 2026: phase 0 is CLOSED — a selected name reads in dark mode (8.41:1 on the dot grid, was 3.32). Phase 1, the tone and the guard, is next.**
+**Where we are, 19 Oct 2026: phases 0–1 are CLOSED. A selected name reads in dark mode, and core decides every ground's tone (`toneOfGround`), held by `groundcontrast.test.ts`. Phase 2, the ink following the ground, is next.**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -43,7 +43,7 @@ test:deep`.
 
 ## Phase 1 — The tone, and the guard
 
-**Status: NOT STARTED**
+**Status: CLOSED** (19 Oct 2026) — `core/src/groundtone.ts` decides dark for nine grounds and the brightest picture, light for Snow and Zen, and mid for Desert only. `GROUND_MEAN` is held equal to both stylesheet blocks, the 24-entry inventory is written down, and the entry chunk is unchanged (743,979 bytes).
 
 - `core/src/groundtone.ts`: `GroundTone`, `GROUND_MEAN`, `toneOfColour`,
   `groundColour`, `toneOfGround` (design §1), exported from core.
@@ -61,6 +61,11 @@ test:deep`.
 brightest picture, `light` for Snow and Zen, `mid` for Desert, and the app's
 own tone for the dot grid; the guard is green; `GROUND_MEAN` matches the
 stylesheet.
+
+**Trajectory**
+
+- **2026-10-19** — The canvas title is not ground-standing chrome. It sits on the glass of `.bar-cluster.floats`, so design §2's rule keeps it on app tokens, and design §2 now says so.
+- **2026-10-19** — The per-token check cannot fail on its own: the tone is decided by the same `GROUND_INK`, so a weak token flips its ground to `mid` instead. The tone table and the mid list are what bite until phase 2 holds the CSS tier equal to `GROUND_INK`.
 
 ## Phase 2 — The ink follows the ground
 

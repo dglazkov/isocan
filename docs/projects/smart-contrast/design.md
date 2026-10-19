@@ -121,8 +121,8 @@ were chosen against `#0e0f12`; some will fail on Ocean or a picture, and the
 guard will say which ones to lift.
 
 **The switch is one attribute.** `CanvasPage` stamps
-`data-ground-tone="dark|light|mid"` on `.canvas-page` — not on the viewport,
-because the canvas title over the top fade is ground-standing chrome too. No
+`data-ground-tone="dark|light|mid"` on `.canvas-page`, the one element every
+ground-standing thing descends from. No
 attribute (a canvas on the dot grid) means the tier resolves to the app's own
 tokens, so the common case is byte-for-byte today's picture:
 
@@ -144,7 +144,11 @@ comment pin — keeps the app's tokens, because its ink is measured against its
 own fill. Phase 1's inventory is this rule applied to `styles.css`; the
 starting list is `.item-titlebar` and `.kind-icon`, `.item.selected
 .item-titlebar`, `.name-input`, `.item.textnode .md-view` and `.note-of`, the
-hover-target dash and selection ring, group band labels, and the canvas title.
+hover-target dash and selection ring, and group band labels. The list as
+built is `GROUND_INVENTORY` in `packages/web/test/groundtext.ts`, which has 24
+entries. The canvas title is not on it: it sits on the glass of
+`.bar-cluster.floats`, so by this rule it keeps the app's tokens (phase 1
+trajectory).
 
 **Identity colours do not move.** The seven `IDENTITY_COLORS` say who is who
 (`core/src/theme.ts`, #195), so a person's colour keeps its hue on every

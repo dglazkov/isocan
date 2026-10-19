@@ -43,7 +43,7 @@
      app's theme. Dark enough that white item cards read as objects on top. */
   /* Measured from the tiles themselves, 8 Sep 2026 — each is its picture's
      own mean colour, so the ground behind an image that has not arrived yet
-     is the colour of the image, and so the top fade over it (groundtone.ts)
+     is the colour of the image, and so the top fade over it (groundtoken.ts)
      is too. Before the art these were chosen by eye and were the target the
      prompts named; now they are read off what the artist sent back. */
   --theme-ocean: #314852;
@@ -332,7 +332,7 @@
      app's theme. Dark enough that white item cards read as objects on top. */
   /* Measured from the tiles themselves, 8 Sep 2026 — each is its picture's
      own mean colour, so the ground behind an image that has not arrived yet
-     is the colour of the image, and so the top fade over it (groundtone.ts)
+     is the colour of the image, and so the top fade over it (groundtoken.ts)
      is too. Before the art these were chosen by eye and were the target the
      prompts named; now they are read off what the artist sent back. */
   --theme-ocean: #314852;
@@ -1054,7 +1054,7 @@ img { height: auto; }
  *
  * `background-color` is each tile's own mean colour, measured off the file
  * rather than picked: it is what shows for the moment before a 139–663KB JPEG
- * arrives, and what the top fade over it is drawn from (`lib/groundtone.ts`).
+ * arrives, and what the top fade over it is drawn from (`lib/groundtoken.ts`).
  * A ground whose holding colour is not its picture's flashes a different
  * ground on every cold load.
  *
@@ -5455,7 +5455,7 @@ button.mt-card:hover { border-color: var(--accent); }
  * is"* — so in light mode the fade was a white bar dissolving into a
  * starfield, which is the exact artefact a fade exists to prevent.
  *
- * `lib/groundtone.ts` writes `--canvas-ground` as the same token the ground
+ * `lib/groundtoken.ts` writes `--canvas-ground` as the same token the ground
  * itself paints with, so the wash and the thing it washes cannot drift; the
  * fallback here is what a canvas with no ground of its own gets, and is why
  * this stayed right for every canvas until one wore a sky.
