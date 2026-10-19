@@ -1,6 +1,7 @@
 import { selectCreatedItems } from "../lib/groupplacement.ts";
 import { createGroupNudger } from "../lib/groupgestures.ts";
-import { groupAncestors, groupScopeRoots, isGroupItem } from "@isocan/core";
+import { groundOf, groupAncestors, groupScopeRoots, isGroupItem } from "@isocan/core";
+import { useShallow } from "zustand/react/shallow";
 import { enterCanvasGroup, leaveCanvasGroup, openGroupCreation, changeCanvasGroup, groupsEnabled, groupTask, removeFromCanvasGroup } from "../lib/canvasgroups.ts";
 import { CanvasGroupScope } from "../components/CanvasGroupScope.tsx";
 import { presentedCanvas, presentedLocus } from "../lib/presentation.ts";
@@ -42,7 +43,8 @@ import { checkForUpdate, mayReloadUnseen } from "../lib/appversion.ts";
 import { arriveSketch, placeSketch } from "../lib/sketch.ts";
 import { CanvasViewport } from "../components/CanvasViewport.tsx";
 import { pageTitle } from "../lib/title.ts";
-import { groundToken, groundToneAttr } from "../lib/groundtoken.ts";
+import { groundMidStyle, groundToken, groundToneAttr } from "../lib/groundtoken.ts";
+import { useGroundSamples } from "../lib/groundsample.ts";
 import { itemThread } from "../components/CommentLayer.tsx";
 
 /**
@@ -291,7 +293,10 @@ function CanvasSurface({
      the page so the ground tier in styles.css switches with one attribute
      (smart contrast). Absent on the dot grid. Derived in every browser from
      the ground it draws; nothing is written for it. */
-  const groundTone = useCanvasStore((s) => groundToneAttr(s.record ?? null));
+  const groundHash = useCanvasStore((s) => (s.record ? groundOf(s.record) : null));
+  const groundSample = useGroundSamples((s) => (groundHash ? s.byHash[groundHash] : undefined));
+  const groundTone = useCanvasStore((s) => groundToneAttr(s.record ?? null, groundSample));
+  const groundMid = useCanvasStore(useShallow((s) => groundMidStyle(s.record ?? null, groundSample)));
   /* Stuck (proactive-agent phase 7): the card loads only while this person has said something in the last
      fifteen minutes (core's STUCK_WINDOW_MS, restated so the entry chunk does not carry the module). */
   const recentlyAsked = useCanvasStore((s) => {
@@ -1208,6 +1213,8 @@ function CanvasSurface({
     <div
       className={`canvas-page${phone ? " phone-layout" : ""}${panelResizing ? " resizing-panel" : ""}${canEdit ? "" : " read-only"}`}
       data-ground-tone={groundTone}
+      data-ground-sample={groundSample}
+      style={groundMid as CSSProperties | undefined}
       onContextMenu={chromeTweakMenu}
     >
       {/* Covered, the canvas keeps its state and stops its paint:

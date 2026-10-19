@@ -9,7 +9,7 @@ note: "the walk: the one-line selected-name fix, the tone function and the guard
 
 **19 October 2026.** Held to [journey.md](journey.md) and [design.md](design.md).
 
-**Where we are, 19 Oct 2026: phases 0–2 are CLOSED. The ink on the canvas follows the ground: names, kind icons, text notes, captions and the selection ring take a ground tier switched by `data-ground-tone`, crossfading, while cards and the dot grid are unchanged. Phase 3, the plate for Desert and sampled pictures, is next.**
+**Where we are, 19 Oct 2026: phases 0–3 are CLOSED. The ink on the canvas follows the ground; Desert's names sit on a glass plate; a picture is sampled once it decodes. Phase 4, telling agents (the CLI, the guide, colour warnings), is next.**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -94,7 +94,7 @@ menu crossfades, and a reduced-motion run does not. Screenshots in the report.
 
 ## Phase 3 — The plate, and pictures
 
-**Status: NOT STARTED**
+**Status: CLOSED** (19 Oct 2026) — Desert's names and captions sit on glass (10.68 in light, 9.88 in dark against the composited plate), its ring is held at 3:1, and its text notes take black words with a soft white glow. Generated white, black and half-and-half pictures sample within 0.5/255 of the expected composite and resolve dark; a 0.2 scrim turns white light.
 
 - The `mid` plate on ground chrome (design §3), and whatever phase 1 decided
   for text nodes on Desert.
@@ -107,6 +107,12 @@ plate; three generated pictures (flat white, flat black, half and half) all
 resolve `dark` under the 0.7 scrim and the sampled hex is within 2% of the
 pixel mean; a test with the scrim set to 0.2 resolves the white picture
 `light` — the "take a look" path proved without changing what ships.
+
+**Trajectory**
+
+- **2026-10-19** — Desert's words are black, not white: black measures 5.11 there, white 4.11 and the ink sets 3.70 and 3.38. Design.md's first decision assumed white. A one-pixel halo was not enough over the sand's dark streaks, because the mean hides a high-variance texture, so the halo is a 1/2/4px glow, judged on a 3× close-up.
+- **2026-10-19** — On the plate the name takes full `--ink`, not the muted ink: the glass is translucent, so composited over Desert the app's muted ink is only 3.70 / 3.83. The best accent on Desert, the light one, measures 2.99, so `bestInk` walks it to #182889, the nearest colour that clears 3:1.
+- **2026-10-19** — Identity colours needed nothing except `.work-chip`. A cursor's name sits on a pill of the person's colour, the presenter's name on a card, and remote selection is a line. Only the agent work chip was bare tinted text, and it now gets the glass plate on every ground (not on the dot grid).
 
 ## Phase 4 — Both surfaces
 

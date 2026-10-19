@@ -1,4 +1,16 @@
-import { type CanvasTheme, type GroundTone, THEMES, groundOf, hasGround, themeOf, toneOfGround } from "@isocan/core";
+import {
+  CONTRAST_UI,
+  type CanvasTheme,
+  type GroundTone,
+  THEMES,
+  bestInk,
+  groundColour,
+  groundOf,
+  haloOf,
+  hasGround,
+  themeOf,
+  toneOfGround,
+} from "@isocan/core";
 
 /**
  * **What colour the canvas is standing on** (8 Sep 2026).
@@ -73,13 +85,39 @@ export const TOKENED = THEMES;
  * `toneOfGround` for a canvas standing on a ground of its own, and nothing at
  * all for one on the dot grid — so the plain canvas is untouched by
  * construction rather than by the tier happening to resolve to the app's
- * tokens.
+ * tokens. `sampled` is a picture's colour under the scrim once it has been
+ * looked at (`lib/groundsample.ts`); until then core takes the worst case.
  *
  * No app theme is asked for, on purpose: the app's theme only ever decides
  * the dot grid's colour, and the dot grid gets no attribute. A ground of its
  * own has the same tone in either theme (`core/test/groundtone.test.ts`), so
  * the page need not subscribe to the theme to stamp it.
  */
-export function groundToneAttr(canvas: { properties?: Record<string, string> } | null): GroundTone | undefined {
-  return canvas !== null && hasGround(canvas) ? toneOfGround(canvas, "dark") : undefined;
+export function groundToneAttr(
+  canvas: { properties?: Record<string, string> } | null,
+  sampled?: string,
+): GroundTone | undefined {
+  return canvas !== null && hasGround(canvas) ? toneOfGround(canvas, "dark", sampled) : undefined;
+}
+
+/**
+ * **What a `mid` ground draws where no plate can go** (smart contrast phase
+ * 3): a chromeless note's words and their halo, and the ring around a card —
+ * worked out by core's `bestInk` for the colour this canvas actually stands
+ * on, and handed to the stylesheet as three properties on `.canvas-page`.
+ * Computed rather than written in the stylesheet so a picture that one day
+ * samples `mid` gets its own answer, not Desert's. Nothing for any other tone.
+ */
+export function groundMidStyle(
+  canvas: { properties?: Record<string, string> } | null,
+  sampled?: string,
+): Record<string, string> | undefined {
+  if (groundToneAttr(canvas, sampled) !== "mid") return undefined;
+  const under = groundColour(canvas, "dark", sampled);
+  const ink = bestInk(under, "ink");
+  return {
+    "--ground-mid-ink": ink,
+    "--ground-mid-halo": haloOf(ink),
+    "--ground-mid-ring": bestInk(under, "accent", CONTRAST_UI),
+  };
 }

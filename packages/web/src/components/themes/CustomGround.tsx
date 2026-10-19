@@ -1,5 +1,7 @@
 import { GROUND_SCRIM } from "@isocan/core";
+import { useEffect } from "react";
 import { blobUrl } from "../../lib/api.ts";
+import { sampleGround } from "../../lib/groundlook.ts";
 
 /**
  * **A ground somebody supplied** (#204 phase 2).
@@ -42,6 +44,10 @@ import { blobUrl } from "../../lib/api.ts";
  * a missing item never would be.
  */
 export function CustomGround({ canvasId, hash }: { canvasId: string; hash: string }) {
+  /* Take a look at the picture once it can be read, so the ink over it
+     follows what it is rather than the worst it could be (smart contrast,
+     `lib/groundsample.ts`). */
+  useEffect(() => sampleGround(hash, blobUrl(canvasId, hash)), [canvasId, hash]);
   return (
     <div className="canvas-theme canvas-theme-custom">
       <div

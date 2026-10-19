@@ -256,6 +256,13 @@ describe("every token used is a token defined", () => {
       // canvas with no ground of its own falls back to the app's page ground
       // and the declaration never drops.
       "--canvas-ground",
+      // A `mid` ground's ink, halo and ring (smart contrast): core's
+      // `bestInk` for the colour THIS canvas stands on, set on `.canvas-page`
+      // by `groundMidStyle` — a picture that samples mid gets its own — and
+      // read with a fallback.
+      "--ground-mid-ink",
+      "--ground-mid-halo",
+      "--ground-mid-ring",
       // `--tint` is a stacked group's member colour (`GroupStack.tsx`
       // `tintOf`): always a token by name — a paper or a kind family — set on
       // the card that reads it, and read with a fallback.

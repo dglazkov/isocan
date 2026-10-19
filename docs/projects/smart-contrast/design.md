@@ -262,7 +262,9 @@ Dion said "go through all the phases", so both questions were taken rather
 than held. Each is one value or one rule to change if the phase 5 walk says
 it reads wrong.
 
-1. **Text nodes on Desert: the higher ink plus a one-pixel halo.** A glass
+1. **Text nodes on Desert: the higher ink plus a halo.** As built in phase 3,
+   that is black (5.11, not white) with a 1/2/4px white glow, because a single
+   pixel lost to the sand's dark streaks. A glass
    backing behind every chromeless note would make Desert the one ground where
    a text node is a card, which contradicts what a text node is; regrading the
    tile is the artist's call, not code's. The halo is the smallest change, and

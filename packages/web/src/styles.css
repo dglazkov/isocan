@@ -1005,8 +1005,8 @@ img { height: auto; }
    `GROUND_INK`, held equal by the guard) replaces them. Each is the
    nearest to today's ink that passes on the worst ground of its side: on-dark
    bound by the brightest picture (muted 4.52, accent 4.94), on-light by Zen
-   (muted 4.86, accent 5.46). `mid` (Desert) declares nothing here; its plate
-   is phase 3's. Cards do not move: their ink is the app's, on the app's card.
+   (muted 4.86, accent 5.46). `mid` (Desert) has its own section below: the
+   plate. Cards do not move: their ink is the app's, on the app's card.
 
    Registered as colours so a change of ground crossfades them over 200ms
    rather than snapping (design §5): the transition sits in `.canvas-page`'s
@@ -1038,6 +1038,76 @@ img { height: auto; }
   --ground-ink-soft: var(--ground-light-ink-soft);
   --ground-accent: var(--ground-light-accent);
   --ground-ring: var(--ground-light-accent);
+}
+/* ---------- mid: the plate (smart contrast phase 3, design §3) ----------
+   A ground no ink family reads on — Desert, where white measures 4.11 and the
+   dark ink 3.70. Rather than the least-bad grey, ground chrome stands on a
+   small plate of the glass every menu wears, and its ink is the app's, on
+   app glass. The glass is translucent (0.82 → 0.74), so the sand shows
+   through: composited over Desert the muted ink measures only 3.70 (light)
+   and 3.83 (dark), the full ink 10.68 and 9.88. So on the plate names, icons
+   and captions take the full `--ink`; `groundcontrast.test.ts` measures it.
+
+   Where no plate can go — a chromeless note's words (a plate behind every
+   note would make Desert the one ground where a note is a card), and the
+   ring around a card — the colour comes from core's `bestInk` for the colour
+   this canvas stands on, set on the page by `CanvasPage`
+   (`--ground-mid-ink`, `-halo`, `-ring`). On Desert that is black words,
+   5.11, with a one-pixel white halo (decided 19 Oct; WCAG does not count a
+   halo — it is for the busy patches of the sand), and a ring of `#182889`,
+   the light accent walked the one step past 2.99 that clears 3:1. */
+.canvas-page[data-ground-tone="mid"] {
+  --ground-ink-muted: var(--ink);
+  --ground-ink-soft: var(--ink);
+  --ground-ring: var(--ground-mid-ring, var(--accent));
+}
+/* The plate sits on the text run, not the row — `.chrome-left` holds the
+   kind icon, the marks, the name or the rename field and the row's own
+   pills — and it is a pseudo-element behind the run, so nothing in the row
+   moves by a pixel (`titlebar.test.ts` holds the row's place). Its 1px and
+   5px are screen pixels already: the run is counter-scaled, and the plate is
+   inside it. The speaker-note caption, positioned already, takes the same. */
+.canvas-page[data-ground-tone="mid"] .item-titlebar .chrome-left { position: relative; }
+.canvas-page[data-ground-tone="mid"] .item-titlebar .chrome-left::before,
+.canvas-page[data-ground-tone="mid"] .note-of::before {
+  content: ""; position: absolute; inset: -1px -5px; z-index: -1;
+}
+.canvas-page[data-ground-tone="mid"] .item-titlebar .chrome-left::before,
+.canvas-page[data-ground-tone="mid"] .note-of::before,
+.canvas-page[data-ground-tone="mid"] .item.canvas-group .area-title,
+.canvas-page[data-ground-tone="mid"] .stack-band,
+.canvas-page[data-ground-tone="mid"] .group-column-label,
+.canvas-page[data-ground-tone="mid"] .group-row-label {
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+  border-radius: 6px;
+}
+.canvas-page[data-ground-tone="mid"] .item.textnode:not(.paper) .md-view,
+.canvas-page[data-ground-tone="mid"] .item.textnode:not(.paper) .text-mark,
+.canvas-page[data-ground-tone="mid"] .text-composer:not(.on-paper) textarea {
+  color: var(--text-ink, var(--ground-mid-ink, var(--ground-ink)));
+  /* A soft glow, not a hairline: Desert is a high-variance sand and its mean
+     hides the dark streaks, where a 1px halo alone left glyphs touching the
+     dark (seen in the walk's screenshot, 19 Oct). Three stacked blurs — tight,
+     wider, widest at 70% — lift each glyph off the streak under it. */
+  text-shadow:
+    0 0 1px var(--ground-mid-halo, transparent),
+    0 0 2px var(--ground-mid-halo, transparent),
+    0 0 4px color-mix(in srgb, var(--ground-mid-halo, transparent) 70%, transparent);
+}
+/* **Identity colours do not move** (design §2): an agent's work chip says
+   whose work this is in that person's colour, so on any ground of its own it
+   gets the plate instead of a new colour — the only lever an identity colour
+   leaves. Its tint stays, laid over the glass. The dot grid keeps it as it
+   was. (A remote cursor's name already sits on a pill of the person's colour,
+   and a presenter's name on a card: both carry their own fill.) */
+.canvas-page[data-ground-tone] .work-chip {
+  background:
+    linear-gradient(color-mix(in srgb, var(--work-color) 10%, transparent), color-mix(in srgb, var(--work-color) 10%, transparent)),
+    var(--glass);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
 }
 @media (prefers-reduced-motion: reduce) {
   .canvas-page { transition: none; }

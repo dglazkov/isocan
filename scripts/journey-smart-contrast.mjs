@@ -30,6 +30,14 @@
  * 4. With `--baseline`, every inventory element on the dot grid
  *    (`packages/web/test/groundtext.ts`) computes exactly what the file —
  *    captured with `--capture` against an earlier build — says it did.
+ * 5. Desert (phase 3, the plate), both themes: the name and the kind icon on
+ *    a plate of the menus' glass, measured against the glass composited over
+ *    Desert's mean at both ends of its gradient (the worse counts); the ring
+ *    against Desert; a note's words against Desert, with their halo.
+ * 6. Three pictures made here (flat white, flat black, half and half): each
+ *    resolves `dark` under the 0.7 scrim, and the colour the page sampled
+ *    (`data-ground-sample` on `.canvas-page`) is within 2% of 255, per
+ *    channel, of the picture's mean under the scrim.
  *
  * Its own daemon, home and browser; synthetic content. Serves whatever
  * `packages/web/dist` holds, so build first — and build the earlier tree for
@@ -41,6 +49,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { crc32, deflateSync } from "node:zlib";
 import { browser, throughTheDoor, until } from "./lib/browser.mjs";
 import { reapOnExit, startDaemon } from "./lib/daemon.mjs";
 
@@ -72,6 +81,42 @@ const hex = (rgb) => {
 };
 const lum = (rgb) => core.luminance(hex(rgb));
 
+/** A greyscale PNG, `at(x)` the grey of column x — enough of the format to
+ *  make the three pictures check 6 needs without a dependency. */
+function png(width, height, at) {
+  const chunk = (type, data) => {
+    const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(data.length);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(body));
+    return Buffer.concat([len, body, crc]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8; // bit depth
+  ihdr[9] = 2; // truecolour
+  const rows = [];
+  for (let y = 0; y < height; y++) {
+    rows.push(0); // no filter
+    for (let x = 0; x < width; x++) rows.push(at(x), at(x), at(x));
+  }
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk("IHDR", ihdr),
+    chunk("IDAT", deflateSync(Buffer.from(rows))),
+    chunk("IEND", Buffer.alloc(0)),
+  ]);
+}
+
+/** A stop of a `linear-gradient(rgba(…) 0%, …)` laid over a hex ground. */
+const stops = (gradient) => [...String(gradient).matchAll(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)/g)].map((m) => [m[1], m[2], m[3], m[4] ?? 1].map(Number));
+const over = (stop, ground) => {
+  const g = [1, 3, 5].map((i) => parseInt(ground.slice(i, i + 2), 16));
+  return `#${g.map((v, i) => Math.round(stop[i] * stop[3] + v * (1 - stop[3])).toString(16).padStart(2, "0")).join("")}`;
+};
+
 const home = mkdtempSync(path.join(tmpdir(), "isocan-smart-contrast-"));
 const daemon = await startDaemon({ cli, home });
 const run = (...args) => {
@@ -95,9 +140,12 @@ try {
   const brief = idOf(run("--canvas", id, "add", file("Acme brief.md", "# Acme brief\n\nThe card's own words.\n")));
   const other = idOf(run("--canvas", id, "add", file("Acme other.md", "# Acme other\n\nAnother card.\n")));
   const words = idOf(run("--canvas", id, "text", "Acme words on the ground"));
+  // A second note further down, where Desert's tile lays a dark streak, for
+  // the close-up of check 5: the mean hides the streaks, the halo must not.
+  const streak = idOf(run("--canvas", id, "text", "Acme over the dark streak"));
   // Laid out apart, one op: the brief and another card side by side, the
   // note's words below them.
-  run("--canvas", id, "mv", brief, "80", "140", other, "520", "140", words, "80", "520");
+  run("--canvas", id, "mv", brief, "80", "140", other, "520", "140", words, "80", "520", streak, "40", "580");
   // A speaker note is a text node that points at its slide.
   let noted = false;
   try {
@@ -282,6 +330,83 @@ try {
       `3 under reduced motion Night → Snow does not: at 80ms the name is ${still.color}, the endpoint is ${snowAgain}`,
     );
     await b.send("Emulation.setEmulatedMedia", { features: [] });
+
+    // ---- 5: Desert, the plate ----
+    for (const theme of ["light", "dark"]) {
+      await open(theme);
+      await wear("desert");
+      const r = await b.ev(`(() => {
+        const items = [...document.querySelectorAll(".world .item")];
+        const other = items.find((i) => i.querySelector(".item-titlebar .name")?.textContent.includes("Acme other"));
+        const run = other.querySelector(".chrome-left");
+        const plate = getComputedStyle(run, "::before");
+        const brief = document.querySelector(".item.selected");
+        const words = items.find((i) => i.classList.contains("textnode") && i.textContent.includes("Acme words"))?.querySelector(".md-view");
+        return {
+          tone: document.querySelector(".canvas-page").dataset.groundTone ?? null,
+          plate: plate.backgroundImage, filter: plate.backdropFilter, content: plate.content,
+          name: getComputedStyle(other.querySelector(".item-titlebar")).color,
+          icon: getComputedStyle(other.querySelector(".kind-icon")).color,
+          ring: getComputedStyle(brief).outlineColor,
+          words: words ? getComputedStyle(words).color : null,
+          halo: words ? getComputedStyle(words).textShadow : null,
+        };
+      })()`);
+      const desert = core.GROUND_MEAN.desert;
+      const plates = stops(r.plate).map((stop) => over(stop, desert));
+      const worst = (ink) => Math.min(...plates.map((p) => core.contrastRatio(hex(ink), p) ?? 0));
+      const nameR = worst(r.name), iconR = worst(r.icon);
+      const ringR = core.contrastRatio(hex(r.ring), desert) ?? 0;
+      const wordsR = core.contrastRatio(hex(r.words), desert) ?? 0;
+      const haloed = /rgb\(255, 255, 255\)|rgb\(0, 0, 0\)/.test(r.halo ?? "");
+      line(
+        r.tone === "mid" && plates.length === 2 && /blur/.test(r.filter) && nameR >= core.CONTRAST_BODY && iconR >= core.CONTRAST_UI && ringR >= core.CONTRAST_UI && wordsR >= core.CONTRAST_UI && haloed,
+        `5 ${theme} on Desert (${desert}, tone ${r.tone}): plate ${plates.join("→")} (glass ${stops(r.plate).map((x) => x[3]).join("/")} over the mean, ${r.filter}); ` +
+          `name ${hex(r.name)} ${nameR}, icon ${hex(r.icon)} ${iconR} on the plate; ring ${hex(r.ring)} ${ringR}; words ${hex(r.words)} ${wordsR} with halo ${r.halo}`,
+      );
+      await shoot(`${theme}-desert`);
+      if (shots) {
+        // The notes up close, at 3×: every glyph should stand off the sand.
+        const box = await b.ev(`(() => {
+          const notes = [...document.querySelectorAll(".world .item.textnode")].map((i) => i.getBoundingClientRect());
+          const x = Math.min(...notes.map((r) => r.left)) - 8, y = Math.min(...notes.map((r) => r.top)) - 8;
+          return { x, y, width: Math.max(...notes.map((r) => r.right)) - x + 8, height: Math.max(...notes.map((r) => r.bottom)) - y + 8 };
+        })()`);
+        const { data } = await b.send("Page.captureScreenshot", { format: "png", clip: { ...box, scale: 3 } });
+        writeFileSync(path.join(shots, `${theme}-desert-notes-3x.png`), Buffer.from(data, "base64"));
+      }
+    }
+
+    // ---- 6: pictures, looked at ----
+    await open("dark");
+    const pictures = [
+      ["white", (x) => 255],
+      ["black", (x) => 0],
+      ["half", (x) => (x < 16 ? 255 : 0)],
+    ];
+    let last = null;
+    for (const [name, at] of pictures) {
+      const file = path.join(home, `Acme ${name}.png`);
+      writeFileSync(file, png(32, 32, at));
+      run("--canvas", id, "canvas", "background", "--picture", file);
+      await until(b, `(() => { const p = document.querySelector(".canvas-page"); return !!p.dataset.groundSample && p.dataset.groundSample !== ${JSON.stringify(last)}; })()`, `the ${name} picture to be looked at`, 20_000);
+      const got = await b.ev(`(() => { const p = document.querySelector(".canvas-page"); return { tone: p.dataset.groundTone ?? null, sample: p.dataset.groundSample }; })()`);
+      last = got.sample;
+      // The mean in linear light, back to sRGB, under 0.7 black — the
+      // arithmetic restated here rather than imported, so the page is checked
+      // against the definition and not against itself.
+      const lin = (v) => { const c = v / 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+      const srgb = (l) => (l <= 0.0031308 ? l * 12.92 : 1.055 * l ** (1 / 2.4) - 0.055) * 255;
+      const mean = Array.from({ length: 32 }, (_, x) => lin(at(x))).reduce((a, v) => a + v, 0) / 32;
+      const expected = srgb(mean) * (1 - core.GROUND_SCRIM);
+      const channels = [1, 3, 5].map((i) => parseInt(got.sample.slice(i, i + 2), 16));
+      const off = Math.max(...channels.map((v) => Math.abs(v - expected)));
+      line(
+        got.tone === "dark" && off <= 0.02 * 255,
+        `6 ${name} picture: tone ${got.tone}, sampled ${got.sample}, expected ${expected.toFixed(1)} per channel, off by ${off.toFixed(1)} (≤ ${(0.02 * 255).toFixed(1)})`,
+      );
+      await shoot(`dark-picture-${name}`);
+    }
 
     // ---- 4 ----
     if (baseline) {

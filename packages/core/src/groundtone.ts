@@ -1,4 +1,4 @@
-import { CONTRAST_BODY, CONTRAST_UI, contrastRatio } from "./contrast.ts";
+import { CONTRAST_BODY, CONTRAST_UI, contrastRatio, luminance, parseHex } from "./contrast.ts";
 import type { TEXT_COLOURS } from "./textnode.ts";
 import { TEXT_SURFACES } from "./textsurfaces.ts";
 import { type CanvasTheme, GROUND_SCRIM, groundOf, themeOf } from "./theme.ts";
@@ -169,4 +169,42 @@ export function toneOfGround(
   sampled?: string,
 ): GroundTone {
   return toneOfColour(groundColour(canvas, app, sampled));
+}
+
+/** `#rrggbb` from three 0–255 channels. */
+const hexOf = (rgb: number[]): string => `#${rgb.map((v) => Math.round(Math.min(255, Math.max(0, v))).toString(16).padStart(2, "0")).join("")}`;
+
+/**
+ * **The ink that reads best on a ground no ink family holds** (smart
+ * contrast phase 3, design §3) — what a `mid` ground draws where a plate
+ * cannot go: a chromeless note's words, and the ring around a card.
+ *
+ * The candidates are the two sets' ink for the role, and for words pure white
+ * and black too, because the decision on 19 Oct was "the higher ink", and on
+ * Desert that is black: `#000000` 5.11, `#ffffff` 4.11, `#23262b` 3.70,
+ * `#e7e9ec` 3.38. If even the best misses `floor`, it is walked toward the
+ * pole on its own side until it clears — the nearest colour that does, rather
+ * than one that does not. Desert's ring is the case: the light accent
+ * `#18288a` measures 2.99 there, one hundredth short of `CONTRAST_UI`.
+ */
+export function bestInk(ground: string, role: GroundInkRole, floor: number = GROUND_INK_FLOOR[role]): string {
+  const ratio = (c: string) => contrastRatio(c, ground) ?? 0;
+  const candidates = [GROUND_INK.dark[role], GROUND_INK.light[role], ...(role === "ink" ? ["#ffffff", "#000000"] : [])];
+  const best = candidates.reduce((a, b) => (ratio(b) > ratio(a) ? b : a));
+  if (ratio(best) >= floor) return best;
+  const pole = (luminance(best) ?? 0) > (luminance(ground) ?? 0) ? 255 : 0;
+  const from = parseHex(best)!;
+  for (let step = 1; step <= 100; step++) {
+    const t = step / 100;
+    const c = hexOf([from.r, from.g, from.b].map((v) => v + (pole - v) * t));
+    if (ratio(c) >= floor) return c;
+  }
+  return hexOf([pole, pole, pole]);
+}
+
+/** The one-pixel halo behind `bestInk`'s words: the pole opposite the ink,
+ *  white behind dark words and black behind light ones. WCAG does not count
+ *  a halo; it is there for the busy patches of a ground, not for the ratio. */
+export function haloOf(ink: string): string {
+  return (luminance(ink) ?? 0) > 0.18 ? "#000000" : "#ffffff";
 }

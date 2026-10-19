@@ -14,6 +14,7 @@ import {
   TEXT_COLOURS,
   TEXT_COLOUR_SHADES,
   TEXT_SURFACES,
+  bestInk,
   contrastRatio,
   groundColour,
   groundPatch,
@@ -23,7 +24,7 @@ import {
 } from "@isocan/core";
 
 import { groundToken } from "../src/lib/groundtoken.ts";
-import { css, rules, sheets } from "./cssrules.ts";
+import { css, rules, selectorsOf, sheets } from "./cssrules.ts";
 import { appInkOnGround } from "./groundtext.ts";
 
 /**
@@ -162,8 +163,11 @@ describe("the ground tier", () => {
     }
   });
 
-  it("declares nothing for mid: the plate is phase 3's", () => {
-    expect(rules(css).filter((r) => r.selector.includes('data-ground-tone="mid"'))).toEqual([]);
+  it("on mid, puts chrome on the app's full ink and the ring on core's best accent", () => {
+    const mid = declarations('.canvas-page[data-ground-tone="mid"]');
+    expect(mid["--ground-ink-muted"]).toBe("var(--ink)");
+    expect(mid["--ground-ink-soft"]).toBe("var(--ink)");
+    expect(mid["--ground-ring"]).toBe("var(--ground-mid-ring, var(--accent))");
   });
 
   it("is registered as colours, so a change of ground crossfades, and not under reduced motion", () => {
@@ -306,3 +310,100 @@ describe("core's ground means are the stylesheet's", () => {
     });
   }
 });
+
+/**
+ * **Mid: the plate** (phase 3, design §3). A ground no ink family holds puts
+ * its chrome on a pill of the menus' glass, with the app's ink on it. The
+ * glass is translucent, so it is measured composited over the ground at both
+ * ends of its gradient: that is where the muted ink failed (3.70 light, 3.83
+ * dark on Desert) and why the plate's ink is the full `--ink`.
+ */
+describe("a mid ground puts its chrome on a plate", () => {
+  const PLATED = [
+    ".item-titlebar .chrome-left::before",
+    ".note-of::before",
+    ".item.canvas-group .area-title",
+    ".stack-band",
+    ".group-column-label",
+    ".group-row-label",
+  ];
+  const MIDS = GROUNDS.filter((g) => g.tone === "mid");
+
+  it("has a mid ground to measure — or this block proves nothing", () => {
+    expect(MIDS.map((g) => g.name)).toEqual(["desert"]);
+  });
+
+  it("plates every piece of chrome on the menus' glass", () => {
+    const plated = rules(css).filter((r) => r.at.length === 0 && r.selector.includes('[data-ground-tone="mid"]') && /background:\s*var\(--glass\)/.test(r.body) && /backdrop-filter:\s*var\(--glass-filter\)/.test(r.body));
+    const covered = plated.flatMap((r) => selectorsOf(r));
+    for (const sel of PLATED) expect(covered, sel).toContain(`.canvas-page[data-ground-tone="mid"] ${sel}`);
+  });
+
+  /** `--glass`'s two stops in one theme block, as [r, g, b, alpha]. */
+  const glassStops = (theme: "light" | "dark") => {
+    const block = (theme === "light" ? /:root,\s*:root\[data-theme="light"\]\s*\{(.*?)\n\}/s : /:root\[data-theme="dark"\]\s*\{(.*?)\n\}/s).exec(css)![1]!;
+    const glass = /--glass:\s*([^;]+);/.exec(block)![1]!;
+    return [...glass.matchAll(/rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)/g)].map((m) => m.slice(1, 5).map(Number));
+  };
+  const appInk = (theme: "light" | "dark", name: string) =>
+    new RegExp(`--${name}:\\s*(#[0-9a-f]{6})`).exec(
+      (theme === "light" ? /:root,\s*:root\[data-theme="light"\]\s*\{(.*?)\n\}/s : /:root\[data-theme="dark"\]\s*\{(.*?)\n\}/s).exec(css)![1]!,
+    )![1]!;
+  const over = (stop: number[], ground: string) => {
+    const g = [1, 3, 5].map((i) => parseInt(ground.slice(i, i + 2), 16));
+    return `#${g.map((v, i) => Math.round(stop[i]! * stop[3]! + v * (1 - stop[3]!)).toString(16).padStart(2, "0")).join("")}`;
+  };
+
+  it("reads at 4.5 on the plate in both themes: the full ink, and the selected name's accent", () => {
+    const short: string[] = [];
+    for (const g of MIDS) {
+      for (const theme of ["light", "dark"] as const) {
+        const stops = glassStops(theme);
+        expect(stops.length, `${theme} --glass stops`).toBe(2);
+        for (const stop of stops) {
+          const plate = over(stop, g.colour);
+          for (const name of ["ink", "accent-text"]) {
+            const r = contrastRatio(appInk(theme, name), plate) ?? 0;
+            if (r < CONTRAST_BODY) short.push(`${theme} --${name} on the plate ${plate} over ${g.name} is ${r}:1`);
+          }
+          // The kind icon and the marks: non-text, 3:1.
+          const soft = contrastRatio(appInk(theme, "ink"), plate) ?? 0;
+          if (soft < CONTRAST_UI) short.push(`${theme} icon ink on ${plate} is ${soft}:1`);
+        }
+      }
+    }
+    expect(short).toEqual([]);
+  });
+
+  /**
+   * Where no plate goes: a chromeless note's words and the ring. Recorded,
+   * not only bounded, so a change to Desert or to the sets shows up as a
+   * number moving: black words at 5.11 (white would be 4.11; WCAG's 3:1
+   * large-text floor is what is held), a ring of `#182889` at 3.
+   */
+  const MEASURED: Record<string, { words: string; ratio: number; ring: string; ringRatio: number }> = {
+    desert: { words: "#000000", ratio: 5.11, ring: "#182889", ringRatio: 3 },
+  };
+
+  it("gives a note's words and the ring core's best ink, at their floors", () => {
+    for (const g of MIDS) {
+      const words = bestInk(g.colour, "ink");
+      const ring = bestInk(g.colour, "accent", CONTRAST_UI);
+      const got = { words, ratio: contrastRatio(words, g.colour)!, ring, ringRatio: contrastRatio(ring, g.colour)! };
+      expect(got, g.name).toEqual(MEASURED[g.name]);
+      expect(got.ratio).toBeGreaterThanOrEqual(CONTRAST_UI);
+      expect(got.ringRatio).toBeGreaterThanOrEqual(CONTRAST_UI);
+    }
+  });
+
+  it("draws those words with a halo, and no card behind them", () => {
+    const words = rules(css).find((r) => r.selector.includes('[data-ground-tone="mid"] .item.textnode:not(.paper) .md-view'));
+    expect(words?.body).toMatch(/color:\s*var\(--text-ink, var\(--ground-mid-ink/);
+    // A glow, not a hairline: Desert's dark streaks swallowed a lone 1px halo.
+    const shadow = /text-shadow:([^;]*)/.exec(words?.body ?? "")?.[1] ?? "";
+    expect(shadow.match(/var\(--ground-mid-halo/g)?.length ?? 0, "halo layers").toBeGreaterThanOrEqual(3);
+    expect(shadow).toMatch(/0 0 4px/);
+    expect(words?.body).not.toMatch(/background/);
+  });
+});
+
