@@ -189,6 +189,7 @@ import {
   groundOf,
   groundPatch,
   hasGround,
+  toneOfGround,
   anchorPatch,
   isTheme,
   noThemePatch,
@@ -5390,6 +5391,10 @@ canvas
           ...p,
           itemCount: Object.keys(snapshot.canvas.items).length,
           ...(dirs.length > 0 ? { directories: dirs } : {}),
+          // Which ink the ground takes (smart contrast) — derived, never
+          // stored; absent on the dot grid, whose tone is the app's. A
+          // picture is its worst case: the CLI cannot see its pixels.
+          ...(hasGround(p) ? { groundTone: toneOfGround(p, "dark") } : {}),
         });
       }
       printKeyValues({
@@ -5431,6 +5436,21 @@ canvas
       },
     ),
   );
+
+/**
+ * **What a ground means for the ink on it**, as the clause bare `canvas
+ * background` ends with (smart contrast): core's `toneOfGround`, said the way
+ * an agent about to write on the canvas needs it. A picture is described by
+ * its worst case — the CLI cannot see its pixels, and under the scrim every
+ * picture is dark — and Desert, where no ink reads, by what the app does
+ * there instead.
+ */
+function toneClause(canvas: { properties?: Record<string, string> }): string {
+  const tone = toneOfGround(canvas, "dark");
+  const what = groundOf(canvas) !== null ? "a picture, dark under its scrim" : `a ${tone} ground`;
+  if (tone === "mid") return `${what}: no ink reads on it alone, so names sit on a plate`;
+  return `${what}: ink on it is ${tone === "dark" ? "light" : "dark"}`;
+}
 
 canvas
   .command("background [theme]")
@@ -5540,12 +5560,13 @@ canvas
           const worn = cursorOf(p);
           return console.log(
             `a picture of yours (${picture.slice(0, 12)}…), pinned` +
-              (worn ? `, everyone pointing with a ${worn}` : ""),
+              (worn ? `, everyone pointing with a ${worn}` : "") +
+              ` — ${toneClause(p)}`,
           );
         }
         const now = themeOf(p);
         if (now === null) return console.log(`none — ${THEMES.join(", ")} are the grounds it can wear, or --picture <file>`);
-        return console.log(`${now} (${anchorOf(p) === "window" ? "stays put" : "moves with the canvas"})`);
+        return console.log(`${now} (${anchorOf(p) === "window" ? "stays put" : "moves with the canvas"}) — ${toneClause(p)}`);
       }
       if (theme !== "none" && !isTheme(theme)) {
         throw new Error(`not a background: ${theme} — ${THEMES.join(", ")}, none, or --picture <file>`);
@@ -6640,14 +6661,16 @@ program
         /**
          * Colour and font through core's doors, so the terminal takes exactly
          * the words the bar offers (`core/textcolour.ts`). A NAMED colour is
-         * adapted per theme and never warns; a hex is drawn exactly, so it is
-         * measured here and the canvas it will not read on is said out loud.
+         * adapted per theme — per ground, on a canvas with a ground of its own —
+         * and warns only where no shade of it can read; a hex is drawn exactly,
+         * so it is measured here against the ground this canvas actually has
+         * (both app grounds on the dot grid) and said out loud.
          * The font's width is in the box below — the estimate is all the CLI
          * has, and lesson #94 is what a font without one does.
          */
         const colour = opts.color === undefined ? null : textColourChoice(opts.color);
         const font = opts.font === undefined ? null : textFontChoice(opts.font);
-        const warnings = textColourWarnings(colour, paper);
+        const warnings = textColourWarnings(colour, paper, p);
         const { width, height } = sizeFor(
           opts.size,
           paper === null ? textBox(body, style, face, font) : { width: PAPER_SIZE, height: PAPER_SIZE },
@@ -8344,7 +8367,7 @@ program
          * exactly.
          */
         if (isTextItem(item) && patch.properties) {
-          const { warnings, ...normalised } = textPropsPatch(item, patch);
+          const { warnings, ...normalised } = textPropsPatch(item, patch, p);
           delete patch.properties;
           delete patch.removeProperties;
           Object.assign(patch, normalised);

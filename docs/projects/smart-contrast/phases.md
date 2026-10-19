@@ -9,7 +9,7 @@ note: "the walk: the one-line selected-name fix, the tone function and the guard
 
 **19 October 2026.** Held to [journey.md](journey.md) and [design.md](design.md).
 
-**Where we are, 19 Oct 2026: phases 0–3 are CLOSED. The ink on the canvas follows the ground; Desert's names sit on a glass plate; a picture is sampled once it decodes. Phase 4, telling agents (the CLI, the guide, colour warnings), is next.**
+**Where we are, 19 Oct 2026: phases 0–4 are CLOSED and phase 5 is PART-DONE. The ink on the canvas follows the ground in the app, and agents are told the tone by the CLI. What is left is a person's: the walk in `docs/verify/2026-10-19-smart-contrast.md` waits on Dion's eyes, and it is where the two conductor decisions (the lifted accent, black words on Desert) are confirmed or overturned.**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -116,7 +116,7 @@ pixel mean; a test with the scrim set to 0.2 resolves the white picture
 
 ## Phase 4 — Both surfaces
 
-**Status: NOT STARTED**
+**Status: CLOSED** (19 Oct 2026) — bare `isocan canvas background` says the tone ("night … — a dark ground: ink on it is light", Desert's plate, a picture's worst case), `canvas show --json` carries `groundTone`, and a hex on Night warns "1.54:1 on Night" while Snow is silent and the dot grid is unchanged. The guide's `--color` paragraph and the README say the shade follows the ground.
 
 - `isocan canvas background` says the tone; `canvas show --json` carries
   `groundTone`.
@@ -129,9 +129,13 @@ Snow canvas does not. The guide's `--color` paragraph ("a shade chosen for the
 light ground, the dark ground and paper … for a collaborator in either theme")
 is rewritten to say the shade follows the canvas's ground.
 
+**Trajectory**
+
+- **2026-10-19** — Named colours gained the one warning their 3:1 floor implies. On a ground of its own a name is silent unless the shade drawn there is under 3:1, which today is brown on Ocean and on a picture, and some names on Desert. A hex keeps today's 4.5 warning, measured against the canvas's ground.
+
 ## Phase 5 — Eyes
 
-**Status: NOT STARTED**
+**Status: PART-DONE** (19 Oct 2026) — the walk is written, [`docs/verify/2026-10-19-smart-contrast.md`](../../verify/2026-10-19-smart-contrast.md), seven steps, and nobody has walked it.
 
 `docs/verify/<date>-smart-contrast.md`: a person opens every ground in both
 app themes, selects a card, writes a note, switches grounds mid-session with a
@@ -140,6 +144,10 @@ the things a ratio cannot see, like the lifted accent no longer feeling like
 the accent (design.md's second decision) and the halo on Desert (its first).
 
 **Proof:** the walk's page, answered.
+
+**Trajectory**
+
+- **2026-10-19** — Open: the walk. It waits on Dion (a desktop browser, twenty minutes, ideally a second person for step 6). Its answers decide the lifted accent `#b4c4ff` and Desert's black words with their glow.
 
 ## Later, on evidence only
 

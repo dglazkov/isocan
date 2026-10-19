@@ -1195,11 +1195,16 @@ words are a command or a path, which yours often are, and `hand` when you
 are scribbling on the board rather than labelling it.
 
 `--color red|orange|yellow|green|blue|purple|pink|brown|grey` colours the
-words. A NAME adapts: each has a shade chosen for the light ground, the dark
-ground and paper, so it reads for a collaborator in either theme — prefer
-names. `--color '#rrggbb'` is drawn exactly, and the CLI warns (and sets it
-anyway) where it will not reach 4.5:1. `auto`, or no flag, is the theme's own
-ink; there is no black or white, because neither reads in both themes.
+words. A NAME adapts, and the shade follows the ground the canvas actually
+stands on: on the dot grid the app theme's shade, on a dark ground (Night, a
+picture) the dark shades, on a light one (Snow, Zen) the paper shades, and on
+paper the paper's — so it reads for a collaborator in either theme. Prefer
+names. On a ground of its own a name is held at 3:1, and the CLI says so where
+none can reach it (brown on Ocean). `--color '#rrggbb'` is drawn exactly, and
+the CLI warns (and sets it anyway) where it will not reach 4.5:1 — against the
+ground this canvas has ("on Night"), or both app grounds on the dot grid.
+`auto`, or no flag, is the ground's own ink; there is no black or white,
+because neither reads on every ground.
 
 `--font <name>` names a family from a closed list — Inter, IBM Plex Sans,
 DM Sans, Manrope, Space Grotesk, IBM Plex Serif, Fraunces, Lora, IBM Plex
@@ -4396,7 +4401,10 @@ with no flag at all, so a canvas somebody archives while you are parked on it
 is still the canvas you are standing on. `canvas background
 <galaxy|ocean|mountains|farm|desert|meadow|night|snow|aurora|pond|zen|none>` sets the ground a canvas stands on, and
 bare `canvas background` says what it is wearing — everybody on the canvas
-sees the same one, so it is a change to ask about rather than assume.
+sees the same one, so it is a change to ask about rather than assume — and
+what that means for ink: "a dark ground: ink on it is light", "a light ground",
+or on Desert "names sit on a plate" (`canvas show --json` carries it as
+`groundTone`). Read it before choosing a colour to write on the ground.
 `meadow` is a living ground: grass that parts under the cursor and settles
 when nothing moves, drawn in each viewer's browser and never stored or sent.
 `night` is one too: a dark meadow under a dim sky where every cursor, yours
