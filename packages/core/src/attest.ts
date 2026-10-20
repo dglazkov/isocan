@@ -20,7 +20,7 @@
 
 import type { Actor } from "./model.ts";
 import type { Attestation } from "./badge.ts";
-import { isAgentHarness } from "./claims.ts";
+import { isAgentHarness } from "./harness.ts";
 import type { AttestedKind, GrantSubject } from "./grants.ts";
 
 /**
