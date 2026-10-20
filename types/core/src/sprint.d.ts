@@ -1,3 +1,4 @@
+export { BOARD_GAP, SPRINT_BOARD, boardArea, boardLayout, boardOf, BRIEF_PROP, type Brief, briefCard, briefItem, deskTitle } from "./sprint-board.js";
 import type { CanvasContents, Item } from "./model.js";
 import type { PresenceSession } from "./protocol.js";
 import type { Paper } from "./textnode.js";
@@ -82,51 +83,10 @@ export interface BoardArea {
 }
 /** `board=<key>` on an area item says which sheet of the board it is. */
 export declare const BOARD_PROP = "board";
-/** Between sheets, in world units. */
-export declare const BOARD_GAP = 200;
-/** The board, sheet by sheet, in the order the week walks it — left to right. */
-export declare const SPRINT_BOARD: readonly BoardArea[];
-/** One sheet's template by key. Every `BoardKey` has one, so this never misses. */
-export declare function boardArea(key: BoardKey): BoardArea;
-/**
- * Where each sheet goes: one row from `origin`, top-aligned, a gap between.
- * Pure, so the CLI's `sprint board` and a test agree to the pixel.
- */
-export declare function boardLayout(origin: {
-    x: number;
-    y: number;
-}): (BoardArea & {
-    x: number;
-    y: number;
-})[];
 /** The sheet wearing `board=<key>`, or null when the board has not been
  *  laid (or that sheet was deleted). By the property, not the title: a
  *  renamed sheet is still the sheet. */
 export declare function boardAreaFor(canvas: CanvasContents, key: BoardKey): Item | null;
-/** Every sheet of the board that exists here, in board order. */
-export declare function boardOf(canvas: CanvasContents): Item[];
-/**
- * **The brief, as a card.** What the setup round answered, written once as
- * markdown the Brief sheet holds — a text node wearing `brief=1` so the
- * facilitator can find it again and write the next version rather than a
- * second card. Empty fields are left out, not written as "TBD": a brief
- * that says less is honest, and the next version fills it.
- */
-export declare const BRIEF_PROP = "brief";
-/** What a brief says. Every field optional: a brief that says less is honest. */
-export interface Brief {
-    goal?: string;
-    questions?: string[];
-    decider?: string;
-    sketchers?: string[];
-    cut?: string;
-}
-/**
- * The brief as the markdown its card shows — empty fields left out rather than written as TBD.
- */
-export declare function briefCard(brief: Brief): string;
-/** The brief card on this canvas, or null. */
-export declare function briefItem(canvas: CanvasContents): Item | null;
 /**
  * **The desk** (sprint phase 3, journey Scene 2): a private canvas per
  * sketcher, born by the facilitator, that knows which sprint it belongs to.
@@ -146,8 +106,6 @@ export declare const DESK_OF_PROP = "sprintOf";
 export declare function deskOf(project: {
     properties?: Record<string, string>;
 }): string | null;
-/** What a desk is called: the sketcher's name, possessive. */
-export declare function deskTitle(name: string): string;
 /**
  * The phases, in the order a five-day sprint runs them. A word not in this
  * table is NOT a phase — `/sprint make onboarding better` is a brief for the
@@ -265,4 +223,3 @@ export declare function tally(items: readonly Item[], mark: string, agents: Read
  * used hand-in still works, on everything.
  */
 export declare function wallFor(canvas: CanvasContents, state: SprintState): Item[];
-export {};

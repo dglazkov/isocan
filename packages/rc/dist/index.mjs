@@ -1822,14 +1822,11 @@ var init_roster = __esm({
   }
 });
 
-// packages/core/src/claims.ts
-var PERSON_HARNESSES, isAgentHarness, CLAIM_STANDS_MS, CLAIM_REFUSAL;
-var init_claims = __esm({
-  "packages/core/src/claims.ts"() {
+// packages/core/src/harness.ts
+var PERSON_HARNESSES, isAgentHarness;
+var init_harness = __esm({
+  "packages/core/src/harness.ts"() {
     "use strict";
-    init_errors();
-    init_ids();
-    init_identity();
     PERSON_HARNESSES = /* @__PURE__ */ new Set(["web", "home", "cli", "person"]);
     isAgentHarness = (harness) => harness !== null && harness !== void 0 && harness !== "" && !PERSON_HARNESSES.has(harness.toLowerCase()) && // **A relay is not a kind** (14 Oct 2026). `replica:` is the key a daemon
     // claims under when it carries its person up to a home: transport custody,
@@ -1839,6 +1836,19 @@ var init_claims = __esm({
     // still read as an agent there, and folding their browser into that id
     // turned the browser into one too ("personal canvases belong to people").
     harness.toLowerCase() !== "replica";
+  }
+});
+
+// packages/core/src/claims.ts
+var CLAIM_STANDS_MS, CLAIM_REFUSAL;
+var init_claims = __esm({
+  "packages/core/src/claims.ts"() {
+    "use strict";
+    init_harness();
+    init_harness();
+    init_errors();
+    init_ids();
+    init_identity();
     CLAIM_STANDS_MS = 30 * 60 * 1e3;
     CLAIM_REFUSAL = {
       heldElsewhere: "held-elsewhere",
@@ -2516,7 +2526,7 @@ var SESSION_HEADER;
 var init_attest = __esm({
   "packages/core/src/attest.ts"() {
     "use strict";
-    init_claims();
+    init_harness();
     SESSION_HEADER = "x-isocan-session";
   }
 });
@@ -2680,7 +2690,7 @@ var init_proposal_words = __esm({
   }
 });
 
-// packages/core/src/inbox.ts
+// packages/core/src/inbox-routing.ts
 function addressesActor(comment, names, joined) {
   const self = names[0]?.id;
   if (self && (comment.mentions ?? []).some((id) => sameActor(joined, id, self))) return true;
@@ -2694,11 +2704,6 @@ function addressesOthers(comment, names, joined, candidates) {
   }
   return false;
 }
-function inYourThread(thread, actorId, names, joined) {
-  return thread.comments.some(
-    (c) => sameActor(joined, c.author.id, actorId) || addressesActor(c, names, joined)
-  );
-}
 function reasonFor(comment, thread, actorId, names, joined, candidates) {
   if (comment.record) return null;
   if (addressesActor(comment, names, joined)) return "mentioned";
@@ -2707,6 +2712,104 @@ function reasonFor(comment, thread, actorId, names, joined, candidates) {
   if (thread && inYourThread(thread, actorId, names, joined)) return "in-your-thread";
   return null;
 }
+function listensTo(rules, authorId, joined, now = Date.now()) {
+  const listen = rules?.listen ?? [];
+  if (listen.length === 0 || listen.includes(LISTEN_ANYONE)) return true;
+  return listenGrants(listen, now).some((g) => !g.lapsed && sameActor(joined, g.id, authorId));
+}
+function answerPolicy(rules, keeping, writtenBy, joined) {
+  const trusted = writtenBy === void 0 || ownersWord(keeping, writtenBy, joined);
+  const listen = trusted ? rules?.listen ?? [] : [];
+  if (listen.includes(LISTEN_ANYONE)) return { owner: keeping.owner, listen: [LISTEN_ANYONE] };
+  const others = listen.filter((entry) => !sameActor(joined, parseListen(entry).id, keeping.owner.id));
+  const byId = /* @__PURE__ */ new Map();
+  for (const entry of others) {
+    const { id, until } = parseListen(entry);
+    const had = byId.get(id);
+    if (had === void 0) byId.set(id, entry);
+    else if (until === void 0) byId.set(id, entry);
+    else {
+      const kept = parseListen(had).until;
+      if (kept !== void 0 && Date.parse(until) > Date.parse(kept)) byId.set(id, entry);
+    }
+  }
+  return { owner: keeping.owner, listen: [...byId.values()] };
+}
+function gateSetAside(rules, keeping, writtenBy, joined) {
+  if (writtenBy === void 0 || ownersWord(keeping, writtenBy, joined)) return false;
+  return (rules?.listen ?? []).some((e2) => !sameActor(joined, parseListen(e2).id, keeping.owner.id));
+}
+function admits(policy, authorId, agent) {
+  const speakers = agent.onBehalfOf && agent.onBehalfOf.length > 0 ? agent.onBehalfOf : [authorId];
+  return speakers.some((id) => mayWake(policy, id, agent.joined, agent.hands));
+}
+function speakersFor(authorIds, carried) {
+  const out = /* @__PURE__ */ new Set();
+  for (const id of authorIds) {
+    const through = carried(id);
+    if (through && through.size > 0) for (const s of through) out.add(s);
+    else out.add(id);
+  }
+  return out;
+}
+function turnedAway(op, authorId, agent) {
+  if (op.type !== "thread.create" && op.type !== "thread.reply") return false;
+  if (op.comment.record) return false;
+  if (isSystemActor(authorId) || sameActor(agent.joined, authorId, agent.actorId)) return false;
+  if (admits(agent.policy, authorId, agent)) return false;
+  return addressesActor(op.comment, agent.names, agent.joined);
+}
+function mentionsOnly(canvas, actorId) {
+  return canvas?.agents?.[actorId]?.ceiling === "note";
+}
+function dispatchReason(op, authorId, agent, canvas) {
+  if (sameActor(agent.joined, authorId, agent.actorId)) return null;
+  if (isSystemActor(authorId)) return null;
+  if (op.comment?.record) return null;
+  const admitted = agent.policy ? admits(agent.policy, authorId, agent) : listensTo(agent.rules, authorId, agent.joined);
+  if (!admitted) return null;
+  const capped = mentionsOnly(canvas, agent.actorId);
+  if (op.type === "thread.create" || op.type === "thread.reply") {
+    const thread = canvas?.threads[op.threadId];
+    const candidates = canvas ? collectCanvasNames(canvas) : void 0;
+    const reason = reasonFor(op.comment, thread, agent.actorId, agent.names, agent.joined, candidates);
+    if (reason && (!capped || reason === "mentioned")) return reason;
+  }
+  if (op.type === "questionnaire.ask" || op.type === "questionnaire.answer") {
+    const thread = canvas?.threads[op.threadId];
+    const comment = thread?.comments.find((c) => c.id === op.commentId);
+    const candidates = canvas ? collectCanvasNames(canvas) : void 0;
+    const reason = comment && reasonFor(comment, thread, agent.actorId, agent.names, agent.joined, candidates);
+    if (reason && (!capped || reason === "mentioned")) return reason;
+  }
+  if (capped) return null;
+  const rules = agent.rules;
+  if (!rules) return null;
+  const items = rules.items ?? [];
+  const ops = rules.ops ?? [];
+  const areas = rules.areas ?? [];
+  if (items.length === 0 && ops.length === 0 && areas.length === 0) return null;
+  if (!opMatchesFilters(op, { items, types: ops }, canvas ?? null)) return null;
+  if (areas.length > 0 && !opTouchesAreas(op, areas, canvas ?? null)) return null;
+  return "change";
+}
+function inYourThread(thread, actorId, names, joined) {
+  return thread.comments.some(
+    (c) => sameActor(joined, c.author.id, actorId) || addressesActor(c, names, joined)
+  );
+}
+var init_inbox_routing = __esm({
+  "packages/core/src/inbox-routing.ts"() {
+    "use strict";
+    init_model();
+    init_mentions();
+    init_identity();
+    init_touches();
+    init_inbox();
+  }
+});
+
+// packages/core/src/inbox.ts
 function parseListen(entry) {
   if (typeof entry === "string") return { id: entry };
   const until = entry.until;
@@ -2755,54 +2858,14 @@ function rulesOf(raw) {
     ...areas ? { areas } : {}
   };
 }
-function listensTo(rules, authorId, joined, now = Date.now()) {
-  const listen = rules?.listen ?? [];
-  if (listen.length === 0 || listen.includes(LISTEN_ANYONE)) return true;
-  return listenGrants(listen, now).some((g) => !g.lapsed && sameActor(joined, g.id, authorId));
-}
 function ownersWord(keeping, actorId, joined) {
   if (sameActor(joined, actorId, keeping.owner.id)) return true;
   return (keeping.hands ?? []).some((id) => sameActor(joined, id, actorId));
-}
-function answerPolicy(rules, keeping, writtenBy, joined) {
-  const trusted = writtenBy === void 0 || ownersWord(keeping, writtenBy, joined);
-  const listen = trusted ? rules?.listen ?? [] : [];
-  if (listen.includes(LISTEN_ANYONE)) return { owner: keeping.owner, listen: [LISTEN_ANYONE] };
-  const others = listen.filter((entry) => !sameActor(joined, parseListen(entry).id, keeping.owner.id));
-  const byId = /* @__PURE__ */ new Map();
-  for (const entry of others) {
-    const { id, until } = parseListen(entry);
-    const had = byId.get(id);
-    if (had === void 0) byId.set(id, entry);
-    else if (until === void 0) byId.set(id, entry);
-    else {
-      const kept = parseListen(had).until;
-      if (kept !== void 0 && Date.parse(until) > Date.parse(kept)) byId.set(id, entry);
-    }
-  }
-  return { owner: keeping.owner, listen: [...byId.values()] };
-}
-function gateSetAside(rules, keeping, writtenBy, joined) {
-  if (writtenBy === void 0 || ownersWord(keeping, writtenBy, joined)) return false;
-  return (rules?.listen ?? []).some((e2) => !sameActor(joined, parseListen(e2).id, keeping.owner.id));
 }
 function mayWake(policy, authorId, joined, hands, now = Date.now()) {
   if (ownersWord({ owner: policy.owner, ...hands ? { hands } : {} }, authorId, joined)) return true;
   if (policy.listen.includes(LISTEN_ANYONE)) return true;
   return listenGrants(policy.listen, now).some((g) => !g.lapsed && sameActor(joined, g.id, authorId));
-}
-function admits(policy, authorId, agent) {
-  const speakers = agent.onBehalfOf && agent.onBehalfOf.length > 0 ? agent.onBehalfOf : [authorId];
-  return speakers.some((id) => mayWake(policy, id, agent.joined, agent.hands));
-}
-function speakersFor(authorIds, carried) {
-  const out = /* @__PURE__ */ new Set();
-  for (const id of authorIds) {
-    const through = carried(id);
-    if (through && through.size > 0) for (const s of through) out.add(s);
-    else out.add(id);
-  }
-  return out;
 }
 function policyWords(policy, nameOf, viewerId, joined, now = Date.now()) {
   if (policy.listen.includes(LISTEN_ANYONE)) return null;
@@ -2815,13 +2878,6 @@ function policyWords(policy, nameOf, viewerId, joined, now = Date.now()) {
   const others = live.map((g) => said(g.id, g.id));
   if (others.length === 1) return `listens to ${owner} and ${others[0]}`;
   return `listens to ${owner} and ${others.length} others`;
-}
-function turnedAway(op, authorId, agent) {
-  if (op.type !== "thread.create" && op.type !== "thread.reply") return false;
-  if (op.comment.record) return false;
-  if (isSystemActor(authorId) || sameActor(agent.joined, authorId, agent.actorId)) return false;
-  if (admits(agent.policy, authorId, agent)) return false;
-  return addressesActor(op.comment, agent.names, agent.joined);
 }
 function turnedAwayLine(agentName, policy, nameOf, asker, opts) {
   const now = opts?.now ?? Date.now();
@@ -2839,49 +2895,13 @@ function turnedAwayLine(agentName, policy, nameOf, asker, opts) {
 function turnedAwayMark(agentName) {
   return `this did not wake ${agentName}, and spent nothing.`;
 }
-function mentionsOnly(canvas, actorId) {
-  return canvas?.agents?.[actorId]?.ceiling === "note";
-}
-function dispatchReason(op, authorId, agent, canvas) {
-  if (sameActor(agent.joined, authorId, agent.actorId)) return null;
-  if (isSystemActor(authorId)) return null;
-  if (op.comment?.record) return null;
-  const admitted = agent.policy ? admits(agent.policy, authorId, agent) : listensTo(agent.rules, authorId, agent.joined);
-  if (!admitted) return null;
-  const capped = mentionsOnly(canvas, agent.actorId);
-  if (op.type === "thread.create" || op.type === "thread.reply") {
-    const thread = canvas?.threads[op.threadId];
-    const candidates = canvas ? collectCanvasNames(canvas) : void 0;
-    const reason = reasonFor(op.comment, thread, agent.actorId, agent.names, agent.joined, candidates);
-    if (reason && (!capped || reason === "mentioned")) return reason;
-  }
-  if (op.type === "questionnaire.ask" || op.type === "questionnaire.answer") {
-    const thread = canvas?.threads[op.threadId];
-    const comment = thread?.comments.find((c) => c.id === op.commentId);
-    const candidates = canvas ? collectCanvasNames(canvas) : void 0;
-    const reason = comment && reasonFor(comment, thread, agent.actorId, agent.names, agent.joined, candidates);
-    if (reason && (!capped || reason === "mentioned")) return reason;
-  }
-  if (capped) return null;
-  const rules = agent.rules;
-  if (!rules) return null;
-  const items = rules.items ?? [];
-  const ops = rules.ops ?? [];
-  const areas = rules.areas ?? [];
-  if (items.length === 0 && ops.length === 0 && areas.length === 0) return null;
-  if (!opMatchesFilters(op, { items, types: ops }, canvas ?? null)) return null;
-  if (areas.length > 0 && !opTouchesAreas(op, areas, canvas ?? null)) return null;
-  return "change";
-}
 var LISTEN_ANYONE;
 var init_inbox = __esm({
   "packages/core/src/inbox.ts"() {
     "use strict";
-    init_mentions();
+    init_inbox_routing();
     init_identity();
-    init_model();
     init_elapsed();
-    init_touches();
     LISTEN_ANYONE = "*";
   }
 });
@@ -3082,11 +3102,20 @@ var init_shelf = __esm({
   }
 });
 
+// packages/core/src/sprint-board.ts
+var init_sprint_board = __esm({
+  "packages/core/src/sprint-board.ts"() {
+    "use strict";
+    init_sprint();
+  }
+});
+
 // packages/core/src/sprint.ts
 var PHASES;
 var init_sprint = __esm({
   "packages/core/src/sprint.ts"() {
     "use strict";
+    init_sprint_board();
     init_canvas_groups();
     init_model();
     init_commands();

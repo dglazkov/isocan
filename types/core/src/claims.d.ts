@@ -1,3 +1,4 @@
+export { PERSON_HARNESSES, isAgentHarness } from "./harness.js";
 import type { Actor } from "./model.js";
 import type { Operation } from "./ops.js";
 import type { ActorClaim } from "./badge.js";
@@ -120,20 +121,6 @@ export interface ActorRegistry {
 }
 /** A registry nobody has claimed anything in — every field present, so readers need no `??`. */
 export declare const emptyActorRegistry: () => ActorRegistry;
-/**
- * The harnesses a PERSON claims from. Everything else — a coding harness,
- * an enrolment (`agent:`), a bot on a timer (`board:`) — is an agent. The
- * list is of people rather than of agents because new harnesses appear
- * (`harnessVars` in config.json) and a new one should be an agent by
- * default: the failure mode of guessing wrong the other way is a corpus
- * that counts a bot's receipts as somebody asking.
- */
-export declare const PERSON_HARNESSES: ReadonlySet<string>;
-/**
- * Is this harness an agent's? Anything not a known person's harness is — empty or missing
- * is neither, and reads as not an agent.
- */
-export declare const isAgentHarness: (harness: string | null | undefined) => boolean;
 /** Actor id → "agent", for every actor whose last claim came from a harness
  *  that is not a person's. People are absent rather than "person", so a
  *  reader can `kinds[id] === "agent"` and an unknown actor reads as a person,
@@ -553,4 +540,3 @@ export declare const CLAIM_REFUSAL: {
  * exactly the shape of the bug it exists to fix.
  */
 export declare function allocateName(ctx: ClaimContext, sessionKey?: string | null): string;
-export {};
