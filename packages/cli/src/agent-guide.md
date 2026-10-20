@@ -3223,7 +3223,10 @@ to bottom, left to right. Marking narrows the walk to just the slides:
   canvas property (`project.update`), the same write as the app's "Slide
   transition" menu and full screen's Transition button. Screens animate live,
   not as pictures; a flip between a screen and an image or text slide always
-  cuts.
+  cuts. The app plays the chosen motion only for a viewer with the
+  *Presentation Transitions* experiment on (Settings → Experiments); everyone
+  else sees screens dissolve and pictures push, as before — so say so when you
+  set one for somebody.
 - **`morph`** takes a screen apart: its pieces (runs of words, pictures,
   cards) lift off the page into depth, the ones that appear on both slides
   travel to their place on the next, and everything settles flat. Pieces are
