@@ -4314,7 +4314,7 @@ button.mt-card:hover { border-color: var(--accent); }
   flex-direction: column;
   align-items: center;
   /* The title's size, and the unit for everything around it. */
-  font-size: clamp(40px, 7.5vw, 112px);
+  font-size: clamp(32px, 4.8vw, 68px);
   gap: 0.14em;
   text-align: center;
   padding: 24px;
@@ -4353,7 +4353,7 @@ button.mt-card:hover { border-color: var(--accent); }
   letter-spacing: -0.035em;
   line-height: 1.02;
   color: var(--ink);
-  max-width: 18ch;
+  max-width: 20ch;
   text-wrap: balance;
   overflow-wrap: break-word;
 }
