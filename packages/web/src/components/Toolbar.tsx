@@ -18,12 +18,14 @@ import {
   workbenchPath,
   modulePagePath,
   type Actor,
+  type DeckTransition,
 } from "@isocan/core";
 import { uploadBlob } from "../lib/api.ts";
 import { sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { useUnreadNews } from "./WhatsNew.tsx";
 import { showMenu } from "../lib/chromemenu.tsx";
+import { transitionsOn } from "../lib/deckflip.ts";
 import { HomeGlyph } from "./Glyphs.tsx";
 import { CanvasPresence, CanvasTitle, ShareButton} from "./CanvasCrumb.tsx";
 import { canEditNow, useCanEdit } from "../lib/capability.ts";
@@ -181,13 +183,17 @@ export function Toolbar({
                       patch: cursor === null ? noCursorPatch() : cursorPatch(cursor),
                     });
                   },
-                  deckTransition: deckTransitionOf(canvas),
-                  setDeckTransition: async (transition) => {
-                    await sendEchoed(canvas.id, actor, {
-                      type: "project.update",
-                      patch: deckTransitionPatch(transition),
-                    });
-                  },
+                  /* Offered only with Presentation Transitions on (`lib/deckflip.ts`);
+                     the menu leaves the row out when these are absent. */
+                  ...(transitionsOn() ? {
+                    deckTransition: deckTransitionOf(canvas),
+                    setDeckTransition: async (transition: DeckTransition) => {
+                      await sendEchoed(canvas.id, actor, {
+                        type: "project.update",
+                        patch: deckTransitionPatch(transition),
+                      });
+                    },
+                  } : {}),
                   canEdit,
                   toWorkbench: () => navigate(workbenchPath(canvas.id)),
                   /* The module's glyph reaches the icon column, so a

@@ -11,7 +11,7 @@ import {
 } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { readBlobText } from "../lib/api.ts";
-import { DECK_TRANSITION_MS, setMorphPlayer } from "../lib/deckflip.ts";
+import { DECK_TRANSITION_MS, setMorphPlayer, useTransitionsOn } from "../lib/deckflip.ts";
 import { morphTwin } from "../lib/morphruntime.ts";
 
 /** The HTML a slide shows, when it is a screen — the morph's raw material. */
@@ -58,7 +58,9 @@ interface Box {
  */
 export function MorphStage({ canvasId, itemId }: { canvasId: string; itemId: string }) {
   const canvas = useCanvasStore((s) => s.canvas);
-  const morphing = useCanvasStore((s) => deckTransitionOf(s.record ?? {}) === "morph");
+  // Behind Presentation Transitions (`lib/deckflip.ts`): off, no twin mounts.
+  const transitionsOn = useTransitionsOn();
+  const morphing = useCanvasStore((s) => deckTransitionOf(s.record ?? {}) === "morph") && transitionsOn;
   const still = useMemo(() => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches, []);
   const active = morphing && !still;
 

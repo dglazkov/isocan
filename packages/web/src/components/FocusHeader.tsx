@@ -24,6 +24,7 @@ import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
 import { useFocusStore } from "../stores/focusStore.ts";
 import { itemThreadsFor } from "../lib/nodechat.ts";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
+import { useTransitionsOn } from "../lib/deckflip.ts";
 
 export interface FocusHeaderProps {
   canvasId: string;
@@ -64,6 +65,8 @@ export function FocusHeader({
   const canEdit = useCanEdit();
   const threads = useCanvasStore((s) => s.canvas?.threads);
   const deckTransition = useCanvasStore((s) => deckTransitionOf(s.record ?? {}));
+  // The choice is offered only with Presentation Transitions on (`lib/deckflip.ts`).
+  const transitionsOn = useTransitionsOn();
   const names = useActorNames();
   const chatOpen = useFocusStore((s) => s.chatOpen);
   const toggleChat = useFocusStore((s) => s.toggleChat);
@@ -299,7 +302,7 @@ export function FocusHeader({
             own dropdown rather than the shared context menu: that menu
             belongs to the canvas and sits under full screen by design
             (`--z-fullscreen`), like the version pill's beside it. */}
-        {mode === "view" && onToggleNotes && canEdit && (
+        {mode === "view" && onToggleNotes && canEdit && transitionsOn && (
           <span className="focus-version-wrap" ref={transitionWrapRef}>
             <button
               type="button"

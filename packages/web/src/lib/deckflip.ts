@@ -1,6 +1,34 @@
 import { flushSync } from "react-dom";
 import type { NavigateFunction } from "react-router-dom";
 import { DEFAULT_DECK_TRANSITION, type DeckTransition } from "@isocan/core";
+import { useUiStore } from "../stores/uiStore.ts";
+
+/**
+ * **Slide transitions are an experiment** (20 Oct 2026).
+ *
+ * Dion, presenting a deck of screens: "the push transition is REALLY janky…
+ * it doesn't smoothly push at all", and then: put them behind an experiment,
+ * "and if the experiment is off the transitions should be as they used to
+ * be… the fade". So with `presentation.transitions` off, `flipTo` is the
+ * flip from before 19 Oct exactly — a deck of screens dissolves (the frame
+ * pool's opacity, `.html-view`), a deck of images and text pushes on a view
+ * transition, any flip touching a frame never rides one — the canvas's chosen
+ * transition is not read, no morph twins mount, and nothing offers a choice.
+ * Per browser, like every experiment: the property stays on the canvas, for
+ * whoever has it on.
+ */
+export const TRANSITIONS_EXPERIMENT = "presentation.transitions";
+
+/** Whether this viewer asked for the chosen slide transitions. */
+export function transitionsOn(): boolean {
+  return useUiStore.getState().experiments.includes(TRANSITIONS_EXPERIMENT);
+}
+
+/** The same, live, for a component that offers or plays them. */
+export function useTransitionsOn(): boolean {
+  return useUiStore((s) => s.experiments.includes(TRANSITIONS_EXPERIMENT));
+}
+
 
 /** Bare keys that flip the deck (#87). Forward and back each answer to three
  * keys because a presenter's clicker sends Page Up/Down, and because "left/
@@ -154,6 +182,13 @@ export function flipTo(
   lastFlip = Date.now();
   busyFor = CUT_WITHIN_MS;
   liveFlip = null;
+  if (!transitionsOn()) {
+    // The flip as it was: a frame on either side never rides a view
+    // transition (it photographs blank), so it navigates and the frame pool
+    // dissolves; pictures and text push.
+    framed = framed === "none" ? "none" : "one";
+    transition = DEFAULT_DECK_TRANSITION;
+  }
   if (
     framed === "one" ||
     rapid ||

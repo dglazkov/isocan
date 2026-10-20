@@ -608,7 +608,8 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   and **Flip**.
   Pick it from full screen's *Transition* button, the canvas menu's *Slide
   transition*, or `isocan slides transition depth`. Screens turn as live
-  pages, not pictures of them.
+  pages, not pictures of them. Behind the *Presentation Transitions*
+  experiment for now; with it off, screens dissolve and pictures push.
 - **The design sprint**: type `/sprint` in the Chat and an agent facilitates a
   Knapp-style sprint — people and agents sketch as peers, one person decides.
   The facilitator calls phases (`/sprint crazy8s 8m`), and a clock chip shows
