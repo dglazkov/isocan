@@ -5525,6 +5525,10 @@ button.mt-card:hover { border-color: var(--accent); }
   font-size: 13px;
   padding: 12px;
 }
+/* With the Chat as the bottom bar, History takes the top instead — under the
+   top bar's clusters (`.toolbar`: `--edge` down, 34px tall) with a gap —
+   because the bar sits higher than it and covered the rail (`Scrubber`). */
+.scrubber.at-top { bottom: auto; top: calc(var(--edge) + 34px + 12px); }
 
 /* ---------- what's new ---------- */
 /* **The day in the margin, the notes as prose.** In a narrow column every
