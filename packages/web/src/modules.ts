@@ -6,6 +6,7 @@ import {
   unregisterModule,
   type ComposerFacts,
   type DialogFacts,
+  type FileDropFacts,
   type FocusFacts,
   type InspectorFacts,
   type Item,
@@ -311,6 +312,25 @@ export function moduleDropFor(types: readonly string[]): { mimeType: string; run
     }
   }
   return null;
+}
+
+/**
+ * Properties loaded modules contribute to a dropped native file, merged in
+ * module registration order (or `undefined` when none claim the drop).
+ */
+export async function moduleFileProperties(
+  facts: FileDropFacts,
+): Promise<Record<string, string> | undefined> {
+  await loadExperiments();
+  let merged: Record<string, string> | undefined;
+  for (const m of live()) {
+    if (!m.fileProperties) continue;
+    const props = await m.fileProperties(facts);
+    if (props && Object.keys(props).length > 0) {
+      merged = { ...(merged ?? {}), ...props };
+    }
+  }
+  return merged;
 }
 
 /** Every page a loaded module adds, in module order. */

@@ -1,4 +1,7 @@
-import { CONTRAST_BODY, contrastRatio } from "./contrast.ts";
+import { CONTRAST_BODY, CONTRAST_UI, contrastRatio } from "./contrast.ts";
+import { GROUND_TEXT_SHADES, groundColour, toneOfGround } from "./groundtone.ts";
+import { groundOf, hasGround, themeLabel, themeOf } from "./theme.ts";
+import { TEXT_SURFACES } from "./textsurfaces.ts";
 import type { Item } from "./model.ts";
 import {
   TEXT_COLOR_PROP,
@@ -83,25 +86,10 @@ export const TEXT_COLOUR_SHADES: Record<TextColour, { light: string; dark: strin
   grey: { light: "#6d737b", dark: "#9aa0a8", paper: "#50555b" },
 };
 
-/**
- * The surfaces words land on, by theme — the stylesheet's `--ground` and the
- * five papers. Copied here (and held equal to `styles.css` by
- * `web/test/textcolour.test.ts`) so the CLI can say where a hex will not
- * read without a browser.
- */
-export const TEXT_SURFACES: {
-  light: { ground: string; papers: Record<Paper, string> };
-  dark: { ground: string; papers: Record<Paper, string> };
-} = {
-  light: {
-    ground: "#fbfbf9",
-    papers: { yellow: "#fdf3c3", pink: "#fbdce6", blue: "#d8ebf9", green: "#d9f0dc", grey: "#e6e7e3" },
-  },
-  dark: {
-    ground: "#0e0f12",
-    papers: { yellow: "#e6dba8", pink: "#e4c3ce", blue: "#c3d6e4", green: "#c2d8c6", grey: "#cdcec9" },
-  },
-};
+/** The surfaces words land on — in `textsurfaces.ts` since smart contrast, so
+ *  the ground's tone can read the app's ground without bringing the shades
+ *  and the parser into the entry chunk; re-exported here where it began. */
+export { TEXT_SURFACES };
 
 /** A text colour as a property holds it: a name, or a lowercase `#rrggbb`. */
 export type TextColourValue = TextColour | `#${string}`;
@@ -121,14 +109,64 @@ export function textColourFrom(value: string): TextColourValue | "auto" | null {
   return `#${hex.length === 3 ? [...hex].map((c) => c + c).join("") : hex}`;
 }
 
+/** A canvas as far as its ground goes — any record with properties. */
+type OnCanvas = { properties?: Record<string, string> } | null | undefined;
+
+/** The ground, named the way the Background menu names it. A picture is
+ *  named for what the CLI can know about it: its brightest under the scrim. */
+function groundName(canvas: { properties?: Record<string, string> }): string {
+  const theme = themeOf(canvas);
+  if (theme) return themeLabel(theme);
+  return groundOf(canvas) !== null ? "its picture (at its brightest under the scrim)" : "the ground";
+}
+
 /**
  * **Where a colour will not read**, as sentences — empty when it reads
- * everywhere it can land. A name is always empty, by the test above; a hex is
- * measured against the ground in both themes, or against its paper in both
- * when it is on one.
+ * everywhere it can land.
+ *
+ * On paper, a hex is measured against that paper in both themes, as it always
+ * was. On the dot grid, against the app's ground in both themes — the dot
+ * grid is the app's. On a canvas with a ground of its own (smart contrast,
+ * phase 4) there is ONE surface, the colour that ground is drawn in
+ * (`groundColour`), and the warning names it — "on Night" — rather than
+ * measuring against two app grounds the canvas does not have.
+ *
+ * A name never warns where its shade holds, which is everywhere on paper and
+ * the dot grid (4.5:1, by `textcolour.test.ts`). On a ground of its own a
+ * named shade is held at 3:1, WCAG's large-text floor (`GROUND_TEXT_SHADES`);
+ * where even that is out of reach — brown on Ocean or a picture, a name on
+ * Desert — it is said, so an agent choosing "brown" for a note on Ocean
+ * hears it the way it would hear a hex.
  */
-export function textColourWarnings(colour: TextColourValue | null, paper: Paper | null): string[] {
-  if (colour === null || !colour.startsWith("#")) return [];
+export function textColourWarnings(colour: TextColourValue | null, paper: Paper | null, canvas?: OnCanvas): string[] {
+  if (colour === null) return [];
+  const own = paper === null && canvas != null && hasGround(canvas) ? canvas : null;
+  if (!colour.startsWith("#")) {
+    if (!own) return [];
+    const name = colour as TextColour;
+    const tone = toneOfGround(own, "dark");
+    const under = groundColour(own, "dark");
+    // The shade the canvas draws there: core's ground shades on dark, the
+    // paper shades on light, and on mid the app's own, theme by theme.
+    const drawn: [string, string][] =
+      tone === "dark"
+        ? [["", GROUND_TEXT_SHADES[name]]]
+        : tone === "light"
+          ? [["", TEXT_COLOUR_SHADES[name].paper]]
+          : [[" in the light theme", TEXT_COLOUR_SHADES[name].light], [" in the dark theme", TEXT_COLOUR_SHADES[name].dark]];
+    return drawn.flatMap(([when, shade]) => {
+      const ratio = contrastRatio(shade, under);
+      return ratio !== null && ratio < CONTRAST_UI
+        ? [`${name} measures ${ratio}:1 on ${groundName(own)}${when} — under ${CONTRAST_UI}:1, the floor for large text; no ${name} reads there and stays ${name}.`]
+        : [];
+    });
+  }
+  if (own) {
+    const ratio = contrastRatio(colour, groundColour(own, "dark"));
+    return ratio !== null && ratio < CONTRAST_BODY
+      ? [`${colour} measures ${ratio}:1 on ${groundName(own)} — body text needs ${CONTRAST_BODY}. A named colour follows the ground; a hex is drawn exactly.`]
+      : [];
+  }
   const out: string[] = [];
   for (const theme of ["light", "dark"] as const) {
     const surface = paper ? TEXT_SURFACES[theme].papers[paper] : TEXT_SURFACES[theme].ground;
@@ -215,11 +253,13 @@ export function textFontChoice(value: string): TextFont | null {
  * removal rather than a word, anything else is refused with the list. A font
  * writes its face beside it (`textLookPatch`'s rule); a face set on its own
  * lets go of a font, the way choosing a face on the bar does. The colour's
- * warnings are measured against the paper the node will have.
+ * warnings are measured against the paper the node will have, or the
+ * canvas's own ground when it has one and the node no paper.
  */
 export function textPropsPatch(
   item: Item,
   patch: { properties?: Record<string, string>; removeProperties?: string[] },
+  canvas?: OnCanvas,
 ): { properties?: Record<string, string>; removeProperties?: string[]; warnings: string[] } {
   const properties = { ...patch.properties };
   const removeProperties = [...(patch.removeProperties ?? [])];
@@ -245,7 +285,7 @@ export function textPropsPatch(
   }
   const next = { ...item.properties, ...properties };
   for (const key of removeProperties) delete next[key];
-  const warnings = textColourWarnings(textColourOf(next), paperOf({ ...item, properties: next }));
+  const warnings = textColourWarnings(textColourOf(next), paperOf({ ...item, properties: next }), canvas);
   return {
     ...(Object.keys(properties).length ? { properties } : {}),
     ...(removeProperties.length ? { removeProperties } : {}),

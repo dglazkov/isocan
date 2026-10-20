@@ -112,7 +112,7 @@ describe("the outline is drawn from the aim, not from :hover", () => {
     expect(css).not.toMatch(/\.canvas-viewport:not\(\.pen\) \.item:hover\s*\{/);
     expect(css).not.toMatch(/\.item\.selected:hover/);
     const rule = css.match(/\.canvas-viewport:not\(\.pen\) \.item\.hover-target \{([^}]*)\}/)?.[1] ?? "";
-    expect(rule).toMatch(/outline:\s*calc\(1px \/ var\(--scale, 1\)\) dashed var\(--accent\)/);
+    expect(rule).toMatch(/outline:\s*calc\(1px \/ var\(--scale, 1\)\) dashed var\(--ground-ring\)/);
     expect(css).toMatch(/\.item\.reach-inside:not\(\.selected\) \{[^}]*solid/);
     expect(css).toMatch(/\.item\.reach-among:not\(\.selected\) \{[^}]*dashed/);
   });

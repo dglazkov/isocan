@@ -2,9 +2,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { promises as fsp } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { crc32, deflateSync } from "node:zlib";
 import { ownerOnlySentence } from "@isocan/core/keys";
 import { removeKey, setKeySharing, writeKey } from "@isocan/core/keystore";
-import { IMAGE_BAD_REQUEST, IMAGE_MODEL_DEFAULT, IMAGE_OWNER_ONLY, IMAGE_RATE_LIMITED, IMAGE_REFUSED, IMAGE_ROUTE, IMAGE_UNAVAILABLE, IMAGE_UPSTREAM, MOOD_AXES, type ImageResponse } from "@isocan/core/mood";
+import {
+  deltaE,
+  IMAGE_BAD_REQUEST,
+  IMAGE_MODEL_DEFAULT,
+  IMAGE_OWNER_ONLY,
+  IMAGE_RATE_LIMITED,
+  IMAGE_REFUSED,
+  IMAGE_ROUTE,
+  IMAGE_SWATCHES_UNAVAILABLE,
+  IMAGE_UNAVAILABLE,
+  IMAGE_UPSTREAM,
+  MOOD_AXES,
+  SWATCHES_ROUTE,
+  type ImageResponse,
+  type SwatchesResponse,
+} from "@isocan/core/mood";
 import type { CanvasSnapshotResponse, Item } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
 import { IMAGE_ENDPOINT } from "../src/image.ts";
@@ -153,6 +169,29 @@ describe("the image route: a spread of pictures, never the key", () => {
     }
     const children = (await tiles()).filter((i) => i.properties.moodRun === more.json.run);
     expect(children.map((i) => i.properties.moodParent)).toEqual([parent, parent]);
+    expect(children.map((i) => i.properties.moodAxis)).toEqual(["more: light", "more: material"]);
+  });
+
+  it("wraps a Push dial in the template, records push: <dial> · <axis>, and refuses an unknown dial", async () => {
+    const bad = await explore(owner, { n: 1, push: "brighter" as never });
+    expect(bad.status).toBe(400);
+    expect(bad.json.code).toBe(IMAGE_BAD_REQUEST);
+    expect(bad.json.error).toMatch(/push.*must be one of/);
+    expect(calls).toHaveLength(0);
+
+    const first = await explore(owner, { n: 1 });
+    const parent = first.json.items[0]!.itemId;
+    calls = [];
+    const pushed = await explore(owner, { n: 2, parent, push: "warmer" });
+    expect(pushed.status, pushed.text).toBe(200);
+    expect(pushed.json.items.map((i) => i.axis)).toEqual(["push: warmer · light", "push: warmer · material"]);
+    for (const call of calls) {
+      const text = call.body.input.find((b) => b.type === "text")?.text ?? "";
+      expect(text).toContain("Push the look warmer:");
+    }
+    const children = (await tiles()).filter((i) => i.properties.moodRun === pushed.json.run);
+    expect(children.map((i) => i.properties.moodAxis)).toEqual(["push: warmer · light", "push: warmer · material"]);
+    expect(children.map((i) => i.properties.moodParent)).toEqual([parent, parent]);
   });
 
   it("refuses a collaborator while sharing is off — nothing reaches Google — and serves them once it is on", async () => {
@@ -226,5 +265,208 @@ describe("the image route: a spread of pictures, never the key", () => {
     expect(limited.status).toBe(429);
     expect(limited.json.code).toBe(IMAGE_RATE_LIMITED);
     expect(calls).toHaveLength(3);
+  });
+});
+
+function makeTricolorPng(width = 60, height = 60): Buffer {
+  const stride = width * 4;
+  const raw = Buffer.alloc(height * (stride + 1));
+  for (let y = 0; y < height; y++) {
+    const row = y * (stride + 1);
+    raw[row] = 0;
+    const [r, g, b] =
+      y < Math.floor(height * 0.5)
+        ? [0xb5, 0x65, 0x1d]
+        : y < Math.floor(height * 0.8)
+          ? [0x2f, 0x3e, 0x46]
+          : [0xf4, 0xf1, 0xea];
+    for (let x = 0; x < width; x++) {
+      const o = row + 1 + x * 4;
+      raw[o] = r;
+      raw[o + 1] = g;
+      raw[o + 2] = b;
+      raw[o + 3] = 255;
+    }
+  }
+  const pngChunk = (type: string, data: Buffer) => {
+    const head = Buffer.alloc(8);
+    head.writeUInt32BE(data.length, 0);
+    head.write(type, 4, "ascii");
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(Buffer.concat([head.subarray(4), data])), 0);
+    return Buffer.concat([head, data, crc]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr.set([8, 6, 0, 0, 0], 8);
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk("IHDR", ihdr),
+    pngChunk("IDAT", deflateSync(raw)),
+    pngChunk("IEND", Buffer.alloc(0)),
+  ]);
+}
+
+describe("POST /api/image/swatches: sharp primary path and textModel fallback", () => {
+  const TRICOLOR_PNG = makeTricolorPng(60, 60);
+
+  async function addImageItem(targetBase: string, badge: TestBadge): Promise<string> {
+    const put = await fetch(`${targetBase}/api/projects/${CANVAS}/blobs`, {
+      method: "POST",
+      headers: { "Content-Type": "image/png", "X-Isocan-Filename": "acme-tricolor.png", ...badge.headers },
+      body: TRICOLOR_PNG,
+    });
+    expect(put.ok).toBe(true);
+    const { blobHash, size } = (await put.json()) as { blobHash: string; size: number };
+    const itemId = "itm_acme_tricolor";
+    const added = await fetch(`${targetBase}/api/ops`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...badge.headers },
+      body: JSON.stringify({
+        canvasId: CANVAS,
+        actor: priya,
+        op: {
+          type: "item.add",
+          itemId,
+          version: { id: "ver_acme_tricolor", blobHash, mimeType: "image/png", filename: "acme-tricolor.png", size },
+          width: 320,
+          height: 320,
+          placement: { x: 0, y: 0, chosen: true },
+          title: "Acme Tricolor",
+        },
+      }),
+    });
+    expect(added.ok).toBe(true);
+    return itemId;
+  }
+
+  it("extracts known colours within ΔE <= 3 via real sharp", async () => {
+    const itemId = await addImageItem(base, owner);
+    const res = await fetch(`${base}${SWATCHES_ROUTE}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...owner.headers },
+      body: JSON.stringify({ canvasId: CANVAS, itemId }),
+    });
+    const text = await res.text();
+    bodies.push(text);
+    expect(res.status, text).toBe(200);
+    const body = JSON.parse(text) as SwatchesResponse;
+    expect(body.source).toBe("sharp");
+    expect(body.swatches.length).toBeGreaterThanOrEqual(3);
+    expect(deltaE(body.swatches[0]!.hex, "#b5651d")).toBeLessThanOrEqual(3);
+    expect(deltaE(body.swatches[1]!.hex, "#2f3e46")).toBeLessThanOrEqual(3);
+    expect(deltaE(body.swatches[2]!.hex, "#f4f1ea")).toBeLessThanOrEqual(3);
+    expect(body.swatches[0]!.estimated).toBeUndefined();
+  });
+
+  it("falls back to picture-capable textModel when sharp is absent and marks every swatch estimated: true", async () => {
+    const ANTHROPIC = "sk-ant-acme-swatches-fallback-1234567890";
+    const textCalls: Array<{ url: string; body: Record<string, unknown> }> = [];
+    const fakeTextFetch = (async (url: string, init: RequestInit) => {
+      textCalls.push({ url: String(url), body: JSON.parse(String(init.body)) as Record<string, unknown> });
+      return new Response(
+        JSON.stringify({
+          id: "msg_acme_swatches",
+          type: "message",
+          role: "assistant",
+          model: "claude-opus-4-6",
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({
+                swatches: [
+                  { hex: "#b5651d", share: 0.5 },
+                  { hex: "#2f3e46", share: 0.3 },
+                  { hex: "#f4f1ea", share: 0.2 },
+                ],
+              }),
+            },
+          ],
+          usage: { input_tokens: 120, output_tokens: 45 },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }) as unknown as typeof fetch;
+
+    const noSharpHome = await fsp.mkdtemp(path.join(os.tmpdir(), "isocan-swatches-nosharp-"));
+    await fsp.writeFile(path.join(noSharpHome, "identity.json"), JSON.stringify(priya));
+    await writeKey(noSharpHome, "anthropic", ANTHROPIC);
+    const noSharpDaemon = await startDaemon({
+      port: 0,
+      home: noSharpHome,
+      auth: null,
+      contentPort: "off",
+      image: { loadSharp: () => Promise.reject(new Error("sharp not installed")) },
+      text: { fetch: fakeTextFetch },
+    });
+    try {
+      const addr = noSharpDaemon.app.server.address();
+      const noSharpBase = `http://127.0.0.1:${typeof addr === "object" && addr ? addr.port : 0}`;
+      const badge = await mintTestBadge(noSharpBase);
+      await badge.speakAs(priya);
+      const made = await fetch(`${noSharpBase}/api/ops`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...badge.headers },
+        body: JSON.stringify({ canvasId: CANVAS, actor: priya, op: { type: "project.create", canvasId: CANVAS, title: "Acme Fallback" } }),
+      });
+      expect(made.ok).toBe(true);
+      const itemId = await addImageItem(noSharpBase, badge);
+      const res = await fetch(`${noSharpBase}${SWATCHES_ROUTE}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...badge.headers },
+        body: JSON.stringify({ canvasId: CANVAS, itemId }),
+      });
+      const text = await res.text();
+      expect(res.status, text).toBe(200);
+      expect(text).not.toContain(ANTHROPIC);
+      const body = JSON.parse(text) as SwatchesResponse;
+      expect(body.source).toBe("estimated");
+      expect(body.swatches).toEqual([
+        { hex: "#b5651d", share: 0.5, estimated: true },
+        { hex: "#2f3e46", share: 0.3, estimated: true },
+        { hex: "#f4f1ea", share: 0.2, estimated: true },
+      ]);
+      expect(textCalls.length).toBeGreaterThanOrEqual(1);
+    } finally {
+      await noSharpDaemon.close();
+      await fsp.rm(noSharpHome, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
+  });
+
+  it("returns 503 IMAGE_SWATCHES_UNAVAILABLE when neither sharp nor a picture-capable text model exists", async () => {
+    const bareHome = await fsp.mkdtemp(path.join(os.tmpdir(), "isocan-swatches-bare-"));
+    await fsp.writeFile(path.join(bareHome, "identity.json"), JSON.stringify(priya));
+    const bareDaemon = await startDaemon({
+      port: 0,
+      home: bareHome,
+      auth: null,
+      contentPort: "off",
+      image: { loadSharp: () => Promise.reject(new Error("sharp not installed")) },
+    });
+    try {
+      const addr = bareDaemon.app.server.address();
+      const bareBase = `http://127.0.0.1:${typeof addr === "object" && addr ? addr.port : 0}`;
+      const badge = await mintTestBadge(bareBase);
+      await badge.speakAs(priya);
+      const made = await fetch(`${bareBase}/api/ops`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...badge.headers },
+        body: JSON.stringify({ canvasId: CANVAS, actor: priya, op: { type: "project.create", canvasId: CANVAS, title: "Acme Bare" } }),
+      });
+      expect(made.ok).toBe(true);
+      const itemId = await addImageItem(bareBase, badge);
+      const res = await fetch(`${bareBase}${SWATCHES_ROUTE}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...badge.headers },
+        body: JSON.stringify({ canvasId: CANVAS, itemId }),
+      });
+      const text = await res.text();
+      expect(res.status, text).toBe(503);
+      expect(JSON.parse(text)).toMatchObject({ code: IMAGE_SWATCHES_UNAVAILABLE });
+    } finally {
+      await bareDaemon.close();
+      await fsp.rm(bareHome, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
   });
 });

@@ -1,12 +1,13 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { sourceOf, deck, deckStep, isDesignSystem, isTextItem, itemPath, isFramedItem, visualFaceOf } from "@isocan/core";
+import { deckTransitionOf, sourceOf, deck, deckStep, isDesignSystem, isTextItem, itemPath, isFramedItem, visualFaceOf } from "@isocan/core";
 import { connectToCanvas, disconnect, useCanvasStore } from "../stores/canvasStore.ts";
 import { VersionContent } from "./ItemView.tsx";
 import { KindIcon } from "./KindIcon.tsx";
+import { MorphStage } from "./MorphStage.tsx";
 import { iconKindFor } from "../lib/kinds.ts";
 import { isTyping } from "../lib/keys.ts";
-import { FLIP_NEXT, FLIP_PREV, REST_AFTER_MS, flipTo } from "../lib/deckflip.ts";
+import { FLIP_NEXT, FLIP_PREV, REST_AFTER_MS, flipTo, framingOf } from "../lib/deckflip.ts";
 
 import { usePhone } from "../lib/phone.ts";
 import { useTouchNavigation } from "../lib/touchnavigation.ts";
@@ -86,14 +87,16 @@ export function Viewer({ canvasId, itemId }: { canvasId: string; itemId: string 
       const forward = FLIP_NEXT.has(e.key);
       const next = deckStep(now, itemId, forward ? 1 : -1);
       if (!next) return; // the deck's edge: stay put rather than wrap
-      // A screen or a site is an iframe, and an iframe photographs blank, so
-      // animating one is a white flash on every flip. See `flipTo`.
+      // The canvas's transition (`deckTransitionOf`). A screen or a site is
+      // an iframe, which photographs blank, so two frames are animated live
+      // and a frame beside anything else cuts. See `flipTo`.
       const here = now.items[itemId];
       flipTo(
         navigate,
         itemPath(canvasId, next.id),
         forward ? "next" : "prev",
-        isFramedItem(next) || (here !== undefined && isFramedItem(here)),
+        framingOf(here !== undefined && isFramedItem(here), isFramedItem(next)),
+        deckTransitionOf(useCanvasStore.getState().record ?? {}),
       );
     }
     window.addEventListener("keydown", onKey, true);
@@ -191,6 +194,9 @@ export function Viewer({ canvasId, itemId }: { canvasId: string; itemId: string 
         )}
       </div>
       </>}
+      {/* The morph's twins (MorphStage), before the stage so they paint
+          beneath the live slide until a morph raises them. */}
+      {!phone && itemId && <MorphStage canvasId={canvasId} itemId={itemId} />}
       <div className="fullscreen-stage" {...gestures}>
         {!canvas ? (
           <div className="page-note">Finding the presentation…</div>

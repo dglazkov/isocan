@@ -43,7 +43,7 @@
      app's theme. Dark enough that white item cards read as objects on top. */
   /* Measured from the tiles themselves, 8 Sep 2026 — each is its picture's
      own mean colour, so the ground behind an image that has not arrived yet
-     is the colour of the image, and so the top fade over it (groundtone.ts)
+     is the colour of the image, and so the top fade over it (groundtoken.ts)
      is too. Before the art these were chosen by eye and were the target the
      prompts named; now they are read off what the artist sent back. */
   --theme-ocean: #314852;
@@ -155,6 +155,32 @@
   --paper-text-pink: #9e1c61;
   --paper-text-brown: #7a491f;
   --paper-text-grey: #50555b;
+  /* The ground tier's two ink sets (smart contrast) — the same in both app
+     themes, because a canvas's ground is the same picture in either: the set
+     for a dark ground and the set for a light one, core's `GROUND_INK`, held
+     equal by `groundcontrast.test.ts`. `.canvas-page[data-ground-tone]` picks
+     one; the dot grid picks neither. With them, the dark shades of the named
+     text colours, for a chromeless note on a dark ground whatever the app's
+     theme (a light ground takes the paper shades above) — core's
+     `GROUND_TEXT_SHADES`, which differ from `--text-*` only where a shade had
+     to lift to clear 3:1 on the dark grounds (red). */
+  --ground-dark-ink: #e7e9ec;
+  --ground-dark-ink-muted: #b8bec8;
+  --ground-dark-ink-soft: #b8bec8;
+  --ground-dark-accent: #b4c4ff;
+  --ground-light-ink: #23262b;
+  --ground-light-ink-muted: #383d44;
+  --ground-light-ink-soft: #383d44;
+  --ground-light-accent: #18288a;
+  --ground-dark-text-red: #f2727c;
+  --ground-dark-text-orange: #f59042;
+  --ground-dark-text-yellow: #e8c547;
+  --ground-dark-text-green: #5cc672;
+  --ground-dark-text-blue: #6ea8f0;
+  --ground-dark-text-purple: #b98ce8;
+  --ground-dark-text-pink: #ec7fbd;
+  --ground-dark-text-brown: #c76300;
+  --ground-dark-text-grey: #9aa0a8;
   /* RUNNING: an item you have stepped inside, whose scripts are live and whose
      links work. Green because it is the one thing on this canvas that is not a
      picture of software but software — the same green a build goes when it
@@ -258,6 +284,12 @@
   --syn-fn: #0f5f8a;
   --syn-type: #7130c3;
   --syn-punct: #646d76;
+  /* The arrival screen's ground (19 Oct 2026): Snow's base, the wash that
+     lights the name, and the drifting motes with their glow. Dark is Night. */
+  --arrival-ground: #e9eef8;
+  --arrival-wash: rgba(255, 255, 255, 0.78);
+  --arrival-mote: #ffffff;
+  --arrival-mote-glow: rgba(110, 130, 180, 0.6);
 }
 
 /* Dark: a graphite ground under the same dot grid, slate cards, a brighter
@@ -265,6 +297,10 @@
    since a soft gray one is invisible on a dark surface. */
 :root[data-theme="dark"] {
   color-scheme: dark;
+  --arrival-ground: #05060c;
+  --arrival-wash: rgba(10, 12, 24, 0.62);
+  --arrival-mote: #ffdf9a;
+  --arrival-mote-glow: rgba(255, 210, 120, 0.85);
   --good: #56b06a;
   /* Lifted for the dark ground, like every other hue here: 6.30:1 on `--card`,
      7.22:1 on `--ground`. The light value would sit at 2.69 and disappear. */
@@ -313,6 +349,32 @@
   --paper-text-pink: #9e1c61;
   --paper-text-brown: #7a491f;
   --paper-text-grey: #50555b;
+  /* The ground tier's two ink sets (smart contrast) — the same in both app
+     themes, because a canvas's ground is the same picture in either: the set
+     for a dark ground and the set for a light one, core's `GROUND_INK`, held
+     equal by `groundcontrast.test.ts`. `.canvas-page[data-ground-tone]` picks
+     one; the dot grid picks neither. With them, the dark shades of the named
+     text colours, for a chromeless note on a dark ground whatever the app's
+     theme (a light ground takes the paper shades above) — core's
+     `GROUND_TEXT_SHADES`, which differ from `--text-*` only where a shade had
+     to lift to clear 3:1 on the dark grounds (red). */
+  --ground-dark-ink: #e7e9ec;
+  --ground-dark-ink-muted: #b8bec8;
+  --ground-dark-ink-soft: #b8bec8;
+  --ground-dark-accent: #b4c4ff;
+  --ground-light-ink: #23262b;
+  --ground-light-ink-muted: #383d44;
+  --ground-light-ink-soft: #383d44;
+  --ground-light-accent: #18288a;
+  --ground-dark-text-red: #f2727c;
+  --ground-dark-text-orange: #f59042;
+  --ground-dark-text-yellow: #e8c547;
+  --ground-dark-text-green: #5cc672;
+  --ground-dark-text-blue: #6ea8f0;
+  --ground-dark-text-purple: #b98ce8;
+  --ground-dark-text-pink: #ec7fbd;
+  --ground-dark-text-brown: #c76300;
+  --ground-dark-text-grey: #9aa0a8;
   --live-wash: rgba(86, 176, 106, 0.22);
   --accent-wash: rgba(76, 110, 245, 0.14);
   --accent-glow: rgba(76, 110, 245, 0.26);
@@ -332,7 +394,7 @@
      app's theme. Dark enough that white item cards read as objects on top. */
   /* Measured from the tiles themselves, 8 Sep 2026 — each is its picture's
      own mean colour, so the ground behind an image that has not arrived yet
-     is the colour of the image, and so the top fade over it (groundtone.ts)
+     is the colour of the image, and so the top fade over it (groundtoken.ts)
      is too. Before the art these were chosen by eye and were the target the
      prompts named; now they are read off what the artist sent back. */
   --theme-ocean: #314852;
@@ -924,7 +986,145 @@ img { height: auto; }
    panel at --z-float covered the comment toasts' close buttons. Without it the
    page's chrome and the body's panels meet on the one scale above
    (layers.test.ts holds this rule to it). */
-.canvas-page { position: absolute; inset: 0; overflow: hidden; }
+.canvas-page {
+  position: absolute; inset: 0; overflow: hidden;
+  /* The ground tier crossfades on the element whose value changes (below). */
+  transition: --ground-ink 0.2s ease, --ground-ink-muted 0.2s ease, --ground-ink-soft 0.2s ease,
+    --ground-accent 0.2s ease, --ground-ring 0.2s ease;
+}
+/* ---------- the ground tier: ink that follows the ground (smart contrast) ----------
+   Chrome drawn straight onto the canvas — names, kind icons, a chromeless
+   note's words, the selection ring — took the APP's ink, and a canvas's ground
+   does not follow the app's theme: in dark mode on Snow a note measured 1.19,
+   and the dark app's muted name 3.07 on Ocean. So everything on the ground
+   (the inventory in `test/groundtext.ts`) paints with these five tokens, and
+   only these (`groundcontrast.test.ts`, "the inventory holds").
+
+   With no ground of its own a canvas has no `data-ground-tone`, and each token
+   IS the app's token — the dot grid is byte-for-byte what it was. Declared on
+   the document root, not on `.canvas-page` (one block per class,
+   `oneblock.test.ts`): the properties inherit, so the page and everything off
+   it — a kind icon in a panel on the body — read the same default, never the
+   registration's initial value (transparent). `--ground-accent` is the accent as words and
+   `--ground-ring` the accent as a line, because today they are different
+   tokens (`--accent-text` and `--accent`), and only a ground of its own makes
+   them one colour.
+
+   On a ground, `CanvasPage` stamps core's `toneOfGround` and the tone's set
+   (`--ground-dark-*`, `--ground-light-*` in the theme blocks: core's
+   `GROUND_INK`, held equal by the guard) replaces them. Each is the
+   nearest to today's ink that passes on the worst ground of its side: on-dark
+   bound by the brightest picture (muted 4.52, accent 4.94), on-light by Zen
+   (muted 4.86, accent 5.46). `mid` (Desert) has its own section below: the
+   plate. Cards do not move: their ink is the app's, on the app's card.
+
+   Registered as colours so a change of ground crossfades them over 200ms
+   rather than snapping (design §5): the transition sits in `.canvas-page`'s
+   own rule above, on the element whose value changes, and the rest inherit
+   the moving value. Under reduced motion the ink changes in the
+   frame the ground does. */
+@property --ground-ink { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --ground-ink-muted { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --ground-ink-soft { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --ground-accent { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --ground-ring { syntax: "<color>"; inherits: true; initial-value: transparent; }
+:root {
+  --ground-ink: var(--ink);
+  --ground-ink-muted: var(--ink-muted);
+  --ground-ink-soft: var(--ink-soft);
+  --ground-accent: var(--accent-text);
+  --ground-ring: var(--accent);
+}
+.canvas-page[data-ground-tone="dark"] {
+  --ground-ink: var(--ground-dark-ink);
+  --ground-ink-muted: var(--ground-dark-ink-muted);
+  --ground-ink-soft: var(--ground-dark-ink-soft);
+  --ground-accent: var(--ground-dark-accent);
+  --ground-ring: var(--ground-dark-accent);
+}
+.canvas-page[data-ground-tone="light"] {
+  --ground-ink: var(--ground-light-ink);
+  --ground-ink-muted: var(--ground-light-ink-muted);
+  --ground-ink-soft: var(--ground-light-ink-soft);
+  --ground-accent: var(--ground-light-accent);
+  --ground-ring: var(--ground-light-accent);
+}
+/* ---------- mid: the plate (smart contrast phase 3, design §3) ----------
+   A ground no ink family reads on — Desert, where white measures 4.11 and the
+   dark ink 3.70. Rather than the least-bad grey, ground chrome stands on a
+   small plate of the glass every menu wears, and its ink is the app's, on
+   app glass. The glass is translucent (0.82 → 0.74), so the sand shows
+   through: composited over Desert the muted ink measures only 3.70 (light)
+   and 3.83 (dark), the full ink 10.68 and 9.88. So on the plate names, icons
+   and captions take the full `--ink`; `groundcontrast.test.ts` measures it.
+
+   Where no plate can go — a chromeless note's words (a plate behind every
+   note would make Desert the one ground where a note is a card), and the
+   ring around a card — the colour comes from core's `bestInk` for the colour
+   this canvas stands on, set on the page by `CanvasPage`
+   (`--ground-mid-ink`, `-halo`, `-ring`). On Desert that is black words,
+   5.11, with a one-pixel white halo (decided 19 Oct; WCAG does not count a
+   halo — it is for the busy patches of the sand), and a ring of `#182889`,
+   the light accent walked the one step past 2.99 that clears 3:1. */
+.canvas-page[data-ground-tone="mid"] {
+  --ground-ink-muted: var(--ink);
+  --ground-ink-soft: var(--ink);
+  --ground-ring: var(--ground-mid-ring, var(--accent));
+}
+/* The plate sits on the text run, not the row — `.chrome-left` holds the
+   kind icon, the marks, the name or the rename field and the row's own
+   pills — and it is a pseudo-element behind the run, so nothing in the row
+   moves by a pixel (`titlebar.test.ts` holds the row's place). Its 1px and
+   5px are screen pixels already: the run is counter-scaled, and the plate is
+   inside it. The speaker-note caption, positioned already, takes the same. */
+.canvas-page[data-ground-tone="mid"] .item-titlebar .chrome-left { position: relative; }
+.canvas-page[data-ground-tone="mid"] .item-titlebar .chrome-left::before,
+.canvas-page[data-ground-tone="mid"] .note-of::before {
+  content: ""; position: absolute; inset: -1px -5px; z-index: -1;
+}
+.canvas-page[data-ground-tone="mid"] .item-titlebar .chrome-left::before,
+.canvas-page[data-ground-tone="mid"] .note-of::before,
+.canvas-page[data-ground-tone="mid"] .item.canvas-group .area-title,
+.canvas-page[data-ground-tone="mid"] .stack-band,
+.canvas-page[data-ground-tone="mid"] .group-column-label,
+.canvas-page[data-ground-tone="mid"] .group-row-label {
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+  border-radius: 6px;
+}
+.canvas-page[data-ground-tone="mid"] .item.textnode:not(.paper) .md-view,
+.canvas-page[data-ground-tone="mid"] .item.textnode:not(.paper) .text-mark,
+.canvas-page[data-ground-tone="mid"] .text-composer:not(.on-paper) textarea {
+  color: var(--text-ink, var(--ground-mid-ink, var(--ground-ink)));
+  /* A soft glow, not a hairline: Desert is a high-variance sand and its mean
+     hides the dark streaks, where a 1px halo alone left glyphs touching the
+     dark (seen in the walk's screenshot, 19 Oct). Three stacked blurs — tight,
+     wider, widest at 70% — lift each glyph off the streak under it. */
+  text-shadow:
+    0 0 1px var(--ground-mid-halo, transparent),
+    0 0 2px var(--ground-mid-halo, transparent),
+    0 0 4px color-mix(in srgb, var(--ground-mid-halo, transparent) 70%, transparent);
+}
+/* **Identity colours do not move** (design §2): an agent's work chip says
+   whose work this is in that person's colour, so on any ground of its own it
+   gets the plate instead of a new colour — the only lever an identity colour
+   leaves. Its tint stays, laid over the glass. The dot grid keeps it as it
+   was. (A remote cursor's name already sits on a pill of the person's colour,
+   and a presenter's name on a card: both carry their own fill.) */
+.canvas-page[data-ground-tone] .work-chip {
+  background:
+    linear-gradient(color-mix(in srgb, var(--work-color) 10%, transparent), color-mix(in srgb, var(--work-color) 10%, transparent)),
+    var(--glass);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+}
+@media (prefers-reduced-motion: reduce) {
+  .canvas-page { transition: none; }
+  /* The name row's own colour ease too, or the ink would still drift for
+     120ms after the ground changed. Its fade in and out on hover stays. */
+  .canvas-page .item-titlebar { transition: opacity 0.12s ease; }
+}
 .canvas-viewport {
   position: absolute; inset: 0;
   background: var(--ground);
@@ -1054,7 +1254,7 @@ img { height: auto; }
  *
  * `background-color` is each tile's own mean colour, measured off the file
  * rather than picked: it is what shows for the moment before a 139–663KB JPEG
- * arrives, and what the top fade over it is drawn from (`lib/groundtone.ts`).
+ * arrives, and what the top fade over it is drawn from (`lib/groundtoken.ts`).
  * A ground whose holding colour is not its picture's flashes a different
  * ground on every cold load.
  *
@@ -1298,7 +1498,41 @@ img { height: auto; }
    here", which is what the item is. */
 .item.away { border-style: dashed; border-color: var(--away); }
 .item.away:hover { box-shadow: var(--shadow-item), 0 0 0 1px var(--away); }
-.item.selected { outline: calc(2px / var(--scale, 1)) solid var(--accent); z-index: 1; }
+/* **Selected: the ring is the outermost edge, and nothing else is** (19 Oct
+   2026, Dion, after a version stack read as "thin blue line => grey => more
+   see-through grey"). Figma's rule, read off its canvas at several zooms:
+   selection is the node's bounds and the last mark on it. Three things used
+   to sit outside or under the ring, and each now gets out of its way:
+
+   - The ring steps one SCREEN pixel inward, over the hairline, so it goes
+     from blue straight to content. One screen pixel rather than one world
+     pixel (the border's width) because a world pixel is 0.4 of a screen one
+     at 40%, which puts the ring between pixels and smears it; up to 100% one
+     screen pixel covers the whole border. Past that the border is wider than
+     the step, so it turns accent too and nothing grey is left outside.
+   - The plies step out (`.item.selected > .ply`, beside `.ply`): two sheets
+     peeking past the ring are what made it look like a line drawn through
+     the middle of the thing. The ×N badge still says there are versions.
+   - The resting halo flattens to the contact shadow, as a selected FigJam
+     sticky does: once the ring says where the edge is, a 64px halo past it
+     is a second edge. `.item.lifted` comes after this and still lifts.
+
+   Kinds that wear no card (ink, text, areas) keep their `box-shadow: none`:
+   their rules come later at the same weight. Paper restates it, below. */
+.item.selected { outline: calc(2px / var(--scale, 1)) solid var(--ground-ring);
+  outline-offset: calc(-1px / var(--scale, 1));
+  border-color: var(--ground-ring);
+  box-shadow: var(--shadow-card);
+  z-index: 1;
+}
+/* The one border the ring does not cover: a slide's and a doorway's. Those
+   are a COLOUR that says what the item is, not the grey hairline every card
+   wears, and a selected slide shows both (`slidelook.test.ts`) — so the ring
+   steps back outside it, as it used to sit for everything. Outweighs the
+   `:hover` halo above, so a pointed-at selection stays flat too. */
+.item.slide.selected, .item.away.selected { outline-offset: 0; box-shadow: var(--shadow-card); }
+.item.slide.selected { border-color: var(--slide); }
+.item.away.selected { border-color: var(--away); }
 /* An item whose render threw (`ItemBoundary`): its own box, drawn as a gap
    rather than a card, so the layout holds and nobody mistakes it for content.
    Dashed in the plain line colour — not `--danger`: nothing the person did is
@@ -1333,6 +1567,9 @@ img { height: auto; }
      reads it as steady. `alternate` rather than a loop, so there is no jump
      from the end of the cycle back to the start. */
   animation: running-breathe 2.8s ease-in-out infinite alternate;
+  /* The edge under the ring follows the ring's colour, for the reason it
+     turns accent under selection. */
+  border-color: var(--running);
 }
 @keyframes running-breathe {
   from { outline-color: var(--running); }
@@ -1373,7 +1610,7 @@ img { height: auto; }
 .item.ink { background: transparent; border-color: transparent; box-shadow: none; }
 .item.ink .item-content { border-radius: var(--radius); }
 .item.ink .img-view { background: transparent; }
-.item.ink .ply { background: transparent; border-color: var(--line-soft); }
+.item.ink .ply { --ply-edge: var(--line-soft); background: transparent; }
 /* Pointing at an item shows the box you would get, in the accent color that
    means "this one" everywhere else — a dashed preview of the solid outline a
    click would give it. NOT `:hover` since groups-by-hand phase 2: `:hover`
@@ -1393,20 +1630,28 @@ img { height: auto; }
 
      Kept at 1px rather than matched to selection's 2px: hover is a preview of
      what a click would give you, and a preview as heavy as the thing it
-     previews stops being one. */
-  outline: calc(1px / var(--scale, 1)) dashed var(--accent);
-  outline-offset: calc(2px / var(--scale, 1));
+     previews stops being one.
+
+     INSIDE the selection ring's footprint (19 Oct 2026), not 2px outside
+     it: the dashed preview used to sit beyond the box and the solid ring on
+     it, so clicking moved the line inward instead of filling it in. Now the
+     dashes are the ring's outer pixel and a click makes them solid.
+     Offset 0 rather than the ring's one pixel in: an outline is painted
+     under the item's content, so a 1px line pushed inward is half hidden by
+     it — measured at 40%, it came out at a third of its colour. */
+  outline: calc(1px / var(--scale, 1)) dashed var(--ground-ring);
+  outline-offset: 0;
 }
-.canvas-viewport:not(.pen) .item.selected.hover-target { outline: calc(2px / var(--scale, 1)) solid var(--accent); }
+.canvas-viewport:not(.pen) .item.selected.hover-target { outline: calc(2px / var(--scale, 1)) solid var(--ground-ring); }
 /* ⌘ held: the item it reaches is the target above; its group is drawn faint
    and SOLID — "inside this", not "this" — and over a frame's open space the
    members a selection box would reach are drawn dimly. */
 .canvas-viewport:not(.pen) .item.reach-inside:not(.selected) {
-  outline: calc(1px / var(--scale, 1)) solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline: calc(1px / var(--scale, 1)) solid color-mix(in srgb, var(--ground-ring) 45%, transparent);
   outline-offset: calc(2px / var(--scale, 1));
 }
 .canvas-viewport:not(.pen) .item.reach-among:not(.selected) {
-  outline: calc(1px / var(--scale, 1)) dashed color-mix(in srgb, var(--accent) 45%, transparent);
+  outline: calc(1px / var(--scale, 1)) dashed color-mix(in srgb, var(--ground-ring) 45%, transparent);
   outline-offset: calc(2px / var(--scale, 1));
 }
 /* …and pointing at a running item does not turn it back into a selected one. */
@@ -1420,8 +1665,8 @@ img { height: auto; }
 /* Pointing at a pill or row lights up the thing itself on the canvas: solid
    accent frame, outer halo, and a soft accent wash across the card. */
 .item.peeked {
-  outline: calc(2px / var(--scale, 1)) solid var(--accent);
-  outline-offset: 0;
+  outline: calc(2px / var(--scale, 1)) solid var(--ground-ring);
+  outline-offset: calc(-1px / var(--scale, 1));
   box-shadow: 0 0 0 calc(4px / var(--scale, 1)) var(--accent-glow), 0 0 calc(20px / var(--scale, 1)) var(--accent-glow), var(--shadow-item);
   z-index: 2;
 }
@@ -1458,7 +1703,7 @@ img { height: auto; }
      the gap would drift by a border width across the zoom range. */
   bottom: calc(100% + 1px + 6px / var(--scale, 1));
   display: flex; align-items: flex-end; justify-content: space-between; gap: 6px;
-  padding: 0; font-size: 11px; color: var(--ink-muted);
+  padding: 0; font-size: 11px; color: var(--ground-ink-muted);
   line-height: 1.4; cursor: grab; user-select: none; -webkit-user-select: none;
   opacity: 0; transition: opacity 0.12s ease, color 0.12s ease;
 }
@@ -1493,7 +1738,13 @@ img { height: auto; }
 .item:hover .item-titlebar,
 .item.selected .item-titlebar,
 .item.renaming .item-titlebar { opacity: 1; }
-.item.selected .item-titlebar { color: var(--accent); }
+/* The selected name is TEXT standing on the ground, so it wears the accent's
+   ink, not its fill. `--accent` is a fill colour; in dark it measured 3.32 on
+   the dot grid as a name, and `--accent-text` measures 8.41 there. In light
+   the two tokens are the same cobalt, so nothing moves (`groundaccent.test.ts`).
+   Since smart contrast it is `--ground-accent`, which IS `--accent-text`
+   until the canvas stands on a ground of its own (the tier, at `.canvas-page`). */
+.item.selected .item-titlebar { color: var(--ground-accent); }
 /* The star lives at the end of the label row, so it appears with the name and
    goes away with it — nothing sitting on the canvas waiting to be noticed. */
 
@@ -1506,7 +1757,7 @@ img { height: auto; }
      hold its size, so "100%" is 100% of the item's row in WORLD units — at
      24% zoom that is a quarter of the room the text needs, and the title
      crops from the left. The measured width IS the text; let it be that. */
-  font: inherit; color: var(--ink);
+  font: inherit; color: var(--ground-ink);
   /* A text input still paints its own native field behind a transparent
      background — that is where the white box came from, not from any rule
      here. Turning the control's appearance off is what stops it. */
@@ -1536,7 +1787,7 @@ img { height: auto; }
    is a statement about the file, not a control. */
 .kind-icon {
   flex: none; width: 13px; height: 13px; display: block;
-  color: var(--ink-soft); pointer-events: none;
+  color: var(--ground-ink-soft); pointer-events: none;
   /* The strokes are drawn on a 24 grid and shown at 13 — measured against 12,
      which lost the stand under the monitor and the sun inside the frame. `vector-effect` keeps it there: this icon sits
      inside counter-scaled chrome, and without it a stroke would be scaled by
@@ -1555,11 +1806,36 @@ img { height: auto; }
 .item-content { flex: 1; overflow: hidden; position: relative; border-radius: calc(var(--radius) - 1px); }
 .item-content.inert { pointer-events: none; user-select: none; -webkit-user-select: none; }
 
-/* version stack plies (the 0.5D) */
+/* version stack plies (the 0.5D)
+
+   **Opaque, and a fixed distance on screen** (19 Oct 2026). They were white
+   cards at 75% and 45% opacity, offset 5 and 10 WORLD pixels. Both halves
+   failed somewhere:
+
+   - Opacity let the ground through, which is the look they were designed
+     for on vellum and mud everywhere else — over a photo or a painted ground
+     the back sheet was a grey smear. So each sheet is mixed toward `--ground`
+     by the same amounts instead: identical on the theme's own ground, and a
+     solid sheet over any other.
+   - World offsets made the fact zoom-dependent: one or two screen pixels at
+     20%, so "this has versions" vanished on exactly the zoomed-out board you
+     scan, and 15/30px bands at 300%. Each step is now 5 world pixels held
+     between 3 and 6 on screen.
+
+   A kind that changes the sheet sets `--ply-face` / `--ply-edge` and leaves
+   the mixing and the offset here. */
 .item .ply {
-  content: ""; position: absolute; inset: 0; background: var(--card);
-  border: 1px solid var(--line); border-radius: var(--radius); z-index: -1;
+  content: ""; position: absolute; inset: 0;
+  --ply-step: clamp(3px / var(--scale, 1), 5px, 6px / var(--scale, 1));
+  background: color-mix(in srgb, var(--ply-face, var(--card)) var(--ply-mix, 75%), var(--ground));
+  border: 1px solid color-mix(in srgb, var(--ply-edge, var(--line)) var(--ply-mix, 75%), var(--ground));
+  border-radius: var(--radius); z-index: -1;
+  transform: translate(calc(var(--ply-n, 1) * var(--ply-step)), calc(var(--ply-n, 1) * var(--ply-step)));
 }
+.item .ply-1 { --ply-n: 1; --ply-mix: 75%; }
+.item .ply-2 { --ply-n: 2; --ply-mix: 45%; }
+/* Selected, the ring is the edge: see `.item.selected`. */
+.item.selected > .ply { display: none; }
 /* The version count is chrome, so it holds its size as the canvas zooms
    (ItemView counter-scales it). It no longer moves: see the position rule
    below for why the corner-yielding rule was retired with the corner. */
@@ -1689,25 +1965,25 @@ img { height: auto; }
 .browser-slow a:hover { text-decoration: underline; }
 .browser-reload {
   flex: none; background: none; border: none; padding: 0 2px;
-  color: var(--ink-muted); font-size: 12px; line-height: 1; cursor: pointer;
+  color: var(--ground-ink-muted); font-size: 12px; line-height: 1; cursor: pointer;
 }
-.browser-reload:hover { color: var(--ink); }
+.browser-reload:hover { color: var(--ground-ink); }
 /* A Google Doc's Live | Words switch on its strip: a word, not a glyph,
    because the two states are unlike things and a glyph would make you guess
    which one you are looking at. */
 .doc-live-toggle {
   flex: none; padding: 0 6px; border-radius: 999px; border: 1px solid var(--line);
-  background: none; color: var(--ink-muted); font-size: 10.5px; line-height: 16px; cursor: pointer;
+  background: none; color: var(--ground-ink-muted); font-size: 10.5px; line-height: 16px; cursor: pointer;
 }
-.doc-live-toggle:hover { color: var(--ink); border-color: var(--ink-soft); }
+.doc-live-toggle:hover { color: var(--ground-ink); border-color: var(--ground-ink-soft); }
 /* The memory mark on a canvas card's strip (memory phase 3): a word, lit
    when the other canvas's context is read here, and the switch for it. */
 .memory-mark {
   flex: none; padding: 0 6px; border-radius: 999px; border: 1px solid var(--line);
-  background: none; color: var(--ink-muted); font-size: 10.5px; line-height: 16px; cursor: pointer;
+  background: none; color: var(--ground-ink-muted); font-size: 10.5px; line-height: 16px; cursor: pointer;
 }
-.memory-mark:hover { color: var(--ink); border-color: var(--ink-soft); }
-.memory-mark.active { background: var(--accent-wash, var(--chip)); color: var(--accent-text); border-color: transparent; }
+.memory-mark:hover { color: var(--ground-ink); border-color: var(--ground-ink-soft); }
+.memory-mark.active { background: var(--accent-wash, var(--chip)); color: var(--ground-accent); border-color: transparent; }
 /* Arrival motion (motion note, recommendation 2): an item from somebody
    else comes in rather than popping. The settled state IS the base state —
    the keyframes are only an entrance, so a throttled tab still shows the
@@ -1720,7 +1996,7 @@ img { height: auto; }
 @media (prefers-reduced-motion: reduce) {
   .item.arrived { animation: none; }
 }
-.doc-live-toggle.active { background: var(--accent-wash, var(--chip)); color: var(--accent-text); border-color: transparent; }
+.doc-live-toggle.active { background: var(--accent-wash, var(--chip)); color: var(--ground-accent); border-color: transparent; }
 /* "double-click to interact" is an instruction, not part of the document — so
    it hangs UNDER the item rather than lying across the bottom of it, and only
    while you are pointing at the thing it is talking about. Same bargain as the
@@ -2072,7 +2348,7 @@ img { height: auto; }
 }
 .fullscreen-back:hover { border-color: var(--accent); color: var(--accent-text); }
 /* The item itself, and everything left over is its. `view-transition-name`
-   is the deck flip's handle on it — see the block below. */
+   is the deck flip's handle on it — see `presentation.css`. */
 .fullscreen-stage {
   flex: 1; min-height: 0; position: relative; overflow: auto;
   view-transition-name: slide;
@@ -2083,37 +2359,10 @@ img { height: auto; }
 }
 .fullscreen-stage > * { width: 100%; height: 100%; }
 
-/* ---------- the deck flip ---------- */
-/* A flip PUSHES (lib/deckflip.ts): the new slide slides in from the side the
-   key named while the old one — a view-transition snapshot, so its scripts
-   are not run twice — recedes a quarter of the way and lets go. 220ms with a
-   hard ease-out reads as snappy rather than staged; anything longer is fun
-   exactly twice. The name is on `.fullscreen-stage` — one per document,
-   whichever face of the deck is up — so only the slide travels: everything
-   else (the bar, the chrome) is pinned still by the `root` rule below, which
-   is scoped to `data-flip` so no future view transition inherits it.
-
-   No reduced-motion block: deckflip.ts never starts a transition for someone
-   who asked for reduced motion, so there is nothing here to switch off. */
-html[data-flip]::view-transition-old(root),
-html[data-flip]::view-transition-new(root) { animation: none; }
-html[data-flip]::view-transition-old(slide),
-html[data-flip]::view-transition-new(slide) {
-  animation-duration: 220ms;
-  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
-}
-html[data-flip="next"]::view-transition-old(slide) { animation-name: deck-recede-left; }
-html[data-flip="next"]::view-transition-new(slide) { animation-name: deck-enter-right; }
-html[data-flip="prev"]::view-transition-old(slide) { animation-name: deck-recede-right; }
-html[data-flip="prev"]::view-transition-new(slide) { animation-name: deck-enter-left; }
-/* The recede scales to 0.98 on its way out — a faint depth cue that says the
-   old slide fell behind, at no cost in time. */
-@keyframes deck-recede-left { to { transform: translateX(-25%) scale(0.98); opacity: 0; } }
-@keyframes deck-recede-right { to { transform: translateX(25%) scale(0.98); opacity: 0; } }
-/* The enter replaces the default cross-fade entirely: it arrives opaque,
-   because a push that also fades is a slide you watch appear twice. */
-@keyframes deck-enter-right { from { transform: translateX(100%); } }
-@keyframes deck-enter-left { from { transform: translateX(-100%); } }
+/* ---------- the deck flip ----------
+   Lives in `components/presentation.css`, which ships with the two faces of
+   the deck (`FullScreen`, `Viewer`) — the only places a slide is flipped — so
+   its keyframes cost a first visit nothing. */
 
 /* The way IN, beside the size chip under a selected item. A chip, not a
    titlebar button: the title row's width belongs to the name (lib/chrome.ts),
@@ -3894,7 +4143,7 @@ button.mt-card:hover { border-color: var(--accent); }
 /* ---------- marquee ---------- */
 /* Alignment guides (drag): hairlines in the accent color, over the items but
    under the panels — they are feedback about the gesture, not furniture. */
-.guide { position: absolute; z-index: calc(var(--z-canvas) + 1); pointer-events: none; background: var(--accent); }
+.guide { position: absolute; z-index: calc(var(--z-canvas) + 1); pointer-events: none; background: var(--ground-ring); }
 .guide-v { top: 0; bottom: 0; width: 1px; }
 .guide-h { left: 0; right: 0; height: 1px; }
 
@@ -3916,7 +4165,7 @@ button.mt-card:hover { border-color: var(--accent); }
 
 .marquee {
   position: absolute; z-index: var(--z-canvas); pointer-events: none;
-  border: 1px solid var(--accent);
+  border: 1px solid var(--ground-ring);
   background: var(--accent-wash);
   border-radius: 2px;
 }
@@ -3935,6 +4184,21 @@ button.mt-card:hover { border-color: var(--accent); }
 .page-note-hint { font-size: 12.5px; color: var(--ink-soft); max-width: 46ch; line-height: 1.45; }
 
 /* ---------- canvas arrival / finding screen ---------- */
+/* **The arrival is a title card on a ground** (19 Oct 2026).
+
+   Dion: "have the NAME of the canvas very large so you quickly can see it" and
+   "use a nice fun background — Night in dark mode, something fun with a light
+   background in light mode". So the name is the headline at poster size and
+   everything else is measured from it (`em` on `.canvas-finding-inner`, whose
+   font-size IS the title's), and the screen wears a seeded ground's painted
+   still: Night in dark, Snow in light.
+
+   The stills, not the living grounds: this screen is up exactly while the
+   canvas is still loading, so it gets a cached JPEG and a CSS layer of drifting
+   lights rather than a WebGL context and a ground's chunk racing the snapshot.
+   The theme comes from `data-theme`, so it follows the OS like everything
+   else; the canvas's OWN ground is not known yet (the snapshot has not landed),
+   so this is the app's welcome, not the board's. */
 .canvas-finding {
   position: fixed;
   inset: 0;
@@ -3942,8 +4206,11 @@ button.mt-card:hover { border-color: var(--accent); }
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: var(--ground);
-  background-image: radial-gradient(circle 340px at 50% 45%, var(--accent-wash), transparent 72%);
+  overflow: hidden;
+  /* Snow, with a lit centre so the name reads at any size. */
+  background-color: var(--arrival-ground);
+  background-image: url(/grounds/snow.jpg);
+  background-size: 640px 640px;
   color: var(--ink);
   opacity: 1;
   transform: none;
@@ -3951,23 +4218,113 @@ button.mt-card:hover { border-color: var(--accent); }
     opacity 360ms cubic-bezier(0.2, 0.8, 0.2, 1),
     transform 360ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
+:root[data-theme="dark"] .canvas-finding {
+  /* Night: the sky's stars and the horizon's lanterns sit above the name, the
+     grass under it; a dusk wash behind the words keeps them off the grass. */
+  background-image: url(/grounds/night.jpg);
+  background-size: cover;
+  background-position: center 30%;
+}
+/* The living ground, when it runs (`CanvasFinding`), is the same layer a
+   canvas wears, pinned to the window. Its flat colour is dropped here so the
+   still keeps showing until the first frame is drawn — no flash of flat blue
+   or black between the picture and the field. */
+.canvas-finding .canvas-theme { background: none; }
+/* The wash that lights the name: over the ground (still or living), under the
+   words. A layer of its own because a WebGL canvas covers any background. */
+.canvas-finding-wash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse 60% 48% at 50% 48%, var(--arrival-wash), transparent 72%);
+}
+/* The drifting lights: snowflakes falling in light, fireflies rising in dark.
+   Two layers of gradient dots, each an oversized box sliding by exactly one
+   tile, so the loop is seamless and the whole effect is two composited
+   transforms and no script. The tiles differ in size and speed — one layer
+   alone repeats on a grid the eye finds at once; two out of step read as
+   depth: the near layer bigger and faster. They are the stand-in for a living
+   ground — shown while it loads, under reduced motion, without WebGL2 — and
+   the living ground brings its own flakes and fireflies. */
+.canvas-finding-motes { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.canvas-finding-motes::before,
+.canvas-finding-motes::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  will-change: transform;
+}
+.canvas-finding-motes::before {
+  top: -360px;
+  bottom: 0;
+  background-image:
+    radial-gradient(circle at 12% 18%, var(--arrival-mote) 0 1.5px, transparent 2.5px),
+    radial-gradient(circle at 34% 62%, var(--arrival-mote) 0 1px, transparent 2px),
+    radial-gradient(circle at 58% 31%, var(--arrival-mote) 0 2px, transparent 3px),
+    radial-gradient(circle at 77% 74%, var(--arrival-mote) 0 1.5px, transparent 2.5px),
+    radial-gradient(circle at 91% 43%, var(--arrival-mote) 0 1px, transparent 2px),
+    radial-gradient(circle at 23% 89%, var(--arrival-mote) 0 1.5px, transparent 2.5px);
+  background-size: 360px 360px;
+  filter: drop-shadow(0 0 1.5px var(--arrival-mote-glow));
+  animation: canvas-finding-fall-far 22s linear infinite;
+}
+.canvas-finding-motes::after {
+  top: -620px;
+  bottom: 0;
+  background-image:
+    radial-gradient(circle at 18% 36%, var(--arrival-mote) 0 3px, transparent 4.5px),
+    radial-gradient(circle at 47% 81%, var(--arrival-mote) 0 2.5px, transparent 4px),
+    radial-gradient(circle at 71% 12%, var(--arrival-mote) 0 3.5px, transparent 5px),
+    radial-gradient(circle at 88% 59%, var(--arrival-mote) 0 2.5px, transparent 4px);
+  background-size: 620px 620px;
+  filter: drop-shadow(0 0 3px var(--arrival-mote-glow));
+  animation: canvas-finding-fall-near 13s linear infinite;
+}
+/* Fireflies: fewer, smaller, glowing harder, rising, and blinking. */
+:root[data-theme="dark"] .canvas-finding-motes::before,
+:root[data-theme="dark"] .canvas-finding-motes::after {
+  background-image:
+    radial-gradient(circle at 14% 30%, var(--arrival-mote) 0 1.5px, transparent 3.5px),
+    radial-gradient(circle at 40% 70%, var(--arrival-mote) 0 1px, transparent 3px),
+    radial-gradient(circle at 63% 22%, var(--arrival-mote) 0 2px, transparent 4px),
+    radial-gradient(circle at 82% 58%, var(--arrival-mote) 0 1px, transparent 3px);
+  filter: drop-shadow(0 0 6px var(--arrival-mote-glow));
+}
+:root[data-theme="dark"] .canvas-finding-motes::before {
+  top: 0;
+  bottom: -360px;
+  animation: canvas-finding-rise-far 30s linear infinite, canvas-finding-blink 3.7s ease-in-out infinite;
+}
+:root[data-theme="dark"] .canvas-finding-motes::after {
+  top: 0;
+  bottom: -620px;
+  animation: canvas-finding-rise-near 21s linear infinite, canvas-finding-blink 2.9s ease-in-out -1.3s infinite;
+}
 .canvas-finding.fading-out {
   opacity: 0;
   transform: scale(1.015);
   pointer-events: none;
 }
 .canvas-finding-inner {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  /* The title's size, and the unit for everything around it. */
+  font-size: clamp(32px, 4.8vw, 68px);
+  gap: 0.14em;
   text-align: center;
   padding: 24px;
   animation: canvas-finding-enter 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 .canvas-finding-emblem {
+  width: max(48px, 0.8em);
+  height: max(48px, 0.8em);
   color: var(--ink-soft);
-  margin-bottom: 4px;
+  margin-bottom: 0.04em;
 }
 .canvas-finding-card-back {
   fill: var(--card);
@@ -3984,30 +4341,33 @@ button.mt-card:hover { border-color: var(--accent); }
   animation: canvas-finding-front 2.4s ease-in-out infinite;
 }
 .canvas-finding-eyebrow {
-  font-size: 10.5px;
+  font-size: max(12px, 0.16em);
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--accent-text);
 }
 .canvas-finding-title {
-  font-size: 26px;
-  font-weight: 600;
-  letter-spacing: -0.025em;
-  line-height: 1.2;
+  font-size: 1em;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.02;
   color: var(--ink);
-  max-width: 28ch;
+  max-width: 20ch;
+  text-wrap: balance;
+  overflow-wrap: break-word;
 }
+:root[data-theme="dark"] .canvas-finding-title { text-shadow: 0 2px 24px var(--arrival-ground); }
 .canvas-finding-sub {
-  font-size: 13px;
+  font-size: max(12px, 0.16em);
   line-height: 1.45;
   color: var(--ink-muted);
   max-width: 42ch;
 }
 .canvas-finding-bar {
-  width: 120px;
-  height: 2px;
-  margin-top: 8px;
+  width: max(120px, 2.4em);
+  height: max(2px, 0.03em);
+  margin-top: 0.12em;
   border-radius: 999px;
   background: var(--line-soft);
   overflow: hidden;
@@ -4018,6 +4378,14 @@ button.mt-card:hover { border-color: var(--accent); }
   border-radius: 999px;
   background: var(--accent);
   animation: canvas-finding-glide 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+@keyframes canvas-finding-fall-far { to { transform: translateY(360px); } }
+@keyframes canvas-finding-fall-near { to { transform: translateY(620px); } }
+@keyframes canvas-finding-rise-far { to { transform: translateY(-360px); } }
+@keyframes canvas-finding-rise-near { to { transform: translateY(-620px); } }
+@keyframes canvas-finding-blink {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
 }
 @keyframes canvas-finding-enter {
   from {
@@ -4055,6 +4423,8 @@ button.mt-card:hover { border-color: var(--accent); }
 }
 @media (prefers-reduced-motion: reduce) {
   .canvas-finding,
+  .canvas-finding-motes::before,
+  .canvas-finding-motes::after,
   .canvas-finding-inner,
   .canvas-finding-card-back,
   .canvas-finding-card-front,
@@ -4479,10 +4849,10 @@ button.mt-card:hover { border-color: var(--accent); }
    one that takes a colour; the rest are quiet. */
 .file-mark {
   flex: none; width: 7px; height: 7px; border-radius: 2px;
-  border: 1px solid var(--ink-soft); background: none;
+  border: 1px solid var(--ground-ink-soft); background: none;
 }
 /* Written: solid, the way a filled checkbox reads. */
-.file-mark.written { background: var(--ink-soft); border-color: var(--ink-soft); }
+.file-mark.written { background: var(--ground-ink-soft); border-color: var(--ground-ink-soft); }
 /* Absent: hollow — it has a place and has not been put there. */
 .file-mark.absent { background: none; }
 /* Behind: the file is there and holds an older version of THIS item — the
@@ -4490,7 +4860,7 @@ button.mt-card:hover { border-color: var(--accent); }
    own. Present but not current, so it is filled and quiet. Deliberately not
    `--warn`: this is a catch-up, not somebody's work about to be lost, and
    colouring it like drift is how the two came to be confused. */
-.file-mark.behind { background: var(--chip); border-color: var(--ink-soft); }
+.file-mark.behind { background: var(--chip); border-color: var(--ground-ink-soft); }
 /* Drifted: the disk and the canvas disagree, and saving would overwrite
    somebody's work. The one state that should catch an eye. */
 .file-mark.drifted { background: var(--warn); border-color: var(--warn); }
@@ -4549,7 +4919,7 @@ button.mt-card:hover { border-color: var(--accent); }
    is not supposed to have. Ink solved this first (`.item.ink .ply`); the
    second wording of a note brought the same card back for the same reason,
    so it takes the same hairline. */
-.item.textnode .ply { background: transparent; border-color: var(--line-soft); }
+.item.textnode .ply { --ply-edge: var(--line-soft); background: transparent; }
 
 /* ---------- paper: the same words, on something you could pick up ----------
 
@@ -4574,12 +4944,20 @@ button.mt-card:hover { border-color: var(--accent); }
 /* Paper is something you could pick up, so it lifts like a card. A bare
    caption and ink do not: they wear no card, and a lifted shadow would draw
    the box they deliberately do not have. */
+/* Selected paper flattens like any selected card (`.item.selected`); this
+   rule outweighs that one, so it says so again. Before `.lifted`, which wins. */
+.item.textnode.paper.selected { border-color: var(--ground-ring); box-shadow: var(--shadow-card); }
 .item.textnode.paper.lifted { box-shadow: var(--shadow-lift); }
-.item.textnode.paper .item-content { background: transparent; }
+/* The paper's colour on the CONTENT too, not only on the card. A ply is
+   `z-index: -1` inside the item's own stacking context, which paints it over
+   the item's background — so on a second version the sheet underneath showed
+   through the words as a paler inner card with its own edge. A screen never
+   showed it because its content is opaque; now paper's is as well. */
+.item.textnode.paper .item-content { background: var(--paper); }
 /* The ply reads as a second sheet under the first, which for paper is
    exactly right — so it takes the paper's own colour rather than the
    hairline a chromeless note needs. */
-.item.textnode.paper .ply { background: var(--paper); border-color: var(--paper-edge); }
+.item.textnode.paper .ply { --ply-face: var(--paper); --ply-edge: var(--paper-edge); background: color-mix(in srgb, var(--ply-face) var(--ply-mix, 75%), var(--ground)); }
 /* Words on paper stop borrowing the canvas's ink: a note is its own surface,
    and light ink on a pale tint is what makes a sticky note unreadable in
    dark mode. */
@@ -4680,7 +5058,7 @@ button.mt-card:hover { border-color: var(--accent); }
 .item-open-source {
   display: inline-flex; align-items: center; justify-content: center;
   width: 18px; height: 18px; border-radius: 4px;
-  color: var(--ink-muted); text-decoration: none; font-size: 12px; line-height: 1;
+  color: var(--ground-ink-muted); text-decoration: none; font-size: 12px; line-height: 1;
 }
 .item-open-source:hover { background: var(--chip); color: var(--ink); }
 /* A grid on the sheet (sprint phase 5): hairlines between cells and a
@@ -4746,6 +5124,9 @@ button.mt-card:hover { border-color: var(--accent); }
   color: var(--ink-muted);
   user-select: none;
 }
+/* A chromeless note's opening words stand on the ground; on paper they keep
+   the rule above. */
+.item.textnode:not(.paper) .text-mark { color: var(--ground-ink-muted); }
 .item.textnode .md-view {
   padding: 4px 6px;
   /* Both supplied per node by `ItemView` — the ladder step's world size and
@@ -4757,7 +5138,7 @@ button.mt-card:hover { border-color: var(--accent); }
   line-height: 1.5;
   /* A colour the node names (`core/textcolour.ts`) — a token for a name, so
      the theme picks the shade — or the theme's own ink. */
-  color: var(--text-ink, var(--ink));
+  color: var(--text-ink, var(--ground-ink));
   /* Words on a canvas are read, not scrolled: a node that outgrew its box
      should be re-fitted (⇧F), not given a scrollbar the size of a sentence. */
   overflow: hidden;
@@ -4765,6 +5146,38 @@ button.mt-card:hover { border-color: var(--accent); }
      the right edge and being clipped — the one way a title could still be
      cut once the box is measured to the words (`core/textnode.ts`, textBox). */
   overflow-wrap: anywhere;
+}
+/* **A named colour on a chromeless note follows the ground** (smart
+   contrast). The node names a token (`--text-ink: var(--text-red)`, set on
+   the item), so re-declaring the token on the same element is enough: on a
+   dark ground the dark theme's shades, on a light ground the paper shades —
+   already chosen for pale surfaces, and the same in both themes. Paper keeps
+   its own (`--paper-text-*`), and so does the composer's palette on glass.
+   Held at 3:1 on every seeded ground and the brightest picture (brown
+   excused on Ocean and the picture, with its reason, in
+   `groundcontrast.test.ts`); the dark values are core's `GROUND_TEXT_SHADES`,
+   held equal there. The dot grid keeps the app's own shades. */
+.canvas-page[data-ground-tone="dark"] .item.textnode:not(.paper) {
+  --text-red: var(--ground-dark-text-red);
+  --text-orange: var(--ground-dark-text-orange);
+  --text-yellow: var(--ground-dark-text-yellow);
+  --text-green: var(--ground-dark-text-green);
+  --text-blue: var(--ground-dark-text-blue);
+  --text-purple: var(--ground-dark-text-purple);
+  --text-pink: var(--ground-dark-text-pink);
+  --text-brown: var(--ground-dark-text-brown);
+  --text-grey: var(--ground-dark-text-grey);
+}
+.canvas-page[data-ground-tone="light"] .item.textnode:not(.paper) {
+  --text-red: var(--paper-text-red);
+  --text-orange: var(--paper-text-orange);
+  --text-yellow: var(--paper-text-yellow);
+  --text-green: var(--paper-text-green);
+  --text-blue: var(--paper-text-blue);
+  --text-purple: var(--paper-text-purple);
+  --text-pink: var(--paper-text-pink);
+  --text-brown: var(--paper-text-brown);
+  --text-grey: var(--paper-text-grey);
 }
 /* **A text node's headings are sized in em, from its own words.**
    The card renderer's `.md-view h1` is a fixed 18px against a 13px card, and
@@ -4922,7 +5335,7 @@ button.mt-card:hover { border-color: var(--accent); }
   width: 100%;
   box-sizing: border-box;
   padding: 4px 6px;
-  border: 1px solid var(--accent);
+  border: 1px solid var(--ground-ring);
   border-radius: var(--radius);
   /* Transparent, because you are typing ONTO the canvas: a caption wears no
      card (`.item.textnode`), so the field editing one must not either — a
@@ -4930,7 +5343,7 @@ button.mt-card:hover { border-color: var(--accent); }
      that box inside the selected item. The accent hairline is the one thing
      that says where the box is; the words are otherwise the canvas's own. */
   background: transparent;
-  color: var(--text-ink, var(--ink));
+  color: var(--text-ink, var(--ground-ink));
   font: inherit;
   font-size: 16px;
   line-height: 1.5;
@@ -4968,11 +5381,24 @@ button.mt-card:hover { border-color: var(--accent); }
    * (`menuground.test.ts`).
    */
   background: var(--glass);
-  -webkit-backdrop-filter: var(--glass-filter);
-  backdrop-filter: var(--glass-filter);
   border: 1px solid var(--glass-border); border-radius: 10px;
   box-shadow: var(--shadow-glass);
   display: flex; flex-direction: column; gap: 1px;
+}
+/* **The blur is a layer, not the menu** (19 Oct 2026).
+   A `backdrop-filter` (like `filter`, `transform`, `contain`) makes its element
+   the containing block for every `position: fixed` descendant — and the
+   submenu IS a fixed panel placed in viewport coordinates. Unifying the glass
+   put the filter on `.context-menu` itself, and Background ▸ and Groups ▸
+   opened ~1000px to the right of the menu's own box, clipped by its
+   `overflow-y: auto`: open, and invisible. On a pseudo-element the filter
+   contains nothing, so the frost stays and the children escape again
+   (`menuground.test.ts`). */
+.context-menu::before {
+  content: ""; position: absolute; inset: 0; z-index: -1;
+  border-radius: inherit; pointer-events: none;
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
 }
 /* **One text column.**
 
@@ -5416,7 +5842,7 @@ button.mt-card:hover { border-color: var(--accent); }
    the words, in world units like the words. */
 .item.textnode .note-of {
   position: absolute; left: 0; bottom: 100%; margin-bottom: 4px;
-  font-size: 11px; line-height: 1; white-space: nowrap; color: var(--ink-soft);
+  font-size: 11px; line-height: 1; white-space: nowrap; color: var(--ground-ink-soft);
   pointer-events: none;
 }
 /* In full screen: under the stage, never over it. */
@@ -5451,7 +5877,7 @@ button.mt-card:hover { border-color: var(--accent); }
  * is"* — so in light mode the fade was a white bar dissolving into a
  * starfield, which is the exact artefact a fade exists to prevent.
  *
- * `lib/groundtone.ts` writes `--canvas-ground` as the same token the ground
+ * `lib/groundtoken.ts` writes `--canvas-ground` as the same token the ground
  * itself paints with, so the wash and the thing it washes cannot drift; the
  * fallback here is what a canvas with no ground of its own gets, and is why
  * this stayed right for every canvas until one wore a sky.
@@ -5497,11 +5923,11 @@ button.mt-card:hover { border-color: var(--accent); }
 .fullscreen-stage .text-comment-actions { top: 64px; }
 
 /* Explicit groups keep their world-space header and leave interiors available to tools. */
-.item.canvas-group .area-title { color: var(--ink); }
-.item.group-drop-target { outline: 3px solid var(--accent); }
+.item.canvas-group .area-title { color: var(--ground-ink); }
+.item.group-drop-target { outline: 3px solid var(--ground-ring); }
 .group-drop-label.out { border-style: dashed; }
 .group-drop-label { position: absolute; right: 12px; top: 8px; padding: 4px 8px; background: var(--card); color: var(--accent-text); border: 1px solid var(--accent); border-radius: 6px; pointer-events: none; }
-.group-column-label, .group-row-label { position: absolute; padding: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-muted); box-sizing: border-box; }
+.group-column-label, .group-row-label { position: absolute; padding: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ground-ink-muted); box-sizing: border-box; }
 .group-grid-cell { position: absolute; border: 1px dashed var(--line); box-sizing: border-box; }
 .text-composer-status { position: absolute; top: 100%; padding: 8px; background: var(--card); color: var(--ink); font-size: 13px; }
 .item.canvas-group:not(.renaming) .item-titlebar { display: none; }

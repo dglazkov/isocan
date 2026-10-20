@@ -4,7 +4,7 @@ import { atLeast, newGroupId, newId, newItemId, newVersionId, sameActor, type Ac
 import { TEXT_BAD_REQUEST, TEXT_MAX_BYTES, TEXT_PICTURES_ROUTE, TEXT_RATE_LIMITED, TEXT_ROUTE, TEXT_TOO_LARGE, TEXT_UNAVAILABLE, type TextPictures, type TextRequest } from "@isocan/core/text";
 import { JUDGMENT_OWNER_ONLY, LIVE_TOKEN_BAD_REQUEST, LIVE_TOKEN_OWNER_ONLY, LIVE_TOKEN_RATE_LIMITED, LIVE_TOKEN_ROUTE, LIVE_TOKEN_UNAVAILABLE, ownerOnlySentence, TEXT_OWNER_ONLY } from "@isocan/core/keys";
 import { readKeyFile } from "@isocan/core/keystore";
-import { deniedIn, IMAGE_BAD_REQUEST, IMAGE_OWNER_ONLY, IMAGE_RATE_LIMITED, IMAGE_REFUSED, IMAGE_ROUTE, IMAGE_UNAVAILABLE, IMAGE_UPSTREAM, MOOD_DEFAULT_N, MOOD_MAX_N, MOOD_PROPS, MOOD_TILE, moodPrompt, moodTray, spreadAxes, type ImageRequest, type ImageResponse } from "@isocan/core/mood";
+import { deniedIn, IMAGE_BAD_REQUEST, IMAGE_OWNER_ONLY, IMAGE_RATE_LIMITED, IMAGE_REFUSED, IMAGE_ROUTE, IMAGE_UNAVAILABLE, IMAGE_UPSTREAM, isMoodDial, MOOD_DEFAULT_N, MOOD_DIALS, MOOD_MAX_N, MOOD_PROPS, MOOD_TILE, moodPrompt, moodPushPrompt, moodTray, spreadAxes, SWATCHES_ROUTE, type ImageRequest, type ImageResponse, type SwatchesRequest } from "@isocan/core/mood";
 import type { Desk } from "./desk.ts";
 import type { Engine } from "./engine.ts";
 import { capabilityIn, type ViewOnlyError } from "./grants.ts";
@@ -12,6 +12,7 @@ import type { RouteOptions } from "./http.ts";
 import { Judge } from "./judgment.ts";
 import { LiveTokens } from "./live-token.ts";
 import { ImageModel, type Drawn } from "./image.ts";
+import { extractMoodSwatches } from "./mood-swatches.ts";
 import { identityFile } from "./paths.ts";
 import { RefusedError, TakenDownError, type Refusals } from "./takedowns.ts";
 import { registerSummaryRoutes } from "./summaries.ts";
@@ -298,11 +299,21 @@ export function registerModelRoutes(app: FastifyInstance, scope: ModelRouteScope
     if (body.parent !== undefined && (typeof body.parent !== "string" || !body.parent)) {
       return reply.status(400).send({ error: "`parent` names the image item the spread varies", code: IMAGE_BAD_REQUEST });
     }
+    if (body.push !== undefined && !isMoodDial(body.push)) {
+      return reply.status(400).send({ error: `\`push\` must be one of ${MOOD_DIALS.join(", ")} — got ${JSON.stringify(body.push)}`, code: IMAGE_BAD_REQUEST });
+    }
     const denied = deniedIn(body.prompt);
     if (denied) return reply.status(422).send({ error: denied, code: IMAGE_REFUSED });
     const canvasId = body.canvasId;
     await door(req, canvasId);
-    const asked: ImageRequest = { canvasId, actor: { id: actor.id, name: actor.name }, prompt: body.prompt, n, ...(body.parent ? { parent: body.parent } : {}) };
+    const asked: ImageRequest = {
+      canvasId,
+      actor: { id: actor.id, name: actor.name },
+      prompt: body.prompt,
+      n,
+      ...(body.parent ? { parent: body.parent } : {}),
+      ...(body.push ? { push: body.push } : {}),
+    };
     const home = homes?.for(canvasId) ?? null;
     const source = images.keySource();
     const refused = source === "file" ? await notTheOwners(req, imageKeysHome) : null;
@@ -338,15 +349,20 @@ export function registerModelRoutes(app: FastifyInstance, scope: ModelRouteScope
     await Promise.all(Array.from({ length: Math.min(3, axes.length) }, async () => {
       while (next < axes.length) {
         const i = next++;
-        drawn[i] = await images.draw(moodPrompt(asked.prompt, axes[i]!.reach), parentImage);
+        const prompt = asked.push
+          ? moodPushPrompt(asked.prompt, asked.push, axes[i]!.reach)
+          : moodPrompt(asked.prompt, axes[i]!.reach);
+        drawn[i] = await images.draw(prompt, parentImage);
       }
     }));
     const answer: ImageResponse = { run: newId("mood"), model, group: newGroupId(), items: [], refused: [] };
     const spots = moodTray(snapshot.canvas, drawn.filter((d) => d.ok).length);
     for (const [i, result] of drawn.entries()) {
       const { axis, reach } = axes[i]!;
+      const axisLabel = asked.push ? `push: ${asked.push} · ${axis}` : asked.parent ? `more: ${axis}` : axis;
+      const prompt = asked.push ? moodPushPrompt(asked.prompt, asked.push, reach) : moodPrompt(asked.prompt, reach);
       if (!result.ok) {
-        answer.refused.push({ axis, why: result.why });
+        answer.refused.push({ axis: axisLabel, why: result.why });
         continue;
       }
       const filename = `mood-${axis.replace(/\W+/g, "-")}.${result.mimeType === "image/jpeg" ? "jpg" : result.mimeType.split("/")[1] ?? "png"}`;
@@ -359,22 +375,67 @@ export function registerModelRoutes(app: FastifyInstance, scope: ModelRouteScope
           version: { id: newVersionId(), blobHash: put.blobHash, mimeType: put.mimeType, filename, size: put.size },
           ...MOOD_TILE,
           placement: spots[answer.items.length]!,
-          title: `${asked.prompt.trim().slice(0, 60)} — ${axis}`,
+          title: `${asked.prompt.trim().slice(0, 60)} — ${axisLabel}`,
           properties: {
             [MOOD_PROPS.mood]: "candidate",
-            [MOOD_PROPS.prompt]: moodPrompt(asked.prompt, reach),
-            [MOOD_PROPS.axis]: axis,
+            [MOOD_PROPS.prompt]: prompt,
+            [MOOD_PROPS.axis]: axisLabel,
             [MOOD_PROPS.model]: model,
             [MOOD_PROPS.run]: answer.run,
             ...(asked.parent ? { [MOOD_PROPS.parent]: asked.parent } : {}),
           },
         },
       });
-      answer.items.push({ itemId, axis });
+      answer.items.push({ itemId, axis: axisLabel });
     }
     if (answer.items.length === 0) {
       return reply.status(502).send({ error: answer.refused[0]?.why ?? "Google drew nothing", code: IMAGE_UPSTREAM });
     }
     return answer;
+  });
+  /**
+   * **`POST /api/image/swatches` — read up to six dominant colour swatches
+   * from an image item** (moodboard phase 2; `docs/projects/moodboard/design.md`
+   * §4). Uses `sharp` when the home has it, or falls back to the home's
+   * picture-capable text model (marking every swatch `estimated: true`).
+   */
+  app.post(SWATCHES_ROUTE, { bodyLimit: 4096 }, async (req, reply) => {
+    const body = req.body as Partial<SwatchesRequest> | null;
+    if (
+      !body ||
+      typeof body !== "object" ||
+      typeof body.canvasId !== "string" ||
+      !body.canvasId ||
+      typeof body.itemId !== "string" ||
+      !body.itemId
+    ) {
+      return reply.status(400).send({ error: "a swatches request names `canvasId` and `itemId`", code: IMAGE_BAD_REQUEST });
+    }
+    const { canvasId, itemId } = body;
+    await door(req, canvasId);
+    const home = homes?.for(canvasId) ?? null;
+    if (home) return home.personalRequest("POST", SWATCHES_ROUTE, { canvasId, itemId });
+    const snapshot = await engine.getSnapshot(canvasId);
+    const item = snapshot.canvas.items[itemId];
+    const version = item?.versions.find((v) => v.id === item.currentVersionId);
+    if (!item || !version || !version.mimeType.startsWith("image/")) {
+      return reply.status(400).send({ error: `${itemId} is not an image on this canvas`, code: IMAGE_BAD_REQUEST });
+    }
+    const stream = await store.openBlob(canvasId, version.blobHash);
+    if (!stream) {
+      return reply.status(404).send({ error: `the picture of ${itemId} is not at this home`, code: IMAGE_BAD_REQUEST });
+    }
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) chunks.push(Buffer.from(chunk as Uint8Array));
+    const bytes = Buffer.concat(chunks);
+    const result = await extractMoodSwatches({
+      bytes,
+      mimeType: version.mimeType,
+      loadSharpOption: options.image?.loadSharp,
+      textModel,
+      badgeId: req.badge!.badgeId,
+      notTheOwners: () => notTheOwners(req, textKeysHome),
+    });
+    return reply.status(result.status).send(result.body);
   });
 }

@@ -179,7 +179,7 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 **Agents and rooms** (`agents`, `present`)
 - `agent add|remove|rules|mark`, `rc add|listen|remove`, `bench add|join|follow|rm`, `harness` — standing agents
 - `persona ls|show|runs`, `docket ls|answer` — roles and their findings
-- `slides add|rm|show|export|note|notes`, `sprint show|phase|board|brief|desk|end|handin|tally`, `present` — running a room
+- `slides add|rm|show|export|note|notes|transition`, `sprint show|phase|board|brief|desk|end|handin|tally`, `present` — running a room
 
 **What a canvas carries** (`extend`, and a topic per module)
 - `module add|rm|ls`, `tool ls|add`, `panel ls|add` — modules, rail tools, dock panels
@@ -1195,11 +1195,16 @@ words are a command or a path, which yours often are, and `hand` when you
 are scribbling on the board rather than labelling it.
 
 `--color red|orange|yellow|green|blue|purple|pink|brown|grey` colours the
-words. A NAME adapts: each has a shade chosen for the light ground, the dark
-ground and paper, so it reads for a collaborator in either theme — prefer
-names. `--color '#rrggbb'` is drawn exactly, and the CLI warns (and sets it
-anyway) where it will not reach 4.5:1. `auto`, or no flag, is the theme's own
-ink; there is no black or white, because neither reads in both themes.
+words. A NAME adapts, and the shade follows the ground the canvas actually
+stands on: on the dot grid the app theme's shade, on a dark ground (Night, a
+picture) the dark shades, on a light one (Snow, Zen) the paper shades, and on
+paper the paper's — so it reads for a collaborator in either theme. Prefer
+names. On a ground of its own a name is held at 3:1, and the CLI says so where
+none can reach it (brown on Ocean). `--color '#rrggbb'` is drawn exactly, and
+the CLI warns (and sets it anyway) where it will not reach 4.5:1 — against the
+ground this canvas has ("on Night"), or both app grounds on the dot grid.
+`auto`, or no flag, is the ground's own ink; there is no black or white,
+because neither reads on every ground.
 
 `--font <name>` names a family from a closed list — Inter, IBM Plex Sans,
 DM Sans, Manrope, Space Grotesk, IBM Plex Serif, Fraunces, Lora, IBM Plex
@@ -3210,6 +3215,23 @@ to bottom, left to right. Marking narrows the walk to just the slides:
   writes one PNG per slide beside either. The app's ⌘K "Export the deck"
   opens the same view with Save as PDF and Download deck.html; both surfaces
   write the same HTML file from core's `deckHtml`.
+- `isocan slides transition [motion]` — how full screen moves from slide to
+  slide, for everybody watching: `push` (the default), `fade`, `zoom`, the
+  four 3D ones — `morph`, `depth` (the slide lifts into 3D, glides to the
+  next, lands flat), `cube`, `flip` — or `cut` (`none` works too) for no
+  motion. No argument says which one the deck uses and lists the rest. A
+  canvas property (`project.update`), the same write as the app's "Slide
+  transition" menu and full screen's Transition button. Screens animate live,
+  not as pictures; a flip between a screen and an image or text slide always
+  cuts.
+- **`morph`** takes a screen apart: its pieces (runs of words, pictures,
+  cards) lift off the page into depth, the ones that appear on both slides
+  travel to their place on the next, and everything settles flat. Pieces are
+  paired by the same words, the same image, or the same classes — so when you
+  BUILD a deck meant to morph, keep the repeated title's words identical, and
+  name anything that should travel with `data-morph="<name>"` on both slides
+  (it wins over every guess). It works between two HTML screens; any other
+  flip under `morph` fades.
 
 **Speaker notes** are text items that point at their slide, kept under it on
 the canvas where the deck is arranged — so a person reads the slide and what
@@ -4396,7 +4418,10 @@ with no flag at all, so a canvas somebody archives while you are parked on it
 is still the canvas you are standing on. `canvas background
 <galaxy|ocean|mountains|farm|desert|meadow|night|snow|aurora|pond|zen|none>` sets the ground a canvas stands on, and
 bare `canvas background` says what it is wearing — everybody on the canvas
-sees the same one, so it is a change to ask about rather than assume.
+sees the same one, so it is a change to ask about rather than assume — and
+what that means for ink: "a dark ground: ink on it is light", "a light ground",
+or on Desert "names sit on a plate" (`canvas show --json` carries it as
+`groundTone`). Read it before choosing a colour to write on the ground.
 `meadow` is a living ground: grass that parts under the cursor and settles
 when nothing moves, drawn in each viewer's browser and never stored or sent.
 `night` is one too: a dark meadow under a dim sky where every cursor, yours
@@ -4481,8 +4506,8 @@ and `save` back it like anything else; `--style`, `--face`, `--paper`,
 answers only at the canvas's own machine),
 `save <items...>` (write backed items out to that directory — see **Screens
 that become files**; `--force` overwrites one that changed on disk),
-`slides add|rm|show` (the deck full screen flips through — `show` prints the
-address to hand an audience),
+`slides add|rm|show|transition` (the deck full screen flips through — `show` prints the
+address to hand an audience, `transition` picks how it moves),
 `sprint [show|phase|end|handin|tally]` (the design sprint's clock — derived
 from the Chat's newest `/sprint` line; `phase` calls one, `handin` marks what
 was made for it, `tally` splits human and agent dots),

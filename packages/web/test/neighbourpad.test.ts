@@ -85,13 +85,12 @@ describe("the neighbour pad", () => {
     expect(pad).toMatch(/neighbourLabel\(where, title,/);
   });
 
-  it("shows only in full screen, where those keys flip slides", () => {
-    // On the workbench ⌘-arrows move the canvas selection and the rail is
-    // already the way around, so the pad would be a second answer to a
-    // question that has one.
-    expect(read("components/ArtifactStage.tsx")).toMatch(
-      /surface === "fullscreen" && \(\s*<NeighbourPad/,
-    );
+  it("is not drawn on the stage — full screen has no pane bar to carry it", () => {
+    // It lived on the preview pane's bar in full screen. That bar went on
+    // 19 Oct 2026 (it sat under the floating header), and the workbench never
+    // wanted it: there ⌘-arrows move the selection and the rail is the way
+    // around. ⌘-arrows still walk in full screen; the pad waits for a home.
+    expect(read("components/ArtifactStage.tsx")).not.toContain("<NeighbourPad");
   });
 
   it("respects a person who asked for less motion", () => {

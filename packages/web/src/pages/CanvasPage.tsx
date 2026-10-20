@@ -1,6 +1,7 @@
 import { selectCreatedItems } from "../lib/groupplacement.ts";
 import { createGroupNudger } from "../lib/groupgestures.ts";
-import { groupAncestors, groupScopeRoots, isGroupItem } from "@isocan/core";
+import { groundOf, groupAncestors, groupScopeRoots, isGroupItem } from "@isocan/core";
+import { useShallow } from "zustand/react/shallow";
 import { enterCanvasGroup, leaveCanvasGroup, openGroupCreation, changeCanvasGroup, groupsEnabled, groupTask, removeFromCanvasGroup } from "../lib/canvasgroups.ts";
 import { CanvasGroupScope } from "../components/CanvasGroupScope.tsx";
 import { presentedCanvas, presentedLocus } from "../lib/presentation.ts";
@@ -42,7 +43,8 @@ import { checkForUpdate, mayReloadUnseen } from "../lib/appversion.ts";
 import { arriveSketch, placeSketch } from "../lib/sketch.ts";
 import { CanvasViewport } from "../components/CanvasViewport.tsx";
 import { pageTitle } from "../lib/title.ts";
-import { groundTone } from "../lib/groundtone.ts";
+import { groundMidStyle, groundToken, groundToneAttr } from "../lib/groundtoken.ts";
+import { useGroundSamples } from "../lib/groundsample.ts";
 import { itemThread } from "../components/CommentLayer.tsx";
 
 /**
@@ -286,7 +288,15 @@ function CanvasSurface({
   /* The token the canvas's own ground paints with, so the wash under the
      top controls is the colour of what it is washing. Null on a canvas with
      no ground, where the stylesheet's `--ground` fallback is right. */
-  const fadeTone = useCanvasStore((s) => groundTone(s.record ?? null));
+  const fadeTone = useCanvasStore((s) => groundToken(s.record ?? null));
+  /* Which ink the canvas's ground takes — dark, light or mid — stamped on
+     the page so the ground tier in styles.css switches with one attribute
+     (smart contrast). Absent on the dot grid. Derived in every browser from
+     the ground it draws; nothing is written for it. */
+  const groundHash = useCanvasStore((s) => (s.record ? groundOf(s.record) : null));
+  const groundSample = useGroundSamples((s) => (groundHash ? s.byHash[groundHash] : undefined));
+  const groundTone = useCanvasStore((s) => groundToneAttr(s.record ?? null, groundSample));
+  const groundMid = useCanvasStore(useShallow((s) => groundMidStyle(s.record ?? null, groundSample)));
   /* Stuck (proactive-agent phase 7): the card loads only while this person has said something in the last
      fifteen minutes (core's STUCK_WINDOW_MS, restated so the entry chunk does not carry the module). */
   const recentlyAsked = useCanvasStore((s) => {
@@ -1202,6 +1212,9 @@ function CanvasSurface({
     // one step of opening and wrong for a width changing every frame.
     <div
       className={`canvas-page${phone ? " phone-layout" : ""}${panelResizing ? " resizing-panel" : ""}${canEdit ? "" : " read-only"}`}
+      data-ground-tone={groundTone}
+      data-ground-sample={groundSample}
+      style={groundMid as CSSProperties | undefined}
       onContextMenu={chromeTweakMenu}
     >
       {/* Covered, the canvas keeps its state and stops its paint:
@@ -1224,7 +1237,7 @@ function CanvasSurface({
 
           The colour is the canvas's own ground where it has one, not the
           app's page ground: a starfield is dark in either app theme, and the
-          fade was washing it white from the top edge. `groundTone` names the
+          fade was washing it white from the top edge. `groundToken` names the
           same token the ground itself paints with, so the two cannot drift. */}
       {!workspace && <>
       {!topFadeHidden && (

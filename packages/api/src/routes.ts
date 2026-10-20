@@ -8,10 +8,11 @@ import { designDecisionsRoute, type DesignDecisionsResponse } from "@isocan/core
 import { designRepairsRoute, type DesignRepairsResponse } from "@isocan/core/design-repair";
 import { recapHeadRoute, type RecapHeadResponse } from "@isocan/core";
 import type { SummaryEntry, SummaryMake, SummaryRead, SummaryStats, SummaryWait } from "@isocan/core/semantic-zoom";
-import type { ImageRequest, ImageResponse } from "@isocan/core/mood";
+import type { ImageRequest, ImageResponse, SwatchesRequest, SwatchesResponse } from "@isocan/core/mood";
 
-/** Core's `IMAGE_ROUTE` (`@isocan/core/mood`), spelled here for `summariesPath`'s reason: a runtime import of that subpath would re-cut the CLI bundle. The mood CLI test walks the real route, so a drift fails there. */
+/** Core's `IMAGE_ROUTE` and `SWATCHES_ROUTE` (`@isocan/core/mood`), spelled here for `summariesPath`'s reason: a runtime import of that subpath would re-cut the CLI bundle. The mood CLI test walks the real routes, so a drift fails there. */
 const imagePath = "/api/image";
+const swatchesPath = "/api/image/swatches";
 /** Core's `summariesRoute`, spelled here: see `DaemonRoutes.summaries` for why it is not imported. */
 const summariesPath = (canvasId: string) => `/api/projects/${encodeURIComponent(canvasId)}/summaries`;
 import type {
@@ -1235,6 +1236,15 @@ export class DaemonRoutes {
    */
   image(request: ImageRequest): Promise<ImageResponse> {
     return this.request("POST", imagePath, request);
+  }
+
+  /**
+   * **Read dominant colour swatches from an image item** (`POST /api/image/swatches`,
+   * moodboard phase 2): uses `sharp` when the home has it, or falls back to a
+   * picture-capable text model (`estimated: true`).
+   */
+  imageSwatches(request: SwatchesRequest): Promise<SwatchesResponse> {
+    return this.request("POST", swatchesPath, request);
   }
 
   /** Every slash command available here: built-ins under this home's own. */

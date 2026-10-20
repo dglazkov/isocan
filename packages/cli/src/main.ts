@@ -16,6 +16,7 @@ import { registerQuestionnaires } from "./questionnaire.ts";
 import { registerDesignSystems } from "./design-system.ts";
 import { designGovernsNotes, designReleasedNotes } from "./design-scope-notes.ts";
 import { designUnuse, designUse, ownDesignSystemAt } from "@isocan/core/design-use";
+import { moodBoardRead } from "@isocan/core/mood";
 import { cleanupNoun, cleanupOps, cleanupSelection, parseBefore, type CommentFilter } from "@isocan/core/chatclean";
 import { registerDesignRequests } from "./design-request.ts";
 import { registerDesignDecisions } from "./design-decision.ts";
@@ -188,6 +189,7 @@ import {
   groundOf,
   groundPatch,
   hasGround,
+  toneOfGround,
   anchorPatch,
   isTheme,
   noThemePatch,
@@ -375,6 +377,13 @@ import {
   slidePatch,
   slides,
   SLIDE_EMOJI,
+  DECK_TRANSITIONS,
+  deckTransitionHint,
+  deckTransitionLabel,
+  deckTransitionOf,
+  deckTransitionPatch,
+  isDeckTransition,
+  isDeckTransition3d,
   deckPages,
   deckHtml,
   isNote,
@@ -5389,6 +5398,10 @@ canvas
           ...p,
           itemCount: Object.keys(snapshot.canvas.items).length,
           ...(dirs.length > 0 ? { directories: dirs } : {}),
+          // Which ink the ground takes (smart contrast) — derived, never
+          // stored; absent on the dot grid, whose tone is the app's. A
+          // picture is its worst case: the CLI cannot see its pixels.
+          ...(hasGround(p) ? { groundTone: toneOfGround(p, "dark") } : {}),
         });
       }
       printKeyValues({
@@ -5430,6 +5443,21 @@ canvas
       },
     ),
   );
+
+/**
+ * **What a ground means for the ink on it**, as the clause bare `canvas
+ * background` ends with (smart contrast): core's `toneOfGround`, said the way
+ * an agent about to write on the canvas needs it. A picture is described by
+ * its worst case — the CLI cannot see its pixels, and under the scrim every
+ * picture is dark — and Desert, where no ink reads, by what the app does
+ * there instead.
+ */
+function toneClause(canvas: { properties?: Record<string, string> }): string {
+  const tone = toneOfGround(canvas, "dark");
+  const what = groundOf(canvas) !== null ? "a picture, dark under its scrim" : `a ${tone} ground`;
+  if (tone === "mid") return `${what}: no ink reads on it alone, so names sit on a plate`;
+  return `${what}: ink on it is ${tone === "dark" ? "light" : "dark"}`;
+}
 
 canvas
   .command("background [theme]")
@@ -5539,12 +5567,13 @@ canvas
           const worn = cursorOf(p);
           return console.log(
             `a picture of yours (${picture.slice(0, 12)}…), pinned` +
-              (worn ? `, everyone pointing with a ${worn}` : ""),
+              (worn ? `, everyone pointing with a ${worn}` : "") +
+              ` — ${toneClause(p)}`,
           );
         }
         const now = themeOf(p);
         if (now === null) return console.log(`none — ${THEMES.join(", ")} are the grounds it can wear, or --picture <file>`);
-        return console.log(`${now} (${anchorOf(p) === "window" ? "stays put" : "moves with the canvas"})`);
+        return console.log(`${now} (${anchorOf(p) === "window" ? "stays put" : "moves with the canvas"}) — ${toneClause(p)}`);
       }
       if (theme !== "none" && !isTheme(theme)) {
         throw new Error(`not a background: ${theme} — ${THEMES.join(", ")}, none, or --picture <file>`);
@@ -6639,14 +6668,16 @@ program
         /**
          * Colour and font through core's doors, so the terminal takes exactly
          * the words the bar offers (`core/textcolour.ts`). A NAMED colour is
-         * adapted per theme and never warns; a hex is drawn exactly, so it is
-         * measured here and the canvas it will not read on is said out loud.
+         * adapted per theme — per ground, on a canvas with a ground of its own —
+         * and warns only where no shade of it can read; a hex is drawn exactly,
+         * so it is measured here against the ground this canvas actually has
+         * (both app grounds on the dot grid) and said out loud.
          * The font's width is in the box below — the estimate is all the CLI
          * has, and lesson #94 is what a font without one does.
          */
         const colour = opts.color === undefined ? null : textColourChoice(opts.color);
         const font = opts.font === undefined ? null : textFontChoice(opts.font);
-        const warnings = textColourWarnings(colour, paper);
+        const warnings = textColourWarnings(colour, paper, p);
         const { width, height } = sizeFor(
           opts.size,
           paper === null ? textBox(body, style, face, font) : { width: PAPER_SIZE, height: PAPER_SIZE },
@@ -8343,7 +8374,7 @@ program
          * exactly.
          */
         if (isTextItem(item) && patch.properties) {
-          const { warnings, ...normalised } = textPropsPatch(item, patch);
+          const { warnings, ...normalised } = textPropsPatch(item, patch, p);
           delete patch.properties;
           delete patch.removeProperties;
           Object.assign(patch, normalised);
@@ -10618,6 +10649,45 @@ slidesCmd
       console.log(itemUrl(origin, p.id, deck[0]!.id));
       console.log(`The deck on paper (Save as PDF, or download one file that plays it):`);
       console.log(deckUrl(origin, p.id));
+      const motion = deckTransitionOf(p);
+      console.log(`Flips with: ${deckTransitionLabel(motion)} — ${deckTransitionHint(motion)} (isocan slides transition)`);
+    }),
+  );
+
+/**
+ * **How the deck moves between slides** — the canvas's choice, so the
+ * presenter and every viewer see the same motion. A canvas property sent as
+ * one `project.update` (`deckTransitionPatch`), the same op the app's
+ * "Slide transition" menu and full screen's Transition button send, so the
+ * two surfaces cannot disagree about what a transition is. No argument is a
+ * question: it says what the deck flips with now and lists the rest.
+ */
+slidesCmd
+  .command("transition [motion]")
+  .description(`How full screen moves between slides, for everybody watching: ${DECK_TRANSITIONS.join(", ")}`)
+  .option("--canvas <canvas>")
+  .action(
+    run(async (motion: string | undefined, opts: { canvas?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      if (opts.canvas) ctx.canvasRef = opts.canvas;
+      const p = await resolveCanvas(ctx);
+      const now = deckTransitionOf(p);
+      if (motion === undefined) {
+        if (ctx.json) return printJson({ transition: now, choices: [...DECK_TRANSITIONS] });
+        console.log(`${deckTransitionLabel(now)} (${now}) — ${deckTransitionHint(now)}\n`);
+        for (const one of DECK_TRANSITIONS) {
+          console.log(`${one === now ? "●" : " "} ${one.padEnd(6)} ${isDeckTransition3d(one) ? "3D  " : "    "}${deckTransitionHint(one)}`);
+        }
+        return;
+      }
+      const wanted = motion === "none" ? "cut" : motion;
+      if (!isDeckTransition(wanted)) {
+        throw new Error(`not a transition: ${motion} — ${DECK_TRANSITIONS.join(", ")}`);
+      }
+      if (wanted === now) return console.log(`the deck already flips with ${deckTransitionLabel(now)}`);
+      await sendOp(ctx, p.id, { type: "project.update", patch: deckTransitionPatch(wanted) });
+      if (ctx.json) return printJson({ transition: wanted });
+      console.log(`the deck flips with ${deckTransitionLabel(wanted)} — ${deckTransitionHint(wanted)}`);
     }),
   );
 
@@ -11477,7 +11547,21 @@ style
       const scope = designScope(snapshot, opts.in);
       const { governing } = await readDesignSystem(designSystemPort(ctx), { canvasId: p.id, ...(scope.at ? { target: { kind: "item", itemId: scope.at.id } } : {}) });
       if (governing.status !== "available") throw new Error(governing.reason);
-      const findings = bySeverity(checkDesign(governing.document));
+      const boardRead = moodBoardRead(snapshot.canvas, snapshot.project.groupMode ?? "legacy");
+      const isocanExt = governing.document.tokens.isocan;
+      const hasSources =
+        isocanExt !== null &&
+        typeof isocanExt === "object" &&
+        !Array.isArray(isocanExt) &&
+        "sources" in isocanExt;
+      const findings = bySeverity(
+        checkDesign(
+          governing.document,
+          boardRead.boardId || hasSources
+            ? { boardTileIds: new Set(boardRead.tiles.map((t) => t.itemId)) }
+            : undefined,
+        ),
+      );
       if (ctx.json) return printJson(opts.provenance ? { findings, governing } : findings);
       console.error(`${governing.title} · ${governing.selection.reason}${governing.exempt ? " · requirement exempt; incumbent retained" : ""}`);
       if (findings.length === 0) return console.error(`${governing.title}: nothing to fix`);

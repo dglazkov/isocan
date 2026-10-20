@@ -13,11 +13,7 @@ step, then the board as a critic.
 **Phase citations name their project**: `moodboard phase 2`, never a bare
 "phase 2".
 
-**Where we are, 16 Oct 2026:** phase 0 is built and PART-DONE — its real
-spreads wait on a Gemini key with billing; phase 1 (keep, drop, more, push)
-is next. Dion decided the three open questions the same day
-([`design.md`](design.md) §8): Flash by default, hosted homes allowed, nine
-tiles a spread.
+**Where we are, 17 Oct 2026:** every phase is built. Phases 2 and 3 are CLOSED; phases 0, 1 and 4 are PART-DONE, waiting on a person with a billing-enabled Gemini key to walk [`docs/verify/2026-10-17-moodboard.md`](../../verify/2026-10-17-moodboard.md) — nothing is waiting on code. `POST /api/image`, `POST /api/image/swatches`, `isocan mood explore|keep|drop|more|board`, deterministic CIE L\*a\*b\* k-means swatches (`moodSwatches`, `.mood-swatch-strip`), `/design-system`'s board branch with `tokens.isocan.sources` citation checking in `checkDesign`, *Derive from the board* plus hover-token-to-peek-tile, and the built-in `board` critic (`isocan critic add board`, `isocan critique --by board` / `--as board`, *Critics in the room*) all pass unit, CLI, and headless Chrome proofs (`scripts/journey-moodboard.mjs`). Dion decided the three open questions on 16 Oct 2026 ([`design.md`](design.md) §8): Flash by default, hosted homes allowed, nine tiles a spread.
 
 ---
 
@@ -58,16 +54,17 @@ the first real calls taught one thing and stopped on another (below).
   id and per-image price recorded in this file.
 - `isocan mood explore "<words>" --n 9` adds nine `mood: candidate` image
   items with full provenance (`design.md` §1), and states the cost first.
-- **Proof:** on a scratch canvas with a real key, nine tiles for Scene 1's
-  words. Record latency per image, total cost, and **how many of the nine
-  are not UI**. The template passes at ≥ 8 of 9 across three different
-  briefs. Below that, the template is the work, not the UI.
-- A person looks at the three spreads and says whether they would keep
-  anything. If not, stop here and say so.
+
+**Proof:** on a scratch canvas with a real key, nine tiles for Scene 1's
+words. Record latency per image, total cost, and **how many of the nine
+are not UI**. The template passes at ≥ 8 of 9 across three different
+briefs. Below that, the template is the work, not the UI. A person looks
+at the three spreads and says whether they would keep anything. If not,
+stop here and say so.
 
 ## Phase 1 — Keep, drop, more, push
 
-**Status: NOT STARTED.**
+**Status: PART-DONE, 17 Oct 2026 — built and proved in headless Chrome; the real-key hand run waits on a Gemini key with billing.** `moodKeepPlan`, `moodDropOps`, `moodTrays`, `findMoodBoard`, `MOOD_DIALS`, and `moodPushPrompt` live in `@isocan/core/mood` for both legacy (`kind: "area"`) and group-mode (`group.change` / `containerId`) canvases. `isocan mood keep|drop|more` ship in `@isocan/mood/cli`, with `keep` refusing agent actors. `@isocan/mood/web` adds `/moodboard`, *Explore a look* in the Design systems dialog, the candidate tray overlay (per-tile and multi-select keep/drop, *More like this*, *Push*, *Close tray* in one undoable group), item menu rows on kept and reference tiles, and `mood: "reference"` on photos dropped into the *Mood* board. Proved by `scripts/journey-moodboard.mjs` (7 browser checks, 21 stubbed model calls, 0 bytes added to the entry chunk).
 
 - `mood keep|drop|more [--push <dial>]`; the *Mood* board area; closing a
   tray removes its candidates as one undoable group; `keep` refused for an
@@ -75,41 +72,53 @@ the first real calls taught one thing and stopped on another (below).
 - Web, behind `moodboard`, lazily loaded: *Explore a look* in the Design
   systems dialog and `/moodboard`; the tray; ✓ / ✕ / *More like this* /
   *Push*; a person's photo dropped on the board becomes `mood: reference`.
-- **Proof:** a browser journey on a scratch daemon with the image route
-  stubbed **at the model call only** (fixture PNGs), driving every action;
-  plus one real run by hand. Adds ≤ 0 bytes to the entry chunk beyond a gate.
+
+**Proof:** a browser journey on a scratch daemon with the image route
+stubbed **at the model call only** (fixture PNGs), driving every action;
+plus one real run by hand. Adds ≤ 0 bytes to the entry chunk beyond a gate.
+
+### Trajectory
+
+- **2026-10-17** — Open: run one real-key exploration, keep, *More like this*, and *Push* by hand. Waits on a Gemini API key with billing enabled.
 
 ## Phase 2 — Swatches
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 17 Oct 2026.** Deterministic CIE L\*a\*b\* k-means swatch extraction (`swatchesFromRgba`, `deltaE`, `rgbToLab` in `packages/core/src/mood-swatches.ts`) runs in the browser on keep and drop-in reference photos (`WebModule.fileProperties` in `packages/core/src/modules.ts` + `@isocan/mood/web`), and on the daemon at `POST /api/image/swatches` (`packages/server/src/mood-swatches.ts`, `sharp` decode with picture-model fallback marked `estimated: true`, or 503 `IMAGE_SWATCHES_UNAVAILABLE` when neither is available) so `isocan mood keep` writes the same `moodSwatches` without a browser. `@isocan/mood/web` claims image items carrying `moodSwatches` (`property: "moodSwatches"`) and draws `.mood-swatch-strip` under each kept or reference tile while moving the upload drop check out of `packages/web/src/lib/upload.ts`. Proved on synthetic colour-field PNGs within ΔE ≤ 3 across core (`packages/core/test/mood.test.ts`), server (`packages/server/test/image.test.ts`), CLI (`packages/cli/test/mood.test.ts`), and headless Chrome (`scripts/journey-moodboard.mjs`, 8 checks including cross-surface CLI readback with the browser closed).
 
 - On keep: browser k-means, or daemon `sharp`, or a model estimate marked
   `estimated`, writing `moodSwatches`. The board draws a palette strip under
   each tile.
-- **Proof:** fixture images with known colour fields read back within ΔE 3
-  on both surfaces; a kept tile read by the CLI with no browser open shows the
-  same swatches the web wrote.
+
+**Proof:** fixture images with known colour fields read back within ΔE 3
+on both surfaces; a kept tile read by the CLI with no browser open shows the
+same swatches the web wrote.
 
 ## Phase 3 — Derive the system from the board
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 17 Oct 2026.** `moodBoardRead` (`packages/core/src/mood.ts`) and `isocan mood board [--json]` (`packages/modules/mood/src/cli.ts`) read kept and reference tiles on legacy and group-mode Mood boards with their `axis`, `prompt`, `words`, and `swatches`. `/design-system` (`packages/core/src/command-bodies.ts`) gains the Mood board branch instructing the agent to derive `DESIGN.md` from `isocan mood board --json` and record every palette token and direction choice in `tokens.isocan.sources`. `readDesignSources` and `checkDesign(doc, { boardTileIds })` (`packages/core/src/designcheck.ts`, wired into `isocan style check` in `packages/cli/src/main.ts`) fail on any uncited palette token or direction field not explained in `direction.rationale`, or any source citing an item not on the Mood board, while `auditScreen` (`isocan design audit`) runs unchanged. In the web app, `DesignSystemsDialog.tsx` adds *Derive from the board* (dispatching `@<lead> /design-system` with `[boardId]` or showing a one-sentence notice when no agent is parked) and renders source tile chips; hovering or focusing a cited token in `DesignSystemsDialog.tsx` or `DesignSystemView.tsx` sets `setPeeked(itemId)` to light its source tile on the canvas. Proved in `packages/core/test/mood.test.ts`, `packages/core/test/designcheck.test.ts`, `packages/cli/test/mood.test.ts`, and `scripts/journey-moodboard.mjs` (10 headless Chrome checks).
 
 - `isocan mood board --json`; `/design-system`'s board branch;
   `tokens.isocan.sources`; *Derive from the board* through the parked agent;
   hover a token to light its tile.
-- **Proof:** from Scene 3's board, a derived DESIGN.md where every palette
-  token and every direction field cites a kept tile (a check fails on any
-  uncited value not explained in `rationale`), and `design audit` runs
-  against it unchanged.
+
+**Proof:** from Scene 3's board, a derived DESIGN.md where every palette
+token and every direction field cites a kept tile (a check fails on any
+uncited value not explained in `rationale`), and `design audit` runs
+against it unchanged.
 
 ## Phase 4 — The board as a critic
 
-**Status: NOT STARTED.**
+**Status: PART-DONE, 17 Oct 2026 — built and proved in headless Chrome; the person's walk in [`docs/verify/2026-10-17-moodboard.md`](../../verify/2026-10-17-moodboard.md) is owed.** `boardCriticDraft`, `findOffBoardColours`, and `boardCritiqueNotes` (`packages/core/src/mood.ts`) turn the canvas's kept and reference tiles and their swatches into a real critique persona card (`critique.critic = "board"`, `agentName: "Board"`). In `@isocan/critique/cli` (`packages/modules/critique/src/cli.ts` and `room-cli.ts`), `isocan critic ls` offers `board` under starter lenses when tiles sit on the Mood board, `isocan critic add board` places the card, and `isocan critique <item> --by board` (and `--as board`) places the card on the fly before asking. In `@isocan/critique/web` (`packages/modules/critique/src/web.tsx` and `room-web.tsx`), *Critique with…* shows a **Board** row and *Critics in the room* shows a **Board** button under *Add a lens*. Proved in `packages/core/test/mood.test.ts`, `packages/modules/critique/test/cli.test.ts`, `packages/cli/test/mood.test.ts`, and `scripts/journey-moodboard.mjs` (11 headless Chrome checks, including Scene 4 pinning a `working` note on `#b5651d` and a `risk` note naming `#2563eb` / `blue` on `Acme Checkout`).
 
 - A built-in critic, `board`, whose lens is the kept tiles and their
   swatches: *does this screen feel like what was kept?* It is a critique
   persona generated from the board, so it lives on the canvas and can be
   edited.
-- **Proof:** Scene 4: a screen with an off-board colour gets a *Risk* note
-  naming the colour and that no tile holds it; a person's walk in
-  `docs/verify/` of the whole journey.
+
+**Proof:** Scene 4: a screen with an off-board colour gets a *Risk* note
+naming the colour and that no tile holds it; a person's walk in
+`docs/verify/` of the whole journey.
+
+### Trajectory
+
+- **2026-10-17** — Open: run the end-to-end human walk in [`docs/verify/2026-10-17-moodboard.md`](../../verify/2026-10-17-moodboard.md) with a billing-enabled Gemini API key.

@@ -13,7 +13,6 @@ import { VersionContent } from "./ItemView.tsx";
 import { CanvasPreviewBoundary } from "./CanvasPreviewBoundary.tsx";
 import { TextEditFrame } from "./TextEditFrame.tsx";
 import { PanelResizer } from "./PanelResizer.tsx";
-import { NeighbourPad } from "./NeighbourPad.tsx";
 import { useCanEdit } from "../lib/capability.ts";
 
 /** The editor is its own chunk inside the cover's chunk: CodeMirror is the
@@ -372,7 +371,18 @@ function OrdinaryArtifactStage({
   // Not editable: one pane, no headers, no folds — a png has no editor to
   // put away, so it gets the whole stage without ceremony. Non-local environments
   // (!disk.bound) also disallow editing dual-face artifacts entirely.
-  if (!editable || !caps.file || (hasVisual && !disk.bound)) return <div className="artifact-stage">{saved}</div>;
+  //
+  // **Full screen is the same whole stage, editable or not** (19 Oct 2026).
+  // It is the presenting surface and never offers the editor (`readPanes`),
+  // so the only thing left between the header and the slide was the preview
+  // pane's own bar — "Saved — v7", the walk arrows, "Edit text" — and once the
+  // header became a floating pill that bar sat UNDER it: covered, and still
+  // costing the slide its top strip. A locally bound file now presents exactly
+  // as a hosted one always did. The version is the header's pill, ⌘-arrows
+  // still walk, and editing is the header's [View | Edit].
+  if (surface === "fullscreen" || !editable || !caps.file || (hasVisual && !disk.bound)) {
+    return <div className="artifact-stage">{saved}</div>;
+  }
 
   const showDraft = panes.edit && draft !== null && current.mimeType === "text/html";
   /**
@@ -469,21 +479,6 @@ function OrdinaryArtifactStage({
               />
             )}
           </div>
-        ) : surface === "fullscreen" ? (
-          /**
-           * **Nothing.** Presenting is not editing, and full screen is the
-           * presenting surface: a rail down the side of every slide offering
-           * a way INTO the editor is chrome earning nothing in the one place
-           * a slide should be the only thing on the glass. The workbench is
-           * where an item is worked on, and it has the same stage with both
-           * panes and a rail of its own.
-           *
-           * The editor is not merely folded here, it is not offered — which
-           * is why this is a branch rather than a hidden rail. `readPanes`
-           * has always opened full screen with `edit: false`; this is that
-           * decision finally reaching the chrome.
-           */
-          null
         ) : (
           /* The folded editor's rail: its whole face is the way back, on the
              edge the pane folded to. */
@@ -519,7 +514,7 @@ function OrdinaryArtifactStage({
                       ))}
                     </div>
                   )}
-                  {surface !== "fullscreen" && caps.file && (
+                  {caps.file && (
                     <div className="focus-file-mode-group" role="group" aria-label="File edit layout">
                       <button
                         type="button"
@@ -562,23 +557,7 @@ function OrdinaryArtifactStage({
                   {backing && backing.state !== "unbound" && (
                     <SaveToDisk canvasId={canvasId} itemId={item.id} backing={backing} />
                   )}
-                  {/**
-                   * **Which way there is something, on the bar people can
-                   * actually see.**
-                   *
-                   * This first went into the full-screen bar — which rests
-                   * after a few still seconds and is therefore invisible
-                   * exactly when somebody is presenting and wants to know
-                   * whether there is a next slide. This bar is the one on
-                   * screen. It is offered only in full screen because that is
-                   * where ⌘-arrows flip slides; on the workbench the same keys
-                   * move the canvas selection and the rail is already the way
-                   * around.
-                   */}
-                  {surface === "fullscreen" && (
-                    <NeighbourPad canvasId={canvasId} itemId={item.id} />
-                  )}
-                  {sourceFaceOf(current).mimeType === "text/html" && surface !== "fullscreen" && !panes.edit && (
+                  {sourceFaceOf(current).mimeType === "text/html" && !panes.edit && (
                     <button className="stage-editor-btn" onClick={() => fold("edit")} title="Check this screen against its governing design and select findings in source">Design check</button>
                   )}
                   {offerTextEdit && !hasVisual && (
@@ -613,7 +592,7 @@ function OrdinaryArtifactStage({
                       srcDoc={draft ?? ""}
                       title={`draft of ${current.filename}`}
                     />
-                  ) : surface === "workbench" && focusFacet?.edit && focusFacts ? (
+                  ) : focusFacet?.edit && focusFacts ? (
                     <Suspense fallback={<div className="page-note">Loading studio…</div>}>
                       <focusFacet.edit {...focusFacts} />
                     </Suspense>

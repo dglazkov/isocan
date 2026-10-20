@@ -70,7 +70,12 @@ describe("the kind mark stands in for the chrome that hid", () => {
        minimap peek use it too — so colouring hover or selection by TYPE would
        spend that invariant, and add a fourth colour language to pixels already
        carrying three. */
-    const block = css.slice(css.indexOf(".kind-mark"), css.indexOf(".text-mark"));
+    // The `.text-mark` AFTER the kind mark's block: the sheet names
+    // `.text-mark` earlier too (smart contrast's mid rules), and slicing to
+    // the first one read nothing at all.
+    const start = css.indexOf(".kind-mark");
+    const block = css.slice(start, css.indexOf(".text-mark", start));
+    expect(block.length, "the kind mark's block was not found").toBeGreaterThan(0);
     expect(block).toContain("var(--ink-soft)");
     expect(block).not.toContain("--accent");
   });

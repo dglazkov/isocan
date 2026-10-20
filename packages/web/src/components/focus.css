@@ -1261,7 +1261,6 @@
    HTML Screen Studio (`ScreenFocus.tsx`)
    ========================================================================== */
 
-.screen-focus-view,
 .screen-focus-edit {
   display: flex;
   flex-direction: column;
@@ -1290,7 +1289,6 @@
 
 .screen-viewport-btn,
 .screen-state-btn,
-.screen-info-btn,
 .screen-inline-edit-btn,
 .screen-save-copy-btn {
   font: inherit;
@@ -1305,14 +1303,12 @@
 
 .screen-viewport-btn.active,
 .screen-state-btn.active,
-.screen-info-btn.active,
 .screen-focus-toolbar .screen-save-copy-btn {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--accent-ink);
 }
 
-.screen-governing-badge,
 .screen-status-note {
   font-size: 12px;
   color: var(--ink-soft);
@@ -1434,3 +1430,7 @@
   background: var(--ground);
   color: var(--ink);
 }
+
+/* The deck's transition picker hangs from the right-hand cluster, so it opens
+   leftward rather than off the edge of the window. */
+.focus-transition-menu { left: auto; right: 0; min-width: 180px; }

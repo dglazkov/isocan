@@ -185,6 +185,11 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   Full, Calm (grounds answer cursors but never move on their own, and an
   untouched one draws nothing) or Still (the painted still, no WebGL);
   reduced motion always gives Still. The menu shows each ground's picture.
+  Ink on the canvas follows the ground, not the app's theme: names, kind icons,
+  a note's words and the selection ring turn light on a dark ground and dark on
+  a light one, crossfading when the ground changes; on Desert, where neither
+  reads, names sit on a frosted plate. Cards keep the app's look, and
+  `isocan canvas background` says which ink a ground takes.
 - **Live UI Devtools**: customize every part of the UI on the fly — floating
   glass opacity and blur, top bar, tool rail, zoom cluster, minimap, docks,
   canvas items, z-index layers, and theme colors. Right-click any chrome piece
@@ -247,8 +252,9 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   each readable twice as far out), a face (sans, mono, serif, handwriting), a
   paper that turns it into a post-it, a **colour** and a **font**. A colour is
   a word — red, orange, yellow, green, blue, purple, pink, brown, grey — whose
-  shade adapts to the light ground, the dark ground and paper, so it reads for
-  whoever is looking in either theme; Auto is the theme's own ink. A font is
+  shade adapts to the light ground, the dark ground, paper and the canvas's own
+  ground, so it reads for whoever is looking in either theme; Auto is the
+  ground's own ink. A font is
   one of ten families (Inter, IBM Plex Sans/Serif/Mono, DM Sans, Manrope,
   Space Grotesk, Fraunces, Lora, JetBrains Mono), fetched only when a node on
   screen names one, falling back to its face offline, and sized for its real
@@ -592,6 +598,17 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   under the slide says where you are ("2 / 12"); Notes (or N) open as a
   sheet; where the browser allows it (Android Chrome, not iPhone Safari) one
   button hands the slide the whole screen; and Back leaves the presentation.
+- **Slide transitions**: how the deck moves between slides is a canvas setting,
+  so the presenter and every viewer see the same motion — Push (the default),
+  Fade, Zoom, None, and four that leave the glass: **Morph** (the slide comes
+  apart — its pieces lift off the page, the ones both slides share fly to
+  their new places, and everything settles flat as the next slide; name a
+  piece `data-morph="…"` on both slides to pair it by hand), **Depth** (the
+  slide lifts into 3D, glides to the next one and lands flat again), **Cube**
+  and **Flip**.
+  Pick it from full screen's *Transition* button, the canvas menu's *Slide
+  transition*, or `isocan slides transition depth`. Screens turn as live
+  pages, not pictures of them.
 - **The design sprint**: type `/sprint` in the Chat and an agent facilitates a
   Knapp-style sprint — people and agents sketch as peers, one person decides.
   The facilitator calls phases (`/sprint crazy8s 8m`), and a clock chip shows

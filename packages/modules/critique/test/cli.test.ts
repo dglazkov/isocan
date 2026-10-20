@@ -7,7 +7,8 @@ import type { CommentThread, Item, Operation } from "@isocan/core";
 import type { CliHost, EnrolRequest } from "@isocan/cli/modulehost";
 import critiqueCli from "../src/cli.ts";
 import { askTemplate, registerModule, unregisterModule } from "@isocan/core";
-import critiqueCore, { CRITICS_POINT, CRITIC_PROP, CRITIC_TEMPLATE, criticMarkdown, enrolArgs, noteBody, readNoteBody, type RosterCritic } from "../src/core.ts";
+import { boardCriticDraft, boardCritiqueNotes, formatMoodSwatches, MOOD_PROPS, moodBoardRead } from "@isocan/core/mood";
+import critiqueCore, { CRITICS_POINT, CRITIC_PROP, CRITIC_TEMPLATE, criticMarkdown, criticProblems, enrolArgs, noteBody, readCritic, readNoteBody, type RosterCritic } from "../src/core.ts";
 
 /**
  * **Asking a critic, and its two answers** — driven in process through the
@@ -21,6 +22,7 @@ import critiqueCore, { CRITICS_POINT, CRITIC_PROP, CRITIC_TEMPLATE, criticMarkdo
 const ADA = { id: "usr_ada", name: "Ada" };
 const QUIET = { id: "act_quiet", name: "Quiet Hands" };
 const WARM = { id: "act_warm", name: "Warm Light" };
+const BOARD = { id: "act_board", name: "Board" };
 const LEAD = { id: "act_lead", name: "Lead Hand" };
 
 const card = (extra = "") =>
@@ -76,6 +78,12 @@ function harness(opts: { parked?: boolean; owners?: { id: string; name: string }
     client: {
       snapshot: async () => ({ canvas: { items, threads, agents }, project: {} }),
       downloadBlob: async (_c: string, hash: string) => Buffer.from(blobs[hash] ?? "", "utf8"),
+      uploadBlob: async (_c: string, buf: Buffer, _mime: string, filename: string) => {
+        const blobHash = `blob_${Object.keys(blobs).length}_${filename}`;
+        blobs[blobHash] = buf.toString("utf8");
+        return { blobHash, size: buf.length };
+      },
+      listSessions: async () => [],
       rcAnswering: async () => ({ parked: opts.parked ?? true, actorIds: [], ...(opts.owners ? { owners: opts.owners } : {}) }),
       sendOp: async (_canvas: string | null, _actor: unknown, op: Operation) => {
         homeOps.push(op);
@@ -99,9 +107,27 @@ function harness(opts: { parked?: boolean; owners?: { id: string; name: string }
       if (!hit) throw new Error(`no item ${ref}`);
       return hit;
     },
+    placementFor: () => ({ x: 0, y: 0 }),
     sendOp: async (_ctx: unknown, _canvas: string, op: Operation) => {
       if (op.type === "agent.ceiling" && opts.refuseCeiling) throw new Error(opts.refuseCeiling);
       ops.push(op);
+      if (op.type === "item.add") {
+        items[op.itemId] = {
+          id: op.itemId,
+          title: op.title ?? op.itemId,
+          x: 0,
+          y: 0,
+          width: op.width,
+          height: op.height,
+          properties: op.properties ?? {},
+          currentVersionId: op.version.id,
+          versions: [op.version],
+        } as unknown as Item;
+      }
+      if (op.type === "item.update" && op.patch?.properties) {
+        const target = items[op.itemId];
+        if (target) target.properties = { ...target.properties, ...(op.patch.properties as Record<string, string>) };
+      }
       if (op.type === "agent.ceiling") {
         const row = agents[op.actorId] ?? { actor: QUIET };
         if (op.ceiling) agents[op.actorId] = { ...row, ceiling: op.ceiling };
@@ -109,7 +135,7 @@ function harness(opts: { parked?: boolean; owners?: { id: string; name: string }
       }
       // Land threads the way the home would, so the next verb reads them.
       if (op.type === "thread.create") {
-        const c = op.comment as { id: string; body: string; mentions?: string[]; items?: string[] };
+        const c = op.comment as { id: string; body: string; mentions?: string[]; items?: string[]; persona?: string };
         threads[op.threadId] = {
           id: op.threadId,
           x: op.x,
@@ -131,7 +157,7 @@ function harness(opts: { parked?: boolean; owners?: { id: string; name: string }
     },
     enrol: async (_ctx: unknown, _canvas: string, ask: EnrolRequest) => {
       enrols.push(ask);
-      const actor = ask.name === WARM.name ? WARM : QUIET;
+      const actor = ask.name === WARM.name ? WARM : ask.name === BOARD.name ? BOARD : QUIET;
       agents[actor.id] ??= { actor };
       return { actorId: actor.id, dir: "/acme/critic", reused: opts.reused ?? false };
     },
@@ -146,7 +172,7 @@ function harness(opts: { parked?: boolean; owners?: { id: string; name: string }
     await program.parseAsync(["node", "isocan", ...argv]);
     log.mockRestore();
   };
-  return { say, ops, homeOps, enrols, errors, blobs, ctx, threads, agents, withdrawn, printed };
+  return { say, ops, homeOps, enrols, errors, blobs, items, ctx, threads, agents, withdrawn, printed };
 }
 
 describe("isocan critique <item> --by <critic>", () => {
@@ -495,5 +521,106 @@ describe("two critics, and the read (critique phase 3)", () => {
     const pn = person.ops.filter((op) => op.type === "thread.create" && op.threadId !== t2) as Extract<Operation, { type: "thread.create" }>[];
     await person.say("critique", "both", `${pn[1]!.threadId}+${pn[0]!.threadId}`);
     expect(person.errors.pop()).toMatch(/Ada asked, and is not an agent here — name who builds them/);
+  });
+});
+
+describe("the board critic (moodboard phase 4)", () => {
+  const seedMoodBoard = (h: ReturnType<typeof harness>) => {
+    const swatches1 = formatMoodSwatches([
+      { hex: "#b5651d", share: 0.5 },
+      { hex: "#e8dcc8", share: 0.5 },
+    ]);
+    const swatches2 = formatMoodSwatches([{ hex: "#8a3b2e", share: 1 }]);
+    h.items.itm_mood = {
+      ...item("itm_mood", "Mood", { kind: "area", [MOOD_PROPS.board]: "true" }, { width: 1200, height: 840 }),
+      x: 0,
+      y: 0,
+    };
+    h.items.itm_tile1 = {
+      ...item("itm_tile1", "loaf, 6 a.m.", { [MOOD_PROPS.mood]: "kept", [MOOD_PROPS.axis]: "light", [MOOD_PROPS.swatches]: swatches1 }, { width: 280, height: 280 }),
+      x: 40,
+      y: 40,
+    };
+    h.items.itm_tile2 = {
+      ...item("itm_tile2", "waxed stamp", { [MOOD_PROPS.mood]: "kept", [MOOD_PROPS.axis]: "material", [MOOD_PROPS.swatches]: swatches2 }, { width: 280, height: 280 }),
+      x: 360,
+      y: 40,
+    };
+    h.blobs.blob_itm_screen = `<main style="background:#e8dcc8"><span style="color:#8a3b2e">Stamp</span><button style="background:#2563eb;color:#ffffff">Pay</button></main>`;
+  };
+
+  it("refuses critic add board and critique --by board when no kept tiles sit on the Mood board", async () => {
+    const h = harness();
+    await h.say("critic", "add", "board");
+    expect(h.errors.pop()).toMatch(/no kept tiles on the Mood board yet/);
+    await h.say("critique", "itm_screen", "--by", "board");
+    expect(h.errors.pop()).toMatch(/no kept tiles on the Mood board yet/);
+    expect(h.ops).toEqual([]);
+  });
+
+  it("lists board in critic ls when kept tiles exist, adds Board via critic add board, and round-trips through readCritic", async () => {
+    const h = harness();
+    seedMoodBoard(h);
+    const draft = boardCriticDraft({ items: h.items, threads: {}, trash: [], marks: {} } as never, "legacy");
+    expect(draft).not.toBeNull();
+    expect(criticProblems(draft!)).toEqual([]);
+    const parsed = readCritic(criticMarkdown(draft!), "board.md");
+    expect(parsed).toMatchObject({ name: "board", agentName: "Board", color: "#b5651d", questions: draft!.lens.questions });
+
+    h.ctx.json = true;
+    await h.say("critic", "ls");
+    expect(h.errors).toEqual([]);
+    const before = h.printed.pop() as { lenses: { id: string; agentName: string }[]; critics: { name: string }[] };
+    expect(before.lenses.some((l) => l.id === "board" && l.agentName === "Board")).toBe(true);
+
+    await h.say("critic", "add", "board");
+    expect(h.errors).toEqual([]);
+    const added = h.printed.pop() as { itemId: string; name: string; agentName: string; on: boolean };
+    expect(added).toMatchObject({ name: "board", agentName: "Board", on: true });
+    const cardItem = h.items[added.itemId]!;
+    expect(cardItem.properties).toMatchObject({ [CRITIC_PROP]: "board", "critique.on": "on", "critique.color": "#b5651d" });
+    const cardText = h.blobs[cardItem.versions[0]!.blobHash]!;
+    expect(cardText).toContain('"loaf, 6 a.m."');
+    expect(cardText).toContain("#b5651d (50%)");
+    expect(cardText).toContain("#8a3b2e (100%)");
+
+    await h.say("critic", "ls");
+    const after = h.printed.pop() as { lenses: { id: string }[]; critics: { name: string }[] };
+    expect(after.lenses.some((l) => l.id === "board")).toBe(false);
+    expect(after.critics.some((c) => c.name === "board")).toBe(true);
+  });
+
+  it("Scene 4 CLI flow: critique --by board creates Board on the fly, and Board pins working (#8a3b2e) and risk (#2563eb) notes", async () => {
+    const h = harness();
+    seedMoodBoard(h);
+    await h.say("critique", "itm_screen", "--by", "board");
+    expect(h.errors).toEqual([]);
+    expect(h.enrols).toHaveLength(1);
+    expect(h.enrols[0]).toMatchObject({ name: "Board", template: CRITIC_TEMPLATE });
+    expect(Object.values(h.items).some((i) => i.properties[CRITIC_PROP] === "board")).toBe(true);
+
+    const boardRead = moodBoardRead({ items: h.items, threads: {}, trash: [], marks: {} } as never, "legacy");
+    const suggestions = boardCritiqueNotes(h.blobs.blob_itm_screen!, boardRead);
+    expect(suggestions.map((s) => s.kind)).toEqual(["working", "risk"]);
+
+    // Board pins the two deterministic notes and calls done.
+    h.ctx.actor = BOARD;
+    await h.say("critique", "note", "itm_screen", "--at", "0.3,0.2", "--kind", suggestions[0]!.kind, "--question", String(suggestions[0]!.question), suggestions[0]!.text);
+    await h.say("critique", "note", "itm_screen", "--at", "0.7,0.8", "--kind", suggestions[1]!.kind, "--question", String(suggestions[1]!.question), suggestions[1]!.text);
+    await h.say("critique", "done", "itm_screen");
+    expect(h.errors).toEqual([]);
+
+    h.ctx.actor = ADA;
+    h.ctx.json = true;
+    await h.say("critique", "notes", "itm_screen");
+    const notes = h.printed.pop() as Array<{ critic: string; kind: string; text: string }>;
+    expect(notes).toHaveLength(2);
+    expect(notes[0]).toMatchObject({ critic: "Board", kind: "working" });
+    expect(notes[0]!.text).toContain("#8a3b2e");
+    expect(notes[0]!.text).toContain('"waxed stamp"');
+    expect(notes[1]).toMatchObject({ critic: "Board", kind: "risk" });
+    expect(notes[1]!.text).toContain("#2563eb");
+    expect(notes[1]!.text).toContain("blue");
+    expect(notes[1]!.text).toContain("on no tile on the Mood board");
   });
 });

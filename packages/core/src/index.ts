@@ -86,6 +86,8 @@ export type { DesignTypography, DesignTokens, DesignDoc, DesignSurface } from ".
 export * from "./contrast.ts";
 export * from "./colour.ts";
 export * from "./textcolour.ts";
+export * from "./groundtone.ts";
+export * from "./groundsample.ts";
 export * from "./shortcut.ts";
 export * from "./designcheck.ts";
 export * from "./tokens.ts";
@@ -128,6 +130,7 @@ export * from "./contextmark.ts";
 export * from "./context-source.ts";
 export * from "./context-pin.ts";
 export * from "./slides.ts";
+export * from "./morph.ts";
 export * from "./slidewrites.ts";
 export * from "./deckexport.ts";
 export * from "./shelf.ts";

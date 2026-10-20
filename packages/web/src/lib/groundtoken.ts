@@ -1,4 +1,16 @@
-import { type CanvasTheme, THEMES, groundOf, themeOf } from "@isocan/core";
+import {
+  CONTRAST_UI,
+  type CanvasTheme,
+  type GroundTone,
+  THEMES,
+  bestInk,
+  groundColour,
+  groundOf,
+  haloOf,
+  hasGround,
+  themeOf,
+  toneOfGround,
+} from "@isocan/core";
 
 /**
  * **What colour the canvas is standing on** (8 Sep 2026).
@@ -28,7 +40,7 @@ import { type CanvasTheme, THEMES, groundOf, themeOf } from "@isocan/core";
  * The names are not derivable from each other (`galaxy` paints `--theme-space`,
  * `mountains` paints `--theme-rock`), so it is a real table — and a table that
  * is missing a row is a fade that silently falls back to the app's ground,
- * which is the bug this fixes. `groundtone.test.ts` requires a row for every
+ * which is the bug this fixes. `groundtoken.test.ts` requires a row for every
  * name in `THEMES`. It earned that keep within a day: farm and desert
  * landed on 8 Sep and the guard is what said this table had to grow.
  *
@@ -37,7 +49,7 @@ import { type CanvasTheme, THEMES, groundOf, themeOf } from "@isocan/core";
  * bytes a first visit downloads. Every ground since Ocean paints with
  * `--theme-<its id>`, so that is the rule and the table holds the three that
  * break it. The guard is unchanged and now carries the whole weight: it asks
- * `groundTone` for every name in `THEMES` and requires the token to be
+ * `groundToken` for every name in `THEMES` and requires the token to be
  * declared and to be the one the ground's own rule paints with.
  */
 const TONE: Partial<Record<CanvasTheme, string>> = {
@@ -58,7 +70,7 @@ const TONE: Partial<Record<CanvasTheme, string>> = {
  * slightly darker than the picture reads as the ground, one much lighter
  * reads as a bar.
  */
-export function groundTone(canvas: { properties?: Record<string, string> } | null): string | null {
+export function groundToken(canvas: { properties?: Record<string, string> } | null): string | null {
   if (canvas === null) return null;
   if (groundOf(canvas) !== null) return "--ground-under";
   const theme = themeOf(canvas);
@@ -66,4 +78,46 @@ export function groundTone(canvas: { properties?: Record<string, string> } | nul
 }
 
 /** Every ground this build can stand a canvas on, for the guard. */
-export const TONED = THEMES;
+export const TOKENED = THEMES;
+
+/**
+ * **What `data-ground-tone` says on `.canvas-page`** (smart contrast): core's
+ * `toneOfGround` for a canvas standing on a ground of its own, and nothing at
+ * all for one on the dot grid — so the plain canvas is untouched by
+ * construction rather than by the tier happening to resolve to the app's
+ * tokens. `sampled` is a picture's colour under the scrim once it has been
+ * looked at (`lib/groundsample.ts`); until then core takes the worst case.
+ *
+ * No app theme is asked for, on purpose: the app's theme only ever decides
+ * the dot grid's colour, and the dot grid gets no attribute. A ground of its
+ * own has the same tone in either theme (`core/test/groundtone.test.ts`), so
+ * the page need not subscribe to the theme to stamp it.
+ */
+export function groundToneAttr(
+  canvas: { properties?: Record<string, string> } | null,
+  sampled?: string,
+): GroundTone | undefined {
+  return canvas !== null && hasGround(canvas) ? toneOfGround(canvas, "dark", sampled) : undefined;
+}
+
+/**
+ * **What a `mid` ground draws where no plate can go** (smart contrast phase
+ * 3): a chromeless note's words and their halo, and the ring around a card —
+ * worked out by core's `bestInk` for the colour this canvas actually stands
+ * on, and handed to the stylesheet as three properties on `.canvas-page`.
+ * Computed rather than written in the stylesheet so a picture that one day
+ * samples `mid` gets its own answer, not Desert's. Nothing for any other tone.
+ */
+export function groundMidStyle(
+  canvas: { properties?: Record<string, string> } | null,
+  sampled?: string,
+): Record<string, string> | undefined {
+  if (groundToneAttr(canvas, sampled) !== "mid") return undefined;
+  const under = groundColour(canvas, "dark", sampled);
+  const ink = bestInk(under, "ink");
+  return {
+    "--ground-mid-ink": ink,
+    "--ground-mid-halo": haloOf(ink),
+    "--ground-mid-ring": bestInk(under, "accent", CONTRAST_UI),
+  };
+}

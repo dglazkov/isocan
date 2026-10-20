@@ -12,6 +12,7 @@ import {
   type OverlayFacts,
   type WebHost,
 } from "@isocan/core";
+import { boardCriticDraft } from "@isocan/core/mood";
 import {
   CRITIC_CARD,
   CRITIC_PROP,
@@ -261,7 +262,7 @@ export function RoomOverlay({ canvas, host }: OverlayFacts) {
 /* ---- the critics in the room --------------------------------------------- */
 
 /** **Critics in the room** — the list with its switches, the starter lenses, a lens described, and the ask. */
-export function RoomDialog({ canvas, selection, args, canEdit, host }: DialogFacts) {
+export function RoomDialog({ canvas, groupMode, selection, args, canEdit, host }: DialogFacts) {
   const [critics, setCritics] = useState<CanvasCritic[] | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -299,6 +300,7 @@ export function RoomDialog({ canvas, selection, args, canEdit, host }: DialogFac
   const ask = screen && screen.properties[CRITIC_PROP] === undefined ? screen : undefined;
   const here = new Set((critics ?? []).map((c) => c.critic.name));
   const starters = STARTER_LENSES.filter((l) => !here.has(starterDraft(l).name));
+  const boardDraft = here.has("board") ? null : boardCriticDraft(canvas, groupMode);
 
   return (
     <div className="crit-dialog" data-critics-room>
@@ -328,7 +330,7 @@ export function RoomDialog({ canvas, selection, args, canEdit, host }: DialogFac
           })}
         </ul>
       )}
-      {starters.length > 0 && (
+      {(starters.length > 0 || boardDraft !== null) && (
         <div>
           <h3>Add a lens</h3>
           <div className="crit-actions room-starters">
@@ -337,6 +339,11 @@ export function RoomDialog({ canvas, selection, args, canEdit, host }: DialogFac
                 {l.agentName}
               </button>
             ))}
+            {boardDraft && (
+              <button type="button" className="btn" title={boardDraft.line} disabled={!canEdit || busy} data-critic-add="board" onClick={() => void act(() => placeLens(host, host.getCanvas(), boardDraft, critics ?? []))}>
+                {boardDraft.agentName}
+              </button>
+            )}
           </div>
         </div>
       )}

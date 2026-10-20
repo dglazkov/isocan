@@ -193,8 +193,17 @@ goal:
   # wrote the four owed paragraphs above in the same hours, and took the bound
   # to 45. Both halves of that are kept — their arguments, and this op — which
   # is why the number here is 46 and not 41.
+  # 46 → 47 on 2026-10-19: record agent.ceiling, shipped in 834018105
+  # (critique phase 2) but omitted from this declaration. It persists one
+  # agent's note-only restriction on one canvas. A field on agent.enroll
+  # would be silently ignored by an older home; an unknown op is refused,
+  # so a critic cannot accidentally be enrolled without the requested cap.
+  # The home enforces it for direct and forwarded writes, it is not undoable,
+  # and a critic cannot lift its own ceiling. Both surfaces use the critique
+  # module; web-only-ops is 0. This names exactly one existing operation,
+  # not room for another. Evidence: docs/reviews/2026-10-15-architect.md.
   - name: operations in the vocabulary
-    at most: 46
+    at most: 47
     measured by: node scripts/measure.mjs op-types
     baseline: 45, 2026-09-15
 runs: docs/reviews/
