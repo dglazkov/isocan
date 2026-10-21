@@ -2,7 +2,7 @@
 status: partial
 since: 2026-10-02
 see: evals, personas, judge
-note: "phases 0 and 1 closed — nightly health page in docs/practice/ (keel-night.yml) and record checks (scripts/lib/records.mjs, status.sh, test/records.test.ts) holding research index, phase Status lines, front matter and docs/projects/README.md in agreement; phases 2–7 (issues ledger, queues with ages, gates, product and loop evals, prune) remain open"
+note: "phases 0 and 1 closed — nightly health page in docs/practice/ (plates-night.yml) and record checks (scripts/lib/records.mjs, status.sh, test/records.test.ts) holding research index, phase Status lines, front matter and docs/projects/README.md in agreement; phases 2–7 (issues ledger, queues with ages, gates, product and loop evals, prune) remain open"
 ---
 
 # The practice: how isocan is built, and how that gets better

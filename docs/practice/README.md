@@ -5,12 +5,12 @@ leaks, measured from the tree, git and GitHub.
 [`docs/projects/practice/design.md`](../projects/practice/design.md) is the
 argument.
 
-**Two series, one directory.** Pages from 6 Oct 2026 on are keel's health
-pages: `node scripts/keel/improve.mjs --report` measures each instrument
-against a bound in `.keel/bounds.json` that only tightens, and ends in one
+**Two series, one directory.** The health-page series began under Keel on
+6 October 2026 and continues under Plates after the rename. Today, `node scripts/plates/improve.mjs --report` measures each instrument
+against a bound in `.plates/bounds.json` that only tightens, and ends in one
 proposal. The pages before that are isocan's own practice page
-(`scripts/practice.mjs`, retired when keel's night took its rows over; the
-rows keel does not measure, like the bundle ceiling and the export ratchets,
+(`scripts/practice.mjs`, retired when Keel's night took its rows over; the
+rows plates does not measure, like the bundle ceiling and the export ratchets,
 are isocan's own tests). Either way, the newest page is the one to read.
 
 **The morning lap reads this page.** Open the newest one, take the worst row,
@@ -21,7 +21,7 @@ The lap, for whoever runs it (a person, `/goal`, or a scheduled session):
 
 > Read the newest page in `docs/practice/`. Take the worst row you can fix
 > without a person. Fix it at its cause rather than its count. Prove it with
-> `node scripts/keel/improve.mjs --json` (the measure moved) and the usual
+> `node scripts/plates/improve.mjs --json` (the measure moved) and the usual
 > gates. Commit with the measure's id in the subject
 > (`practice: research_unindexed 25 → 0`). If the worst rows all need a
 > person, list them for Dion instead.
@@ -35,14 +35,14 @@ The lap, for whoever runs it (a person, `/goal`, or a scheduled session):
   of [the walk](../projects/practice/phases.md) is mostly that.
 
 ```
-node scripts/keel/improve.mjs             # every measure against its bound
-node scripts/keel/improve.mjs --json      # the numbers
-node scripts/keel/improve.mjs --report    # write today's page and .keel/bounds.json
+node scripts/plates/improve.mjs             # every measure against its bound
+node scripts/plates/improve.mjs --json      # the numbers
+node scripts/plates/improve.mjs --report    # write today's page and .plates/bounds.json
 ```
 
-`.github/workflows/keel-night.yml` writes the page nightly at 07:23 UTC: a
+`.github/workflows/plates-night.yml` writes the page nightly at 07:23 UTC: a
 `keel-night/<day>` PR that holds only data (this directory and
-`.keel/bounds.json`), merged once the gate passed on that tree, and then older
-`keel-night/` PRs are drained by `scripts/keel/drain.mjs`. Deterministic, with
+`.plates/bounds.json`), merged once the gate passed on that tree, and then older
+`keel-night/` PRs are drained by `scripts/plates/drain.mjs`. Deterministic, with
 no model. Closing issues and moving bounds are proposed on the page and never
 done by the run.

@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "Managed by keel (practice renovate): four lanes, so the queue never holds more than one PR per lane. Why each lane is shaped this way: the practice's README.",
+  "description": "Managed by plates (practice renovate): four lanes, so the queue never holds more than one PR per lane. Why each lane is shaped this way: the practice's README.",
   "extends": [
     "config:recommended"
   ],

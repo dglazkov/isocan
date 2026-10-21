@@ -8,7 +8,7 @@ note: "A proactive agent: an agent on the canvas that works beside a person rath
 # A proactive agent — the scenes
 
 **14 October 2026.** Dion asked for *"specs for each of the features that
-make sense, in GitHub issues / keel format"*, from a set of concepts for an
+make sense, in GitHub issues / plates format"*, from a set of concepts for an
 agent that guides a person through design work the way a good designer
 would: one that understands what they are making, says something at the
 right moment rather than every moment, and leaves the person better at
