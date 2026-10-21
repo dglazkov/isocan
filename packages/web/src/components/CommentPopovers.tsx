@@ -24,7 +24,7 @@ import { OnIt } from "./OnIt.tsx";
 import { GateGrant } from "./LazyGate.tsx";
 import { modules as shellModules } from "../modules.ts";
 import { CommentFold, CommentWhen } from "./CommentWhen.tsx";
-import { messageContextRoots, useMessageContext, useMessageSend, withMessageContext } from "../lib/messagecontext.ts";
+import { manifestNeedsDisclosure, messageContextRoots, needsContextManifestPreview, useMessageContext, useMessageSend, withMessageContext } from "../lib/messagecontext.ts";
 import { ContextManifestView, MessageContextPreview } from "./LazyGroupContext.tsx";
 import { usePresentation } from "../lib/canvasPresentation.ts";
 import { FloatingHandles, useFloatingBox } from "../lib/floatingbox.tsx";
@@ -102,7 +102,8 @@ export function ThreadPopover({
 }) {
   const [reply, setReply] = useState("");
   const canvas = useCanvasStore((state) => state.canvas);
-  const context = useMessageContext(canvasId, messageContextRoots(canvas, reply, thread.anchorItemId ? [thread.anchorItemId] : []));
+  const anchorIds = useMemo(() => (thread.anchorItemId ? [thread.anchorItemId] : []), [thread.anchorItemId]);
+  const context = useMessageContext(canvasId, messageContextRoots(canvas, reply, anchorIds));
   const sending = useMessageSend(canvasId, context, reply);
   const textView = useTextAnchorStore(s => s.views[thread.id]);
   // The registry names people, not the comment: see lib/names.ts.
@@ -162,7 +163,7 @@ export function ThreadPopover({
               <div className="body">
                 {comment.designDecision ? <Suspense fallback={<p>Reading design decision…</p>}><DesignComparisonComment comment={comment} canvasId={canvasId} actor={actor} threadId={thread!.id} /></Suspense> : comment.design ? <Suspense fallback={<p>Reading design record…</p>}><DesignComment comment={comment} /></Suspense> : <><CommandChip body={comment.body} /><Markdown rehypePlugins={chips}>{withoutCommand(comment.body)}</Markdown></>}
               </div>
-              {comment.context && <ContextManifestView manifest={comment.context} comment={{ threadId: thread.id, commentId: comment.id }} />}
+              {comment.context && manifestNeedsDisclosure(comment.context, anchorIds) && <ContextManifestView manifest={comment.context} comment={{ threadId: thread.id, commentId: comment.id }} />}
             </CommentFold>
             {/* The refusal is the control (#272): under the ask an agent's
                 gate turned away, the owner — and nobody else — gets the two
@@ -229,7 +230,7 @@ export function ThreadPopover({
             go looked like the one that was not, and people stopped believing
             they could press it. The accent makes the two states different
             colours rather than two shades of the same one. */}
-        <MessageContextPreview context={context} />
+        {needsContextManifestPreview(context, anchorIds) && <MessageContextPreview context={context} />}
         {sending.error && <p role="alert">{sending.error}</p>}
         <button className="btn primary" type="submit" title={`Reply (${shortcut("⏎")})`} disabled={!reply.trim() || sending.disabled}>
           ↑
@@ -287,6 +288,7 @@ export function ComposePopover({
   const { candidates, peers } = useMentionRoster(actor.id);
   const itemRoster = useItemRefRoster();
   const [body, setBody] = useState("");
+  const anchorIds = useMemo(() => (pending.anchorItemId ? [pending.anchorItemId] : []), [pending.anchorItemId]);
   const context = useMessageContext(canvasId, messageContextRoots(canvas, body, [pending.aboutItemId, pending.anchorItemId].filter((id): id is string => Boolean(id))));
   const sending = useMessageSend(canvasId, context, body);
   const presentation = usePresentation();
@@ -334,7 +336,7 @@ export function ComposePopover({
         style={{ display: "block" }}
       >
         {pending.textAnchor && <blockquote className="thread-text-anchor">{pending.textAnchor.quote}</blockquote>}
-        <MessageContextPreview context={context} />
+        {needsContextManifestPreview(context, anchorIds) && <MessageContextPreview context={context} />}
         {sending.error && <p role="alert">{sending.error}</p>}
         <MentionField
           multiline

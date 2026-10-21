@@ -1,11 +1,14 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, createElement as h } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import type { CanvasState, ContextManifest, Item } from "@isocan/core";
-import { applyOperation } from "@isocan/core";
+import type { CanvasState, CommentThread, ContextManifest, Item } from "@isocan/core";
+import { applyOperation, contextManifest } from "@isocan/core";
+import { ComposePopover, ThreadPopover } from "../src/components/CommentPopovers.tsx";
+import "../src/components/GroupContext.tsx";
 import { Attached, needsContextManifestPreview } from "../src/components/MainThreadPanel.tsx";
-import type { useMessageContext } from "../src/lib/messagecontext.ts";
+import { NodeFocusChat } from "../src/components/NodeFocusChat.tsx";
+import { manifestNeedsDisclosure, type useMessageContext } from "../src/lib/messagecontext.ts";
 import { useCanvasStore } from "../src/stores/canvasStore.ts";
 import { useUiStore } from "../src/stores/uiStore.ts";
 
@@ -198,5 +201,166 @@ describe("selected items in the chat composer", () => {
     ).toBe(true);
 
     expect(needsContextManifestPreview(fakeContext({ error: "home unreachable" }), ["itm_dash"])).toBe(true);
+    expect(manifestNeedsDisclosure(fakeContext({ manifest: { includeExcluded: true } }).manifest!, ["itm_dash"])).toBe(true);
+  });
+});
+
+describe("anchored comment and node-focus composers omit redundant single-item context", () => {
+  let host: HTMLDivElement;
+  let root: Root;
+  let state: CanvasState;
+
+  beforeEach(() => {
+    state = makeState();
+    useCanvasStore.setState({
+      canvasId: state.project.id,
+      record: state.project,
+      canvas: state.canvas,
+      confirmed: state,
+      lastSeq: 2,
+      capability: "edit",
+    });
+    useUiStore.setState({ selectedItemIds: ["itm_dash"] });
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (raw: string) => {
+        const url = new URL(raw, "https://acme.test");
+        if (url.pathname.endsWith("/context")) {
+          const rootIds = url.searchParams.get("roots")?.split(",").filter(Boolean) ?? [];
+          const includeExcluded = url.searchParams.get("includeExcluded") === "true";
+          return Response.json(contextManifest(state, 2, { rootIds, includeExcluded }));
+        }
+        return Response.json([]);
+      }),
+    );
+    host = document.createElement("div");
+    document.body.appendChild(host);
+    root = createRoot(host);
+  });
+
+  afterEach(() => {
+    act(() => root.unmount());
+    host.remove();
+    vi.unstubAllGlobals();
+    useUiStore.setState({ selectedItemIds: [] });
+  });
+
+  async function flush() {
+    for (let i = 0; i < 4; i++) {
+      await act(async () => {
+        await Promise.resolve();
+      });
+    }
+  }
+
+  it("hides the context card when composing a comment on a single flat screen, but shows it for a group", async () => {
+    await act(async () => {
+      root.render(
+        h(ComposePopover, {
+          canvasId: "prj_acme",
+          actor,
+          embedded: true,
+          pending: { x: 24, y: 24, anchorItemId: "itm_dash" },
+        }),
+      );
+    });
+    await flush();
+    expect(host.querySelector(".group-context")).toBeNull();
+    expect(host.innerHTML).not.toContain("1 included, 0 excluded");
+
+    await act(async () => {
+      root.render(
+        h(ComposePopover, {
+          canvasId: "prj_acme",
+          actor,
+          embedded: true,
+          pending: { x: 24, y: 24, anchorItemId: "itm_group" },
+        }),
+      );
+    });
+    await flush();
+    expect(host.querySelector(".group-context")).not.toBeNull();
+    expect(host.innerHTML).toContain("Group Navigation Group");
+  });
+
+  it("hides the frozen context card on single-screen threads in ThreadPopover and NodeFocusChat, unless scope goes wider", async () => {
+    const singleContext = contextManifest(state, 2, { rootIds: ["itm_dash"] });
+    const widerContext = contextManifest(state, 2, { rootIds: ["itm_dash", "itm_four"] });
+    const thread: CommentThread = {
+      id: "thr_acme",
+      x: 16,
+      y: 16,
+      anchorItemId: "itm_dash",
+      createdAt: stamp.createdAt,
+      createdBy: actor,
+      comments: [
+        {
+          id: "cmt_single",
+          author: actor,
+          createdAt: stamp.createdAt,
+          body: "Tighten the spacing on the header.",
+          context: singleContext,
+        },
+      ],
+    };
+    state.canvas.threads = { [thread.id]: thread };
+
+    await act(async () => {
+      useCanvasStore.setState({ canvas: { ...state.canvas }, confirmed: state });
+      root.render(
+        h(ThreadPopover, {
+          canvasId: "prj_acme",
+          actor,
+          thread,
+          embedded: true,
+          screen: { x: 0, y: 0 },
+        }),
+      );
+    });
+    await flush();
+    expect(host.querySelector(".group-context")).toBeNull();
+
+    await act(async () => {
+      root.render(
+        h(NodeFocusChat, {
+          canvasId: "prj_acme",
+          actor,
+          item: state.canvas.items.itm_dash!,
+        }),
+      );
+    });
+    await flush();
+    expect(host.querySelector(".group-context")).toBeNull();
+
+    // When a comment's frozen context spans beyond the anchored screen, disclose it.
+    const multiThread: CommentThread = {
+      ...thread,
+      comments: [{ ...thread.comments[0]!, id: "cmt_multi", context: widerContext }],
+    };
+    state.canvas.threads = { [multiThread.id]: multiThread };
+
+    await act(async () => {
+      useCanvasStore.setState({ canvas: { ...state.canvas }, confirmed: state });
+      root.render(
+        h(ThreadPopover, {
+          canvasId: "prj_acme",
+          actor,
+          thread: multiThread,
+          embedded: true,
+          screen: { x: 0, y: 0 },
+        }),
+      );
+    });
+    await flush();
+    expect(host.querySelector(".group-context")).not.toBeNull();
+    expect(host.innerHTML).toContain("2 items");
   });
 });
