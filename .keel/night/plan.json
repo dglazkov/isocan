@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "date": "2026-10-20",
+  "date": "2026-10-21",
   "shapedBy": "default",
   "readyBy": null,
   "willNotTouch": [],
@@ -11,7 +11,7 @@
   "items": [
     {
       "id": "measures",
-      "title": "Measure the practice: 39 measures; outside or broken on 2026-10-19: long_files, phases_without_issue, phases_stuck, escapes, changelog_gaps, verify_owed, lint, machine_prs, issues_unnamed, issues_done_open, prs_stale, reviews_unanswered, dependency_age",
+      "title": "Measure the practice: 39 measures; outside or broken on 2026-10-20: long_files, phases_without_issue, phases_stuck, escapes, changelog_gaps, verify_owed, lint, issues_unnamed, issues_done_open, prs_stale, reviews_unanswered, dependency_age",
       "kind": "measure",
       "source": "default",
       "number": null,
@@ -20,12 +20,12 @@
       "status": "done",
       "result": {
         "note": "10 ok, 12 outside, 17 n/a, 0 broken",
-        "link": "docs/practice/2026-10-20.md"
+        "link": "docs/practice/2026-10-21.md"
       }
     },
     {
       "id": "health-phases-without-issue",
-      "title": "Proposal from 2026-10-19: Open an issue on dglazkov/isocan for critique, design-partner, durable-agents, extensions, hosted-sharing, living-grounds and 11 more and set `issue:` in each project's primary doc front matter (open phases critique/1, critique/4, design-partner/7, durable-agents/0, durabl…",
+      "title": "Proposal from 2026-10-20: Open an issue on dglazkov/isocan for critique, design-partner, durable-agents, extensions, hosted-sharing, living-grounds and 11 more and set `issue:` in each project's primary doc front matter (open phases critique/1, critique/4, design-partner/7, durable-agents/0, durabl…",
       "kind": "review",
       "source": "health:phases_without_issue",
       "number": {
