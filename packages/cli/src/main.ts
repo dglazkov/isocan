@@ -17,6 +17,7 @@ import { registerDesignSystems } from "./design-system.ts";
 import { designGovernsNotes, designReleasedNotes } from "./design-scope-notes.ts";
 import { designUnuse, designUse, ownDesignSystemAt } from "@isocan/core/design-use";
 import { moodBoardRead } from "@isocan/core/mood";
+import { MOTION_PROPS } from "@isocan/core/motion";
 import { cleanupNoun, cleanupOps, cleanupSelection, parseBefore, type CommentFilter } from "@isocan/core/chatclean";
 import { registerDesignRequests } from "./design-request.ts";
 import { registerDesignDecisions } from "./design-decision.ts";
@@ -12493,7 +12494,7 @@ comment
   .option("--item <item>", "anchor to this item")
   .option("--quote <text>", "anchor to exact rendered text on --item")
   .option("--occurrence <number>", "which matching quote, counted from 1")
-  .option("--at <x,y>", "freestanding at world coordinates — or, with --item, a point ON the item as fractions of its size (0.6,0.8)")
+  .option("--at <x,y>", "freestanding at world coordinates — or, with --item, a point ON the item as fractions of its size (0.6,0.8) — or, with --item on a motion, one number: the moment in seconds (1.2)")
   .option("--in <group>", "attach this group and its complete subtree as frozen context")
   .option("--include-excluded", "explicitly include excluded context in this request")
   .action(
@@ -12501,6 +12502,19 @@ comment
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx, { create: true });
       if (!opts.item && !opts.at) throw new Error("pass --item <item> or --at <x,y>");
+      // One number with --item is a moment, not a place (motion phase 2): a
+      // comment on a motion at 1.2 s remembers the time, and opening it
+      // scrubs the player there. Only a motion has a clock to point into.
+      let moment: number | undefined;
+      if (opts.item && opts.at !== undefined && !opts.at.includes(",")) {
+        const item = resolveItem(snapshot, opts.item);
+        if (item.properties[MOTION_PROPS.motion] !== "true") throw new Error(`--at with one number is a moment in a motion, and ${item.title} is not one — a place on it is --at x,y`);
+        moment = Number(opts.at.replace(/s$/, ""));
+        const length = Number(item.properties[MOTION_PROPS.seconds]);
+        if (!Number.isFinite(moment) || moment < 0) throw new Error(`--at is seconds into the motion, not "${opts.at}"`);
+        if (Number.isFinite(length) && moment > length) throw new Error(`--at ${moment} is past the end of ${item.title}, which is ${length} s long`);
+        delete opts.at;
+      }
       if ((opts.quote !== undefined || opts.occurrence !== undefined) && !opts.item) throw new Error("Text selection requires --item");
       if (opts.occurrence !== undefined && opts.quote === undefined) throw new Error("--occurrence requires --quote");
       const textAnchor = opts.quote !== undefined ? await quotedCommentAnchor(ctx, p.id, resolveItem(snapshot, opts.item!), opts.quote, opts.occurrence) : null;
@@ -12521,6 +12535,7 @@ comment
       }
       const threadId = newThreadId();
       const first = await newComment(ctx, p.id, snapshot, text, { in: opts.in, includeExcluded: opts.includeExcluded });
+      if (moment !== undefined) first.at = moment;
       const receipt = await sendOp(ctx, p.id, {
         type: "thread.create",
         threadId,
@@ -12683,7 +12698,7 @@ comment
             : `at ${t.x},${t.y}`;
         console.log(`${t.id} (${anchor})`);
         for (const c of t.comments) {
-          console.log(`  ${actorNameIn(snapshot.names, c.author)} · ${c.createdAt} · ${c.id}`);
+          console.log(`  ${actorNameIn(snapshot.names, c.author)} · ${c.createdAt} · ${c.id}${c.at !== undefined ? ` · at ${c.at} s` : ""}`);
           console.log(`    ${c.body}`);
         }
       }

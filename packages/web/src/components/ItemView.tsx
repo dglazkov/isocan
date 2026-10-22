@@ -2089,6 +2089,29 @@ function HtmlItemView({
     window.addEventListener("message", hear);
     return () => window.removeEventListener("message", hear);
   }, [canvasId, itemId, actor, src]);
+  // A motion's player (motion phase 2): it says where a person paused it, so
+  // a comment left then remembers the moment; and opening a comment pinned
+  // to this item at a time scrubs it there — now, and again once a frame
+  // that was still loading says it is ready.
+  const openThreadId = useUiStore((s) => s.openThreadId);
+  const openAt = useCanvasStore((s) => {
+    const thread = openThreadId ? s.canvas?.threads[openThreadId] : undefined;
+    return thread && thread.anchorItemId === itemId ? (thread.comments.find((c) => c.at !== undefined)?.at ?? null) : null;
+  });
+  useEffect(() => {
+    if (!itemId) return;
+    const frames = () => [...(stack.current?.querySelectorAll("iframe") ?? [])];
+    // Lazy: a canvas with no motion on it never fetches the half that answers.
+    const hear = (e: MessageEvent) => {
+      const from = frames().find((f) => f.contentWindow === e.source);
+      if (from && /^isocan:motion-/.test(String((e.data as { type?: unknown } | null)?.type))) {
+        void import("../lib/motionframe.ts").then((m) => m.heardFromMotion(itemId, e.data, from.contentWindow, openAt));
+      }
+    };
+    window.addEventListener("message", hear);
+    if (openAt !== null) void import("../lib/motionframe.ts").then((m) => m.seekMotion(frames().map((f) => f.contentWindow), openAt));
+    return () => window.removeEventListener("message", hear);
+  }, [itemId, openAt, src]);
   if (!snapshotUrl && (!wantLive || !src || !frame)) return <div className="html-view" />;
   return (
     <div className={`html-view-surface${proxyReady ? " has-snapshot" : ""}`}>

@@ -9,8 +9,9 @@ import { motionRenderRequest, renderMotion, type MotionRenderStatus } from "../l
  * One page both surfaces open, so the movie the terminal makes and the one
  * the web will make are made by the same code: `isocan motion render` opens
  * it in the headless browser `canvas shot` drives and reads the bytes off
- * `window`, and phase 2's *Render movie…* will open it in a hidden frame and
- * read the same. Lazy, because nobody's first visit is a render; and NOT
+ * `window`, and *Render movie…* (motion phase 2, the motion module's web
+ * half) opens it in a one-pixel frame of the canvas tab and reads the same;
+ * both then add the movie with core's `addMotionMovie`. Lazy, because nobody's first visit is a render; and NOT
  * behind the `motion` experiment, because the CLI's browser has no settings
  * to switch one on. It reads with this browser's own badge, so it reaches
  * exactly what the person reaching it may read.

@@ -3864,6 +3864,431 @@ export default async function act({ prompt, cli, cwd }) {
     },
   },
   {
+    name: "motion",
+    /**
+     * **Motion, Scenes 1–3, in a browser** (motion phase 2,
+     * `docs/projects/motion/journey.md`). Its own home and daemon with the
+     * real `isocan rc` and `packages/cli/test/fake-acp.mjs` as Kit, the
+     * canvas's lead — **no model runs**: the act below is Kit, and it answers
+     * the way the agent guide tells an agent to, by writing a SPEC and running
+     * `isocan motion new … --spec` (and, for "slower", `motion spec` then
+     * `motion edit`). Every write the browser makes is the real request.
+     *
+     * Maya, with the `motion` experiment on: Animate… before anybody is
+     * parked says so in one sentence and sends nothing; then three SVGs of
+     * Acme Bakery's logo, selected by real presses, right-click → Animate… →
+     * assemble builds a motion in the browser that plays beside them, its
+     * controls below the stage. Her words go to Kit as a summons; Kit's spec
+     * lands as a second motion. "Slower wheat, and less sway" in the Chat
+     * makes it a version. She scrubs its player to about 1.2 s by a real
+     * press on the scrubber inside its frame, ⇧C pins a comment that keeps
+     * the moment, and opening that comment again later scrubs the player
+     * back there. Render movie… records 6 s at 60 fps, 1080 × 1080 — the
+     * progress line counts frames — and lands a video item wearing
+     * `renderedFrom`.
+     */
+    what: "select SVGs → Animate… (recipe in the browser; words through the parked agent's spec) → a version by talking → scrub, comment at a time, reopen it → Render movie…",
+    async run(rig) {
+      const { b } = rig;
+      const home = mkdtempSync(path.join(tmpdir(), "isocan-journey-motion-"));
+      const kitDir = path.join(home, "kit");
+      const fakeAcp = path.join(repo, "packages/cli/test/fake-acp.mjs");
+      const act = path.join(home, "act.mjs");
+      const fixtures = path.join(repo, "packages/core/test/fixtures/motion");
+      execFileSync("mkdir", ["-p", kitDir]);
+      writeFileSync(path.join(home, "identity.json"), JSON.stringify({ id: "usr_motion_maya", name: "Maya", createdAt: new Date().toISOString() }));
+      writeFileSync(path.join(home, "config.json"), JSON.stringify({ adapterEnv: ["FAKE_ACP_*"], acpAdapters: { "claude-code": [process.execPath, fakeAcp] }, defaultHarness: "claude-code" }));
+      // Kit, scripted: it writes a spec from the words — never code — and answers with the CLI.
+      writeFileSync(act, `
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+export default async function act({ prompt, cli, cwd }) {
+  const canvasId = /"canvasId":\\s*"([^"]+)"/.exec(prompt)?.[1];
+  if (!canvasId) return;
+  const run = (...args) => execFileSync(process.execPath, [cli, "--canvas", canvasId, ...args], { encoding: "utf8" });
+  const payload = JSON.parse(prompt.slice(prompt.indexOf("returns):\\n") + 10));
+  const said = [];
+  const walk = (v) => { if (typeof v === "string") said.push(v); else if (v && typeof v === "object") Object.values(v).forEach(walk); };
+  walk(payload.entries);
+  const memory = path.join(cwd, "motion.json");
+  const threadId = /"threadId":\\s*"([^"]+)"/.exec(prompt)?.[1];
+  const slower = said.find((s) => /slower/i.test(s));
+  if (slower && existsSync(memory)) {
+    const { itemId } = JSON.parse(readFileSync(memory, "utf8"));
+    const { spec } = JSON.parse(run("--json", "motion", "spec", itemId));
+    for (const move of spec.moves) {
+      if (move.target !== "wheat/stalk") continue;
+      for (const ch of Object.values(move.channels)) for (const k of ch.keys ?? []) k.t = Math.round(k.t * 1.4 * 1000) / 1000;
+      if (move.channels.rotate?.wave) move.channels.rotate.wave = { ...move.channels.rotate.wave, amp: 1.5, from: 2.1 };
+    }
+    const file = path.join(cwd, "slower.json");
+    writeFileSync(file, JSON.stringify(spec, null, 2));
+    run("motion", "edit", itemId, "--spec", file);
+    if (threadId) run("comment", "reply", threadId, "Slower wheat, less sway: a new version of the motion.");
+    return;
+  }
+  const ask = said.find((s) => s.includes("Animate, please:"));
+  if (!ask || existsSync(memory)) return;
+  const ids = [...ask.matchAll(/\\((itm_[\\w-]+)\\)/g)].map((m) => m[1]);
+  const words = /— “([^”]*)”\\./.exec(ask)?.[1] ?? "";
+  const spec = {
+    seconds: 3,
+    loop: false,
+    moves: [
+      { target: "circle", channels: { draw: { keys: [{ t: 0, v: 0 }, { t: 0.9, v: 1, ease: "inOut" }] } } },
+      { target: "wheat/stalk", pivot: "base", follows: "circle", channels: {
+        scale: { keys: [{ t: 0.5, v: 0.2 }, { t: 1.5, v: 1, ease: "outBack" }] },
+        rotate: { keys: [{ t: 0.5, v: -10 }, { t: 1.5, v: 0, ease: "outBack" }], wave: { period: 3, amp: 3, from: 1.5 } },
+      } },
+      { target: "wordmark", follows: "wheat/stalk", channels: {
+        opacity: { keys: [{ t: 1.7, v: 0 }, { t: 2, v: 1, ease: "out" }] },
+        y: { keys: [{ t: 1.7, v: 8 }, { t: 2.3, v: 0, ease: "outBack" }] },
+      } },
+    ],
+  };
+  const file = path.join(cwd, "scene-1.json");
+  writeFileSync(file, JSON.stringify(spec, null, 2));
+  const made = JSON.parse(run("--json", "motion", "new", ...ids, "--spec", file, "--say", words, "--title", "Acme logo — from words"));
+  writeFileSync(memory, JSON.stringify({ itemId: made.itemId }));
+  if (threadId) run("comment", "reply", threadId, "Here it moves: Acme logo — from words.");
+}
+`);
+      const daemon = await startDaemon(home);
+      const { origin } = daemon;
+      const env = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(origin).port, FAKE_ACP_ACT: act, FAKE_ACP_CLI: cli };
+      for (const name of ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_ENTRYPOINT", "ISOCAN_SESSION_ID", "ISOCAN_HARNESS", "CODEX_SANDBOX", "CODEX_THREAD_ID"]) delete env[name];
+      const runCli = (...args) => {
+        const out = execFileSync(process.execPath, [cli, "--json", ...args], { cwd: home, encoding: "utf8", env });
+        return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+      };
+      const shots = {};
+      const shot = async (name) => {
+        const file = path.join(tmpdir(), `isocan-motion-${name}-${Date.now()}.png`);
+        writeFileSync(file, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+        shots[name] = file;
+      };
+      const FEATURES = `{headers:{'x-isocan-features':'canvas-groups-v4'}}`;
+      const served = async (id) => JSON.parse(await b.ev(`fetch('/api/projects/${id}/canvas', ${FEATURES}).then(r => r.json()).then(r => JSON.stringify(r.canvas))`));
+      const mouse = (type, x, y, { button = "left", modifiers = 0 } = {}) => b.send("Input.dispatchMouseEvent", {
+        type, x, y, modifiers, button: type === "mouseMoved" ? "none" : button,
+        buttons: type === "mousePressed" ? (button === "right" ? 2 : 1) : 0, clickCount: type === "mouseMoved" ? 0 : 1,
+      });
+      const press = async (at, opts) => { await mouse("mouseMoved", at.x, at.y); await mouse("mousePressed", at.x, at.y, opts); await mouse("mouseReleased", at.x, at.y, opts); await sleep(200); };
+      /**
+       * A point on an item that the browser's own hit test says IS that item —
+       * not the Chat panel over it, not the item drawn on top of it. The asked
+       * fraction first, else the nearest point of a grid over the item that
+       * hits it; none, and the failure says what covers it.
+       */
+      const pointOn = async (itemId, fx = 0.5, fy = 0.5) => {
+        const at = await b.ev(`(() => {
+          const el = document.querySelector('.item[data-item-id="${itemId}"]');
+          if (!el) return { none: "the item is not drawn" };
+          const r = el.getBoundingClientRect();
+          const hits = (x, y) => document.elementFromPoint(x, y)?.closest(".item")?.dataset.itemId === ${JSON.stringify(itemId)};
+          const want = { x: r.left + r.width * ${fx}, y: r.top + r.height * ${fy} };
+          const tries = [want];
+          for (let i = 1; i < 10; i++) for (let j = 1; j < 10; j++) tries.push({ x: r.left + (r.width * i) / 10, y: r.top + (r.height * j) / 10 });
+          tries.sort((a, b2) => Math.hypot(a.x - want.x, a.y - want.y) - Math.hypot(b2.x - want.x, b2.y - want.y));
+          const ok = tries.find((p) => p.x > 0 && p.y > 0 && p.x < innerWidth && p.y < innerHeight && hits(p.x, p.y));
+          if (ok) return { x: Math.round(ok.x), y: Math.round(ok.y) };
+          const top = document.elementFromPoint(want.x, want.y);
+          return { none: "covered by " + (top ? (top.className?.toString?.() || top.tagName) : "nothing") };
+        })()`);
+        if (at.none) throw new Error(`no point on ${itemId} a press would reach: ${at.none}`);
+        return at;
+      };
+      /** A row of the item menu, pressed for real — after a real right-click on `at`. */
+      const menuRow = async (at, label) => {
+        await press(at, { button: "right" });
+        const row = `[...document.querySelectorAll(".context-menu [role=menuitem], .context-menu button")].find((el) => el.textContent.trim().startsWith(${JSON.stringify(label)}))`;
+        try {
+          await until(b, `!!${row}`, `the item menu, offering "${label}"`, 5000);
+        } catch (err) {
+          const offered = await b.ev(`[...document.querySelectorAll(".context-menu [role=menuitem], .context-menu button")].map(e => e.textContent.trim()).join(" | ")`);
+          throw new Error(`${err.message} — it offers: ${offered}`);
+        }
+        const r = await b.ev(`(() => { const r = ${row}.getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`);
+        await press(r);
+      };
+      /**
+       * The player inside a motion's frame, read through an isolated world —
+       * the frame is the sandboxed content origin, so the page cannot look
+       * inside it, and neither does the app; only the journey does, to see
+       * what a person sees.
+       */
+      const inPlayer = async (blobHash, expression) => {
+        const { frameTree } = await b.send("Page.getFrameTree");
+        const all = [];
+        const visit = (t) => { all.push(t.frame); (t.childFrames ?? []).forEach(visit); };
+        visit(frameTree);
+        const frame = all.find((f) => f.url.includes(blobHash));
+        if (!frame) return null;
+        const { executionContextId } = await b.send("Page.createIsolatedWorld", { frameId: frame.id, worldName: "journey" });
+        const r = await b.send("Runtime.evaluate", { expression, contextId: executionContextId, returnByValue: true });
+        return r.result?.value ?? null;
+      };
+      const currentHash = (item) => item.versions.find((v) => v.id === item.currentVersionId).blobHash;
+      let rc = null;
+      let rcOut = "";
+      try {
+        const id = runCli("canvas", "create", "Acme Bakery").canvasId;
+        const add = (file, title, at, size) => runCli("--canvas", id, "add", path.join(fixtures, file), "--title", title, "--at", at, "--size", size).itemId;
+        const circle = add("circle.svg", "Circle", "0,0", "200x200");
+        const wheat = add("wheat.svg", "Wheat", "58,30", "84x140");
+        const wordmark = add("wordmark.svg", "Wordmark", "-60,210", "320x60");
+        runCli("--canvas", id, "rc", "add", "Kit", "--dir", kitDir);
+        runCli("--canvas", id, "canvas", "edit", "--prop", "proactive=Kit");
+
+        const { address } = runCli("--canvas", id, "pass");
+        await b.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+        const loaded = b.once("Page.loadEventFired");
+        await b.send("Page.navigate", { url: origin });
+        await Promise.race([loaded, sleep(15_000)]);
+        await b.ev(`(() => { localStorage.clear(); localStorage.setItem("isocan.experiments", JSON.stringify(["motion"])); return true; })()`);
+        await b.send("Page.navigate", { url: address });
+        await sleep(2500);
+        for (const itemId of [circle, wheat, wordmark]) await until(b, `!!document.querySelector('.item[data-item-id="${itemId}"]')`, "the logo's three SVGs on Maya's canvas", 20_000);
+        await rig.click(".zoom-pct", "the zoom menu");
+        await rig.clickText(".zoom-menu-row", "Zoom to Fit", "Zoom to Fit");
+        await sleep(800);
+
+        // 1. Three SVGs, selected by real presses: the wheat, then ⇧ the circle on its rim and the wordmark.
+        const selectLogo = async () => {
+          const seen = [];
+          const selected = () => b.ev(`[...document.querySelectorAll(".item.selected")].map((e) => e.dataset.itemId).join(",")`);
+          // The whole canvas first: adding a motion glides the camera to it.
+          await rig.click(".zoom-pct", "the zoom menu");
+          await rig.clickText(".zoom-menu-row", "Zoom to Fit", "Zoom to Fit");
+          await sleep(800);
+          if (await selected()) {
+            const bare = await openSpot(rig);
+            await press(bare);
+            await until(b, `!document.querySelector(".item.selected")`, "the selection to clear", 3000);
+          }
+          // The wheat first: it sits inside the circle, and a selected item draws on top.
+          await press(await pointOn(wheat, 0.5, 0.6));
+          seen.push(await selected());
+          await press(await pointOn(circle, 0.95, 0.5), { modifiers: 8 });
+          seen.push(await selected());
+          await press(await pointOn(wordmark, 0.5, 0.5), { modifiers: 8 });
+          seen.push(await selected());
+          await until(b, `[${JSON.stringify(circle)}, ${JSON.stringify(wheat)}, ${JSON.stringify(wordmark)}].every((id) => document.querySelector('.item[data-item-id="' + id + '"]')?.classList.contains("selected"))`, `all three SVGs selected (after each press: ${JSON.stringify(seen)}; circle ${circle}, wheat ${wheat}, wordmark ${wordmark})`, 4000);
+        };
+        await selectLogo();
+
+        // 1a. Nobody parked yet: Animate… says so in one sentence, and sends nothing.
+        await menuRow(await pointOn(wordmark, 0.5, 0.5), "Animate…");
+        await until(b, `!!document.querySelector("[data-motion-animate]")`, "the Animate dialog", 10_000);
+        await until(b, `/Nobody’s agent is parked/.test(document.querySelector("[data-motion-animate] .motion-problem")?.textContent ?? "")`, "the sentence that nobody is parked");
+        if (!(await b.ev(`document.querySelector("[data-motion-ask]").disabled`))) throw new Error("Ask is offered with nobody parked");
+        await shot("animate-nobody-parked");
+        await rig.press("Escape");
+        await until(b, `!document.querySelector('.modal-backdrop')`, "the dialog to close");
+        if (Object.values((await served(id)).threads).length !== 0) throw new Error("Animate… with nobody parked sent something");
+
+        // Kit's runner, parked.
+        rc = spawn(process.execPath, [cli, "--canvas", id, "rc"], { cwd: home, env, stdio: ["ignore", "pipe", "pipe"] });
+        rc.stdout.on("data", (c) => (rcOut += c));
+        rc.stderr.on("data", (c) => (rcOut += c));
+        await until(b, `fetch('/api/projects/${id}/rc', ${FEATURES}).then(r => r.json()).then(r => r.parked)`, "Kit's rc to park", 20_000);
+        await sleep(2500);
+
+        // 1b. Animate… → assemble: built in the browser, beside the logo.
+        await selectLogo();
+        await menuRow(await pointOn(wordmark, 0.5, 0.5), "Animate…");
+        await until(b, `!!document.querySelector("[data-motion-recipe-go]")`, "the Animate dialog, with its recipes", 10_000);
+        await until(b, `!document.querySelector("[data-motion-animate] .motion-problem[role=status]")`, "the dialog to know Kit is parked", 10_000);
+        await shot("animate-dialog");
+        await rig.click("[data-motion-recipe-go]", "Animate with assemble");
+        await until(b, `!document.querySelector('.modal-backdrop')`, "the recipe's motion to land", 20_000);
+        let canvas = await served(id);
+        const recipeMotion = Object.values(canvas.items).find((i) => i.properties.motion === "true");
+        if (!recipeMotion) throw new Error("no motion item after Animate with assemble");
+        const sources = JSON.parse(recipeMotion.properties.motionSources).map((s) => s.item);
+        if (JSON.stringify(sources) !== JSON.stringify([circle, wheat, wordmark])) throw new Error(`the motion was taken from ${sources}, not the logo back to front`);
+        if (recipeMotion.x < 260 || recipeMotion.height !== 270 + 32) throw new Error(`the motion is not beside the logo with its controls below: ${JSON.stringify({ x: recipeMotion.x, h: recipeMotion.height })}`);
+        await until(b, `!!document.querySelector('.item[data-item-id="${recipeMotion.id}"] iframe')`, "the motion playing on the canvas", 20_000);
+        const player = await (async () => {
+          const deadline = Date.now() + 15_000;
+          for (;;) {
+            const p = await inPlayer(currentHash(recipeMotion), `(() => { const s = document.getElementById("stage").getBoundingClientRect(), c = document.getElementById("motion-controls").getBoundingClientRect(); return { scrub: !!document.getElementById("motion-scrub"), label: document.getElementById("motion-scrub")?.getAttribute("aria-label"), below: c.top >= s.bottom - 0.5, time: document.getElementById("motion-time").textContent }; })()`);
+            if (p || Date.now() > deadline) return p;
+            await sleep(300);
+          }
+        })();
+        if (!player?.scrub || player.label !== "Time" || !player.below) throw new Error(`the player is not a labelled scrubber below the stage: ${JSON.stringify(player)}`);
+        if (!/ \/ 2\.4 s$/.test(player.time)) throw new Error(`the player does not say the motion's length: ${player.time}`);
+        await shot("assembled");
+
+        // 1c. Words, through the parked agent: a summons naming the sources; Kit writes the spec.
+        const words = "assemble: the circle draws on, the wheat grows up from the base, the wordmark settles in last; then a slow idle sway";
+        await selectLogo();
+        await menuRow(await pointOn(wordmark, 0.5, 0.5), "Animate…");
+        await until(b, `!!document.querySelector("[data-motion-animate] textarea") && !document.querySelector("[data-motion-animate] textarea").disabled`, "the words field, with Kit to answer", 10_000);
+        await rig.click("[data-motion-animate] textarea", "the words field");
+        await rig.type(words);
+        await until(b, `/^Ask Kit$/.test(document.querySelector("[data-motion-ask]")?.textContent ?? "") && !document.querySelector("[data-motion-ask]").disabled`, "Ask Kit");
+        await rig.click("[data-motion-ask]", "Ask Kit");
+        await until(b, `!document.querySelector('.modal-backdrop')`, "the ask to send");
+        canvas = await served(id);
+        const asked = Object.values(canvas.threads).flatMap((t) => t.comments).find((c) => c.body.includes("Animate, please:"));
+        if (!asked || !asked.body.includes(words) || JSON.stringify(asked.items) !== JSON.stringify([circle, wheat, wordmark]) || asked.mentions?.length !== 1) throw new Error(`the summons does not name the sources and the words: ${JSON.stringify(asked)}`);
+        await until(b, `fetch('/api/projects/${id}/canvas', ${FEATURES}).then(r => r.json()).then(r => Object.values(r.canvas.items).some(i => i.properties.motion === "true" && i.description === ${JSON.stringify(words)}))`, "Kit's motion, written from the words", 60_000);
+        canvas = await served(id);
+        const spoken = Object.values(canvas.items).find((i) => i.properties.motion === "true" && i.description === words);
+        if (spoken.createdBy?.name !== "Kit") throw new Error(`the words' motion was made by ${spoken.createdBy?.name}, not Kit`);
+        const spokenSpec = runCli("--canvas", id, "motion", "spec", spoken.id);
+        if (spokenSpec.recipe !== null || spokenSpec.spec.moves.find((m) => m.target === "wheat/stalk")?.pivot !== "base") throw new Error(`Kit's motion is not its spec, turning the stalk on its base: ${JSON.stringify(spokenSpec)}`);
+        await until(b, `!!document.querySelector('.item[data-item-id="${spoken.id}"]')`, "Kit's motion on Maya's canvas", 20_000);
+
+        // 2. "Slower wheat, and less sway", in the Chat: Kit edits its spec into a version.
+        await until(b, `!!document.querySelector(".main-panel .mention-input")`, "the Chat's composer", 20_000);
+        await sleep(1500);
+        await rig.click(".main-panel .mention-input", "the Chat's composer");
+        await rig.type("Slower wheat, and less sway.");
+        await rig.press("Enter");
+        await until(b, `fetch('/api/projects/${id}/canvas', ${FEATURES}).then(r => r.json()).then(r => r.canvas.items[${JSON.stringify(spoken.id)}].versions.length === 2)`, "the motion to gain a version from 'slower'", 60_000);
+        canvas = await served(id);
+        const versioned = canvas.items[spoken.id];
+        const slowerSpec = runCli("--canvas", id, "motion", "spec", spoken.id).spec;
+        const stalk = slowerSpec.moves.find((m) => m.target === "wheat/stalk");
+        if (stalk.channels.rotate.wave.amp !== 1.5 || stalk.channels.scale.keys[1].t <= 1.5) throw new Error(`the new version is not slower with less sway: ${JSON.stringify(stalk)}`);
+
+        // 2b. Scrub to about 1.2 s, by a real press on the scrubber inside the motion's frame.
+        await rig.click(".zoom-pct", "the zoom menu");
+        await rig.clickText(".zoom-menu-row", "Zoom to Fit", "Zoom to Fit");
+        await sleep(800);
+        await press(await pointOn(spoken.id, 0.5, 0.05));
+        await until(b, `!!document.querySelector('.item[data-item-id="${spoken.id}"].selected')`, "Kit's motion selected", 4000);
+        await rig.click(`.item[data-item-id="${spoken.id}"] button[aria-label="Enter item"]`, "Enter, on the motion");
+        await until(b, `!!document.querySelector('.item[data-item-id="${spoken.id}"] iframe')`, "the motion's live frame, entered", 15_000);
+        const hash = currentHash(versioned);
+        const seconds = Number(versioned.properties.motionSeconds);
+        const scrubAt = async (t) => {
+          const inner = await inPlayer(hash, `(() => { const r = document.getElementById("motion-scrub").getBoundingClientRect(); return { left: r.left, width: r.width, top: r.top, height: r.height, vw: innerWidth }; })()`);
+          if (!inner) throw new Error("the motion's frame is not there to scrub");
+          const outer = await b.ev(`(() => { const f = [...document.querySelectorAll('.item[data-item-id="${spoken.id}"] iframe')].find((f) => f.src.includes(${JSON.stringify(hash)})); const r = f.getBoundingClientRect(); return { left: r.left, top: r.top, width: r.width }; })()`);
+          const k = outer.width / inner.vw;
+          // A range's value runs between the thumb's centres, not its edges: about 8 px in from each.
+          const thumb = 8;
+          const x = outer.left + k * (inner.left + thumb + ((inner.width - 2 * thumb) * t) / seconds);
+          const y = outer.top + k * (inner.top + inner.height / 2);
+          await press({ x: Math.round(x), y: Math.round(y) });
+        };
+        await scrubAt(1.2);
+        const readTime = () => inPlayer(hash, `Number(document.getElementById("motion-scrub").value)`);
+        const scrubbed = await readTime();
+        if (!(Math.abs(scrubbed - 1.2) < 0.15)) throw new Error(`the scrubber pressed at 1.2 s reads ${scrubbed}`);
+        await shot("scrubbed");
+
+        // 2c. ⇧C on the motion: the comment keeps the moment. Leave it first —
+        // the keyboard is inside the frame while it is entered.
+        const leave = async () => {
+          await rig.click(`.item[data-item-id="${spoken.id}"] button[aria-label="Leave item"]`, "Leave, on the motion");
+          await until(b, `!!document.querySelector('.item[data-item-id="${spoken.id}"] button[aria-label="Enter item"]')`, "the motion left", 4000);
+        };
+        await leave();
+        await rig.click(`.item[data-item-id="${spoken.id}"] .item-titlebar .chrome-left`, "the motion's title");
+        await until(b, `!!document.querySelector('.item[data-item-id="${spoken.id}"].selected')`, "Kit's motion selected again", 4000);
+        const k = { windowsVirtualKeyCode: 67, key: "C", code: "KeyC" };
+        await b.send("Input.dispatchKeyEvent", { type: "rawKeyDown", modifiers: 8, ...k });
+        await b.send("Input.dispatchKeyEvent", { type: "keyUp", modifiers: 8, ...k });
+        await until(b, `!!document.querySelector(".compose-popover [data-comment-at]")`, "the composer, saying the moment", 5000);
+        const composedAt = Number(await b.ev(`document.querySelector(".compose-popover [data-comment-at]").dataset.commentAt`));
+        if (Math.abs(composedAt - scrubbed) > 0.011) throw new Error(`the composer keeps ${composedAt}, not the scrubbed ${scrubbed}`);
+        await rig.type("wordmark overshoots here");
+        await until(b, `document.querySelector(".compose-popover textarea")?.value === "wordmark overshoots here"`, "the words in the composer", 4000);
+        await rig.clickText(".compose-popover button", "Comment", "the composer's Comment button");
+        await until(b, `fetch('/api/projects/${id}/canvas', ${FEATURES}).then(r => r.json()).then(r => Object.values(r.canvas.threads).some(t => t.anchorItemId === ${JSON.stringify(spoken.id)} && t.comments[0].at !== undefined))`, "the comment pinned to the motion, at its moment", 10_000);
+        canvas = await served(id);
+        const pinned = Object.values(canvas.threads).find((t) => t.anchorItemId === spoken.id);
+        if (pinned.comments[0].body !== "wordmark overshoots here" || Math.abs(pinned.comments[0].at - scrubbed) > 0.011) throw new Error(`the pinned comment is not the words at the moment: ${JSON.stringify(pinned.comments[0])}`);
+        const listed = runCli("--canvas", id, "comment", "ls", "--item", spoken.id);
+        if (listed[0]?.comments[0]?.at !== pinned.comments[0].at) throw new Error("the terminal does not read the comment's moment");
+
+        // 2d. Elsewhere in the motion, then the comment opened again: the player scrubs back to it.
+        await until(b, `!document.querySelector(".compose-popover")`, "the composer to close after sending", 4000);
+        await rig.click(`.item[data-item-id="${spoken.id}"] button[aria-label="Enter item"]`, "Enter, on the motion again");
+        await until(b, `!!document.querySelector('.item[data-item-id="${spoken.id}"] iframe')`, "the motion's frame", 15_000);
+        await scrubAt(2.6);
+        const away = await readTime();
+        if (!(away > 2.2)) throw new Error(`the scrubber pressed at 2.6 s reads ${away}`);
+        await leave();
+        await until(b, `!!document.querySelector(".pin")`, "the comment's pin", 5000);
+        await until(b, `!document.querySelector('.toast-said')`, "the comment toasts to clear", 30_000);
+        await b.ev(`(() => { const p = [...document.querySelectorAll(".pin")].find((p) => /overshoots/.test(p.title)); p?.setAttribute("data-journey-pin", ""); return !!p; })()`);
+        await rig.click("[data-journey-pin]", "the comment's pin", { x: 0.3, y: 0.3 });
+        await until(b, `/overshoots/.test(document.querySelector('.thread-popover')?.textContent ?? '') && !!document.querySelector('.thread-popover [data-comment-at]')`, "the comment opened, saying its moment", 5000);
+        const deadline = Date.now() + 5000;
+        let back = await readTime();
+        while (Math.abs(back - pinned.comments[0].at) > 0.011 && Date.now() < deadline) { await sleep(200); back = await readTime(); }
+        if (Math.abs(back - pinned.comments[0].at) > 0.011) throw new Error(`opening the comment left the player at ${back}, not its moment ${pinned.comments[0].at}`);
+        await shot("comment-at-moment");
+        await rig.press("Escape");
+
+        // 3. Render movie… → MP4, 1080 × 1080, 60 fps, 6 s.
+        await press(await pointOn(spoken.id, 0.5, 0.05));
+        await menuRow(await pointOn(spoken.id, 0.5, 0.05), "Render movie…");
+        await until(b, `!!document.querySelector("[data-motion-render-go]")`, "the Render movie dialog", 10_000);
+        await b.ev(`(() => { const i = [...document.querySelectorAll("[data-motion-render] input[type=number]")][1]; i.setAttribute("data-journey-seconds", ""); return true; })()`);
+        await rig.click("[data-journey-seconds]", "the Seconds field");
+        // Emptied key by key — ⌘A here would be the canvas's select-all.
+        for (const k of [{ windowsVirtualKeyCode: 8, key: "Backspace", code: "Backspace" }, { windowsVirtualKeyCode: 46, key: "Delete", code: "Delete" }]) {
+          for (let i = 0; i < 4; i++) {
+            await b.send("Input.dispatchKeyEvent", { type: "rawKeyDown", ...k });
+            await b.send("Input.dispatchKeyEvent", { type: "keyUp", ...k });
+          }
+        }
+        await rig.type("6");
+        const typed = await b.ev(`document.querySelector("[data-journey-seconds]").value`);
+        if (typed !== "6") throw new Error(`the Seconds field reads ${typed}, not 6`);
+        await rig.click("[data-motion-render-go]", "Render MP4");
+        const lines = [];
+        let progress = null;
+        for (const deadline = Date.now() + 60_000; Date.now() < deadline && !progress;) {
+          const line = await b.ev(`document.querySelector("[data-motion-progress]")?.textContent ?? document.querySelector("[data-motion-render] .motion-problem")?.textContent ?? "(no progress line)"`);
+          if (lines.at(-1) !== line) lines.push(line);
+          if (/^frame [1-9]\d* of 360$/.test(line)) progress = line;
+          else await sleep(150);
+        }
+        if (!progress) throw new Error(`the progress line never counted frames of 360 — it read: ${JSON.stringify(lines)}`);
+        await shot("rendering");
+        await until(b, `fetch('/api/projects/${id}/canvas', ${FEATURES}).then(r => r.json()).then(r => Object.values(r.canvas.items).some(i => i.properties.renderedFrom))`, "the movie beside the motion", 240_000);
+        canvas = await served(id);
+        const movie = Object.values(canvas.items).find((i) => i.properties.renderedFrom);
+        const from = JSON.parse(movie.properties.renderedFrom);
+        const v = movie.versions[0];
+        if (v.mimeType !== "video/mp4" || from.item !== spoken.id || from.version !== versioned.currentVersionId || from.fps !== 60 || from.size !== "1080x1080" || from.seconds !== 6) {
+          throw new Error(`the movie is not the motion's version at 60 fps, 1080 × 1080, 6 s: ${JSON.stringify({ mime: v.mimeType, from })}`);
+        }
+        await until(b, `!!document.querySelector('.item[data-item-id="${movie.id}"] video')`, "the movie playing on the canvas", 20_000);
+        // MOTION_MOVIE=<file.mp4> keeps the movie, for ffprobe and a person's eyes.
+        if (process.env.MOTION_MOVIE) {
+          const b64 = await b.ev(`fetch('/api/projects/${id}/blobs/${v.blobHash}').then(r => r.arrayBuffer()).then(a => { let t = ""; const u = new Uint8Array(a); for (let i = 0; i < u.length; i += 0x8000) t += String.fromCharCode(...u.subarray(i, i + 0x8000)); return btoa(t); })`);
+          writeFileSync(process.env.MOTION_MOVIE, Buffer.from(b64, "base64"));
+        }
+        await shot("movie");
+        const errors = b.takeErrors();
+        if (errors.length > 0) throw new Error(`the page threw: ${errors[0]}`);
+        return { screenshots: shots, recipeMotion: recipeMotion.id, spoken: spoken.id, scrubbed, commentAt: pinned.comments[0].at, progress, movie: { id: movie.id, renderedFrom: from, bytes: v.size } };
+      } catch (err) {
+        await shot("failure").catch(() => {});
+        throw new Error(`${err.message}\n(screens: ${JSON.stringify(shots)})\n--- rc ---\n${rcOut.slice(-3000)}`);
+      } finally {
+        if (rc) {
+          rc.kill("SIGINT");
+          await new Promise((r) => { rc.once("exit", r); setTimeout(r, 3000); });
+          if (rc.exitCode === null) rc.kill("SIGKILL");
+        }
+        await daemon.stop();
+        rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+        await b.send("Emulation.clearDeviceMetricsOverride").catch(() => {});
+      }
+    },
+  },
+  {
     name: "panels",
     /** The bug: the Personas panel's header collapsed to `display: block` and
      *  its icon sat on its own title, while every test passed. */

@@ -124,6 +124,7 @@ export * from "./inbox.ts";
 export * from "./roll.ts";
 export * from "./prototype-click.ts";
 export * from "./summons.ts";
+export * from "./motion-messages.ts";
 export * from "./docstatus.ts";
 export * from "./jsoncanvas.ts";
 export * from "./contextmark.ts";

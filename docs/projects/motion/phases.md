@@ -12,10 +12,11 @@ and a person's walk.
 
 **Phase citations name their project**: `motion phase 1`.
 
-**Where we are, 22 Oct 2026:** phases 0 and 1 CLOSED — the engine, two
-recipes, `isocan motion new`, and `isocan motion render` to MP4. Next:
-motion phase 2, the web's doors. Dion decided [`design.md`](design.md) §7
-— our own engine, MP4 first, no faces — and asked for every phase.
+**Where we are, 22 Oct 2026:** phases 0–2 CLOSED — the engine and
+recipes, `isocan motion new|edit|refresh|render`, and the web's
+*Animate…*, scrubber, comments at a moment and *Render movie…*. Next:
+motion phase 3, WebM, GIF and the remaining recipes, then a person's walk.
+Dion decided [`design.md`](design.md) §7 and asked for every phase.
 
 ---
 
@@ -63,7 +64,7 @@ the web's hidden frame yields the same decoded frames.
 
 ## Phase 2 — Select, animate, scrub
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 22 Oct 2026 — *Animate…* (recipes in the browser, words to the lead), `motion new --spec`/`edit`/`refresh`, a scrubber below the stage, comments at a moment that scrub the player back, and *Render movie…*, walked by the `motion` journey in headless Chrome; one real Codex turn wrote and ran Scene 1's spec from the words (wheat on its `base`, `loop: true`).**
 
 - Web, lazily loaded behind `motion`: *Animate…* on a selection of SVGs
   (recipes, and words through the parked agent); the player's scrubber;
@@ -74,6 +75,14 @@ the web's hidden frame yields the same decoded frames.
 **Proof:** a browser journey through Scenes 1–3 on a scratch daemon with
 the scripted harness standing in for the agent; one real agent run by
 hand writing Scene 1's spec from the words.
+
+### Trajectory
+
+- **2026-10-22** — The recipe build runs in the browser (parse5 and css-tree's parser subpaths, a lazy chunk), so *Animate…* needs no daemon route.
+- **2026-10-22** — Words go to the canvas's lead in the Chat, not through `enrol`: the same path a summons takes, so any parked agent can answer.
+- **2026-10-22** — A real agent read the ask's "answer with `isocan motion new …`" as "reply with this text" and printed the command; the scripted stand-in could not have. The ask and the guide now say RUN it — the motion on the canvas is the answer.
+- **2026-10-22** — Open: a looping motion replays its entrance every cycle; "assemble, then idle forever" has no shape yet. The guide tells an agent to say so or offer the idle as a second motion. An engine change, not scheduled.
+- **2026-10-22** — Open: a motion item's properties (`motionSeconds`, `motionSources`) describe its newest version; flipping back to an older version leaves them describing the newest.
 
 ## Phase 3 — Formats and a person's walk
 

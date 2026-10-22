@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { type Daemon } from "@isocan/server";
 import { startDaemon } from "@isocan/server/daemon";
 import vm from "node:vm";
-import { MOTION_PROPS, motionEngine, type MotionEngine, type MotionSpec } from "@isocan/core/motion";
+import { MOTION_CONTROLS_HEIGHT, MOTION_PROPS, motionEngine, type MotionEngine, type MotionSpec } from "@isocan/core/motion";
 import { cliEnv, runCli, type Run } from "./cli.ts";
 
 /**
@@ -87,7 +87,8 @@ describe("isocan motion new", () => {
     const sources = JSON.parse(shown.properties[MOTION_PROPS.sources]!) as Array<{ item: string; version: string }>;
     expect(sources.map((s) => s.item)).toEqual([ids.circle, ids.wheat, ids.wordmark]);
     for (const s of sources) expect(s.version).toMatch(/^ver_/);
-    expect({ width: shown.width, height: shown.height }).toEqual({ width: 320, height: 270 });
+    // The stage, and the player's controls below it — never over the drawing.
+    expect({ width: shown.width, height: shown.height }).toEqual({ width: 320, height: 270 + MOTION_CONTROLS_HEIGHT });
     expect(shown.x).toBeGreaterThanOrEqual(260);
 
     const doc = await isocan("get", answer.itemId);
@@ -133,6 +134,104 @@ describe("isocan motion new", () => {
     const notSvg = await isocan("motion", "new", noteId);
     expect(notSvg.code).not.toBe(0);
     expect(notSvg.stderr).toContain("Note is not an SVG");
+  }, 60_000);
+});
+
+/**
+ * **What an agent does with a motion** (motion phase 2): writes a spec rather
+ * than code (`motion new --spec`), reads it back (`motion spec`), changes it
+ * into a new version from the same sources (`motion edit`), refreshes it from
+ * a source's newer version (`motion refresh`), and points at a moment in it
+ * (`comment add --at <seconds>`).
+ */
+describe("an agent's motion", () => {
+  type Channel = { keys?: Array<{ t: number; v: number; ease?: string }>; wave?: { period: number; amp: number; from?: number } };
+  const SPEC: { seconds: number; loop: boolean; moves: Array<{ target: string; pivot?: string; follows?: string; channels: Record<string, Channel> }> } = {
+    seconds: 3,
+    loop: false,
+    moves: [
+      { target: "circle", channels: { draw: { keys: [{ t: 0, v: 0 }, { t: 0.9, v: 1 }] } } },
+      { target: "wheat/stalk", pivot: "base", follows: "circle", channels: { rotate: { keys: [{ t: 0.5, v: -10 }, { t: 1.5, v: 0, ease: "outBack" }], wave: { period: 3, amp: 4, from: 1.5 } } } },
+      { target: "wordmark", follows: "wheat/stalk", channels: { opacity: { keys: [{ t: 1.7, v: 0 }, { t: 2, v: 1 }] } } },
+    ],
+  };
+  let motion = "";
+
+  it("makes a motion from a spec, keeping the words, and refuses a spec that names nothing there", async () => {
+    const file = path.join(home, "scene-1.json");
+    await fs.writeFile(file, JSON.stringify(SPEC));
+    const run = await isocan("motion", "new", ids.circle!, ids.wheat!, ids.wordmark!, "--spec", file, "--say", "assemble, then a slow idle sway", "--json");
+    expect(run.code, run.stderr).toBe(0);
+    const answer = JSON.parse(run.stdout) as { itemId: string; seconds: number; recipe: string | null; warnings: unknown[] };
+    expect(answer).toMatchObject({ seconds: 3, recipe: null, warnings: [] });
+    motion = answer.itemId;
+    const shown = JSON.parse((await isocan("show", motion, "--json")).stdout) as { title: string; description: string };
+    expect(shown).toMatchObject({ title: "Circle + Wheat + Wordmark — motion", description: "assemble, then a slow idle sway" });
+
+    const bad = path.join(home, "bad.json");
+    await fs.writeFile(bad, JSON.stringify({ seconds: 1, moves: [{ target: "wheat/stem", channels: {} }] }));
+    const refused = await isocan("motion", "new", ids.wheat!, "--spec", bad);
+    expect(refused.code).not.toBe(0);
+    expect(refused.stderr).toContain('which is not here — the targets are wheat, wheat/stalk');
+    const say = await isocan("motion", "new", ids.wheat!, "--say", "make it dance");
+    expect(say.code).not.toBe(0);
+    expect(say.stderr).toContain("this CLI runs no model");
+  }, 60_000);
+
+  it("prints the spec as it was written, with the targets", async () => {
+    const run = await isocan("motion", "spec", motion);
+    expect(run.code, run.stderr).toBe(0);
+    expect(JSON.parse(run.stdout)).toEqual(SPEC);
+    expect(run.stderr).toContain("targets: circle, wheat, wheat/stalk, wordmark");
+  }, 60_000);
+
+  it("edits it into a new version from the same sources — slower wheat, less sway", async () => {
+    const slower = structuredClone(SPEC);
+    slower.moves[1]!.channels.rotate!.keys![1]!.t = 2;
+    slower.moves[1]!.channels.rotate!.wave!.amp = 2;
+    const file = path.join(home, "slower.json");
+    await fs.writeFile(file, JSON.stringify(slower));
+    const run = await isocan("motion", "edit", motion, "--spec", file);
+    expect(run.code, run.stderr).toBe(0);
+    expect(run.stdout).toMatch(/a new version \(ver_/);
+    const shown = JSON.parse((await isocan("show", motion, "--json")).stdout) as { versions: unknown[]; properties: Record<string, string> };
+    expect(shown.versions).toHaveLength(2);
+    const sources = JSON.parse(shown.properties[MOTION_PROPS.sources]!) as Array<{ item: string }>;
+    expect(sources.map((s) => s.item)).toEqual([ids.circle, ids.wheat, ids.wordmark]);
+    expect((JSON.parse((await isocan("motion", "spec", motion)).stdout) as typeof SPEC).moves[1]!.channels.rotate!.wave!.amp).toBe(2);
+  }, 60_000);
+
+  it("refreshes from a source's newer version, and says when there is none", async () => {
+    const none = await isocan("motion", "refresh", motion);
+    expect(none.code, none.stderr).toBe(0);
+    expect(none.stdout).toContain("nothing to refresh");
+    const wheat = await fs.readFile(path.join(fixtures, "wheat.svg"), "utf8");
+    const newer = path.join(home, "wheat-2.svg");
+    await fs.writeFile(newer, wheat.replace('fill="#d9a441"', 'fill="#c98f2a"'));
+    expect((await isocan("edit", ids.wheat!, newer)).code).toBe(0);
+    const told = await isocan("motion", "spec", motion);
+    expect(told.stderr).toContain(`Wheat has a newer version — isocan motion refresh ${motion}`);
+    const run = await isocan("motion", "refresh", motion, "--json");
+    expect(run.code, run.stderr).toBe(0);
+    expect((JSON.parse(run.stdout) as { refreshed: string[] }).refreshed).toEqual([ids.wheat]);
+    expect((await isocan("motion", "spec", motion)).stderr).not.toContain("newer version");
+  }, 60_000);
+
+  it("pins a comment at a moment, and refuses a moment on what has no clock", async () => {
+    const run = await isocan("comment", "add", "wordmark overshoots here", "--item", motion, "--at", "1.2", "--json");
+    expect(run.code, run.stderr).toBe(0);
+    const { threadId } = JSON.parse(run.stdout) as { threadId: string };
+    const threads = JSON.parse((await isocan("comment", "ls", "--item", motion, "--json")).stdout) as Array<{ id: string; anchorItemId: string; comments: Array<{ at?: number }> }>;
+    const thread = threads.find((t) => t.id === threadId)!;
+    expect(thread.anchorItemId).toBe(motion);
+    expect(thread.comments[0]!.at).toBe(1.2);
+    expect((await isocan("comment", "ls", "--item", motion)).stdout).toContain("· at 1.2 s");
+    const past = await isocan("comment", "add", "after the end", "--item", motion, "--at", "9");
+    expect(past.code).not.toBe(0);
+    expect(past.stderr).toContain("past the end");
+    const still = await isocan("comment", "add", "no clock", "--item", ids.circle!, "--at", "1.2");
+    expect(still.code).not.toBe(0);
+    expect(still.stderr).toContain("Circle is not one");
   }, 60_000);
 });
 
