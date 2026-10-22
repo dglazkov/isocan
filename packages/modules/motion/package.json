@@ -1,0 +1,21 @@
+{
+  "name": "@isocan/motion",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Motion: select SVGs, move them with one deterministic clock, and keep the motion as an HTML item that plays on the canvas",
+  "exports": {
+    "./core": "./src/core.ts",
+    "./web": "./src/web.tsx",
+    "./cli": "./src/cli.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "isocan": {
+    "engines": "^0.2.10"
+  },
+  "dependencies": {
+    "@isocan/core": "*"
+  }
+}

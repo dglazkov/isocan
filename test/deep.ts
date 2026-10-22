@@ -218,6 +218,7 @@ export const FAST_SPAWNERS: readonly FastSpawner[] = [
   { file: "packages/cli/test/model.test.ts", secs: 0.4, why: "local-judge phase 0: three short walks of `isocan model` — no daemon, no network; measured 7 October" },
   { file: "packages/cli/test/conditional-edit.test.ts", secs: 2.3, why: "one daemon in process; about fifteen `edit` spawns for the conditional path, each a fraction of a second" },
   { file: "packages/cli/test/mood.test.ts", secs: 1.4, why: "moodboard phase 0: one in-process daemon with Google faked at the image model's fetch, six short walks of `isocan mood explore` and `ls`; measured 16 October" },
+  { file: "packages/cli/test/motion.test.ts", secs: 2.7, why: "motion phase 0: one in-process daemon, about a dozen short walks of `isocan add`, `motion new`, `show` and `get` over three synthetic SVGs; measured 22 October" },
   { file: "packages/cli/test/summary.test.ts", secs: 6.7, why: "semantic-zoom phase 4: one in-process daemon with a stub model, a dozen short walks of `isocan summary` and `ls --summaries`; measured 14 October" },
   { file: "packages/cli/test/keys.test.ts", secs: 6.9, why: "keys phase 1: a dozen short walks of `isocan keys` — no daemon knock — plus one in-process daemon for the no-restart proof; measured 2 October" },
   { file: "packages/cli/test/tools.test.ts", secs: 7.7, why: "three cases sharing one daemon" },

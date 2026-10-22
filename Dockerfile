@@ -90,6 +90,7 @@ COPY packages/modules/talk/package.json packages/modules/talk/package.json
 COPY packages/modules/wireframe/package.json packages/modules/wireframe/package.json
 COPY packages/modules/judge/package.json packages/modules/judge/package.json
 COPY packages/modules/mood/package.json packages/modules/mood/package.json
+COPY packages/modules/motion/package.json packages/modules/motion/package.json
 COPY packages/modules/critique/package.json packages/modules/critique/package.json
 COPY packages/modules/lottie/package.json packages/modules/lottie/package.json
 

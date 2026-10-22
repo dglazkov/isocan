@@ -34,8 +34,14 @@ import { CLI_MODULES } from "../src/modules.ts";
  * bound is raised: what moved into the cold start, and why it could not be a
  * topic. The answer to "my verb does not fit" is almost always one more line
  * in the verb index and the prose in a topic.
+ *
+ * **3,600 on 22 Oct 2026** (motion phase 0): measured 3,505 once the
+ * `motion` module's index line arrived — the margin above was spent by the
+ * five modules added since (fourteen now), one generated index line each — the growth
+ * it was set aside for. Nothing moved into the cold start's prose; a module's
+ * line is how its topic is found, so it cannot be a topic itself.
  */
-const COLD_START_BUDGET = 3_500;
+const COLD_START_BUDGET = 3_600;
 
 const modules = CLI_MODULES.map((m) => ({ name: m.core.name, guide: m.guide }));
 const guideFile = fileURLToPath(new URL("../src/agent-guide.md", import.meta.url));
