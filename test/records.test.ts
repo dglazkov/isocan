@@ -9,7 +9,7 @@ import { docStatus } from "@isocan/core";
 import { checkFrontMatterVsPhases, checkPhaseStatuses, checkProjectsIndex, checkRepoRecords, checkResearchIndex, phaseSections } from "../scripts/lib/records.mjs";
 
 const repo = fileURLToPath(new URL("..", import.meta.url));
-const statusSh = path.join(repo, ".claude/skills/conduct/status.sh");
+const statusSh = path.join(repo, ".claude/skills/spin/status.sh");
 const roadmapScript = path.join(repo, "scripts/roadmap.mjs");
 
 interface SyntheticProject {

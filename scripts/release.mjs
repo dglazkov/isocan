@@ -91,7 +91,7 @@ const RELEASE_SCRIPTS_DIR = "scripts";
 export const RELEASE_DROPS = [
   ["docs"],
   ["test"],
-  // keel's tests (keel practice `loop`, 5 Oct 2026): the suite for scripts
+  // Plates's tests (adopted as Keel practice `loop`, 5 Oct 2026): the suite for scripts
   // that are dropped below, so as inert here as `test/`.
   ["tests"],
   [":(glob)packages/**/test/**"],
