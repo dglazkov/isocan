@@ -12,8 +12,9 @@ and a person's walk.
 
 **Phase citations name their project**: `motion phase 1`.
 
-**Where we are, 22 Oct 2026:** specified; nothing built. Three questions
-for Dion are open in [`design.md`](design.md) §7.
+**Where we are, 22 Oct 2026:** specified; nothing built. Dion decided
+[`design.md`](design.md) §7 the same day — our own engine, MP4 first, no
+faces — and asked for every phase. Next: motion phase 0, the engine.
 
 ---
 
@@ -26,10 +27,11 @@ for Dion are open in [`design.md`](design.md) §7.
 - `isocan motion new <svg…> --recipe assemble` builds the motion item of
   §2 from the selected SVGs' canvas positions, with scripts and remote
   references stripped.
-- **Proof:** unit tests that `render(t)` is pure (the same `t` gives the
-  same transforms in any order, any number of times); the three-part logo
-  of Scene 1 as a motion item that plays on a scratch canvas in a real
-  browser; two renders of the frame at t = 1.2 s pixel-identical.
+
+**Proof:** unit tests that `render(t)` is pure (the same `t` gives the
+same transforms in any order, any number of times); the three-part logo
+of Scene 1 as a motion item that plays on a scratch canvas in a real
+browser; two renders of the frame at t = 1.2 s pixel-identical.
 
 ## Phase 1 — The movie
 
@@ -38,10 +40,11 @@ for Dion are open in [`design.md`](design.md) §7.
 - The render page of §4 with WebCodecs H.264 into MP4; `isocan motion
   render` through the headless browser; the video item with
   `renderedFrom`; caps.
-- **Proof:** a 6 s, 60 fps, 1080² MP4 of the logo: 360 frames, decoded
-  frames 0, 72 and 359 equal the player's `render(t)` at those times
-  (within encoder tolerance), plays on the canvas; the same render from
-  the web's hidden frame yields the same decoded frames.
+
+**Proof:** a 6 s, 60 fps, 1080² MP4 of the logo: 360 frames, decoded
+frames 0, 72 and 359 equal the player's `render(t)` at those times
+(within encoder tolerance), plays on the canvas; the same render from
+the web's hidden frame yields the same decoded frames.
 
 ## Phase 2 — Select, animate, scrub
 
@@ -52,9 +55,10 @@ for Dion are open in [`design.md`](design.md) §7.
   comments with `at`; *Refresh from sources*; *Render movie…*.
 - The agent guide's motion section; `--say` for an agent writing the spec
   itself.
-- **Proof:** a browser journey through Scenes 1–3 on a scratch daemon with
-  the scripted harness standing in for the agent; one real agent run by
-  hand writing Scene 1's spec from the words.
+
+**Proof:** a browser journey through Scenes 1–3 on a scratch daemon with
+the scripted harness standing in for the agent; one real agent run by
+hand writing Scene 1's spec from the words.
 
 ## Phase 3 — Formats and a person's walk
 
@@ -62,6 +66,7 @@ for Dion are open in [`design.md`](design.md) §7.
 
 - WebM (VP9) and GIF; the remaining recipes (`reveal`, `orbit`,
   `emphasis`).
-- **Proof:** each format plays on the canvas and outside isocan; a
-  `docs/verify/` walk: a person animates something of their own and judges
-  whether the motion feels right, which no check can say.
+
+**Proof:** each format plays on the canvas and outside isocan; a
+`docs/verify/` walk: a person animates something of their own and judges
+whether the motion feels right, which no check can say.

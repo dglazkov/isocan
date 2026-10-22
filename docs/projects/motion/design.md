@@ -137,13 +137,12 @@ never tainted.
   is cheap in money but not in time; the agent guide says to offer, not to
   render unasked.
 
-## 7. Open questions for Dion
+## 7. Decided
 
-1. **The skill's code, or its ideas?** It is MIT: the engine could be a
-   port of `motion.ts` with the licence kept, or our own written to the same
-   shapes. Proposal: our own, credited, because ours must be pure in `t`
-   and theirs is written for a native frame loop.
-2. **Is MP4 enough first?** Proposal: MP4 in phase 1, WebM and GIF in
-   phase 3.
-3. **Faces and rigs**, the skill's strength. Proposal: not in this
-   project; a later door once the engine has carried a logo and a scene.
+Dion, 22 Oct 2026, agreeing all three proposals:
+
+1. **Our own engine, credited.** Written to the skill's shapes and
+   principles, pure in `t`; none of its MIT code is ported.
+2. **MP4 first.** H.264 MP4 in phase 1; WebM and GIF in phase 3.
+3. **No faces or rigs here.** A later door, once the engine has carried a
+   logo and a scene.
