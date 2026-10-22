@@ -13,7 +13,7 @@
     "typecheck": "tsc --noEmit"
   },
   "isocan": {
-    "engines": "^0.2.10"
+    "engines": "^0.2.11"
   },
   "dependencies": {
     "@isocan/core": "*"

@@ -59,6 +59,15 @@ export declare function workbenchPath(canvasId: string): string;
 export declare function workbenchItemPath(canvasId: string, itemId: string): string;
 /** The whole address of a workbench view: origin + path, item optional. */
 export declare function workbenchUrl(origin: string, canvasId: string, itemId?: string): string;
+/** The router's pattern for the render page, built from `CANVAS_ROUTE`. */
+export declare const MOTION_RENDER_ROUTE = "/p/:canvasId/render/motion/:itemId";
+/**
+ * The render page's whole address. The query is how the movie is asked for —
+ * `version`, `fps`, `size` (`1080` or `1920x1080`), `seconds`, `background`
+ * (`#rrggbb`) and `keep` (frame numbers whose pre-encode picture the page
+ * keeps, for a proof to compare with) — each left out when not given.
+ */
+export declare function motionRenderUrl(origin: string, canvasId: string, itemId: string, query?: Partial<Record<"version" | "fps" | "size" | "seconds" | "background" | "keep", string | number>>): string;
 /**
  * The whole invitation: origin + path.
  *

@@ -1282,8 +1282,14 @@ export declare function isDataOnly(manifest: ModuleManifest): boolean;
  * already stands; and a template's `prepare` may answer with the agent's
  * `budget` and `color`, which the rc applies when it enrols from a web ask.
  * Optional, provided or passed: a module built for `^0.2.9` still loads.
+ *
+ * **0.2.10 → 0.2.11 on 22 Oct 2026**, an addition (motion phase 1):
+ * `CliHost.runPackageScript`, a member a module is handed — one of isocan's
+ * own `scripts/*.mjs`, run the way `canvas shot` runs its — optional so a
+ * module can tell an older host by its absence. A module built for `^0.2.10`
+ * still loads.
  */
-export declare const MODULE_API_VERSION = "0.2.10";
+export declare const MODULE_API_VERSION = "0.2.11";
 /**
  * **The parts of the API we intend to change**, named so a module can say it
  * is using one and a home can say yes before it runs.

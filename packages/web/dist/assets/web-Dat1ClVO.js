@@ -1,0 +1,1 @@
+import{R as o}from"./motion-render-Cb6BG3c2.js";const t={motion:"motion",sources:"motionSources",seconds:"motionSeconds",loop:"motionLoop"},n={name:"@isocan/motion",propertyKeys:[...Object.values(t),o]},s={core:n};export{s as default,s as motionWeb};
