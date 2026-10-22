@@ -13,9 +13,16 @@
     "typecheck": "tsc --noEmit"
   },
   "isocan": {
-    "engines": "^0.2.11"
+    "engines": "^0.2.11",
+    "proposed": [
+      "dialogs",
+      "host"
+    ]
   },
   "dependencies": {
     "@isocan/core": "*"
+  },
+  "peerDependencies": {
+    "react": "^18.3.1"
   }
 }

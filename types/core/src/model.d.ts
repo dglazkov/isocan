@@ -304,6 +304,13 @@ export interface Comment {
         word: string;
         reading: string;
     }>;
+    /**
+     * **A moment in the item, in seconds** (motion phase 2): a comment pinned
+     * to a motion at 1.2 s says *"wordmark overshoots here"* about that frame,
+     * and opening it scrubs the player there. A property on the comment, not
+     * an op (motion design §2); at most a day, to the millisecond.
+     */
+    at?: number;
     /** Item ids #-referenced in the body, resolved at authoring time against
      * the live items the author could see. Absent on older comments. */
     items?: string[];

@@ -3032,6 +3032,13 @@ var init_summons = __esm({
   }
 });
 
+// packages/core/src/motion-messages.ts
+var init_motion_messages = __esm({
+  "packages/core/src/motion-messages.ts"() {
+    "use strict";
+  }
+});
+
 // packages/core/src/docstatus.ts
 var init_docstatus = __esm({
   "packages/core/src/docstatus.ts"() {
@@ -3392,6 +3399,7 @@ var init_src = __esm({
     init_roll();
     init_prototype_click();
     init_summons();
+    init_motion_messages();
     init_docstatus();
     init_jsoncanvas();
     init_contextmark();
