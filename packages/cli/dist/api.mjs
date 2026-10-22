@@ -40,7 +40,7 @@ import {
   waitForFeedback,
   waitForResolvedFeedback,
   wholeLog
-} from "./chunk-BRW6IJMV.mjs";
+} from "./chunk-6R6U3EAM.mjs";
 import {
   prepareDesignReviewCompletion,
   prepareDesignReviewHandoff,
@@ -51,7 +51,7 @@ import {
   prepareDesignVerifierOffer,
   submitDesignReviewWrite,
   validatePreparedDesignReviewWrite
-} from "./chunk-HGNDRYEY.mjs";
+} from "./chunk-VJ65OLH7.mjs";
 import {
   checkDesignCraft,
   parseDesignCraftPacket,
@@ -69,7 +69,7 @@ import {
   prepareDesignRepair,
   submitDesignRepair,
   validatePreparedDesignRepair
-} from "./chunk-SZP5RGXM.mjs";
+} from "./chunk-PQDKDDEP.mjs";
 import {
   CanvasGroups,
   DaemonClient,
@@ -105,8 +105,8 @@ import {
   retireStrandedIdentities,
   shaOfRoot,
   writeIdentity
-} from "./chunk-KGMPUQR2.mjs";
-import "./chunk-2EJTXNRG.mjs";
+} from "./chunk-SSH2EGY3.mjs";
+import "./chunk-ZC6YZGGW.mjs";
 import {
   DaemonRoutes,
   OPERATIONS_ROUTE,
@@ -120,7 +120,7 @@ import {
   readDesignAuditAdvisory,
   readDesignSourceAudit,
   repairDesignScreen
-} from "./chunk-5LB453ZS.mjs";
+} from "./chunk-DQU4246C.mjs";
 import "./chunk-PKQBK4R5.mjs";
 import {
   prepareDesignDecision,
