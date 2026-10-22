@@ -1,5 +1,5 @@
 {
-  "practice": "0.8.32",
+  "practice": "0.8.33",
   "files": {
     ".agents/skills/plates/SKILL.md": {
       "practice": "agents-md",
@@ -15,11 +15,11 @@
     },
     ".github/workflows/plates-morning.yml": {
       "practice": "night",
-      "sha256": "0e3f548ada17b1a0f33e90885041aa8f853b1bde07e67324274e6bbbb4bcc991"
+      "sha256": "90d27ed92f8cced922075f1cc30b6f5f3a05c9f4bfbd22dddf48eaa097643e79"
     },
     ".github/workflows/plates-night.yml": {
       "practice": "night",
-      "sha256": "f048a3eb414f7afd1996c88c0f3911563124b8f70b62773d2d0134db891494d1"
+      "sha256": "382ebb1b5c16312467dcc2143d29a51111a6d27124c0f34106b2cd13ed13d8d8"
     },
     "AGENTS.md#agents-md": {
       "practice": "agents-md",
@@ -83,7 +83,7 @@
     },
     "scripts/plates/lib.mjs": {
       "practice": "night",
-      "sha256": "9c48fe21528ef669d21e1b36d39add8dd0648182ede7cf17dcb25453dc8b034b"
+      "sha256": "d1295a719141e9ed56326a1da5b99476f6b72ce41d3c616ac6caf6c8a1a2f738"
     },
     "scripts/plates/milestones.mjs": {
       "practice": "night",

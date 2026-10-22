@@ -318,6 +318,11 @@ jobs:
             echo "::error::$1"
             exit 1
           }
+          # Honor legacy provisioning only when the canonical setting is absent.
+          # An explicitly empty canonical value must still fail the preflight.
+          export PLATES_CANVAS_PLATES_VERSION="${PLATES_CANVAS_PLATES_VERSION-${KEEL_CANVAS_KEEL_VERSION-}}"
+          export PLATES_CANVAS_ISOCAN_VERSION="${PLATES_CANVAS_ISOCAN_VERSION-${KEEL_CANVAS_ISOCAN_VERSION-}}"
+          export PLATES_CANVAS_ISOCAN_HOME="${PLATES_CANVAS_ISOCAN_HOME-${KEEL_CANVAS_ISOCAN_HOME-}}"
           for tool in plates isocan; do
             command -v "$tool" >/dev/null 2>&1 || preflight_fail "Canvas night requires $tool explicitly installed and pinned by the project setup."
           done

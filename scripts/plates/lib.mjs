@@ -1920,8 +1920,9 @@ export function setupEnvProblems(config) {
 export function gateEnv(env, config) {
   const problems = setupEnvProblems({ env: config?.env });
   if (problems.length) throw new Error(`.plates/plates.json: ${problems.join('; ')}`);
-  // PLATES_AGENT_GIT is climb.mjs's own (phase 47): a gate never inherits it, so a project's tests run git as they always do.
-  const base = Object.fromEntries(Object.entries(env).filter(([k]) => !k.startsWith('NODE_TEST_') && k !== 'PLATES_AGENT_GIT'));
+  // Both spellings belong to climb (phase 47); leaving the legacy alias lets
+  // child compatibility recreate the override and redirect a gate's Git calls.
+  const base = Object.fromEntries(Object.entries(env).filter(([k]) => !k.startsWith('NODE_TEST_') && !['PLATES_AGENT_GIT', 'KEEL_AGENT_GIT'].includes(k)));
   return { ...base, ...(config?.env ?? {}) };
 }
 
