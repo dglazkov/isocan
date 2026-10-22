@@ -1,38 +1,38 @@
 ---
-name: keel
-description: Start here in any repo with a .keel/keel.json, or when asked about its phases, the roadmap, lessons, the night shift, evidence, or keel itself — it says what keel is and where its instructions live.
+name: plates
+description: Start here in any repo with a .plates/plates.json, or when asked about its phases, the roadmap, lessons, the night shift, evidence, or plates itself — it says what plates is and where its instructions live.
 ---
 
-# isocan is run with keel
+# isocan is run with plates
 
-`keel` keeps a project's working practice in its files: one phase file per
+`plates` keeps a project's working practice in its files: one phase file per
 piece of work, status in that file's front matter, lessons as a table, and
-evidence before anything is called built. The `keel` CLI installs that
+evidence before anything is called built. The `plates` CLI installs that
 practice, checks it, and keeps it current.
 
 **The instructions live in the tool.** Run this first, once per session, and
 follow what it says:
 
 ```sh
-keel --agent-help
+plates --agent-help
 ```
 
 It ships with the CLI, so it describes the version you are running; this file
 cannot fall behind it.
 
-## If `keel` isn't there
+## If `plates` isn't there
 
-Run it from GitHub with nothing installed: wherever a command says `keel`,
-say `npx -y github:dalmaer/keel`.
+Run it from GitHub with nothing installed: wherever a command says `plates`,
+say `npx -y github:dalmaer/plates`.
 
 ```sh
-npx -y github:dalmaer/keel --agent-help
+npx -y github:dalmaer/plates --agent-help
 ```
 
 To install it instead:
 
 ```sh
-git clone https://github.com/dalmaer/keel <dir>
+git clone https://github.com/dalmaer/plates <dir>
 npm install -g <dir>
 ```
 
