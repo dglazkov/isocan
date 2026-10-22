@@ -12,10 +12,10 @@ and a person's walk.
 
 **Phase citations name their project**: `motion phase 1`.
 
-**Where we are, 22 Oct 2026:** phase 0 CLOSED — the engine, the `assemble`
-and `idle` recipes and `isocan motion new`. Next: motion phase 1, the
-movie. Dion decided [`design.md`](design.md) §7 — our own engine, MP4
-first, no faces — and asked for every phase.
+**Where we are, 22 Oct 2026:** phases 0 and 1 CLOSED — the engine, two
+recipes, `isocan motion new`, and `isocan motion render` to MP4. Next:
+motion phase 2, the web's doors. Dion decided [`design.md`](design.md) §7
+— our own engine, MP4 first, no faces — and asked for every phase.
 
 ---
 
@@ -43,7 +43,7 @@ browser; two renders of the frame at t = 1.2 s pixel-identical.
 
 ## Phase 1 — The movie
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 22 Oct 2026 — `isocan motion render` makes a 360-frame 1080² H.264 MP4 in 17 s that lands as a video item with `renderedFrom`; decoded frames 0/72/359 sit within 2.2 of the page's own pictures and each nearest its own, and the hidden-frame path decodes to the CLI's frames exactly.**
 
 - The render page of §4 with WebCodecs H.264 into MP4; `isocan motion
   render` through the headless browser; the video item with
@@ -53,6 +53,13 @@ browser; two renders of the frame at t = 1.2 s pixel-identical.
 frames 0, 72 and 359 equal the player's `render(t)` at those times
 (within encoder tolerance), plays on the canvas; the same render from
 the web's hidden frame yields the same decoded frames.
+
+### Trajectory
+
+- **2026-10-22** — The render page lives under the canvas's address, not at an item-only route as `design.md` §4 first said: an item id names no canvas to read it from. The design now names `MOTION_RENDER_ROUTE`.
+- **2026-10-22** — Modules can run isocan's own `scripts/*.mjs` through `CliHost.runPackageScript` (module API 0.2.10 → 0.2.11): the render page needs the headless browser, and a module could not start a process before.
+- **2026-10-22** — Open: `mp4-muxer` (MIT, 11.5 KB gzipped, in the render chunk only) is marked deprecated upstream; its successor Mediabunny is MPL-2.0 and larger. Replace it, or own the muxing, before it breaks — nothing forces it yet.
+- **2026-10-22** — Open: rendering a motion on a personal canvas follows `canvas shot`'s owner-credential path but was not exercised; a walk on a personal canvas owes it.
 
 ## Phase 2 — Select, animate, scrub
 

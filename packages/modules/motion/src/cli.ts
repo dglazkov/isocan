@@ -1,17 +1,22 @@
 import guideText from "../agent-guide.md";
+import { promises as fs } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import type { Command } from "commander";
 import type { CliHost, CliModule } from "@isocan/cli/modulehost";
-import { newGroupId, newItemId, newVersionId, type Item, type ItemVersion } from "@isocan/core";
+import { motionRenderUrl, newGroupId, newItemId, newVersionId, type Item, type ItemVersion } from "@isocan/core";
 import {
   buildMotion,
   isMotionRecipe,
   MOTION_MAX_SECONDS,
   MOTION_MIME,
+  MOTION_PROPS,
   MOTION_RECIPES,
   motionProperties,
   motionSlug,
   type MotionSource,
 } from "@isocan/core/motion";
+import { MOTION_RENDER_CAPS, motionRenderPlan, RENDERED_FROM, type MotionRenderedFrom } from "@isocan/core/motion-render";
 import { motionModule } from "./core.ts";
 
 /**
@@ -43,6 +48,96 @@ const isSvg = (version: ItemVersion | undefined) =>
 
 /** The gap between the selection and the motion placed beside it, in world units. */
 const BESIDE = 40;
+
+interface RenderOpts {
+  canvas?: string;
+  fps?: string;
+  seconds?: string;
+  size?: string;
+  background?: string;
+  out?: string;
+}
+
+/** What `scripts/motion-render.mjs` says the page rendered (`--report`). */
+interface RenderReport {
+  frames: number;
+  codec: string;
+  bytes: number;
+  renderedFrom: MotionRenderedFrom;
+}
+
+/**
+ * **`isocan motion render <motion>`** (motion phase 1; design §4, §6): the
+ * motion recorded to an MP4 by the web app's render page, in the headless
+ * browser `canvas shot` drives, and added as a `video/mp4` item beside it
+ * wearing `renderedFrom`. The caps are asked here first, off the motion's
+ * own properties, so a movie past them is refused before a browser starts;
+ * the page asks again over the document it fetched, and what IT reports is
+ * what `renderedFrom` says.
+ */
+async function render(host: CliHost, ref: string, opts: RenderOpts, cmd: Command): Promise<void> {
+  if (!host.runPackageScript) throw new Error("this isocan cannot run its render script for a module — upgrade it (module API 0.2.11)");
+  const ctx = await host.ctxOf(cmd);
+  const canvas = await host.resolveCanvas(ctx);
+  const snapshot = await ctx.client.snapshot(canvas.id);
+  const motion = host.resolveItem(snapshot, ref.replace(/^#/, ""));
+  if (motion.properties[MOTION_PROPS.motion] !== "true") throw new Error(`${motion.title} is not a motion — render makes movies of motion items (isocan motion new)`);
+  const version = current(motion);
+  if (!version) throw new Error(`${motion.title} has no version to render`);
+  const length = Number(motion.properties[MOTION_PROPS.seconds]);
+  const plan = motionRenderPlan(
+    { fps: opts.fps, size: opts.size, seconds: opts.seconds, background: opts.background },
+    { seconds: Number.isFinite(length) && length > 0 ? length : MOTION_RENDER_CAPS.seconds, loop: motion.properties[MOTION_PROPS.loop] === "true" },
+  );
+  const origin = (await ctx.homeOf(canvas.id)) ?? ctx.client.base;
+  const url = motionRenderUrl(origin, canvas.id, motion.id, {
+    version: version.id,
+    fps: plan.fps,
+    size: `${plan.width}x${plan.height}`,
+    background: plan.background,
+    ...(opts.seconds !== undefined ? { seconds: plan.seconds } : {}),
+  });
+  const scratch = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-motion-render-"));
+  try {
+    const file = path.join(scratch, "movie.mp4");
+    const reportFile = path.join(scratch, "report.json");
+    // The owner's identity rides on stdin for a personal canvas, exactly as
+    // `canvas shot` hands it; the script uses it only when the home says the
+    // canvas is personal, and only with this machine's own owner credential.
+    host.runPackageScript(
+      "scripts/motion-render.mjs",
+      ["--url", url, "--canvas", canvas.id, "--out", file, "--report", reportFile, "--owner-from-stdin"],
+      { what: "the movie", input: JSON.stringify({ actor: ctx.actor }), quiet: ctx.json },
+    );
+    const report = JSON.parse(await fs.readFile(reportFile, "utf8")) as RenderReport;
+    const bytes = await fs.readFile(file);
+    const filename = `${motionSlug(motion.title) || "motion"}.mp4`;
+    const uploaded = await ctx.client.uploadBlob(canvas.id, bytes, "video/mp4", filename);
+    const [w, h] = report.renderedFrom.size.split("x").map(Number) as [number, number];
+    const width = Math.max(160, Math.round(motion.width));
+    const itemId = newItemId();
+    const title = `${motion.title} — movie`;
+    await host.sendOp(ctx, canvas.id, {
+      type: "item.add",
+      itemId,
+      version: { id: newVersionId(), blobHash: uploaded.blobHash, mimeType: "video/mp4", filename, size: uploaded.size },
+      width,
+      height: Math.round((width * h) / w),
+      placement: { x: motion.x + motion.width + BESIDE, y: motion.y },
+      title,
+      properties: { [RENDERED_FROM]: JSON.stringify(report.renderedFrom) },
+    }, newGroupId());
+    if (opts.out) await fs.writeFile(opts.out, bytes);
+    if (ctx.json) {
+      return host.printJson({ itemId, title, frames: report.frames, codec: report.codec, bytes: bytes.length, renderedFrom: report.renderedFrom, ...(opts.out ? { out: opts.out } : {}) });
+    }
+    const r = report.renderedFrom;
+    console.log(`${itemId}  ${title} — ${report.frames} frames, ${r.size} at ${r.fps} fps, ${r.seconds} s, ${(bytes.length / 1e6).toFixed(1)} MB (${report.codec})`);
+    if (opts.out) console.log(`  wrote ${opts.out}`);
+  } finally {
+    await fs.rm(scratch, { recursive: true, force: true });
+  }
+}
 
 function register(host: CliHost): void {
   const motion = host.program.command("motion").description("Motion: make selected SVGs move, as an HTML item that plays on the canvas");
@@ -127,6 +222,16 @@ function register(host: CliHost): void {
         console.log(`  layers: ${built.spec.layers.map((l) => l.id).join(", ")}${parts.length > 0 ? `; parts: ${parts.join(", ")}` : ""}`);
       }),
     );
+  motion
+    .command("render <motion>")
+    .description(`Record a motion to an MP4 video item beside it (at most ${MOTION_RENDER_CAPS.short}p, ${MOTION_RENDER_CAPS.fps} fps, ${MOTION_RENDER_CAPS.seconds} s) — through the headless browser canvas shot uses`)
+    .option("--canvas <canvas>")
+    .option("--fps <fps>", `frames a second (default 60, at most ${MOTION_RENDER_CAPS.fps})`)
+    .option("--seconds <seconds>", "how long (default: the motion's length — one loop, for a loop)")
+    .option("--size <size>", "1080 for a square, or WIDTHxHEIGHT (default 1080)")
+    .option("--background <color>", "what is behind the stage, #rrggbb (default #ffffff)")
+    .option("--out <file.mp4>", "also write the movie here")
+    .action(host.run(async (ref: string, opts: RenderOpts, cmd: Command) => render(host, ref, opts, cmd)));
 }
 
 export const motionCli: CliModule = {

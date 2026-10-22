@@ -135,3 +135,37 @@ describe("isocan motion new", () => {
     expect(notSvg.stderr).toContain("Note is not an SVG");
   }, 60_000);
 });
+
+/**
+ * **`isocan motion render`'s refusals** (motion phase 1). The movie itself is
+ * proved in a real browser by `scripts/motion-proof.mjs` — a suite case
+ * cannot hold Chrome and ffmpeg — so what is held here is what must happen
+ * BEFORE a browser starts: past a cap, or on an item that is not a motion,
+ * the verb refuses in words and adds nothing.
+ */
+describe("isocan motion render", () => {
+  it("refuses past its caps and on a non-motion, before any browser starts", async () => {
+    const made = await isocan("motion", "new", ids.circle!, "--recipe", "idle", "--title", "Acme circle — idle", "--json");
+    expect(made.code, made.stderr).toBe(0);
+    const motion = (JSON.parse(made.stdout) as { itemId: string }).itemId;
+    const count = async () => {
+      const listed = JSON.parse((await isocan("ls", "--json")).stdout) as { items?: unknown[] } | unknown[];
+      return (Array.isArray(listed) ? listed : listed.items ?? []).length;
+    };
+    const before = await count();
+    for (const [flags, words] of [
+      [["--fps", "120"], "a movie is at most 60 fps, not 120"],
+      [["--seconds", "90"], "a movie is at most 60 seconds, not 90"],
+      [["--size", "2160"], "a movie is at most 1080p"],
+      [["--background", "white"], "--background is a colour as #rrggbb"],
+    ] as const) {
+      const run = await isocan("motion", "render", motion, ...flags);
+      expect(run.code, `${flags.join(" ")} was not refused`).not.toBe(0);
+      expect(run.stderr).toContain(words);
+    }
+    const notMotion = await isocan("motion", "render", ids.circle!);
+    expect(notMotion.code).not.toBe(0);
+    expect(notMotion.stderr).toContain("Circle is not a motion");
+    expect(await count()).toBe(before);
+  }, 60_000);
+});

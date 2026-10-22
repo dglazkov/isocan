@@ -95,7 +95,8 @@ when parts must move separately.
 
 ## 4. Rendering a movie: one page, both surfaces
 
-`/render/motion/:itemId?version&fps&width&height&seconds&format` is a page
+`MOTION_RENDER_ROUTE` (under the canvas's own address, built by
+`motionRenderUrl()`, `?version&fps&size&seconds&background`) is a page
 of the web app that loads the motion document, and for each frame `n`
 calls `render(n / fps)`, draws the stage to a canvas, and encodes it with
 **WebCodecs** (`VideoEncoder`: H.264 for MP4, VP9 for WebM), muxed in the

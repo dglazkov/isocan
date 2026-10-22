@@ -6741,6 +6741,12 @@ const moduleHost: CliHost = {
   // Fenced or refused; there is no third answer, and no flag that makes one
   // (`sandbox.ts`, "A program that came from a canvas").
   runFenced: (request) => runFenced(paths.isocanHome(), request),
+  // A script of this copy's own, by its path in the package — never a path
+  // a module (or a canvas) could point outside `scripts/` with.
+  runPackageScript: (script, args, opts) => {
+    if (!/^scripts\/[a-z0-9-]+\.mjs$/.test(script)) throw new Error(`a module runs isocan's own scripts/*.mjs, not ${script}`);
+    runPackageScript(packagePath(script), args, opts);
+  },
   /**
    * `rc add`, promoted (proposed: `templates`): the claim, the enroll, the
    * cursor and the rc row — with the template's directory as the row's cwd

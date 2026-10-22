@@ -30,3 +30,11 @@ versions and comments like any screen. It wears `motion=true`,
 - The document's `window.render(t)` sets every layer for time `t` and nothing
   else — the same clock drives the preview and every frame a movie will be
   rendered from. Open it with `#still` to load it paused at 0.
+- `isocan motion render <motion> [--fps 60] [--seconds <s>] [--size 1080 | WxH] [--background #rrggbb] [--out file.mp4] [--json]`
+  — records the motion to an H.264 MP4 and adds it as a `video/mp4` item
+  beside it, wearing `renderedFrom` (JSON `{item, version, fps, size,
+  seconds, background}`); `--out` also writes the file. Every frame `n` is
+  `render(n / fps)`, so the movie is the preview, recorded. The length is the
+  motion's (one loop, for a loop). At most 1080p, 60 fps and 60 s — past
+  those it is refused. It takes as long as the frames take, so **offer a
+  render; do not render unasked.** Needs Chrome, as `canvas shot` does.
