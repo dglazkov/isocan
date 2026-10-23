@@ -26,6 +26,11 @@ description: >
 # while a PR run wants the cheap default. A shared step with a flag that only
 # one caller sets is not shared, it is two steps wearing one name.
 
+inputs:
+  stage:
+    description: Stable job or shard identity for retained setup evidence
+    required: true
+
 runs:
   using: composite
   steps:
@@ -50,5 +55,20 @@ runs:
       with:
         install_components: cloud-firestore-emulator
 
-    - run: npm ci
+    # Five minutes is provisional headroom over observed 46–67s setup actions,
+    # not a cold/warm p95. The script preserves npm ci and lifecycle scripts.
+    - id: install
+      run: node scripts/install-watchdog.mjs
       shell: bash
+      env:
+        ISOCAN_SETUP_STAGE: ${{ inputs.stage }}
+
+    - name: Keep install diagnostics
+      if: always() && steps.install.outputs.artifact-name != ''
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ steps.install.outputs.artifact-name }}
+        path: .isocan/install-diagnostics.json
+        include-hidden-files: true
+        retention-days: 14
+        if-no-files-found: error

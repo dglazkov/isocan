@@ -1,19 +1,23 @@
 ---
-status: designed
+status: partial
 since: 2026-10-23
-note: "Plates phase 113: bounded install diagnostics and exact-input retry planning; implementation and verification pending."
+note: "Phase 113 PART-DONE: watchdog and manual retry planning implemented; focused proof passes, integrated gates and PR review await the coordinated heavy slot."
 ---
 
 # Validation efficiency
 
-**Where we are: validation-efficiency phase 113 is next.** This project is the
+**Where we are: validation-efficiency phase 113 is PART-DONE.** Next is the
+parent-coordinated integrated gate, then the separate draft PR and exact-head
+review. [Focused evidence](evidence.md) is retained. This project is the
 isocan slice of Plates's 22 October validation-efficiency spec. It does not
 reorder the unrelated practice project's work. Delivery is an isolated draft
 PR; no merge, deployment, schedule or validation-policy change is authorized.
 
 ## Phase 113 — A stalled install leaves bounded evidence
 
-**Status: NOT STARTED, 23 October 2026.** Contract and dependency inventory established.
+**Status: PART-DONE, 23 October 2026.** Watchdog, retained diagnostics and
+read-only retry planning pass focused controls; full verification waits on
+the parent-controlled heavy slot, currently assigned to Ledger.
 
 **Done when:** A stalled shared suite installation fails within its configured
 bound, leaves redacted lifecycle evidence, and any proposed targeted retry
@@ -22,8 +26,8 @@ requires matching immutable inputs and preserves attempt history.
 **Scope:** Wrap the existing shared PR/release suite-setup install, preserving
 `npm ci` and its lifecycle scripts. Use a provisional generous five-minute
 deadline, heartbeat, pre-TERM diagnostics, TERM grace and process-group KILL.
-The audit observed successful installs of 46–67 seconds and one 1,203-second
-stall, not a cold/warm p95 or p99. Retain installer exit/signal and distinguish
+The audit observed successful setup actions of 46–67 seconds and one 1,203-second
+stall, not isolated npm spans or a cold/warm p95 or p99. Retain installer exit/signal and distinguish
 watchdog timeout. Do not print environment values or arbitrary process arguments.
 No added shards, changed cache policy, worker limits or removed tests.
 
@@ -55,3 +59,8 @@ No heavy gate starts before coordination with the parent on this shared Mac.
 **Deliberately open:** Cold/warm p95/p99 and comparable hosted speed savings
 remain unknown. Complete gate evidence/reuse belongs to Plates phase 114.
 Broader adoption waits on parent review of the exact-head evidence.
+
+- **2026-10-23** — Open: integrated install/build, deep/typecheck and hosted
+  exact-head proof wait on the parent releasing the shared heavy slot. The
+  detached emulator does not satisfy the cooperative foreground admission
+  contract; use explicit parent serialization.
