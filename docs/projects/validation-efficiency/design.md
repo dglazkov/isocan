@@ -34,6 +34,14 @@ signals the entire group even if its leader already exited. A timeout remains
 failure even when a TERM handler exits zero. Evidence-write failure cannot
 turn a failed installation green.
 
+Output exceptions and asynchronous stream errors take the same bounded cleanup
+path and retain only the stream identity and error code. Late write callbacks
+must settle before success; broken-stream error listeners remain through actual
+error/close delivery. After failed supervision, the CLI exits explicitly so an
+unread OS log pipe cannot keep it alive. Pending log bytes may be lost on failure;
+the final synchronous JSON report and installer outcome remain. Successful runs
+drain normally.
+
 Each stage/attempt gets its own retained JSON artifact. The normal four-shard
 test union, anti-skip switches, typecheck, lint, release graders, metrics and
 roadmap steps remain intact. Dependency installation does not attest any of

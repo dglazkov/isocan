@@ -1,9 +1,10 @@
 # Phase 113 evidence — 23 October 2026
 
-Implementation and focused verification are complete in an isolated worktree
-from `e59d061a02ae44bf02a45a02a3e47095ab2688f7`. Required integrated gates,
-hosted verification, independent exact-head PR review and parent approval are
-pending. This is not a completed gate or a speed-improvement claim.
+Implementation is in an isolated worktree from
+`e59d061a02ae44bf02a45a02a3e47095ab2688f7`. A first integrated checkpoint passed;
+independent source review then required an output-error cleanup correction.
+Final corrected gates, hosted verification and parent approval are pending.
+This is not a completed gate or a speed-improvement claim.
 
 ## Inputs and dependency inventory
 
@@ -75,18 +76,62 @@ these cases. Local Git fsmonitor emitted daemon errors during focused switch
 fixtures; the test process still returned zero, and this is recorded rather than
 removed from its log.
 
+## First integrated checkpoint and source review
+
+After Ledger released its slot, the parent assigned isocan the next slot.
+Admission showed zero used/no leases and no competing heavy commands were found.
+Fetched `origin/main` was unchanged. At `8f3d2ad8b`, Node 24.22.1/npm 11.19.1:
+
+| Command | Exit | Wall | User / system CPU |
+| --- | --- | --- | --- |
+| Watchdog running unchanged `npm ci` | 0 | 16.42 s | 24.21 / 14.03 s |
+| Explicit `npm run build` | 0 | 9.06 s | 19.92 / 1.89 s |
+| `npm run test:deep` | 0 | 415.49 s | 1792.28 / 329.17 s |
+
+Deep reported 892 files passed, 11 skipped; 9,344 tests passed, 115 skipped.
+These local skips are not strict hosted coverage. Times are `/usr/bin/time`
+measurements with different local hardware, cache and coverage from the audit;
+they establish no comparable hosted speed gain. The install used a private npm
+cache and a scoped `GIT_CONFIG` so prepare's merge-driver registration did not
+change the canonical checkout's shared config. Flags/lifecycle were unchanged.
+The explicit build separately confirmed success because existing prepare does
+not propagate its build subprocess exit. npm warnings were retained; no
+dependency, install-script policy or security setting was changed.
+
+A fresh source reviewer found one P2: an output destination's asynchronous
+`EPIPE` or synchronous write exception could exit the wrapper before cleanup,
+leaving its detached installer alive and the diagnostic marked running. This
+was validated from source. The first deep pass does not prove that case; the
+correction and its new controls require final validation. No other actionable
+source findings were reported. Four new controls failed against that checkpoint,
+including late output failure after installer exit zero. A real unread OS pipe
+also kept the wrapper alive after supervision returned 124; that failed control
+is retained. The CLI now exits nonzero only after bounded cleanup/reporting,
+while success flushes normally. A delayed `_destroy` control exposed premature
+error-listener removal; the corrected listener survives until actual error/close.
+An invalid first observer used asynchronous persistence during a fatal event;
+it is retained separately and was replaced by synchronous observation.
+
+The builder's corrected 20 controls passed, including actual process snapshots.
+Fresh source review of the correction found no remaining actionable findings.
+This review covered the earlier complete base diff plus the correction, without
+claiming a hosted or final-commit review. The conductor independently passed
+20/20 controls with required process snapshots in 10.315 seconds, then 69 tests
+across the bridge/workflow/switch/record/changelog/docstatus files in 13.04
+seconds with one worker. Both commands returned zero. Spin lint was clean.
+
 ## Remaining acceptance and coordination
 
-Ledger owns the next shared local heavy slot by parent direction. No isocan
-full suite or install/build has started. The emulator uses `detached: true`,
-so this task does not claim the admission wrapper's cooperative foreground
-contract; parent-controlled serialization is required.
+The emulator uses `detached: true`, so this task does not claim the admission
+wrapper's cooperative foreground contract; parent-controlled serialization is
+required. The final local deep/typecheck checkpoint follows the correction,
+before pushing the draft PR. All failures and skips remain in the evidence.
 
-After the slot is released: refresh/integrate the remote base, preserve the
-exact candidate, run the unchanged fresh installation/build and required
-deep/typecheck/configured checkpoint, then create the draft PR and inspect its
-complete strict CI shard union/checks at the exact head. Preserve any failures
-and skips. Do not push before the mandatory local deep/typecheck proof holds.
+The complete strict CI shard union/checks must hold at the PR head. This repo
+has no committed `ready_for_review` review workflow or cross-review practice;
+its `review.yml` runs mechanical metrics on main pushes. Any review produced
+at the PR boundary must be inspected for actual head and complete input; local
+source review and green CI do not manufacture hosted review evidence.
 
 The planner is read-only and cannot authenticate supplied artifacts or grant
 reuse authority. [The manual path](design.md#a-conservative-retry-decision)

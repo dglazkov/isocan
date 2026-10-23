@@ -1,7 +1,7 @@
 ---
 status: partial
 since: 2026-10-23
-note: "Phase 113 PART-DONE: watchdog and manual retry planning implemented; focused proof passes, integrated gates and PR review await the coordinated heavy slot."
+note: "Phase 113 PART-DONE: watchdog and manual retry planning implemented; output-error review corrections pass focused proof, final integrated gates and PR review remain."
 ---
 
 # Validation efficiency
@@ -16,8 +16,8 @@ PR; no merge, deployment, schedule or validation-policy change is authorized.
 ## Phase 113 — A stalled install leaves bounded evidence
 
 **Status: PART-DONE, 23 October 2026.** Watchdog, retained diagnostics and
-read-only retry planning pass focused controls; full verification waits on
-the parent-controlled heavy slot, currently assigned to Ledger.
+read-only retry planning pass focused controls; review corrections are ready
+for final verification in the parent-assigned heavy slot.
 
 **Done when:** A stalled shared suite installation fails within its configured
 bound, leaves redacted lifecycle evidence, and any proposed targeted retry
@@ -60,7 +60,7 @@ No heavy gate starts before coordination with the parent on this shared Mac.
 remain unknown. Complete gate evidence/reuse belongs to Plates phase 114.
 Broader adoption waits on parent review of the exact-head evidence.
 
-- **2026-10-23** — Open: integrated install/build, deep/typecheck and hosted
-  exact-head proof wait on the parent releasing the shared heavy slot. The
-  detached emulator does not satisfy the cooperative foreground admission
-  contract; use explicit parent serialization.
+- **2026-10-23** — Open: corrected integrated deep/typecheck and hosted
+  exact-head proof remain before acceptance. The detached emulator does not
+  satisfy the cooperative foreground admission contract; the parent assigned
+  this task the next serialized slot after Ledger released it.

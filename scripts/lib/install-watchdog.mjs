@@ -2,6 +2,17 @@ import { spawn, spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync, renameSync, rmSync } from "node:fs";
 import path from "node:path";
 import { constants } from "node:os";
+import { Writable } from "node:stream";
+
+/** The CLI owns its process; library supervision must not destroy a caller's
+ * stdout/stderr. Called only after the diagnostic and group cleanup finish. */
+export function finishInstallProcess(code) {
+  // Failure evidence is already on disk and the group has been cleaned. A
+  // runner that stopped reading logs must not keep this CLI alive via a pending
+  // stdout write. Success keeps normal flushing; never truncate successful logs.
+  if (code !== 0) process.exit(code);
+  process.exitCode = code;
+}
 
 /** No command names, arguments or environment: even an executable name can
  * carry private text. ps is separately bounded and a failed snapshot is unknown. */
@@ -32,6 +43,7 @@ export async function superviseInstall({ command, args, cwd, env = process.env,
     deadlineMs, graceMs, heartbeatMs, lastHeartbeatMs: 0, lastOutputMs: null,
     status: "running", installer: { exitCode: null, signal: null }, snapshots: [] };
   let evidenceError = false;
+  let logDiagnostic = () => {};
   const write = () => {
     record.elapsedMs = Date.now() - started;
     const temporary = `${reportPath}.tmp-${process.pid}`;
@@ -41,17 +53,33 @@ export async function superviseInstall({ command, args, cwd, env = process.env,
       renameSync(temporary, reportPath);
     } catch {
       try { rmSync(temporary, { force: true }); } catch { /* original failure is retained */ }
-      evidenceError = true; stderr.write("install watchdog: diagnostic write failed\n");
+      evidenceError = true; logDiagnostic("install watchdog: diagnostic write failed\n");
     }
   };
-  write();
   return await new Promise((resolve) => {
     let settled = false;
     let terminating = false;
     let graceTimer;
     let child;
     let completedCode;
+    let childClosed = false;
+    const outputs = new Map();
     const forwardingCleanup = [];
+    const cleanupOutputErrors = () => {
+      if (!settled) return;
+      for (const [output, state] of outputs) {
+        if (state.cleanupScheduled || state.pending > 0) continue;
+        // An asynchronous _destroy can delay error delivery beyond the write
+        // callback and beyond supervision. Keep the listener until that event
+        // (or close), rather than guessing how many event-loop turns it takes.
+        if (state.broken && !state.errorSeen && !state.closed && typeof output.on === "function") continue;
+        state.cleanupScheduled = true;
+        setImmediate(() => {
+          output.removeListener?.("error", state.onError);
+          output.removeListener?.("close", state.onClose);
+        });
+      }
+    };
     const finish = (code) => {
       if (settled) return;
       settled = true;
@@ -66,6 +94,7 @@ export async function superviseInstall({ command, args, cwd, env = process.env,
       record.wrapperExitCode = code;
       write();
       if (evidenceError && code === 0) { code = 1; record.wrapperExitCode = 1; record.status = "evidence_failed"; write(); }
+      cleanupOutputErrors();
       resolve({ code, record });
     };
     const kill = (signal) => {
@@ -80,7 +109,7 @@ export async function superviseInstall({ command, args, cwd, env = process.env,
       record.snapshots.push({ phase: "before-term", elapsedMs: Date.now() - started, ...processGroupSnapshot(child.pid) });
       record.beforeTermEvidenceAt = new Date().toISOString();
       write(); // The diagnostic exists BEFORE either signal is sent.
-      stderr.write(`install watchdog: ${reason}; elapsed=${record.elapsedMs}ms; last-output=${record.lastOutputMs ?? "unknown"}ms; sending TERM\n`);
+      logDiagnostic(`install watchdog: ${reason}; elapsed=${record.elapsedMs}ms; last-output=${record.lastOutputMs ?? "unknown"}ms; sending TERM\n`);
       record.termSentAt = new Date().toISOString();
       kill("SIGTERM");
       graceTimer = setTimeout(() => {
@@ -97,14 +126,61 @@ export async function superviseInstall({ command, args, cwd, env = process.env,
         }, 50);
       }, graceMs);
     };
+    const maybeFinish = () => {
+      if (!terminating && childClosed && completedCode !== undefined && [...outputs.values()].every((state) => state.pending === 0)) finish(completedCode);
+    };
+    const outputFailed = (state, error) => {
+      if (state.broken) return;
+      state.broken = true;
+      (record.outputFailures ??= []).push({ streams: [...state.names],
+        code: /^[A-Z0-9_]+$/.test(error?.code ?? "") ? error.code : "unknown" });
+      if (settled) return;
+      child?.stdout?.pause(); child?.stderr?.pause();
+      if (!child) { record.status = "output_failed"; write(); }
+      else if (terminating) write(); // Preserve timeout/cancellation and its original cleanup clock.
+      else terminate("output_failed", 1);
+    };
+    const outputWrite = (output, chunk) => {
+      const state = outputs.get(output);
+      if (settled || state.broken) return false;
+      const tracked = output instanceof Writable;
+      let completed = false;
+      if (tracked) state.pending++;
+      const complete = (error) => {
+        if (completed) return;
+        completed = true;
+        state.pending--;
+        if (error) outputFailed(state, error);
+        maybeFinish();
+        cleanupOutputErrors();
+      };
+      try { return tracked ? output.write(chunk, complete) : output.write(chunk); }
+      catch (error) {
+        if (tracked && !completed) { completed = true; state.pending--; }
+        outputFailed(state, error);
+        return false;
+      }
+    };
+    for (const [name, output] of [["stdout", stdout], ["stderr", stderr]]) {
+      if (outputs.has(output)) { outputs.get(output).names.push(name); continue; }
+      const state = { names: [name], pending: 0, broken: false, errorSeen: false, closed: false, cleanupScheduled: false };
+      state.onError = (error) => { state.errorSeen = true; outputFailed(state, error); cleanupOutputErrors(); };
+      state.onClose = () => { state.closed = true; cleanupOutputErrors(); };
+      outputs.set(output, state);
+      output.on?.("error", state.onError);
+      output.on?.("close", state.onClose);
+    }
+    logDiagnostic = (message) => outputWrite(stderr, message);
     const onTerm = () => terminate("cancelled", 143);
     const onInt = () => terminate("cancelled", 130);
     const heartbeat = setInterval(() => {
       record.lastHeartbeatMs = Date.now() - started;
-      stderr.write(`install watchdog: elapsed=${record.lastHeartbeatMs}ms; last-output=${record.lastOutputMs ?? "unknown"}ms\n`);
+      logDiagnostic(`install watchdog: elapsed=${record.lastHeartbeatMs}ms; last-output=${record.lastOutputMs ?? "unknown"}ms\n`);
       write();
     }, heartbeatMs);
     const deadlineTimer = setTimeout(() => terminate("timed_out", 124), deadlineMs);
+    write();
+    if (record.outputFailures?.length) { finish(1); return; }
     child = spawn(command, args, { cwd, env, detached: true, stdio: ["ignore", "pipe", "pipe"] });
     record.processGroup = child.pid ?? null;
     process.on("SIGTERM", onTerm);
@@ -116,11 +192,13 @@ export async function superviseInstall({ command, args, cwd, env = process.env,
         if (!settled) { input.resume(); pump(); }
       };
       const pump = () => {
-        if (blocked || settled) return;
+        if (blocked || settled || record.outputFailures?.length) return;
         let chunk;
         while ((chunk = input.read(Math.min(input.readableLength, 64 * 1024) || undefined)) !== null) {
           record.lastOutputMs = Date.now() - started;
-          if (output.write(chunk) === false) {
+          const accepted = outputWrite(output, chunk);
+          if (outputs.get(output).broken) return;
+          if (accepted === false) {
             // A slow runner log must back up the child pipe, not accumulate an
             // unbounded queue in this wrapper. Timers remain independent of drain.
             blocked = true;
@@ -161,6 +239,6 @@ export async function superviseInstall({ command, args, cwd, env = process.env,
       // Preserve trailing output under backpressure. close follows pipe EOF;
       // a sink that never drains still hits the independent deadline above.
     });
-    child.once("close", () => { if (!terminating && completedCode !== undefined) finish(completedCode); });
+    child.once("close", () => { childClosed = true; maybeFinish(); });
   });
 }

@@ -94,6 +94,89 @@ test("draining a slow output sink resumes forwarding without truncating successf
   } finally { slow.destroy(); }
 }));
 
+async function outputFailureControl(mode) {
+  return fixture(async (dir) => {
+    const module = new URL("./lib/install-watchdog.mjs", import.meta.url).href;
+    const childSource = mode === "late" ? "process.stdout.write('ready');" :
+      `const fs=require('node:fs'); process.on('SIGTERM',()=>{});
+       fs.writeFileSync('child.pid',String(process.pid));
+       setInterval(()=>{${mode === "heartbeat" ? "" : "process.stdout.write('ready');"}},20);`;
+    const script = `import {Writable} from 'node:stream';import {writeFileSync} from 'node:fs';
+      import {superviseInstall} from ${JSON.stringify(module)};
+      const error=()=>Object.assign(new Error('private-output-error-marker'),{code:'EPIPE'});
+      let writes=0;
+      const broken=${mode === "throw" ? "{write(){writes++;throw error()}}" :
+        mode === "delayed-destroy" ? "new Writable({write(_chunk,_encoding,callback){writes++;setTimeout(()=>callback(error()),100)},destroy(error,callback){setTimeout(()=>callback(error),1000)}})" :
+        "new Writable({write(_chunk,_encoding,callback){writes++;setTimeout(()=>callback(error()),100)}})"};
+      const quiet={write(){}};
+      process.on('uncaughtExceptionMonitor',()=>writeFileSync(${JSON.stringify(path.join(dir, "uncaught-error"))},'uncaught'));
+      const result=await superviseInstall({command:process.execPath,args:['-e',${JSON.stringify(childSource)}],
+        cwd:${JSON.stringify(dir)},reportPath:${JSON.stringify(path.join(dir, "report.json"))},
+        stdout:${mode === "heartbeat" ? "quiet" : "broken"},stderr:${mode === "heartbeat" || mode === "throw" ? "broken" : "quiet"},
+        deadlineMs:2000,graceMs:100,heartbeatMs:500});
+      await import('node:fs').then(fs=>fs.writeFileSync(${JSON.stringify(path.join(dir, "wrapper-result.json"))},JSON.stringify({code:result.code,writes})));
+      process.exitCode=result.code;`;
+    writeFileSync(path.join(dir, "wrapper.mjs"), script);
+    const wrapper = spawn(process.execPath, [path.join(dir, "wrapper.mjs")], { stdio: "ignore" });
+    const timeout = setTimeout(() => wrapper.kill("SIGKILL"), 6000);
+    let exited;
+    try { exited = await new Promise((resolve) => wrapper.once("exit", (code, signal) => resolve({ code, signal }))); }
+    finally { clearTimeout(timeout); wrapper.kill("SIGKILL"); }
+    assert.deepEqual(exited, { code: 1, signal: null });
+    assert.equal(existsSync(path.join(dir, "uncaught-error")), false, "output errors must stay handled even after supervision finishes");
+    const reportText = readFileSync(path.join(dir, "report.json"), "utf8");
+    const report = JSON.parse(reportText);
+    assert.equal(report.status, "output_failed");
+    assert.equal(report.wrapperExitCode, 1);
+    assert.ok(report.completedAt && report.termSentAt && report.killSentAt);
+    assert.ok(report.outputFailures.some((failure) => failure.code === "EPIPE"));
+    assert.ok(!reportText.includes("private-output-error-marker"));
+    const result = JSON.parse(readFileSync(path.join(dir, "wrapper-result.json"), "utf8"));
+    assert.equal(result.code, 1);
+    assert.equal(result.writes, 1, "a broken destination must not receive recursive diagnostic writes");
+    if (mode === "late") assert.deepEqual(report.installer, { exitCode: 0, signal: null });
+    else {
+      assert.equal(report.installer.signal, "SIGKILL");
+      await gone(Number(readFileSync(path.join(dir, "child.pid"), "utf8")));
+    }
+  });
+}
+
+test("output errors: async stdout EPIPE retains evidence and kills the child", () => outputFailureControl("stdout"));
+test("output errors: heartbeat stderr EPIPE retains evidence and kills the child", () => outputFailureControl("heartbeat"));
+test("output errors: synchronous throws do not recurse into broken stderr", () => outputFailureControl("throw"));
+test("late output errors cannot turn an installer exit zero into wrapper success", () => outputFailureControl("late"));
+test("output errors delayed by Writable destruction remain handled after supervision", () => outputFailureControl("delayed-destroy"));
+
+test("real wrapper exits within the cleanup bound when its OS stdout pipe stays unread", async () => fixture(async (dir) => {
+  const module = new URL("./lib/install-watchdog.mjs", import.meta.url).href;
+  const childSource = `const fs=require('node:fs');process.on('SIGTERM',()=>{});
+    fs.writeFileSync('child.pid',String(process.pid));const block=Buffer.alloc(65536,120);
+    function pump(){while(process.stdout.write(block)){};process.stdout.once('drain',pump)}pump();`;
+  const script = `import {superviseInstall,finishInstallProcess} from ${JSON.stringify(module)};
+    const result=await superviseInstall({command:process.execPath,args:['-e',${JSON.stringify(childSource)}],
+      cwd:${JSON.stringify(dir)},reportPath:${JSON.stringify(path.join(dir, "report.json"))},
+      deadlineMs:1000,graceMs:100,heartbeatMs:100});
+    await import('node:fs').then(fs=>fs.writeFileSync(${JSON.stringify(path.join(dir, "wrapper-result.json"))},JSON.stringify({code:result.code})));
+    finishInstallProcess(result.code);`;
+  writeFileSync(path.join(dir, "wrapper.mjs"), script);
+  const wrapper = spawn(process.execPath, [path.join(dir, "wrapper.mjs")], { stdio: ["ignore", "pipe", "ignore"] });
+  // Deliberately never attach a reader: unlike a synthetic Writable, this
+  // leaves a real pending libuv write when the OS pipe fills.
+  const timeout = setTimeout(() => wrapper.kill("SIGKILL"), 6000);
+  let exited;
+  try { exited = await new Promise((resolve) => wrapper.once("exit", (code, signal) => resolve({ code, signal }))); }
+  finally { clearTimeout(timeout); wrapper.kill("SIGKILL"); wrapper.stdout.destroy(); }
+  assert.equal(JSON.parse(readFileSync(path.join(dir, "wrapper-result.json"))).code, 124, "supervision itself must finish before wrapper exit");
+  assert.deepEqual(exited, { code: 124, signal: null });
+  const report = JSON.parse(readFileSync(path.join(dir, "report.json")));
+  assert.equal(report.status, "timed_out");
+  assert.equal(report.wrapperExitCode, 124);
+  assert.ok(report.completedAt && report.killSentAt);
+  assert.equal(report.installer.signal, "SIGKILL");
+  await gone(Number(readFileSync(path.join(dir, "child.pid"), "utf8")));
+}));
+
 test("an installer signal retains the actual signal and nonzero wrapper status", async () => fixture(async (dir) => {
   const result = await run(dir, 'process.kill(process.pid, "SIGTERM")');
   assert.equal(result.code, 143);
@@ -246,6 +329,9 @@ test("retry proposal refuses product failures, missing stages/provenance, and an
 test("shared PR/release setup preserves four-shard union and retains bounded install diagnostics", () => {
   const root = fileURLToPath(new URL("../", import.meta.url));
   const action = readFileSync(path.join(root, ".github/actions/suite-setup/action.yml"), "utf8");
+  const cli = readFileSync(path.join(root, "scripts/install-watchdog.mjs"), "utf8");
+  assert.match(cli, /finishInstallProcess\(result.code\)/);
+  assert.doesNotMatch(cli, /process\.exitCode/);
   assert.match(action, /run: node scripts\/install-watchdog.mjs/);
   assert.match(action, /if: always\(\) && steps.install.outputs.artifact-name != ''/);
   assert.match(action, /path: \.isocan\/install-diagnostics.json/);

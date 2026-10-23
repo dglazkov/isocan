@@ -3,7 +3,7 @@ import { appendFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { superviseInstall } from "./lib/install-watchdog.mjs";
+import { superviseInstall, finishInstallProcess } from "./lib/install-watchdog.mjs";
 import { installInputDigests } from "./lib/install-inputs.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
@@ -31,10 +31,10 @@ try {
   if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `artifact-name=${artifact}\n`);
   const result = await superviseInstall({ command: "npm", args: ["ci"], cwd: root,
     reportPath: path.join(root, ".isocan/install-diagnostics.json"), metadata });
-  process.exitCode = result.code;
+  finishInstallProcess(result.code);
 } catch {
   // Errors can contain paths/arguments. Keep the configuration failure explicit,
   // but do not turn it into an arbitrary diagnostic-data disclosure.
   console.error("install watchdog: preflight or evidence failure; installation did not succeed");
-  process.exitCode = 1;
+  finishInstallProcess(1);
 }

@@ -11,5 +11,5 @@ it("install watchdog and retry negative controls hold", () => {
   });
   expect(run.error, `${run.stdout}\n${run.stderr}`).toBeUndefined();
   expect(run.status, `${run.stdout}\n${run.stderr}`).toBe(0);
-  expect(run.stdout).toMatch(/# pass 14|ℹ pass 14/);
+  expect(run.stdout).toMatch(/# pass 20|ℹ pass 20/);
 });
