@@ -24,12 +24,13 @@ import { OnIt } from "./OnIt.tsx";
 import { GateGrant } from "./LazyGate.tsx";
 import { modules as shellModules } from "../modules.ts";
 import { CommentFold, CommentWhen } from "./CommentWhen.tsx";
-import { messageContextRoots, useMessageContext, useMessageSend, withMessageContext } from "../lib/messagecontext.ts";
+import { manifestNeedsDisclosure, messageContextRoots, needsContextManifestPreview, useMessageContext, useMessageSend, withMessageContext } from "../lib/messagecontext.ts";
 import { ContextManifestView, MessageContextPreview } from "./LazyGroupContext.tsx";
 import { usePresentation } from "../lib/canvasPresentation.ts";
 import { FloatingHandles, useFloatingBox } from "../lib/floatingbox.tsx";
 import { presentedOffset } from "../lib/presentation.ts";
 import { makeComment } from "./CommentLayer.tsx";
+import { motionTimeOf } from "../lib/motionclock.ts";
 
 /**
  * **A pin's open thread and a new comment's composer, loaded when the first
@@ -102,7 +103,8 @@ export function ThreadPopover({
 }) {
   const [reply, setReply] = useState("");
   const canvas = useCanvasStore((state) => state.canvas);
-  const context = useMessageContext(canvasId, messageContextRoots(canvas, reply, thread.anchorItemId ? [thread.anchorItemId] : []));
+  const anchorIds = useMemo(() => (thread.anchorItemId ? [thread.anchorItemId] : []), [thread.anchorItemId]);
+  const context = useMessageContext(canvasId, messageContextRoots(canvas, reply, anchorIds));
   const sending = useMessageSend(canvasId, context, reply);
   const textView = useTextAnchorStore(s => s.views[thread.id]);
   // The registry names people, not the comment: see lib/names.ts.
@@ -153,6 +155,7 @@ export function ThreadPopover({
           <div className="comment" key={comment.id}>
             <span className="who">{actorNameIn(names, comment.author)}</span>
             <CommentWhen comment={comment} />
+            {comment.at !== undefined && <span className="worked" data-comment-at={comment.at}>at {comment.at.toFixed(1)} s</span>}
             {workedFor(comment) && (
               <span className="worked" title={`Posted, then rewritten ${workedFor(comment)} later`}>
                 edited · {workedFor(comment)}
@@ -162,7 +165,7 @@ export function ThreadPopover({
               <div className="body">
                 {comment.designDecision ? <Suspense fallback={<p>Reading design decision…</p>}><DesignComparisonComment comment={comment} canvasId={canvasId} actor={actor} threadId={thread!.id} /></Suspense> : comment.design ? <Suspense fallback={<p>Reading design record…</p>}><DesignComment comment={comment} /></Suspense> : <><CommandChip body={comment.body} /><Markdown rehypePlugins={chips}>{withoutCommand(comment.body)}</Markdown></>}
               </div>
-              {comment.context && <ContextManifestView manifest={comment.context} comment={{ threadId: thread.id, commentId: comment.id }} />}
+              {comment.context && manifestNeedsDisclosure(comment.context, anchorIds) && <ContextManifestView manifest={comment.context} comment={{ threadId: thread.id, commentId: comment.id }} />}
             </CommentFold>
             {/* The refusal is the control (#272): under the ask an agent's
                 gate turned away, the owner — and nobody else — gets the two
@@ -229,7 +232,7 @@ export function ThreadPopover({
             go looked like the one that was not, and people stopped believing
             they could press it. The accent makes the two states different
             colours rather than two shades of the same one. */}
-        <MessageContextPreview context={context} />
+        {needsContextManifestPreview(context, anchorIds) && <MessageContextPreview context={context} />}
         {sending.error && <p role="alert">{sending.error}</p>}
         <button className="btn primary" type="submit" title={`Reply (${shortcut("⏎")})`} disabled={!reply.trim() || sending.disabled}>
           ↑
@@ -287,9 +290,12 @@ export function ComposePopover({
   const { candidates, peers } = useMentionRoster(actor.id);
   const itemRoster = useItemRefRoster();
   const [body, setBody] = useState("");
+  const anchorIds = useMemo(() => (pending.anchorItemId ? [pending.anchorItemId] : []), [pending.anchorItemId]);
   const context = useMessageContext(canvasId, messageContextRoots(canvas, body, [pending.aboutItemId, pending.anchorItemId].filter((id): id is string => Boolean(id))));
   const sending = useMessageSend(canvasId, context, body);
   const presentation = usePresentation();
+  // Pinned to a motion its person paused or scrubbed: the comment keeps the moment (motion phase 2).
+  const [moment] = useState(() => motionTimeOf(pending.anchorItemId));
 
   // Pending world position: anchored offsets resolve against the item.
   let wx = pending.x;
@@ -328,13 +334,14 @@ export function ComposePopover({
             y: pending.y,
             anchorItemId: pending.anchorItemId,
             ...(pending.textAnchor ? { textAnchor: pending.textAnchor } : {}),
-            comment: withMessageContext(withAbout(makeComment(trimmed), pending.aboutItemId), context.request),
+            comment: withMessageContext(withAbout({ ...makeComment(trimmed), ...(moment !== undefined ? { at: moment } : {}) }, pending.aboutItemId), context.request),
           }), () => { onSent?.(); if (useUiStore.getState().pendingComment === pending) useUiStore.getState().setPendingComment(null); });
         }}
         style={{ display: "block" }}
       >
         {pending.textAnchor && <blockquote className="thread-text-anchor">{pending.textAnchor.quote}</blockquote>}
-        <MessageContextPreview context={context} />
+        {moment !== undefined && <p className="thread-moment" data-comment-at={moment}>At {moment.toFixed(1)} s</p>}
+        {needsContextManifestPreview(context, anchorIds) && <MessageContextPreview context={context} />}
         {sending.error && <p role="alert">{sending.error}</p>}
         <MentionField
           multiline

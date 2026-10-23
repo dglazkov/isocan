@@ -35,6 +35,8 @@
     "./keys": "./src/keys.ts",
     "./keystore": "./src/keystore.ts",
     "./mood": "./src/mood.ts",
+    "./motion": "./src/motion.ts",
+    "./motion-render": "./src/motion-render.ts",
     "./copy-deck": "./src/copy-deck.ts",
     "./copy-variants": "./src/copy-variants.ts",
     "./copy-fit": "./src/copy-fit.ts",

@@ -798,6 +798,16 @@ function toComment(c: NewComment, actor: Actor, ts: string): Comment {
     }
     comment.readings = c.readings.map(({ word, reading }) => ({ word, reading }));
   }
+  // A moment in the item (motion phase 2): seconds, at most a day, kept to the
+  // millisecond. A string is not refused but dropped, as every `at` was before:
+  // the talk module's voice posts sent a timestamp there, which nothing kept,
+  // and a released client still may.
+  if (c.at !== undefined && typeof c.at !== "string") {
+    if (typeof c.at !== "number" || !Number.isFinite(c.at) || c.at < 0 || c.at > 86_400) {
+      throw new OpValidationError("bad-op", "a comment's time is seconds into the item, from 0 to 86400");
+    }
+    comment.at = Math.round(c.at * 1000) / 1000;
+  }
   if (c.items?.length) comment.items = [...c.items];
   const context = c.context;
   if (context) {

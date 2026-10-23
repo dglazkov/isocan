@@ -42,7 +42,7 @@ describe("agent skills are shared, not copied", () => {
   it("no harness directory holds a rival SKILL.md", async () => {
     /* A rival is a SECOND ORIGINAL of a skill that already has one: the fork
        with a delay fuse this file exists to stop. A skill that belongs to one
-       harness and is deliberately not shared is a different thing — `conduct`
+       harness and is deliberately not shared is a different thing — `spin`
        is this repo's own workflow, and `npx skills add dglazkov/isocan` must
        hand a stranger the collaboration skill and nothing else (AGENTS.md,
        "The conductor"). So a harness-only skill is admitted exactly when the
@@ -115,12 +115,31 @@ describe("agent skills are shared, not copied", () => {
       timeout: 1000,
     }).split("\n").filter(Boolean);
     expect(listed, "git sees no skill files at all — the rival guard would pass blind").not.toEqual([]);
+    expect(listed).toContain(".claude/skills/spin/SKILL.md");
     expect(listed).toContain(".claude/skills/conduct/SKILL.md");
     expect(listed).toContain(`.agents/skills/${SKILL}/SKILL.md`);
   });
 
+  it("spin owns the local conductor and conduct forwards without another behavioral copy", async () => {
+    const spin = path.join(repo, ".claude/skills/spin");
+    const conduct = path.join(repo, ".claude/skills/conduct");
+    const body = await fs.readFile(path.join(spin, "SKILL.md"), "utf8");
+    const alias = await fs.readFile(path.join(conduct, "SKILL.md"), "utf8");
+    expect(body).toMatch(/^name: spin$/m);
+    expect(body).toContain(".claude/skills/spin/status.sh");
+    expect(alias).toMatch(/^name: conduct$/m);
+    expect(alias).toContain("../spin/SKILL.md");
+    expect(alias).toContain("argument unchanged");
+    expect(alias).not.toContain("## 0. Orient");
+    expect(await fs.readlink(path.join(conduct, "status.sh"))).toBe("../spin/status.sh");
+    expect(await fs.realpath(path.join(conduct, "status.sh"))).toBe(await fs.realpath(path.join(spin, "status.sh")));
+    const config = JSON.parse(await fs.readFile(path.join(repo, ".plates/plates.json"), "utf8"));
+    expect(config.local.conduct).toContain("locally owned");
+  });
+
   it("a harness-only skill is named in the house rules, so the exception is never silent", async () => {
     const houseRules = await fs.readFile(path.join(repo, "AGENTS.md"), "utf8");
+    expect(houseRules).toContain(".claude/skills/spin/");
     expect(houseRules).toContain(".claude/skills/conduct/");
   });
 });

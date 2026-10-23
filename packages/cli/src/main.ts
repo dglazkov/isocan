@@ -17,6 +17,7 @@ import { registerDesignSystems } from "./design-system.ts";
 import { designGovernsNotes, designReleasedNotes } from "./design-scope-notes.ts";
 import { designUnuse, designUse, ownDesignSystemAt } from "@isocan/core/design-use";
 import { moodBoardRead } from "@isocan/core/mood";
+import { MOTION_PROPS } from "@isocan/core/motion";
 import { cleanupNoun, cleanupOps, cleanupSelection, parseBefore, type CommentFilter } from "@isocan/core/chatclean";
 import { registerDesignRequests } from "./design-request.ts";
 import { registerDesignDecisions } from "./design-decision.ts";
@@ -377,6 +378,13 @@ import {
   slidePatch,
   slides,
   SLIDE_EMOJI,
+  DECK_TRANSITIONS,
+  deckTransitionHint,
+  deckTransitionLabel,
+  deckTransitionOf,
+  deckTransitionPatch,
+  isDeckTransition,
+  isDeckTransition3d,
   deckPages,
   deckHtml,
   isNote,
@@ -6734,6 +6742,12 @@ const moduleHost: CliHost = {
   // Fenced or refused; there is no third answer, and no flag that makes one
   // (`sandbox.ts`, "A program that came from a canvas").
   runFenced: (request) => runFenced(paths.isocanHome(), request),
+  // A script of this copy's own, by its path in the package — never a path
+  // a module (or a canvas) could point outside `scripts/` with.
+  runPackageScript: (script, args, opts) => {
+    if (!/^scripts\/[a-z0-9-]+\.mjs$/.test(script)) throw new Error(`a module runs isocan's own scripts/*.mjs, not ${script}`);
+    runPackageScript(packagePath(script), args, opts);
+  },
   /**
    * `rc add`, promoted (proposed: `templates`): the claim, the enroll, the
    * cursor and the rc row — with the template's directory as the row's cwd
@@ -10642,6 +10656,45 @@ slidesCmd
       console.log(itemUrl(origin, p.id, deck[0]!.id));
       console.log(`The deck on paper (Save as PDF, or download one file that plays it):`);
       console.log(deckUrl(origin, p.id));
+      const motion = deckTransitionOf(p);
+      console.log(`Flips with: ${deckTransitionLabel(motion)} — ${deckTransitionHint(motion)} (isocan slides transition)`);
+    }),
+  );
+
+/**
+ * **How the deck moves between slides** — the canvas's choice, so the
+ * presenter and every viewer see the same motion. A canvas property sent as
+ * one `project.update` (`deckTransitionPatch`), the same op the app's
+ * "Slide transition" menu and full screen's Transition button send, so the
+ * two surfaces cannot disagree about what a transition is. No argument is a
+ * question: it says what the deck flips with now and lists the rest.
+ */
+slidesCmd
+  .command("transition [motion]")
+  .description(`How full screen moves between slides, for everybody watching: ${DECK_TRANSITIONS.join(", ")}`)
+  .option("--canvas <canvas>")
+  .action(
+    run(async (motion: string | undefined, opts: { canvas?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      if (opts.canvas) ctx.canvasRef = opts.canvas;
+      const p = await resolveCanvas(ctx);
+      const now = deckTransitionOf(p);
+      if (motion === undefined) {
+        if (ctx.json) return printJson({ transition: now, choices: [...DECK_TRANSITIONS] });
+        console.log(`${deckTransitionLabel(now)} (${now}) — ${deckTransitionHint(now)}\n`);
+        for (const one of DECK_TRANSITIONS) {
+          console.log(`${one === now ? "●" : " "} ${one.padEnd(6)} ${isDeckTransition3d(one) ? "3D  " : "    "}${deckTransitionHint(one)}`);
+        }
+        return;
+      }
+      const wanted = motion === "none" ? "cut" : motion;
+      if (!isDeckTransition(wanted)) {
+        throw new Error(`not a transition: ${motion} — ${DECK_TRANSITIONS.join(", ")}`);
+      }
+      if (wanted === now) return console.log(`the deck already flips with ${deckTransitionLabel(now)}`);
+      await sendOp(ctx, p.id, { type: "project.update", patch: deckTransitionPatch(wanted) });
+      if (ctx.json) return printJson({ transition: wanted });
+      console.log(`the deck flips with ${deckTransitionLabel(wanted)} — ${deckTransitionHint(wanted)}`);
     }),
   );
 
@@ -12441,7 +12494,7 @@ comment
   .option("--item <item>", "anchor to this item")
   .option("--quote <text>", "anchor to exact rendered text on --item")
   .option("--occurrence <number>", "which matching quote, counted from 1")
-  .option("--at <x,y>", "freestanding at world coordinates — or, with --item, a point ON the item as fractions of its size (0.6,0.8)")
+  .option("--at <x,y>", "freestanding at world coordinates — or, with --item, a point ON the item as fractions of its size (0.6,0.8) — or, with --item on a motion, one number: the moment in seconds (1.2)")
   .option("--in <group>", "attach this group and its complete subtree as frozen context")
   .option("--include-excluded", "explicitly include excluded context in this request")
   .action(
@@ -12449,6 +12502,19 @@ comment
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx, { create: true });
       if (!opts.item && !opts.at) throw new Error("pass --item <item> or --at <x,y>");
+      // One number with --item is a moment, not a place (motion phase 2): a
+      // comment on a motion at 1.2 s remembers the time, and opening it
+      // scrubs the player there. Only a motion has a clock to point into.
+      let moment: number | undefined;
+      if (opts.item && opts.at !== undefined && !opts.at.includes(",")) {
+        const item = resolveItem(snapshot, opts.item);
+        if (item.properties[MOTION_PROPS.motion] !== "true") throw new Error(`--at with one number is a moment in a motion, and ${item.title} is not one — a place on it is --at x,y`);
+        moment = Number(opts.at.replace(/s$/, ""));
+        const length = Number(item.properties[MOTION_PROPS.seconds]);
+        if (!Number.isFinite(moment) || moment < 0) throw new Error(`--at is seconds into the motion, not "${opts.at}"`);
+        if (Number.isFinite(length) && moment > length) throw new Error(`--at ${moment} is past the end of ${item.title}, which is ${length} s long`);
+        delete opts.at;
+      }
       if ((opts.quote !== undefined || opts.occurrence !== undefined) && !opts.item) throw new Error("Text selection requires --item");
       if (opts.occurrence !== undefined && opts.quote === undefined) throw new Error("--occurrence requires --quote");
       const textAnchor = opts.quote !== undefined ? await quotedCommentAnchor(ctx, p.id, resolveItem(snapshot, opts.item!), opts.quote, opts.occurrence) : null;
@@ -12469,6 +12535,7 @@ comment
       }
       const threadId = newThreadId();
       const first = await newComment(ctx, p.id, snapshot, text, { in: opts.in, includeExcluded: opts.includeExcluded });
+      if (moment !== undefined) first.at = moment;
       const receipt = await sendOp(ctx, p.id, {
         type: "thread.create",
         threadId,
@@ -12631,7 +12698,7 @@ comment
             : `at ${t.x},${t.y}`;
         console.log(`${t.id} (${anchor})`);
         for (const c of t.comments) {
-          console.log(`  ${actorNameIn(snapshot.names, c.author)} · ${c.createdAt} · ${c.id}`);
+          console.log(`  ${actorNameIn(snapshot.names, c.author)} · ${c.createdAt} · ${c.id}${c.at !== undefined ? ` · at ${c.at} s` : ""}`);
           console.log(`    ${c.body}`);
         }
       }

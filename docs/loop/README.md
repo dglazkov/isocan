@@ -10,7 +10,7 @@ Loop's claim and, under `## Our read`, what the code actually shows.
   in Loop.
 - `rank`: `now`, `next`, `later`, `never`: ours, never Loop's P0–P3.
 - `phase`: the `docs/phases/` number the work belongs to, or `new`. In a
-  projects-shaped repo (`.keel/keel.json` `"phases": {"shape": "projects"}`)
+  projects-shaped repo (`.plates/plates.json` `"phases": {"shape": "projects"}`)
   it is `project` instead: the `docs/projects/<name>/` directory, or `new`.
 
 `docs/LOOP.md` is generated from these files by `node scripts/loop.mjs render`

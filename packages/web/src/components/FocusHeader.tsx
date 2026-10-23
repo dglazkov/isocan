@@ -2,6 +2,12 @@ import "./focus.css";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  DECK_TRANSITIONS,
+  deckTransitionHint,
+  deckTransitionLabel,
+  deckTransitionOf,
+  deckTransitionPatch,
+  isDeckTransition3d,
   itemPath,
   nodeCapabilitiesFor,
   shortcut,
@@ -18,6 +24,7 @@ import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
 import { useFocusStore } from "../stores/focusStore.ts";
 import { itemThreadsFor } from "../lib/nodechat.ts";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
+import { useTransitionsOn } from "../lib/deckflip.ts";
 
 export interface FocusHeaderProps {
   canvasId: string;
@@ -57,6 +64,9 @@ export function FocusHeader({
   const navigate = useNavigate();
   const canEdit = useCanEdit();
   const threads = useCanvasStore((s) => s.canvas?.threads);
+  const deckTransition = useCanvasStore((s) => deckTransitionOf(s.record ?? {}));
+  // The choice is offered only with Presentation Transitions on (`lib/deckflip.ts`).
+  const transitionsOn = useTransitionsOn();
   const names = useActorNames();
   const chatOpen = useFocusStore((s) => s.chatOpen);
   const toggleChat = useFocusStore((s) => s.toggleChat);
@@ -66,6 +76,8 @@ export function FocusHeader({
   const [titleDraft, setTitleDraft] = useState(item?.title ?? "");
   const [versionsOpen, setVersionsOpen] = useState(false);
   const versionWrapRef = useRef<HTMLSpanElement>(null);
+  const [transitionsOpen, setTransitionsOpen] = useState(false);
+  const transitionWrapRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
     setRenaming(false);
@@ -83,6 +95,17 @@ export function FocusHeader({
     window.addEventListener("pointerdown", onPointerDown);
     return () => window.removeEventListener("pointerdown", onPointerDown);
   }, [versionsOpen]);
+
+  useEffect(() => {
+    if (!transitionsOpen) return;
+    function onPointerDown(e: PointerEvent) {
+      if (transitionWrapRef.current && !transitionWrapRef.current.contains(e.target as Node)) {
+        setTransitionsOpen(false);
+      }
+    }
+    window.addEventListener("pointerdown", onPointerDown);
+    return () => window.removeEventListener("pointerdown", onPointerDown);
+  }, [transitionsOpen]);
 
   const currentVersion =
     item?.versions.find((v) => v.id === item.currentVersionId) ?? item?.versions[0];
@@ -271,6 +294,48 @@ export function FocusHeader({
           >
             Notes
           </button>
+        )}
+        {/* How the deck moves between slides — the canvas's choice, so it is
+            offered only to somebody who may write, and picking one here is
+            the same `project.update` the drawer's "Slide transition" sends.
+            Here because this is where a presenter is when they want it. Its
+            own dropdown rather than the shared context menu: that menu
+            belongs to the canvas and sits under full screen by design
+            (`--z-fullscreen`), like the version pill's beside it. */}
+        {mode === "view" && onToggleNotes && canEdit && transitionsOn && (
+          <span className="focus-version-wrap" ref={transitionWrapRef}>
+            <button
+              type="button"
+              className="fullscreen-notes-toggle fullscreen-transition"
+              title="How the deck moves from slide to slide, for everybody watching"
+              aria-haspopup="menu"
+              aria-expanded={transitionsOpen}
+              onClick={() => setTransitionsOpen((open) => !open)}
+            >
+              Transition: {deckTransitionLabel(deckTransition)}
+            </button>
+            {transitionsOpen && (
+              <div className="focus-version-menu focus-transition-menu" role="menu" aria-label="Slide transition">
+                {DECK_TRANSITIONS.map((transition) => (
+                  <button
+                    key={transition}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={transition === deckTransition}
+                    className={`focus-version-row${transition === deckTransition ? " current" : ""}`}
+                    title={deckTransitionHint(transition)}
+                    onClick={() => {
+                      setTransitionsOpen(false);
+                      void sendEchoed(canvasId, actor, { type: "project.update", patch: deckTransitionPatch(transition) });
+                    }}
+                  >
+                    <span>{deckTransitionLabel(transition)}</span>
+                    {isDeckTransition3d(transition) && <small>3D</small>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </span>
         )}
         {item && canEdit && (
           <button

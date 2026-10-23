@@ -64,7 +64,23 @@ export interface GroundProbe {
   lean: (sx: number) => number;
 }
 
-export function LivingGround({ theme, anchor, still }: { theme: CanvasTheme; anchor: ThemeAnchor; still: ReactNode }) {
+/**
+ * `cursors: false` is the arrival screen's (19 Oct 2026): it answers this
+ * viewer's own pointer, but never takes `groundCursors.feed` — that singleton
+ * is the canvas's ground's, and a veil that claimed it and then faded out
+ * would leave the board's ground deaf to everybody else's cursor.
+ */
+export function LivingGround({
+  theme,
+  anchor,
+  still,
+  cursors = true,
+}: {
+  theme: CanvasTheme;
+  anchor: ThemeAnchor;
+  still: ReactNode;
+  cursors?: boolean;
+}) {
   const ref = useRef<HTMLCanvasElement>(null);
   const [isStill, setStill] = useState(false);
   const pinned = anchor === "window";
@@ -189,10 +205,12 @@ export function LivingGround({ theme, anchor, still }: { theme: CanvasTheme; anc
         const session = useCanvasStore.getState().sessions.find((s) => s.sessionId === sid);
         h.presence(sid, g.x, g.y, !!session && isAgentActor(kindsRef.current, session.actor.id));
       };
-      groundCursors.feed = feed;
-      off.push(() => {
-        if (groundCursors.feed === feed) groundCursors.feed = null;
-      });
+      if (cursors) {
+        groundCursors.feed = feed;
+        off.push(() => {
+          if (groundCursors.feed === feed) groundCursors.feed = null;
+        });
+      }
 
       const probe: GroundProbe = {
         frames: () => h.frames,
@@ -222,7 +240,7 @@ export function LivingGround({ theme, anchor, still }: { theme: CanvasTheme; anc
       for (const f of off) f();
       host?.dispose();
     };
-  }, [theme, pinned, motion]);
+  }, [theme, pinned, motion, cursors]);
 
   if (isStill || motion === "still") return <>{still}</>;
   return (

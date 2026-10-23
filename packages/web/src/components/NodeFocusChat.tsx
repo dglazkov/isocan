@@ -18,7 +18,9 @@ import { CommandChip, awaitingReply, withoutCommand } from "./MainThreadPanel.ts
 import { OnIt } from "./OnIt.tsx";
 import { makeComment } from "./CommentLayer.tsx";
 import {
+  manifestNeedsDisclosure,
   messageContextRoots,
+  needsContextManifestPreview,
   useMessageContext,
   useMessageSend,
 } from "../lib/messagecontext.ts";
@@ -235,7 +237,7 @@ export function NodeFocusChat({
                         </>
                       )}
                     </div>
-                    {comment.context && (
+                    {comment.context && manifestNeedsDisclosure(comment.context, selectionRoots) && (
                       <ContextManifestView
                         manifest={comment.context}
                         comment={{ threadId: currentThread.id, commentId: comment.id }}
@@ -316,7 +318,7 @@ export function NodeFocusChat({
             );
           }}
         >
-          <MessageContextPreview context={context} />
+          {needsContextManifestPreview(context, selectionRoots) && <MessageContextPreview context={context} />}
           {sending.error && <p role="alert">{sending.error}</p>}
           <div className="node-focus-chat-composer-row">
             <MentionField

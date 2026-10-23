@@ -330,7 +330,11 @@ describe("type sizes", () => {
   /* 20 → 23 on 27 Sep 2026 when the component sheets were read too
      (BC-6/BC-4): 23px, 24px and 26px were already there, in the design
      comparison and the phone face, where no count looked. */
-  const TYPE_STEPS = 23;
+  /* 23 → 25 on 19 Oct 2026: the arrival screen's title is a poster size,
+     `clamp(32px, 4.8vw, 68px)`, and the eyebrow and sentence under it share
+     one step measured from it, `max(12px, 0.16em)` — Dion asked for the name
+     very large and the rest sized from it, which no fixed px can say. */
+  const TYPE_STEPS = 25;
   const HALF_PIXEL = [9.5, 10.5, 11.5, 12.5, 13.5];
 
   it("invents no new size", () => {

@@ -209,12 +209,24 @@ describe("the release CLI is a bundle", () => {
      * `paths`. 4.5 MB after. The ceiling is here so the next person to add a
      * static import to a barrel finds out on their own machine, where the
      * whole command is a tenth of a second and nothing else would tell them.
+     *
+     * 5.1 MB on 22 Oct 2026 (motion phase 0): 4.999 MB measured before the
+     * `motion` module, so the next module of any kind would have crossed 5.
+     * Motion's first cut read 5.49 MB — parse5 and css-tree, for sanitising
+     * source SVGs, imported at startup — and that was fixed, not budgeted:
+     * they load when a motion is built (`buildMotion` in
+     * `packages/core/src/motion.ts`). What remains, 5.026, is the module's
+     * own 27 KB: its verb and guide, and the engine, recipes and player its
+     * subpath carries. Lazy-loading that too was measured and is worse: the
+     * lazy chunk shares two small modules with startup, so esbuild cuts them
+     * into chunks of their own and `--version` crosses the module-count
+     * bound above instead (42, against under 41) to save 19 KB.
      */
     const startup = modulesLoadedBy(bundle, ["--version"])
       .filter((url) => url.startsWith("file:") && url.includes("/dist/"))
       .reduce((bytes, url) => bytes + statSync(fileURLToPath(url)).size, 0);
     const mb = startup / 1024 / 1024;
-    expect(mb, `${mb.toFixed(1)} MB read to print a version`).toBeLessThan(5);
+    expect(mb, `${mb.toFixed(2)} MB read to print a version`).toBeLessThan(5.1);
   }, 120_000);
 
   it("declares nothing an install has to resolve, and drops what an install never runs", () => {

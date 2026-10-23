@@ -5,6 +5,8 @@ import { ago, axisTicks, majors, majorWhat, past, span, track } from "@isocan/co
 import { ItemThumb } from "./ItemThumb.tsx";
 import { getArchivedOplog, getOplog } from "../lib/api.ts";
 import { enterPast, leavePast, useCanvasStore } from "../stores/canvasStore.ts";
+import { useUiStore } from "../stores/uiStore.ts";
+import { chatHiddenNow } from "../lib/panels.ts";
 
 /**
  * **The canvas's history, as something you can stand in.**
@@ -34,6 +36,15 @@ export function Scrubber({ canvasId, onClose }: { canvasId: string; onClose: () 
   const [seq, setSeq] = useState<number | null>(null);
   const [playing, setPlaying] = useState(false);
   const railRef = useRef<HTMLDivElement>(null);
+  /**
+   * **Above the canvas when the Chat is the bottom bar** (20 Oct 2026). Dion:
+   * "History is broken if chat is on the bottom… I guess it should go on top?"
+   * Both are bottom-centred and the bar rides higher (`--z-bar`), so the
+   * composer covered the rail, the track and Play. With the Chat docked on the
+   * left the bottom is free, and History stays where it has always been.
+   */
+  const chatBelow = useUiStore((s) => s.chatAt) === "bottom" && !chatHiddenNow();
+  const cls = `scrubber${chatBelow ? " at-top" : ""}`;
 
   /**
    * The whole history, archive first — the same contract `isocan timeline`
@@ -177,7 +188,7 @@ export function Scrubber({ canvasId, onClose }: { canvasId: string; onClose: () 
 
   if (failed) {
     return (
-      <div className="scrubber" role="group" aria-label="History">
+      <div className={cls} role="group" aria-label="History">
         <p className="scrub-note bad">{failed}</p>
         <button className="btn" onClick={onClose}>
           Close
@@ -185,10 +196,10 @@ export function Scrubber({ canvasId, onClose }: { canvasId: string; onClose: () 
       </div>
     );
   }
-  if (!entries) return <div className="scrubber quiet">reading the history…</div>;
+  if (!entries) return <div className={`${cls} quiet`}>reading the history…</div>;
   if (!range || buckets.length === 0) {
     return (
-      <div className="scrubber" role="group" aria-label="History">
+      <div className={cls} role="group" aria-label="History">
         <p className="scrub-note">nothing has happened here yet</p>
         <button className="btn" onClick={onClose}>
           Close
@@ -213,7 +224,7 @@ export function Scrubber({ canvasId, onClose }: { canvasId: string; onClose: () 
   const nearest = nearestMajor(seams, here);
 
   return (
-    <div className="scrubber" role="group" aria-label="History">
+    <div className={cls} role="group" aria-label="History">
       <div className="scrub-head">
         <span className="scrub-where">
           {atNow ? "now" : `#${here}`}

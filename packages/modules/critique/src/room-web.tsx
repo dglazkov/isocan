@@ -151,9 +151,37 @@ async function placeLens(host: WebHost, canvas: CanvasContents, draft: CriticDra
 
 const TICK_MS = 10_000;
 
+/**
+ * **A closed read stays closed** (20 Oct 2026). Dion: "when I load this
+ * canvas this right sidebar always shows up and I don't want it to." The
+ * close button only set component state, so every load opened the newest
+ * read again — however old it was, and however many times it had been
+ * closed. Which read this viewer closed is now remembered per canvas in this
+ * browser, so the card comes back only when the room is asked something NEW.
+ * Nothing is lost by it: the lead's posted read is a comment in the Chat.
+ * Local, not an op: closing a card is one person's view, not the canvas's.
+ */
+const dismissedKey = (canvasId: string) => `critique:room-dismissed:${canvasId}`;
+
+function readDismissed(canvasId: string): string | null {
+  try {
+    return localStorage.getItem(dismissedKey(canvasId));
+  } catch {
+    return null;
+  }
+}
+
+function rememberDismissed(canvasId: string, commentId: string): void {
+  try {
+    localStorage.setItem(dismissedKey(canvasId), commentId);
+  } catch {
+    /* Restricted storage: closed for this visit, which is what it was before. */
+  }
+}
+
 /** The read of the room, and the ear for a pause. Draws nothing until the lenses have spoken. */
-export function RoomOverlay({ canvas, host }: OverlayFacts) {
-  const [dismissed, setDismissed] = useState<string | null>(null);
+export function RoomOverlay({ canvasId, canvas, host }: OverlayFacts) {
+  const [dismissed, setDismissed] = useState<string | null>(() => readDismissed(canvasId));
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -206,7 +234,7 @@ export function RoomOverlay({ canvas, host }: OverlayFacts) {
 
   return (
     <section className="crit-dialog room-card" data-room-read={ask.commentId} aria-label="Read of the room">
-      <button type="button" className="room-close" aria-label="Close" onClick={() => setDismissed(ask.commentId)}>
+      <button type="button" className="room-close" aria-label="Close" onClick={() => { rememberDismissed(canvasId, ask.commentId); setDismissed(ask.commentId); }}>
         <svg viewBox="0 0 16 16" width={14} height={14} aria-hidden fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round">
           <path d="M4 4l8 8M12 4l-8 8" />
         </svg>

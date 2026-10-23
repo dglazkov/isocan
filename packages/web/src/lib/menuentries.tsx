@@ -1,5 +1,6 @@
 import { selectCreatedItems } from "./groupplacement.ts";
-import type { Actor, CanvasCursor, CanvasTheme, Item, ModuleMark, ThemeAnchor } from "@isocan/core";
+import type { Actor, CanvasCursor, CanvasTheme, DeckTransition, Item, ModuleMark, ThemeAnchor } from "@isocan/core";
+import { DECK_TRANSITIONS, deckTransitionLabel, isDeckTransition3d } from "@isocan/core";
 import { markOffered, moduleMarkIntent, moduleMarkPatch, moduleMarks } from "@isocan/core";
 import { canvasScopes, isDesignSystem, parentOf } from "@isocan/core";
 import { isDesignFile } from "@isocan/core/design-use";
@@ -673,6 +674,26 @@ export function canvasMenu(ctx: MenuContext): MenuEntry[] {
 }
 
 /**
+ * **The deck's transition, as a set you can see** — the drawer's "Slide
+ * transition" rows. Full screen's bar offers the same `DECK_TRANSITIONS`
+ * in its own dropdown, since this menu sits under full screen. A canvas fact (`deckTransitionPatch`,
+ * one `project.update`), so every row writes; the 3D ones say so beside
+ * their names, because "Cube" alone does not tell you it will turn.
+ */
+function deckTransitionEntries(
+  current: DeckTransition,
+  set: (transition: DeckTransition) => void | Promise<void>,
+): MenuEntry[] {
+  return DECK_TRANSITIONS.map((transition) => ({
+    label: deckTransitionLabel(transition),
+    ...(isDeckTransition3d(transition) ? { value: "3D" } : {}),
+    checked: current === transition,
+    writes: true,
+    run: () => void set(transition),
+  }));
+}
+
+/**
  * **The `···` drawer: one handle instead of a row of buttons.**
  *
  * The bar had grown to eight always-present controls, each of which was right
@@ -735,6 +756,10 @@ export function chromeMenu(ctx: {
    *  own — null when nothing has been chosen (#204 phase 3). */
   cursor: CanvasCursor | null;
   setCursor: (cursor: CanvasCursor | null) => void | Promise<void>;
+  /** How this canvas's deck moves between slides, and the write that changes
+   *  it. Absent from a caller that does not offer the choice. */
+  deckTransition?: DeckTransition;
+  setDeckTransition?: (transition: DeckTransition) => void | Promise<void>;
   /** Open the switcher — the same face ⌘O opens. */
   openSwitcher: () => void;
   /** Whether the ground travels with the canvas or stays behind the glass. */
@@ -883,6 +908,20 @@ export function chromeMenu(ctx: {
        puts it with the history and the trash rather than with the rooms. */
     ...(ctx.groups?.length
       ? [{ label: "Groups", value: ctx.groupsValue ?? "", run: () => {}, submenu: ctx.groups }]
+      : []),
+    /* **Slide transition** — how full screen moves from one slide to the
+       next, for everybody watching. Beside Groups because it is the same kind
+       of row: something about this canvas, not a place to go. */
+    ...(ctx.deckTransition && ctx.setDeckTransition
+      ? [
+          {
+            label: "Slide transition",
+            value: deckTransitionLabel(ctx.deckTransition),
+            writes: true,
+            run: () => {},
+            submenu: deckTransitionEntries(ctx.deckTransition, ctx.setDeckTransition),
+          },
+        ]
       : []),
     { separator: "" },
     {

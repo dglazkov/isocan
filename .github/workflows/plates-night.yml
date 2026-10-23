@@ -1,0 +1,555 @@
+# The night shift (plates practice `night`; managed: plates render rewrites it).
+#
+# Each night: gather the test ledger's history (CI's plates-test-runs
+# artifacts), measure the practice (scripts/plates/improve.mjs --report), put
+# the dated health page on a branch of its own, open one pull request, and
+# drain the queue (scripts/plates/drain.mjs) so it never holds more than one
+# open `keel-night/` PR. Both scripts are managed files of this practice, in
+# this repo. Optional canvas publishing needs owner-provisioned tools and identity. The rules, each
+# paid for once (plates docs/design.md §6, from isocan's "night shift's pull
+# requests"):
+#
+#   - Measure first. Nothing here fixes anything; the page proposes one change.
+#   - A plan after read-only production observation and before gate/agent work
+#     (scripts/plates/night-plan.mjs): the owner's
+#     from the branch keel-night-plan when it is dated tonight, else plates's
+#     default plan; the page shows it, and the PR commits it as it ended
+#     (docs/night/<date>.json). A default night writes its plan to
+#     keel-night-plan from the PR step (never over a plan for tonight or
+#     later), so climb and the robot tick it as they tick an owner's.
+#   - A bot writes a pull request, never to main. The pushes name
+#     refs/heads/keel-night/<date> and, for a default night's plan alone,
+#     refs/heads/keel-night-plan (with a lease); both from the PR step.
+#   - One open PR per queue, the newest; drain.mjs enforces it, not a person.
+#   - A merge is checked, not trusted. improve.mjs's gate measure may reuse
+#     the latest eligible configured default-branch push CI result on the
+#     exact clean SHA, completed within 24 hours. Dirty trees or unavailable
+#     evidence fall back to the local gate. PR CI may require approval;
+#     the newest night PR merges only when the gate measure passed and the
+#     PR holds nothing but data
+#     (tonight's dated health page, docs/night/<date>.json, docs/inbox/, docs/INBOX.md,
+#     .plates/bounds.json; never the rest of the health directory, which may be
+#     shared). The health directory is .plates/plates.json "health" (default
+#     docs/health), read at run time; one the project git-ignores, or one
+#     that resolves outside the repo (a symlink), makes the run red.
+#   - A guard fires into a room someone is in. A broken instrument (improve
+#     exit 2) or a failing gate makes this run red, and GitHub emails. A
+#     measure outside its bound (exit 1) is news: it is on the page, not red.
+#
+# Optional Vercel collection uses VERCEL_API_TOKEN only in its collection step.
+# A project whose `setup` must clone a private repo names
+# a secret in .plates/plates.json "setupToken"; the Install step alone gets it, as
+# GH_TOKEN. Repo setting: Actions must be allowed to create pull requests;
+# until they are, the branch is pushed and the run ends green with a notice.
+name: plates-night
+
+on:
+  schedule:
+    # 07:23 UTC, off the hour, so it does not queue behind every other cron.
+    - cron: "23 7 * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: keel-night
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+  issues: read
+
+jobs:
+  night:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      # The whole history: some measures read it.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      # The project's install, read from .plates/plates.json at run time (so a
+      # config change never needs a re-render): `setup` when it has one, else
+      # npm ci when a lockfile exists. Its `env` goes to every later step
+      # (scripts/plates/improve.mjs applies it to the gate too), so a gate that
+      # must not sync or push is told so before anything runs.
+      - name: Read the config
+        id: config
+        run: |
+          node -e '
+            const fs = require("fs");
+            const c = JSON.parse(fs.readFileSync(".plates/plates.json", "utf8"));
+            const env = c.env ?? {};
+            if (!env || typeof env !== "object" || Array.isArray(env)) throw new Error(".plates/plates.json: \"env\" must be an object of NAME: \"value\"");
+            if (c.setup !== undefined && (typeof c.setup !== "string" || !c.setup.trim())) throw new Error(".plates/plates.json: \"setup\" must be a non-empty shell command");
+            const tok = c.setupToken;
+            if (tok !== undefined && (typeof tok !== "string" || !/^[A-Z_][A-Z0-9_]*$/.test(tok) || tok.startsWith("GITHUB_") || c.setup === undefined)) throw new Error(".plates/plates.json: \"setupToken\" must name a repo secret (not GITHUB_*) and needs a \"setup\"");
+            const eof = `PLATES_EOF_${Date.now()}`;
+            const lines = [];
+            for (const [k, v] of Object.entries(env)) {
+              if (!/^[A-Z_][A-Z0-9_]*$/.test(k) || typeof v !== "string") throw new Error(`.plates/plates.json: "env" ${k} must be NAME: "value"`);
+              lines.push(`${k}<<${eof}`, v, eof);
+              console.log(`env: ${k}`);
+            }
+            if (lines.length) fs.appendFileSync(process.env.GITHUB_ENV, `${lines.join("\n")}\n`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `setup<<${eof}\n${c.setup ?? ""}\n${eof}\n`);
+            // Only the secret NAME, never its value: the Install step looks it up.
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `setup_token=${tok ?? ""}\n`);
+            import("./scripts/plates/production-collectors.mjs").then(({ productionConfig }) => {
+              const p = productionConfig(c);
+              fs.appendFileSync(process.env.GITHUB_OUTPUT, `production_vercel=${p.enabled && p.sources.some(s => s.provider === "vercel")}\n`);
+            });
+            if (tok) console.log(`setupToken: ${tok} (a repo secret, for the Install step only)`);
+          '
+      # Where improve writes the health page and what the PR commits: the
+      # project's own scripts/plates/lib.mjs reads .plates/plates.json "health"
+      # (default docs/health), so improve, this workflow and drain agree.
+      - name: Where the health page goes
+        id: health
+        run: |
+          node --input-type=module -e '
+            import { readFileSync, appendFileSync } from "node:fs";
+            import { healthDirIn } from "./scripts/plates/lib.mjs";
+            const dir = healthDirIn(".", JSON.parse(readFileSync(".plates/plates.json", "utf8")));
+            console.log(`health: ${dir}`);
+            appendFileSync(process.env.GITHUB_OUTPUT, `dir=${dir}\n`);
+          '
+      - name: Install
+        # setupToken (a secret's name in .plates/plates.json) becomes GH_TOKEN here
+        # and in no other step, so setup can clone a private repo with gh
+        # (ledger's data). Absent or unset, the job's own token. Never echoed.
+        env:
+          SETUP: ${{ steps.config.outputs.setup }}
+          GH_TOKEN: ${{ secrets[steps.config.outputs.setup_token] || github.token }}
+        run: |
+          if [ -n "$SETUP" ]; then
+            echo "setup (.plates/plates.json): $SETUP"
+            bash -e -c "$SETUP"
+          elif [ -f package-lock.json ]; then
+            npm ci
+          fi
+
+      # Read-only production collection, restored from the newest enabled attempt.
+      # The provider CLI/identity must be supplied by project setup. No model runs.
+      - name: Collect production evidence
+        id: production
+        continue-on-error: true
+        env:
+          BASE: ${{ github.event.repository.default_branch }}
+          VERCEL_TOKEN: ${{ steps.config.outputs.production_vercel == 'true' && secrets.VERCEL_API_TOKEN || '' }}
+        run: node scripts/plates/production-night.mjs
+
+      - name: Retain production evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: plates-production-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/plates-production/
+          if-no-files-found: ignore
+          retention-days: 90
+
+      # Tonight's plan follows read-only production observation and precedes
+      # gate/agent work (plates phase 73): the one on
+      # the plan branch keel-night-plan when it holds a valid plan dated for
+      # tonight (the run's UTC date, the date its page and PR carry), else
+      # plates's default plan (scripts/plates/night-plan.mjs: deterministic, no
+      # model). It says which, and why. The branch is only read here; a
+      # default night's plan is pushed to it later, from the PR step, the
+      # night's one step that writes. A plan that cannot be made (an input it cannot
+      # read, exit 2) or a branch that cannot be read is red at the verdict,
+      # after the measure has still run.
+      - name: Plan the night
+        id: plan
+        run: |
+          DAY=$(date -u +%F)
+          code=0
+          found=0
+          git ls-remote --exit-code --heads origin keel-night-plan > /dev/null || found=$?
+          ARGS=()
+          if [ "$found" = 0 ]; then
+            # The branch is there: a fetch that fails is a plan the night could
+            # not read (red), never "no plan file"; only a fetched branch with no
+            # plan file is the default plan.
+            fetched=0
+            git fetch -q --no-tags origin "+refs/heads/keel-night-plan:refs/remotes/origin/keel-night-plan" || fetched=$?
+            if [ "$fetched" != 0 ]; then
+              echo "::error::git fetch could not read the plan branch keel-night-plan (exit $fetched); tonight runs the default plan."
+              ARGS=(--branch-unread "git fetch exit $fetched")
+              code=2
+            elif git show "refs/remotes/origin/keel-night-plan:.keel/night/plan.json" > "$RUNNER_TEMP/branch-plan.json" 2> /dev/null; then
+              ARGS=(--branch-plan "$RUNNER_TEMP/branch-plan.json")
+            else
+              echo "plan: keel-night-plan holds no .keel/night/plan.json"
+            fi
+          elif [ "$found" != 2 ]; then
+            echo "::error::git ls-remote could not read the plan branch keel-night-plan (exit $found); tonight runs the default plan."
+            ARGS=(--branch-unread "git ls-remote exit $found")
+            code=2
+          fi
+          node scripts/plates/night-plan.mjs tonight --date "$DAY" "${ARGS[@]}" || code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "day=$DAY" >> "$GITHUB_OUTPUT"
+
+      # On plates itself only (its .plates/plates.json says "plates": "self"): lesson
+      # issues and moved sources become inbox proposals. It reads and writes
+      # files and decides nothing, so it runs before the measure that counts
+      # the inbox. A project has no learn step: lessons go home from a person's
+      # plates (plates lessons), never from a workflow.
+      - name: Is this plates?
+        id: self
+        run: |
+          if node -e "process.exit(JSON.parse(require('fs').readFileSync('.plates/plates.json', 'utf8')).plates === 'self' ? 0 : 1)"; then
+            echo "self=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Gather what came home
+        if: steps.self.outputs.self == 'true'
+        run: node bin/plates.mjs learn || echo "::warning::plates learn did not finish; see its output above."
+
+      # Recover bounded, identity-verified history; gaps remain visible to measures.
+      - name: Gather the test ledger
+        env:
+          REPO: ${{ github.repository }}
+          BASE: ${{ github.event.repository.default_branch }}
+        run: |
+          node scripts/plates/test-history.mjs --repo "$REPO" --branch "$BASE" --json
+
+      # The newest climb night's record (the climb practice's plates-climb
+      # artifact), read-only, by name, from the default branch only, into
+      # .plates/climb, before improve writes its line on the health page. None
+      # (climb off, or never run), or no listing, is no line: never red.
+      - name: Gather the climb's record
+        env:
+          REPO: ${{ github.repository }}
+          BASE: ${{ github.event.repository.default_branch }}
+        run: |
+          if ! gh api "repos/$REPO/actions/artifacts?name=plates-climb&per_page=100" \
+            --jq "[.artifacts[] | select(.expired | not) | select(.workflow_run.head_branch == \"$BASE\")] | sort_by(.created_at) | reverse | .[:1][] | .id" > "$RUNNER_TEMP/climb.txt"; then
+            echo "::warning::The plates-climb artifacts could not be listed; the health page has no climb line tonight."
+            exit 0
+          fi
+          id=$(head -n 1 "$RUNNER_TEMP/climb.txt")
+          if [ -z "$id" ]; then
+            echo "climb: no plates-climb record on $BASE"
+            exit 0
+          fi
+          mkdir -p .plates/climb
+          if gh api "repos/$REPO/actions/artifacts/$id/zip" > "$RUNNER_TEMP/climb-$id.zip"; then
+            unzip -o -q "$RUNNER_TEMP/climb-$id.zip" -d .plates/climb
+            echo "climb: record $id read"
+          else
+            echo "::warning::The plates-climb record $id could not be read; the health page has no climb line tonight."
+          fi
+
+      # The newest tend pass's record (the climb practice's plates-tend
+      # artifact), read the same way into .plates/tend: improve writes its Tend
+      # line, naming each finding the pass left. None is no line: never red.
+      - name: Gather the tend record
+        env:
+          REPO: ${{ github.repository }}
+          BASE: ${{ github.event.repository.default_branch }}
+        run: |
+          if ! gh api "repos/$REPO/actions/artifacts?name=plates-tend&per_page=100" \
+            --jq "[.artifacts[] | select(.expired | not) | select(.workflow_run.head_branch == \"$BASE\")] | sort_by(.created_at) | reverse | .[:1][] | .id" > "$RUNNER_TEMP/tend.txt"; then
+            echo "::warning::The plates-tend artifacts could not be listed; the health page has no tend line tonight."
+            exit 0
+          fi
+          id=$(head -n 1 "$RUNNER_TEMP/tend.txt")
+          if [ -z "$id" ]; then
+            echo "tend: no plates-tend record on $BASE"
+            exit 0
+          fi
+          mkdir -p .plates/tend
+          if gh api "repos/$REPO/actions/artifacts/$id/zip" > "$RUNNER_TEMP/tend-$id.zip"; then
+            unzip -o -q "$RUNNER_TEMP/tend-$id.zip" -d .plates/tend
+            echo "tend: record $id read"
+          else
+            echo "::warning::The plates-tend record $id could not be read; the health page has no tend line tonight."
+          fi
+
+      # Before the drain, so machine_prs counts last night's PR. improve also
+      # writes the PR body's input (--pr-input); scripts/plates/pr-body.mjs
+      # turns it into the body below, so no body is built in inline JS.
+      - name: Measure
+        id: improve
+        run: |
+          code=0
+          node scripts/plates/improve.mjs --report --json --pr-input "$RUNNER_TEMP/pr.json" > "$RUNNER_TEMP/improve.json" || code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          node -e '
+            const fs = require("fs");
+            const [file, out] = process.argv.slice(1);
+            let r = {};
+            try { r = JSON.parse(fs.readFileSync(file, "utf8")); } catch {}
+            const gate = (r.measures ?? []).find(m => m.id === "gate");
+            const day = r.date ?? new Date().toISOString().slice(0, 10);
+            fs.appendFileSync(out, `gate=${gate?.state ?? "missing"}\nday=${day}\n`);
+            for (const m of r.measures ?? []) console.log(`${m.id.padEnd(22)} ${String(m.value ?? "-").padStart(6)}  ${m.state.padEnd(8)} ${m.detail}`);
+            if (r.error) console.log(`improve: ${r.error}`);
+          ' "$RUNNER_TEMP/improve.json" "$GITHUB_OUTPUT"
+
+      # Tonight's history, gate run included, for tomorrow night: the ledger
+      # persists between nights only as this artifact (it is never committed).
+      - name: Keep the test ledger
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: plates-test-runs
+          # Explicit telemetry paths only: never upload local workaround transcripts.
+          path: |
+            .plates/test-runs/*.json
+            .plates/test-runs/retention
+            .plates/test-runs/recovery/status.json
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 56
+
+      # Porcelain, never `git diff --quiet`: a file created for the first time
+      # is not in the index, so diff reads it as no change (ledger's audit
+      # agent lost every report to that). Only the night's data is committed:
+      # exact health pages written by improve (including earlier remeasurements,
+      # never the whole directory), the inbox and bounds; tracked deletions are
+      # its deletion. Paths are literal (GIT_LITERAL_PATHSPECS), never
+      # pathspec magic. A page the project ignores is red: it would never be
+      # committed (ledger lost its pages that way), so the probe is a dated
+      # name, as improve writes. The push names its own branch.
+      # The body is scripts/plates/pr-body.mjs's (Summary: the commit's files;
+      # Evidence: the gate and the measures outside; Merge danger: two-way,
+      # data only), from improve's --pr-input.
+      #
+      # First, a night that ran plates's default plan records it on the plan
+      # branch (night-plan.mjs publish, phase 78), so climb and the robot tick
+      # it: the plan as improve left it, only when the branch holds no plan for
+      # tonight or a later night (never the owner's), with a lease. This step
+      # is the night's only writer; the plan branch is the one more ref it
+      # pushes. A failure is red at the verdict, after the PR.
+      - name: Open the night's pull request
+        id: pr
+        env:
+          DAY: ${{ steps.improve.outputs.day }}
+          PLAN_DAY: ${{ steps.plan.outputs.day }}
+          BASE: ${{ github.event.repository.default_branch }}
+          HEALTH: ${{ steps.health.outputs.dir }}
+        run: |
+          published=0
+          node scripts/plates/night-plan.mjs publish --date "$PLAN_DAY" || published=$?
+          echo "publish=$published" >> "$GITHUB_OUTPUT"
+          if [ -z "$HEALTH" ]; then
+            echo "::error::No health directory was read from .plates/plates.json."
+            exit 1
+          fi
+          PAGE="$HEALTH/$DAY.md"
+          case "$PAGE" in :*) echo "::error::\"health\" starts with \":\" (git pathspec magic)."; exit 1 ;; esac
+          # Consume only the writer-reported paths, not every discovered proposal.
+          # Validate before staging anything; NUL separation keeps paths literal.
+          node --input-type=module -e '
+            import { readFileSync, lstatSync, realpathSync } from "node:fs";
+            import { resolve, relative, isAbsolute } from "node:path";
+            import { healthDirIn } from "./scripts/plates/lib.mjs";
+            const fail = message => { throw new Error(`health staging: ${message}`); };
+            const root = realpathSync(".");
+            const health = healthDirIn(root, JSON.parse(readFileSync(".plates/plates.json", "utf8")));
+            const { DAY: day, HEALTH: expected } = process.env;
+            if (health !== expected || !/^\d{4}-\d{2}-\d{2}$/.test(day ?? "")) fail("report configuration/date mismatch");
+            if (realpathSync(resolve(root, health)) !== resolve(root, health)) fail("configured health alias cannot be staged: Git refuses paths beyond symbolic links");
+            const report = JSON.parse(readFileSync(process.argv[1], "utf8"));
+            const historical = report.changedHistoricalHealthPaths;
+            if (report.date !== day || report.report !== `${health}/${day}.md` || !Array.isArray(historical) || historical.length > 512 || new Set(historical).size !== historical.length || historical.includes(report.report)) fail("missing or malformed changedHistoricalHealthPaths");
+            const paths = [report.report, ...historical];
+            for (const path of paths) {
+              if (typeof path !== "string" || /[\x00-\x1f\x7f\\]/.test(path) || !path.startsWith(`${health}/`) || !/^\d{4}-\d{2}-\d{2}\.md$/.test(path.slice(health.length + 1))) fail("invalid health page path");
+              const absolute = resolve(root, path), rel = relative(root, absolute);
+              if (isAbsolute(path) || rel !== path || rel.startsWith("../")) fail("noncanonical health page path");
+              let current = root;
+              for (const [i, part] of path.split("/").entries()) {
+                current = resolve(current, part);
+                const stat = lstatSync(current);
+                if (stat.isSymbolicLink() || (i === path.split("/").length - 1 ? !stat.isFile() : !stat.isDirectory())) fail("health page is not a regular confined file");
+              }
+            }
+            process.stdout.write(paths.join("\0") + "\0");
+          ' "$RUNNER_TEMP/improve.json" > "$RUNNER_TEMP/health-paths.bin"
+          HEALTH_PATHS=()
+          while IFS= read -r -d '' p; do
+            ignored=0
+            git check-ignore -q -- "$p" || ignored=$?
+            if [ "$ignored" = 0 ]; then
+              echo "::error::$HEALTH is git-ignored ($p), so its health page is never committed: set \"health\" in .plates/plates.json to a directory that is not ignored (plates doctor: health-ignored)."
+              exit 1
+            fi
+            if [ "$ignored" != 1 ]; then
+              echo "::error::git check-ignore could not read $p (exit $ignored)."
+              exit 1
+            fi
+            HEALTH_PATHS+=("$p")
+          done < "$RUNNER_TEMP/health-paths.bin"
+          # The night's plan as it ended (improve wrote it from the working
+          # plan): one dated file, a regular one, never under a symlink.
+          RECORD="docs/night/$DAY.json"
+          if [ -e "$RECORD" ] || [ -L "$RECORD" ]; then
+            if [ -L docs ] || [ -L docs/night ] || [ -L "$RECORD" ] || [ ! -f "$RECORD" ]; then
+              echo "::error::$RECORD is not a regular file inside the repo; the plan record is not committed."
+              exit 1
+            fi
+            ignored=0
+            git check-ignore -q -- "$RECORD" || ignored=$?
+            if [ "$ignored" = 0 ]; then
+              echo "::error::$RECORD is git-ignored, so the night's plan record is never committed: stop ignoring docs/night/."
+              exit 1
+            fi
+            HEALTH_PATHS+=("$RECORD")
+          fi
+          # check-ignore refuses literal pathspecs; every git call after it reads paths literally.
+          export GIT_LITERAL_PATHSPECS=1
+          PATHS=("${HEALTH_PATHS[@]}")
+          for p in docs/inbox docs/INBOX.md .plates/bounds.json; do
+            if [ -e "$p" ] || [ -n "$(git ls-files -- "$p")" ]; then PATHS+=("$p"); fi
+          done
+          if [ "${#PATHS[@]}" = 0 ] || [ -z "$(git status --porcelain -- "${PATHS[@]}")" ]; then
+            echo "Nothing changed."
+            exit 0
+          fi
+          BRANCH="keel-night/$DAY"
+          git config user.name "plates-night"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -q -b "$BRANCH"
+          git add -A -- "${PATHS[@]}"
+          git commit -q --only -m "plates night: $DAY" -- "${PATHS[@]}"
+          git show --name-only --format= HEAD > "$RUNNER_TEMP/files.txt"
+          node scripts/plates/pr-body.mjs --input "$RUNNER_TEMP/pr.json" --files "$RUNNER_TEMP/files.txt" > "$RUNNER_TEMP/body.md"
+          # The branch is this workflow's alone; a re-run the same day replaces
+          # its own reading, so force is safe here and nowhere else.
+          git push --force origin "HEAD:refs/heads/keel-night/$DAY"
+          PR=$(gh pr list --state open --head "$BRANCH" --json number --jq '.[0].number')
+          if [ -n "$PR" ]; then
+            gh pr edit "$PR" --body-file "$RUNNER_TEMP/body.md"
+          else
+            # A repo that has not allowed Actions to open PRs is unconfigured,
+            # not broken: a notice, like a missing secret. Any other failure is red.
+            code=0
+            out=$(gh pr create --base "$BASE" --head "$BRANCH" --title "plates night: $DAY" --body-file "$RUNNER_TEMP/body.md" 2>&1) || code=$?
+            echo "$out"
+            if [ "$code" != 0 ]; then
+              if printf '%s' "$out" | grep -qi 'not permitted to create or approve pull requests'; then
+                echo "::notice::$BRANCH is pushed, but no PR was opened: allow it in Settings → Actions → General → Workflow permissions → \"Allow GitHub Actions to create and approve pull requests\"."
+              else
+                exit "$code"
+              fi
+            fi
+          fi
+
+      # After the machine commit: refuse any remaining dirty source files.
+      # Opt-in only. Install/setup must already provide pinned executables and
+      # a dedicated admitted isocan home; this step installs nothing. Never
+      # hand the raw report to isocan: plates projects allowlisted measurements.
+      - name: Project the night onto its canvas
+        id: canvas
+        continue-on-error: true
+        env:
+          REPO: ${{ github.repository }}
+          BASE: ${{ github.event.repository.default_branch }}
+        run: |
+          enabled=$(node -e 'const c=JSON.parse(require("fs").readFileSync(".plates/plates.json","utf8")); console.log(c.canvas?.enabled === true && c.canvas?.cadence === "nightly" ? "yes" : "no")')
+          [ "$enabled" = yes ] || exit 0
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+          # A preflight failure never reaches the canvas: it leaves a receipt
+          # saying so, and the next night recovers from the attempt before it.
+          preflight_fail() {
+            node -e 'const fs = require("node:fs"); fs.mkdirSync(require("node:path").dirname(process.argv[1]), { recursive: true }); fs.writeFileSync(process.argv[1], JSON.stringify({ neverRan: true, provenance: { repo: process.env.GITHUB_REPOSITORY, workflow: ".github/workflows/plates-night.yml", runId: String(process.env.GITHUB_RUN_ID), attempt: Number(process.env.GITHUB_RUN_ATTEMPT), headSha: process.env.GITHUB_SHA } }))' "$RUNNER_TEMP/keel-canvas-night/never-ran.json"
+            echo "::error::$1"
+            exit 1
+          }
+          # Honor legacy provisioning only when the canonical setting is absent.
+          # An explicitly empty canonical value must still fail the preflight.
+          export PLATES_CANVAS_PLATES_VERSION="${PLATES_CANVAS_PLATES_VERSION-${KEEL_CANVAS_KEEL_VERSION-}}"
+          export PLATES_CANVAS_ISOCAN_VERSION="${PLATES_CANVAS_ISOCAN_VERSION-${KEEL_CANVAS_ISOCAN_VERSION-}}"
+          export PLATES_CANVAS_ISOCAN_HOME="${PLATES_CANVAS_ISOCAN_HOME-${KEEL_CANVAS_ISOCAN_HOME-}}"
+          for tool in plates isocan; do
+            command -v "$tool" >/dev/null 2>&1 || preflight_fail "Canvas night requires $tool explicitly installed and pinned by the project setup."
+          done
+          if [ -z "${PLATES_CANVAS_PLATES_VERSION:-}" ] || [ -z "${PLATES_CANVAS_ISOCAN_VERSION:-}" ]; then
+            preflight_fail "Canvas night requires owner-pinned PLATES_CANVAS_PLATES_VERSION and PLATES_CANVAS_ISOCAN_VERSION."
+          fi
+          if [ "$(plates --version)" != "$PLATES_CANVAS_PLATES_VERSION" ] || [ "$(isocan --version)" != "$PLATES_CANVAS_ISOCAN_VERSION" ]; then
+            preflight_fail "Canvas executable version does not match its owner-provisioned pin."
+          fi
+          if [ -z "${PLATES_CANVAS_ISOCAN_HOME:-}" ] || [ ! -d "$PLATES_CANVAS_ISOCAN_HOME" ]; then
+            preflight_fail "Canvas night requires a dedicated owner-provisioned admitted isocan home (PLATES_CANVAS_ISOCAN_HOME)."
+          fi
+          # Restore the latest canvas-enabled attempt, even when it failed:
+          # its pending receipt may describe a write whose answer was lost.
+          # The night and plates-morning's plan card (phase 78) write one
+          # journal, so the newest attempt of either is the one restored
+          # (scripts/plates/canvas-recovery.mjs holds the rules).
+          recovery=$(node scripts/plates/canvas-recovery.mjs --workflow plates-night.yml) || preflight_fail "Canvas recovery stopped before the canvas was touched; this attempt is recorded as never run."
+          export PLATES_CANVAS_RECOVERY="$recovery"
+          export PLATES_CANVAS_PERSISTENCE=artifact-v1
+          export PLATES_ISOCAN="$(command -v isocan)"
+          export ISOCAN_HOME="$PLATES_CANVAS_ISOCAN_HOME"
+          export PLATES_CANVAS_OUTPUT="$RUNNER_TEMP/keel-canvas-night"
+          # The existing report is consumed once; no second improve or gate.
+          plates canvas night --report "$RUNNER_TEMP/improve.json" --yes --json
+
+      - name: Keep the canvas snapshot and receipt
+        if: always() && steps.canvas.outputs.enabled == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: keel-canvas-night-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/keel-canvas-night/
+          if-no-files-found: ignore
+          retention-days: 90
+
+      # Older plates-night PRs: merged when they are data and still merge,
+      # closed as superseded (branch kept) otherwise. The newest merges only
+      # after a gate that passed on this tree.
+      - name: Drain the queue
+        env:
+          GATE: ${{ steps.improve.outputs.gate }}
+        run: |
+          if [ "$GATE" = ok ]; then
+            node scripts/plates/drain.mjs keel-night/ --yes --gate-passed
+          else
+            node scripts/plates/drain.mjs keel-night/ --yes
+          fi
+
+      - name: Verdict
+        if: always()
+        env:
+          PRODUCTION_OUTCOME: ${{ steps.production.outcome }}
+          CANVAS_OUTCOME: ${{ steps.canvas.outcome }}
+          CODE: ${{ steps.improve.outputs.code }}
+          GATE: ${{ steps.improve.outputs.gate }}
+          PLAN: ${{ steps.plan.outputs.code }}
+          PUBLISH: ${{ steps.pr.outputs.publish }}
+        run: |
+          if [ "$PRODUCTION_OUTCOME" = failure ]; then
+            echo "::error::Production collection or recovery has gaps; other health work still ran."
+            exit 1
+          fi
+          if [ "$CANVAS_OUTCOME" = failure ]; then
+            echo "::error::Canvas projection failed; the health report and queue were still processed."
+            exit 1
+          fi
+          if [ "$PLAN" != 0 ]; then
+            echo "::error::Tonight's plan could not be made or read (night-plan.mjs exit ${PLAN:-none}); the Plan the night step says which input."
+            exit 1
+          fi
+          if [ -n "$PUBLISH" ] && [ "$PUBLISH" != 0 ]; then
+            echo "::error::Tonight's default plan could not be written to keel-night-plan (night-plan.mjs publish exit $PUBLISH); the passes will not tick it. The PR step says why."
+            exit 1
+          fi
+          if [ "$CODE" = 2 ] || [ -z "$CODE" ]; then
+            echo "::error::An instrument is broken (improve.mjs exit ${CODE:-none}); the health page says which."
+            exit 1
+          fi
+          if [ "$GATE" != ok ]; then
+            echo "::error::The project's gate did not pass (gate: $GATE)."
+            exit 1
+          fi
+          if [ "$CODE" = 1 ]; then
+            echo "::notice::A measure is outside its bound; it is on the health page and in the PR's proposal."
+          fi

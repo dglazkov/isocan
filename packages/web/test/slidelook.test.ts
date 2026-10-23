@@ -84,7 +84,7 @@ describe("moving from one slide to the next", () => {
   it("keeps a frame that has been seen painted underneath", () => {
     // So the incoming slide fades in over a finished picture rather than over
     // the ground: the two of them never add up to less than one slide.
-    expect(item).toContain('className={`html-view${shown.has(one) ? "" : " arriving"}`}');
+    expect(item).toContain('className={`html-view${shown.has(one) ? "" : " arriving"}');
   });
 
   it("fades rather than cutting, and respects reduced motion", () => {

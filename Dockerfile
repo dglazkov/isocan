@@ -29,6 +29,13 @@
 # Google-hosted APIs over HTTPS is the wrong place to find out, so the image
 # follows `.nvmrc` exactly until a newer 24.x is checked the same way.
 #
+# **Moved to 24.22.1 on 21 Oct 2026** for CVE-2026-111497 (Brotli decoder
+# out-of-bounds write; also two TLS hostname-verification bypasses). Checked
+# the same way first: on macOS with `fetch`, 24.22.1 verifies isocan.io,
+# isocan.store and google.com, and so do 24.20.0 and, today, 24.21.0, so
+# the September failure looks like the chain at the time, not Node. The
+# Linux image was again not measured before this change.
+#
 # ---- the two things that would have failed on Cloud Run ----
 #
 # 1. `startDaemon` binds 127.0.0.1. A container that binds loopback fails Cloud
@@ -50,7 +57,7 @@
 # either library is missing after the prune.
 
 # ============================ builder ============================
-FROM node:24.20.0-slim AS builder
+FROM node:24.22.1-slim AS builder
 WORKDIR /app
 
 # Manifests first, sources second: `npm ci` then re-runs only when a dependency
@@ -83,6 +90,7 @@ COPY packages/modules/talk/package.json packages/modules/talk/package.json
 COPY packages/modules/wireframe/package.json packages/modules/wireframe/package.json
 COPY packages/modules/judge/package.json packages/modules/judge/package.json
 COPY packages/modules/mood/package.json packages/modules/mood/package.json
+COPY packages/modules/motion/package.json packages/modules/motion/package.json
 COPY packages/modules/critique/package.json packages/modules/critique/package.json
 COPY packages/modules/lottie/package.json packages/modules/lottie/package.json
 
@@ -147,7 +155,7 @@ RUN node -e " \
  && echo 'kept: packages/web/dist/index.html'
 
 # ============================ runtime ============================
-FROM node:24.20.0-slim AS runtime
+FROM node:24.22.1-slim AS runtime
 
 # tini as PID 1. Cloud Run sends SIGTERM to drain, `runDaemon` installs a
 # SIGTERM handler that closes the sockets and flushes the backing's debounced

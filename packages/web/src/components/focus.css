@@ -1430,3 +1430,7 @@
   background: var(--ground);
   color: var(--ink);
 }
+
+/* The deck's transition picker hangs from the right-hand cluster, so it opens
+   leftward rather than off the edge of the window. */
+.focus-transition-menu { left: auto; right: 0; min-width: 180px; }

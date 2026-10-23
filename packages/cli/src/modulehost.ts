@@ -55,6 +55,18 @@ export interface CliHost {
    */
   runFenced: (request: FencedRequest) => Promise<FencedRun>;
   /**
+   * **Run one of this copy's own scripts** (module API 0.2.11, 22 Oct 2026;
+   * motion phase 1) — the question `runFenced` says to ask out loud. The
+   * script is isocan's, shipped with the CLI the person installed (`script`
+   * is its path in the package, `scripts/…` and nothing else), never bytes
+   * off a canvas; it is what `canvas shot` and the deck's PDF export run,
+   * through the same `runPackageScript`, so a missing file, a broken install
+   * and a failed run are the same three sentences. `isocan motion render`
+   * runs `scripts/motion-render.mjs`, the headless browser and the render
+   * page. Optional, so a module can tell an older host by its absence.
+   */
+  runPackageScript?: (script: string, args: readonly string[], opts: { what: string; input?: string; quiet?: boolean }) => void;
+  /**
    * **Enrol an agent on a canvas, from this machine** (proposed: `templates`,
    * 11 Sep 2026) — what `isocan rc add` does, promoted rather than imported:
    * the `agent.enroll` op, and the machine-local row the rc dispatches from.

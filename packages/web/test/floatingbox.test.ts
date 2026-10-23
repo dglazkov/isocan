@@ -193,7 +193,12 @@ describe("useFloatingBox and FloatingHandles", () => {
       expect(idx, `${selector} exists in styles.css`).toBeGreaterThan(-1);
       const block = styles.slice(idx, styles.indexOf("}", idx));
       expect(block, `${selector} uses --glass`).toContain("var(--glass)");
-      expect(block, `${selector} uses --glass-filter`).toContain("var(--glass-filter)");
+      /* The menu wears its frost on a `::before` layer: a filter on the box
+         itself would trap its fixed submenu (`menuground.test.ts`). */
+      const frost = selector === ".context-menu {"
+        ? styles.slice(styles.indexOf("\n.context-menu::before {"), styles.indexOf("}", styles.indexOf("\n.context-menu::before {")))
+        : block;
+      expect(frost, `${selector} uses --glass-filter`).toContain("var(--glass-filter)");
     }
   });
 });

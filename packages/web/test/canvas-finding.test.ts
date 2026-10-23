@@ -48,6 +48,17 @@ describe("CanvasFinding arrival screen", () => {
     expect(eyebrow?.textContent).toBe("Finding this canvas…");
   });
 
+  it("falls back to the drifting motes where no living ground can run", () => {
+    // jsdom has no WebGL2, which is exactly the fallback a real browser without
+    // it (or under reduced motion) gets: the still, the motes, no ground canvas.
+    act(() => {
+      root.render(h(CanvasFinding, { canvasId: "prj_new" }));
+    });
+    expect(host.querySelector(".canvas-finding-motes")).toBeTruthy();
+    expect(host.querySelector(".ground-canvas")).toBeNull();
+    expect(host.querySelector(".canvas-finding-wash")).toBeTruthy();
+  });
+
   it("holds the veil across asking and store load, then fades out once the canvas arrives", () => {
     vi.useFakeTimers();
     try {
