@@ -3,8 +3,9 @@
 Implementation is in an isolated worktree from
 `e59d061a02ae44bf02a45a02a3e47095ab2688f7`. A first integrated checkpoint passed;
 independent source review then required an output-error cleanup correction.
-Final corrected gates, hosted verification and parent approval are pending.
-This is not a completed gate or a speed-improvement claim.
+Corrected local gates and independent source review passed at `b81481fe4`.
+Hosted verification and parent approval remain pending. No speed improvement
+or complete hosted gate is claimed.
 
 ## Inputs and dependency inventory
 
@@ -16,7 +17,8 @@ matched, no versions differed, and all 75 absent entries were optional
 platform packages. This is not evidence of a fresh `npm ci`.
 
 Java 27 is available locally, but this checkout's discovered gcloud SDK lacks
-the Firestore emulator component. The fresh worktree has no web bundle yet.
+the Firestore emulator component. The initial worktree inventory had no web
+bundle; fresh installation and explicit builds subsequently produced it.
 The hosted setup still pins Java 21 and installs the emulator. Local deep
 coverage and strict hosted CI coverage are not asserted to be equivalent.
 
@@ -24,9 +26,9 @@ coverage and strict hosted CI coverage are not asserted to be equivalent.
 
 All commands below used Node 24.22.1 and returned exit 0:
 
-- Final `ISOCAN_TEST_REQUIRE_PROCESS_SNAPSHOT=1 node --test scripts/install-watchdog.test.mjs`:
+- Earlier checkpoint `ISOCAN_TEST_REQUIRE_PROCESS_SNAPSHOT=1 node --test scripts/install-watchdog.test.mjs`:
   14 controls passed in 5.373 seconds, with actual process inspection required.
-- Final `node node_modules/vitest/vitest.mjs run test/install-watchdog.test.ts test/workflows.test.ts test/switches.test.ts --maxWorkers=1`:
+- Earlier checkpoint `node node_modules/vitest/vitest.mjs run test/install-watchdog.test.ts test/workflows.test.ts test/switches.test.ts --maxWorkers=1`:
   38 tests passed across 3 files in 6.25 seconds after the backpressure correction.
 - `node node_modules/vitest/vitest.mjs run test/install-watchdog.test.ts test/workflows.test.ts test/switches.test.ts test/sharding.test.ts test/records.test.ts test/teardown.test.ts test/packaging.test.ts test/unused-exports.test.ts test/undocumented-exports.test.ts packages/core/test/docstatus.test.ts --maxWorkers=1`:
   89 tests passed across 10 files, 36.05 seconds before that correction.
@@ -71,7 +73,7 @@ attempt were retained while correcting forwarding: Node automatically resumes
 child pipes on exit, and fixed-size reads can delay small output. Pull-based
 forwarding now caps each read at 64 KiB and waits for destination drain. Controls
 prove bounded queued output, active deadline/heartbeat while blocked, and full
-successful output after a delayed drain. The final 14-control proof above includes
+successful output after a delayed drain. The earlier 14-control proof above includes
 these cases. Local Git fsmonitor emitted daemon errors during focused switch
 fixtures; the test process still returned zero, and this is recorded rather than
 removed from its log.
@@ -120,12 +122,39 @@ claiming a hosted or final-commit review. The conductor independently passed
 across the bridge/workflow/switch/record/changelog/docstatus files in 13.04
 seconds with one worker. Both commands returned zero. Spin lint was clean.
 
+## Corrected integrated proof
+
+On clean `b81481fe46b734336de7b8ee74ebde7b5122bc4a`, with unchanged fetched base:
+
+| Command | Exit | Wall | User / system CPU |
+| --- | --- | --- | --- |
+| Watchdog running unchanged `npm ci` | 0 | 7.56 s | 5.12 / 13.89 s |
+| Explicit `npm run build` | 0 | 9.45 s | 19.54 / 1.94 s |
+| `npm run test:deep` | 0 | 408.76 s | 1708.41 / 319.44 s |
+| `npm run typecheck` | 0 | 87.14 s | 165.02 / 5.47 s |
+
+Deep again reported 892 files passed, 11 skipped; 9,344 tests passed, 115
+skipped. The loop command passed 2/2. Direct `npm run lint` passed; its preceding
+timed attempt returned 1 because the timing utility's `sysctl kern.clockrate`
+read was sandbox-denied, not because ESLint reported a finding. Both attempts
+are retained. The install cache was now populated and the bundle already
+existed; the 7.56-second result is not a matched comparison to 16.42 seconds.
+No code changed during the gates.
+
+A separate complete-diff source review pinned this head and base and found no
+remaining actionable code findings. The final documentation update corrects
+historical wording and records results; targeted record checks cover it.
+
 ## Remaining acceptance and coordination
 
 The emulator uses `detached: true`, so this task does not claim the admission
 wrapper's cooperative foreground contract; parent-controlled serialization is
-required. The final local deep/typecheck checkpoint follows the correction,
-before pushing the draft PR. All failures and skips remain in the evidence.
+was used. Local heavy work ended and the slot was released at 02:11 UTC;
+process inspection found no remaining validation/worktree children. The shared
+admission status then refused a hostname binding mismatch despite matching UID
+and a raw state file with zero leases. That state was left untouched for parent
+inspection; no valid current admission receipt is claimed. All failures and
+skips remain in the evidence.
 
 The complete strict CI shard union/checks must hold at the PR head. This repo
 has no committed `ready_for_review` review workflow or cross-review practice;

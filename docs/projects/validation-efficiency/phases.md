@@ -1,14 +1,14 @@
 ---
 status: partial
 since: 2026-10-23
-note: "Phase 113 PART-DONE: watchdog and manual retry planning implemented; output-error review corrections pass focused proof, final integrated gates and PR review remain."
+note: "Phase 113 PART-DONE: corrected local gates and independent source review pass; hosted proof and parent review remain before acceptance."
 ---
 
 # Validation efficiency
 
 **Where we are: validation-efficiency phase 113 is PART-DONE.** Next is the
-parent-coordinated integrated gate, then the separate draft PR and exact-head
-review. [Focused evidence](evidence.md) is retained. This project is the
+separate draft PR's complete hosted gate and parent review. [Local proof and
+review evidence](evidence.md) are retained. This project is the
 isocan slice of Plates's 22 October validation-efficiency spec. It does not
 reorder the unrelated practice project's work. Delivery is an isolated draft
 PR; no merge, deployment, schedule or validation-policy change is authorized.
@@ -16,8 +16,8 @@ PR; no merge, deployment, schedule or validation-policy change is authorized.
 ## Phase 113 — A stalled install leaves bounded evidence
 
 **Status: PART-DONE, 23 October 2026.** Watchdog, retained diagnostics and
-read-only retry planning pass focused controls; review corrections are ready
-for final verification in the parent-assigned heavy slot.
+read-only retry planning pass corrected local gates and independent source
+review; complete hosted proof and parent review remain.
 
 **Done when:** A stalled shared suite installation fails within its configured
 bound, leaves redacted lifecycle evidence, and any proposed targeted retry
@@ -60,7 +60,7 @@ No heavy gate starts before coordination with the parent on this shared Mac.
 remain unknown. Complete gate evidence/reuse belongs to Plates phase 114.
 Broader adoption waits on parent review of the exact-head evidence.
 
-- **2026-10-23** — Open: corrected integrated deep/typecheck and hosted
-  exact-head proof remain before acceptance. The detached emulator does not
-  satisfy the cooperative foreground admission contract; the parent assigned
-  this task the next serialized slot after Ledger released it.
+- **2026-10-23** — Open: hosted exact-head proof and parent review remain before
+  acceptance. Corrected local deep/typecheck passed; the parent-controlled
+  heavy slot was released. The detached emulator does not satisfy the
+  cooperative foreground admission contract.
