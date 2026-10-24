@@ -1,6 +1,8 @@
+import { useEffect, useRef } from "react";
 import { panelActorId } from "@isocan/core";
 import { useUiStore } from "../stores/uiStore.ts";
 import { extensionPanelKey, openPanel } from "../lib/panels.ts";
+import { bridgePanelFrame } from "../lib/panelBridge.ts";
 import {
   extensionColor,
   panelUnavailableSentence,
@@ -38,6 +40,7 @@ export function ExtensionPanelSurface({
   onClose: () => void;
 }) {
   const panelWidth = useUiStore((s) => s.panelWidth);
+  const frameRef = useRef<HTMLIFrameElement | null>(null);
   const frame = active.panel
     ? panelFrame(origin, canvasId, active.panel.bytes.blobHash)
     : null;
@@ -46,6 +49,17 @@ export function ExtensionPanelSurface({
     : !frame
       ? `${active.title} is unavailable — the content origin is not standing.`
       : null;
+
+  const originBase = origin?.base ?? null;
+  useEffect(() => {
+    if (unavailable || !originBase) return;
+    return bridgePanelFrame({
+      canvasId,
+      itemId: active.itemId,
+      contentOrigin: originBase,
+      frameWindow: () => frameRef.current?.contentWindow ?? null,
+    });
+  }, [canvasId, active.itemId, unavailable, originBase]);
 
   return (
     <aside
@@ -98,6 +112,7 @@ export function ExtensionPanelSurface({
           </div>
         ) : (
           <iframe
+            ref={frameRef}
             className="extension-panel-frame"
             title={active.title}
             src={frame!.src}

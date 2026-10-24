@@ -1437,4 +1437,69 @@ describe("the extension actor (extensions phase 5)", () => {
     expect(EXTENSION_COLORS.some((c) => c.value === color)).toBe(true);
     expect(IDENTITY_COLORS.some((c) => c.value === color)).toBe(false);
   });
+
+  it("refuses an operation outside the vocabulary with a product-feature message and an operation not permitted by its grant with the same refusal a person gets (extensions phase 6)", async () => {
+    const panel = await seedPanel();
+
+    // 1. An operation outside the vocabulary is refused, telling the panel that
+    // proposing a new operation is proposing a product feature, and nothing is written.
+    const unknownOpRes = await fetch(`${base}/api/ops`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...panelHeaders(panel) },
+      body: JSON.stringify({
+        canvasId: CANVAS,
+        actor: panel.actor,
+        op: { type: "panel.inventedFeature", itemId: PAGE_ID },
+      }),
+    });
+    expect(unknownOpRes.status).toBe(400);
+    const unknownBody = (await unknownOpRes.json()) as { error: string };
+    expect(unknownBody.error).toContain("proposing a new operation is proposing a product feature");
+
+    // 2. Narrow the panel's grant to `read` (view-only): an edit op (`item.move`)
+    // is refused at the door with the exact same `403 read-only` refusal a person
+    // with a `read` grant gets, while a comment op (`thread.create`) is still
+    // refused only if narrowed to `view`. Let's test `view` vs `read`!
+    const narrowedToView = await fetch(`${base}${grantsRoute(CANVAS)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...owner.headers },
+      body: JSON.stringify({ subject: panelSubject(PANEL_ID), capability: "view" }),
+    });
+    expect(narrowedToView.status).toBe(200);
+
+    // Compare against a person holding a `view` link grant on the same canvas.
+    const viewLink = await fetch(`${base}${grantsRoute(CANVAS)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...owner.headers },
+      body: JSON.stringify({ subject: "link", capability: "view" }),
+    });
+    expect(viewLink.status).toBe(200);
+    const viewerPerson = await stranger();
+    await viewerPerson.speakAs({ id: "usr_viewer", name: "Viewer" });
+
+    const personRefused = await op(viewerPerson, {
+      canvasId: CANVAS,
+      actor: { id: "usr_viewer", name: "Viewer" },
+      op: { type: "item.move", itemId: PAGE_ID, x: 50, y: 50 },
+    });
+    const panelRefused = await fetch(`${base}/api/ops`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...panelHeaders(panel) },
+      body: JSON.stringify({
+        canvasId: CANVAS,
+        actor: panel.actor,
+        op: { type: "item.move", itemId: PAGE_ID, x: 50, y: 50 },
+      }),
+    });
+    expect(panelRefused.status).toBe(personRefused.status);
+    expect(panelRefused.status).toBe(403);
+    const personRefusedJson = (await personRefused.json()) as { code: string; error: string };
+    const panelRefusedJson = (await panelRefused.json()) as { code: string; error: string };
+    expect(panelRefusedJson).toEqual(personRefusedJson);
+
+    // Nothing was written to the canvas by either refused op.
+    const snap = (await (await get(owner, `/api/projects/${CANVAS}/canvas`)).json()) as CanvasSnapshotResponse;
+    expect(snap.canvas.items[PAGE_ID]!.x).toBe(0);
+    expect(snap.canvas.items[PAGE_ID]!.y).toBe(0);
+  });
 });
