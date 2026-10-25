@@ -33,8 +33,9 @@ export declare function versionMotionItem(w: MotionWriter, motion: Pick<Item, "i
 }>;
 /**
  * **A movie of a motion, beside it** — `isocan motion render`'s and *Render
- * movie…*'s one write: a `video/mp4` item as wide as the motion, as tall as
- * the frame's shape says, wearing `renderedFrom`.
+ * movie…*'s one write: a `video/mp4`, `video/webm` or `image/gif` item, as
+ * `renderedFrom.format` says (an MP4 when it says nothing), as wide as the
+ * motion, as tall as the frame's shape says, wearing `renderedFrom`.
  */
 export declare function addMotionMovie(w: MotionWriter, motion: Pick<Item, "title" | "x" | "y" | "width">, bytes: Uint8Array, renderedFrom: MotionRenderedFrom): Promise<{
     itemId: string;

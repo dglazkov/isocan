@@ -2,12 +2,15 @@
  * **Recipes: a good default with no model** (motion phase 0;
  * `docs/projects/motion/design.md` §3). Each is a function from the layers —
  * their named parts, sizes and ink — to a spec in the engine's vocabulary.
- * Phase 0 carries `assemble` and `idle`; `reveal`, `orbit` and `emphasis`
- * are phase 3's.
+ * Phase 0 carried `assemble` and `idle`; phase 3 adds `reveal`, `orbit` and
+ * `emphasis`. Every recipe plays clean under the principle checks
+ * (`motion-checks.ts`): whatever turns or scales names its pivot, a follower
+ * trails its leader by at least a beat, and idle motion stays under its
+ * ceiling — `packages/core/test/motion.test.ts` holds each one to that.
  */
 import type { MotionBox, MotionLayer, MotionPivot, MotionSpec } from "./motion-engine.js";
 /** The recipes this build knows, in the order `--recipe` lists them. */
-export declare const MOTION_RECIPES: readonly ["assemble", "idle"];
+export declare const MOTION_RECIPES: readonly ["assemble", "reveal", "idle", "orbit", "emphasis"];
 /** A recipe's name. */
 export type MotionRecipeName = (typeof MOTION_RECIPES)[number];
 /** Is this a recipe this build knows? */
@@ -27,10 +30,13 @@ export interface MotionRecipeOptions {
     seconds?: number;
     loop?: boolean;
 }
+/** What each recipe does, in a line — the words *Animate…* and `--help` show. */
+export declare const MOTION_RECIPE_WORDS: Record<MotionRecipeName, string>;
 /**
  * **A recipe's spec for these layers.** `seconds` stretches or squeezes the
- * recipe's own timing to fit; `loop` defaults to the recipe's nature —
- * `assemble` plays once and holds, `idle` loops.
+ * recipe's own timing to fit (a loop's one cycle, 4 s unless said); `loop`
+ * defaults to the recipe's nature — `idle` and `orbit` loop, the others play
+ * once and hold.
  */
 export declare function motionRecipe(name: MotionRecipeName, layers: readonly MotionLayer[], stage: {
     width: number;

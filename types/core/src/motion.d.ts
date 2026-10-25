@@ -24,7 +24,7 @@ import { type MotionWarning } from "./motion-checks.js";
 import type { Actor, CanvasContents, Item, ItemVersion } from "./model.js";
 export { createMotionEngine, motionEngine, motionEngineSource, type MotionBell, type MotionBox, type MotionChannel, type MotionChannelName, type MotionEase, type MotionElement, type MotionEngine, type MotionKey, type MotionLayer, type MotionMove, type MotionPivot, type MotionRoot, type MotionSpec, type MotionState, type MotionWave, } from "./motion-engine.js";
 export type { MotionSource, PreparedLayer } from "./motion-svg.js";
-export { isMotionRecipe, MOTION_BEAT, MOTION_PIVOTS, MOTION_RECIPES, motionRecipe, pivotOn, type MotionRecipeName, type MotionRecipeOptions } from "./motion-recipes.js";
+export { isMotionRecipe, MOTION_BEAT, MOTION_PIVOTS, MOTION_RECIPE_WORDS, MOTION_RECIPES, motionRecipe, pivotOn, type MotionRecipeName, type MotionRecipeOptions } from "./motion-recipes.js";
 export { MOTION_MAX_SECONDS, motionWarnings, validateMotionSpec, type MotionWarning } from "./motion-checks.js";
 export { authoredSpec, motionDocumentSpec, motionSpecFrom, motionTargets, type MotionAuthoredMove, type MotionAuthoredSpec, type MotionPivotName } from "./motion-spec.js";
 export { MOTION_MESSAGES, motionMessage, motionSeek } from "./motion-messages.js";

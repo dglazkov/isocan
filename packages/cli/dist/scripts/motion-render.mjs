@@ -26,7 +26,7 @@ var url = arg("--url");
 var canvasId = arg("--canvas");
 var out = arg("--out");
 if (!url || !canvasId || !out) {
-  console.error("usage: motion-render.mjs --url <render address> --canvas <canvas> --out <file.mp4> [--report <file.json>] [--keep-dir <dir>]");
+  console.error("usage: motion-render.mjs --url <render address> --canvas <canvas> --out <file> [--report <file.json>] [--keep-dir <dir>]");
   process.exit(2);
 }
 var address = new URL(url);
