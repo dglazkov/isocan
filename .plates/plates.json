@@ -61,7 +61,7 @@
   ],
   "production": {
     "version": 1,
-    "enabled": true,
+    "enabled": false,
     "sources": [
       {
         "id": "isocan-production",
