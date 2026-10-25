@@ -5,6 +5,8 @@ import {
   buildMotion,
   isMotionRecipe,
   MOTION_BEAT,
+  MOTION_RECIPE_WORDS,
+  MOTION_RECIPES,
   MOTION_PIVOTS,
   MOTION_PROPS,
   motionEngine,
@@ -242,7 +244,8 @@ describe("buildMotion, the logo of Scene 1", () => {
 
   it("knows its recipes and pivots", () => {
     expect(isMotionRecipe("assemble")).toBe(true);
-    expect(isMotionRecipe("orbit")).toBe(false);
+    expect(isMotionRecipe("orbit")).toBe(true);
+    expect(isMotionRecipe("spin")).toBe(false);
     expect(MOTION_PIVOTS).toContain("base");
   });
 });
@@ -331,5 +334,98 @@ describe("the principles, as checks", () => {
     const pivot = pivotOn(stalkBox, "base");
     expect(motionWarnings(withMoves([{ target: "wheat/stalk", pivot, channels: { rotate: { wave: { period: 2.4, amp: 25 } } } }])).map((w) => w.code)).toContain("idle-ceiling");
     expect(motionWarnings(withMoves([{ target: "wordmark", channels: { opacity: { keys: [{ t: 1, v: 0 }, { t: 1, v: 1 }] } } }])).map((w) => w.code)).toEqual(["teleport"]);
+  });
+});
+
+/**
+ * **Every recipe plays clean** (motion phase 3): on Scene 1's logo, each of
+ * the five builds a spec the checks accept and warn nothing about — its
+ * turns and scales name their pivots, its followers trail by a beat, its idle
+ * motion stays under the ceiling — and each is pure in `t`.
+ */
+const RECIPES_BUILT = Object.fromEntries(await Promise.all(MOTION_RECIPES.map(async (r) => [r, await buildMotion({ sources: LOGO, recipe: r })] as const)));
+
+describe("the recipes", () => {
+  const built = RECIPES_BUILT;
+
+  it("are five, each with its words", () => {
+    expect([...MOTION_RECIPES]).toEqual(["assemble", "reveal", "idle", "orbit", "emphasis"]);
+    for (const r of MOTION_RECIPES) expect(MOTION_RECIPE_WORDS[r].length).toBeGreaterThan(20);
+  });
+
+  for (const recipe of MOTION_RECIPES) {
+    it(`${recipe} plays clean: accepted, and no principle warned about`, () => {
+      const { spec, warnings } = built[recipe]!;
+      expect(() => validateMotionSpec(spec)).not.toThrow();
+      expect(warnings).toEqual([]);
+      expect(motionWarnings(spec)).toEqual([]);
+      expect(spec.recipe).toBe(recipe);
+      expect(spec.moves.length).toBeGreaterThan(0);
+      for (const move of spec.moves) {
+        if (move.channels.rotate || move.channels.scale) expect(MOTION_PIVOTS).toContain(move.pivot!.at);
+      }
+    });
+
+    it(`${recipe} is pure in t: the same t, the same frame, in any order`, () => {
+      const { spec } = built[recipe]!;
+      const times = [0, spec.seconds / 2, 0.37, spec.seconds, spec.seconds / 2, 0, 0.37];
+      const first = new Map<number, string>();
+      for (const t of times) {
+        const s = JSON.stringify(motionEngine.evaluate(spec, t));
+        if (first.has(t)) expect(s).toBe(first.get(t));
+        else first.set(t, s);
+      }
+      // It moves, or "the same frame" proves nothing.
+      expect(first.get(0.37)).not.toBe(first.get(spec.seconds / 2));
+      const once = recordingRoot(spec);
+      motionEngine.render(once.root, spec, 0.37);
+      const after = recordingRoot(spec);
+      for (const t of [spec.seconds, 0, spec.seconds / 3]) motionEngine.render(after.root, spec, t);
+      motionEngine.render(after.root, spec, 0.37);
+      expect(after.attrs()).toEqual(once.attrs());
+    });
+  }
+
+  it("reveal brings each layer in whole, back to front, each a beat or more behind the last", () => {
+    const { spec } = built.reveal!;
+    expect(spec.moves.map((m) => m.target)).toEqual(["circle", "wheat", "wordmark"]);
+    expect(spec.moves.slice(1).map((m) => m.follows)).toEqual(["circle", "wheat"]);
+    expect(spec.loop).toBe(false);
+    const at0 = motionEngine.evaluate(spec, 0), end = motionEngine.evaluate(spec, spec.seconds);
+    expect(at0.wordmark!.opacity).toBe(0);
+    expect(at0.circle!.draw).toBe(0);
+    expect(end.wordmark).toMatchObject({ opacity: 1, y: 0, scale: 1 });
+  });
+
+  it("orbit loops one turn: each part circles where it rests, a beat behind, its circle under the idle ceiling", () => {
+    const { spec } = built.orbit!;
+    expect(spec.loop).toBe(true);
+    const [first, second] = spec.moves;
+    const lag = (first!.channels.x!.wave!.phase ?? 0) - (second!.channels.x!.wave!.phase ?? 0);
+    expect(lag * spec.seconds).toBeGreaterThanOrEqual(MOTION_BEAT - 1e-9);
+    for (const move of spec.moves) {
+      expect(move.channels.x!.wave!.period).toBe(spec.seconds);
+      expect(move.pivot!.at).toBe("base");
+    }
+    // A circle: x and y a quarter-turn apart, so the distance from rest is constant.
+    const r = (t: number) => { const s = motionEngine.evaluate(spec, t)[first!.target]!; return Math.hypot(s.x, s.y); };
+    expect(r(0.3)).toBeCloseTo(r(1.9), 3);
+  });
+
+  it("emphasis rests, then pulses each part in turn and comes back to rest", () => {
+    const { spec } = built.emphasis!;
+    expect(spec.loop).toBe(false);
+    const target = spec.moves[0]!.target;
+    const bell = spec.moves[0]!.channels.scale!.bells![0]!;
+    expect(motionEngine.evaluate(spec, 0)[target]!.scale).toBeCloseTo(1, 2);
+    expect(motionEngine.evaluate(spec, bell.at)[target]!.scale).toBeCloseTo(1 + bell.amp, 6);
+    expect(motionEngine.evaluate(spec, spec.seconds)[spec.moves.at(-1)!.target]!.scale).toBeCloseTo(1, 2);
+    expect(spec.moves.slice(1).every((m, i) => m.follows === spec.moves[i]!.target)).toBe(true);
+  });
+
+  it("the follower check reads a pulse's moment, so pulses at once are a warning", () => {
+    const { spec } = built.emphasis!;
+    const together = { ...spec, moves: spec.moves.map((m) => ({ ...m, channels: { scale: { bells: [{ at: 0.4, width: 0.12, amp: 0.08 }] } } })) };
+    expect(motionWarnings(together).map((w) => w.code)).toContain("follower-lag");
   });
 });

@@ -47,7 +47,7 @@ export {
   type MotionWave,
 } from "./motion-engine.ts";
 export type { MotionSource, PreparedLayer } from "./motion-svg.ts";
-export { isMotionRecipe, MOTION_BEAT, MOTION_PIVOTS, MOTION_RECIPES, motionRecipe, pivotOn, type MotionRecipeName, type MotionRecipeOptions } from "./motion-recipes.ts";
+export { isMotionRecipe, MOTION_BEAT, MOTION_PIVOTS, MOTION_RECIPE_WORDS, MOTION_RECIPES, motionRecipe, pivotOn, type MotionRecipeName, type MotionRecipeOptions } from "./motion-recipes.ts";
 export { MOTION_MAX_SECONDS, motionWarnings, validateMotionSpec, type MotionWarning } from "./motion-checks.ts";
 export { authoredSpec, motionDocumentSpec, motionSpecFrom, motionTargets, type MotionAuthoredMove, type MotionAuthoredSpec, type MotionPivotName } from "./motion-spec.ts";
 export { MOTION_MESSAGES, motionMessage, motionSeek } from "./motion-messages.ts";

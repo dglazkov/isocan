@@ -172,7 +172,7 @@ export const MOTION_RENDER_ROUTE = `${CANVAS_ROUTE}/${MOTION_RENDER_PATH_SEGMENT
 
 /**
  * The render page's whole address. The query is how the movie is asked for —
- * `version`, `fps`, `size` (`1080` or `1920x1080`), `seconds`, `background`
+ * `format` (`mp4`, `webm` or `gif`), `version`, `fps`, `size` (`1080` or `1920x1080`), `seconds`, `background`
  * (`#rrggbb`) and `keep` (frame numbers whose pre-encode picture the page
  * keeps, for a proof to compare with) — each left out when not given.
  */
@@ -180,7 +180,7 @@ export function motionRenderUrl(
   origin: string,
   canvasId: string,
   itemId: string,
-  query: Partial<Record<"version" | "fps" | "size" | "seconds" | "background" | "keep", string | number>> = {},
+  query: Partial<Record<"format" | "version" | "fps" | "size" | "seconds" | "background" | "keep", string | number>> = {},
 ): string {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(query)) if (value !== undefined && String(value) !== "") params.set(key, String(value));

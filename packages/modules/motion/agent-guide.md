@@ -7,14 +7,19 @@ versions and comments like any screen. It wears `motion=true`,
 `motionSeconds` and `motionLoop`. Its player sits below the stage: Play, a
 scrubber and the time.
 
-- `isocan motion new <svg...> [--recipe assemble|idle | --spec <file.json>] [--say "<words>"] [--seconds <n>] [--loop | --no-loop] [--title <t>] [--json]`
+- `isocan motion new <svg...> [--recipe assemble|reveal|idle|orbit|emphasis | --spec <file.json>] [--say "<words>"] [--seconds <n>] [--loop | --no-loop] [--title <t>] [--json]`
   — the named SVG items become one motion. The stage is their bounding box
   on the canvas; each keeps its offset and its place in the stacking, so the
-  logo as laid out IS the scene. `assemble` (the default) draws line-only
-  drawings on, grows named parts up from their base each a beat after the
-  last, and settles everything else in last; it plays once and holds.
+  logo as laid out IS the scene. The recipes, each clean under the checks
+  below: `assemble` (the default) draws line-only drawings on, grows named
+  parts up from their base each a beat after the last, and settles
+  everything else in last. `reveal` brings each drawing in whole, back to
+  front — it fades up and rises into place. `emphasis` starts finished and
+  runs a pulse through it, part by part. Those three play once and hold.
   `idle` sways named parts a few degrees on their base and breathes the
-  rest; it loops. `--seconds` fits a recipe to a length (at most 60).
+  rest; `orbit` drifts each part round a small circle where it rests, a beat
+  behind the last; both loop. `--seconds` fits a recipe to a length (at
+  most 60).
   `--say` keeps the words it was made from as its description.
 - **When a person asks in words** — *Animate…* in the web posts you
   `Animate, please: “Circle” (itm_…), … — “<words>”` — you write a **spec**,
@@ -81,12 +86,16 @@ Each move is `{ "target", "pivot"?, "follows"?, "channels" }`:
 - The document's `window.render(t)` sets every layer for time `t` and nothing
   else — the same clock drives the preview, the scrubber and every frame a
   movie is rendered from. Open it with `#still` to load it paused at 0.
-- `isocan motion render <motion> [--fps 60] [--seconds <s>] [--size 1080 | WxH] [--background #rrggbb] [--out file.mp4] [--json]`
-  — records the motion to an H.264 MP4 and adds it as a `video/mp4` item
-  beside it, wearing `renderedFrom` (JSON `{item, version, fps, size,
-  seconds, background}`); `--out` also writes the file. Every frame `n` is
-  `render(n / fps)`, so the movie is the preview, recorded. The length is the
-  motion's (one loop, for a loop). At most 1080p, 60 fps and 60 s — past
-  those it is refused. It takes as long as the frames take, so **offer a
-  render; do not render unasked.** Needs Chrome, as `canvas shot` does. The
-  web's *Render movie…* makes the same item.
+- `isocan motion render <motion> [--mp4 | --webm | --gif] [--fps 60] [--seconds <s>] [--size 1080 | WxH] [--background #rrggbb] [--out <file>] [--json]`
+  — records the motion and adds it beside it: an H.264 MP4 (`--mp4`, the
+  default) as a `video/mp4` item, a VP9 WebM (`--webm`) as `video/webm`, or
+  an animated GIF (`--gif`) as `image/gif`, wearing `renderedFrom` (JSON
+  `{item, version, fps, size, seconds, background, format}`); `--out` also
+  writes the file. Every frame `n` is `render(n / fps)`, so the movie is the
+  preview, recorded, in any format. The length is the motion's (one loop,
+  for a loop). At most 1080p, 60 fps and 60 s — past those it is refused. A
+  GIF is big: it is 30 fps unless `--fps` says otherwise, at most 50, and a
+  GIF whose estimate passes 64 MB is refused before it starts — say so and
+  offer fewer seconds, a smaller size, or a WebM. It takes as long as the
+  frames take, so **offer a render; do not render unasked.** Needs Chrome,
+  as `canvas shot` does. The web's *Render movie…* makes the same item.

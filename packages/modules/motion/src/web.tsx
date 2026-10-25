@@ -22,6 +22,7 @@ import {
   addMotionMovie,
   buildMotion,
   MOTION_PROPS,
+  MOTION_RECIPE_WORDS,
   MOTION_RECIPES,
   motionAsk,
   motionDocumentSpec,
@@ -35,7 +36,7 @@ import {
   type MotionSource,
   type MotionWriter,
 } from "@isocan/core/motion";
-import { MOTION_RENDER_CAPS, motionRenderPlan, type MotionRenderedFrom } from "@isocan/core/motion-render";
+import { MOTION_FORMAT_FACTS, MOTION_FORMATS, MOTION_GIF, MOTION_RENDER_CAPS, MOTION_RENDER_DEFAULTS, motionRenderPlan, type MotionFormat, type MotionRenderedFrom } from "@isocan/core/motion-render";
 import { motionModule } from "./core.ts";
 
 /**
@@ -54,7 +55,7 @@ import { motionModule } from "./core.ts";
  *   `rebuildMotion` and one `item.edit`, as `isocan motion refresh` does.
  * - **Render movie…**: the render page `isocan motion render` drives, in a
  *   one-pixel frame of this page, polled through `window.isocanMotionRender`;
- *   then `addMotionMovie`, the CLI's own write.
+ *   then `addMotionMovie`, the CLI's own write — an MP4, a WebM or a GIF.
  *
  * The scrubber lives in the motion document itself, and a comment's `at`
  * reaches it through the shell's frame (`ItemView`); neither is here.
@@ -108,11 +109,6 @@ function builtWords(built: MotionBuild): string | null {
 }
 
 /* ---- Animate… ------------------------------------------------------------ */
-
-const RECIPE_WORDS: Record<MotionRecipeName, string> = {
-  assemble: "line drawings draw on, named parts grow up from their base, the rest settles in last — plays once",
-  idle: "named parts sway a few degrees on their base, the rest breathes — loops",
-};
 
 /**
  * **Animate…** — `isocan motion new <svg…> --recipe` from the browser, or the
@@ -191,7 +187,7 @@ function AnimateDialog({ args, selection, canvas, rcParked, canEdit, host }: Dia
           {MOTION_RECIPES.map((r) => (
             <label key={r} className="motion-row">
               <input type="radio" name="motion-recipe" value={r} checked={recipe === r} onChange={() => setRecipe(r)} disabled={!canEdit} />
-              <span><b>{r}</b><small>{RECIPE_WORDS[r]}</small></span>
+              <span><b>{r}</b><small>{MOTION_RECIPE_WORDS[r]}</small></span>
             </label>
           ))}
         </fieldset>
@@ -282,7 +278,7 @@ const SIZES = [
   { value: "720", label: "720 × 720" },
 ];
 
-/** The MP4 off the render page, a slice at a time. */
+/** The file off the render page, a slice at a time. */
 function bytesOf(surface: RenderSurface): Uint8Array {
   const out = new Uint8Array(surface.size);
   const step = 4 << 20;
@@ -293,16 +289,27 @@ function bytesOf(surface: RenderSurface): Uint8Array {
   return out;
 }
 
+/** What each format is, in the dialog's words. */
+const FORMAT_WORDS: Record<MotionFormat, string> = {
+  mp4: "H.264 — plays everywhere",
+  webm: "VP9 — an open format, for the web",
+  gif: `an animated picture — big, so ${MOTION_GIF.fps} fps unless you say`,
+};
+
+/** The frame rate a format starts at: a GIF's 30, a movie's 60. */
+const fpsFor = (format: MotionFormat) => String(format === "gif" ? MOTION_GIF.fps : MOTION_RENDER_DEFAULTS.fps);
+
 /**
  * **Render movie…** — `isocan motion render` from the browser, through the
  * same page: opened at one pixel in this tab, polled until it says done, and
- * its MP4 added beside the motion by `addMotionMovie`. Closing the dialog
- * stops the render with it.
+ * its MP4, WebM or GIF added beside the motion by `addMotionMovie`. Closing
+ * the dialog stops the render with it.
  */
 function RenderDialog({ args, selection, canvasId, canvas, canEdit, host }: DialogFacts) {
   const motion = canvas.items[idsOf(args, selection)[0] ?? ""];
   const length = Number(motion?.properties[MOTION_PROPS.seconds]);
-  const [fps, setFps] = useState("60");
+  const [format, setFormat] = useState<MotionFormat>("mp4");
+  const [fps, setFps] = useState(fpsFor("mp4"));
   const [size, setSize] = useState("1080");
   const [seconds, setSeconds] = useState(Number.isFinite(length) && length > 0 ? String(length) : "6");
   const [progress, setProgress] = useState<{ frame: number; frames: number } | null>(null);
@@ -319,14 +326,14 @@ function RenderDialog({ args, selection, canvasId, canvas, canEdit, host }: Dial
     setProblem(null);
     try {
       const item = host.getCanvas().items[motion.id] ?? motion;
-      const plan = motionRenderPlan({ fps, size, seconds }, { seconds: Number.isFinite(length) && length > 0 ? length : MOTION_RENDER_CAPS.seconds, loop: item.properties[MOTION_PROPS.loop] === "true" });
+      const plan = motionRenderPlan({ format, fps, size, seconds }, { seconds: Number.isFinite(length) && length > 0 ? length : MOTION_RENDER_CAPS.seconds, loop: item.properties[MOTION_PROPS.loop] === "true" });
       setProgress({ frame: 0, frames: plan.frames });
       const f = document.createElement("iframe");
       f.className = "motion-render-frame";
       f.title = `Rendering ${item.title}`;
       f.setAttribute("aria-hidden", "true");
       f.tabIndex = -1;
-      f.src = motionRenderUrl(location.origin, canvasId, item.id, { version: item.currentVersionId, fps: plan.fps, size: `${plan.width}x${plan.height}`, seconds: plan.seconds, background: plan.background });
+      f.src = motionRenderUrl(location.origin, canvasId, item.id, { format: plan.format, version: item.currentVersionId, fps: plan.fps, size: `${plan.width}x${plan.height}`, seconds: plan.seconds, background: plan.background });
       document.body.appendChild(f);
       frame.current = f;
       const surface = await new Promise<RenderSurface>((resolve, reject) => {
@@ -355,9 +362,25 @@ function RenderDialog({ args, selection, canvasId, canvas, canEdit, host }: Dial
     }
   };
   const rendering = progress !== null;
+  // Changing the format moves the frame rate with it only while it is still
+  // the old format's own — a rate somebody typed is theirs.
+  const pick = (next: MotionFormat) => {
+    if (fps === fpsFor(format)) setFps(fpsFor(next));
+    setFormat(next);
+  };
+  const label = MOTION_FORMAT_FACTS[format].label;
   return (
     <div className="motion-dialog" data-motion-render>
-      <p className="motion-note">Records <b>{motion.title}</b> to an MP4 beside it, frame by frame from the clock that plays it — the movie is the preview, recorded.</p>
+      <p className="motion-note">Records <b>{motion.title}</b> to {format === "mp4" ? "an" : "a"} {label} beside it, frame by frame from the clock that plays it — the movie is the preview, recorded.</p>
+      <fieldset className="motion-pick">
+        <legend className="motion-note">Format</legend>
+        {MOTION_FORMATS.map((f) => (
+          <label key={f} className="motion-row">
+            <input type="radio" name="motion-format" value={f} checked={format === f} onChange={() => pick(f)} disabled={rendering} data-motion-format={f} />
+            <span><b>{MOTION_FORMAT_FACTS[f].label}</b><small>{FORMAT_WORDS[f]}</small></span>
+          </label>
+        ))}
+      </fieldset>
       <div className="motion-fields">
         <label className="motion-field">Size
           <select value={size} onChange={(e) => setSize(e.target.value)} disabled={rendering}>
@@ -380,7 +403,7 @@ function RenderDialog({ args, selection, canvasId, canvas, canEdit, host }: Dial
       {problem && <p className="motion-problem" role="alert">{problem}</p>}
       <div className="motion-actions">
         <button type="button" className="btn" onClick={() => { stop(); host.close(); }}>{rendering ? "Stop" : "Cancel"}</button>
-        <button type="button" className="btn primary" data-motion-render-go disabled={!canEdit || rendering} onClick={() => void go()}>{rendering ? "Rendering…" : "Render MP4"}</button>
+        <button type="button" className="btn primary" data-motion-render-go disabled={!canEdit || rendering} onClick={() => void go()}>{rendering ? "Rendering…" : `Render ${label}`}</button>
       </div>
     </div>
   );
@@ -423,7 +446,7 @@ const actions: ModuleAction[] = [
   {
     id: "motion.render",
     name: "Render movie…",
-    hint: "record this motion to an MP4 beside it",
+    hint: "record this motion to an MP4, WebM or GIF beside it",
     available: ({ canvas, selection }) => isMotion(one(canvas, selection)),
     opens: "motion-render",
   },

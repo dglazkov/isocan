@@ -1,8 +1,11 @@
 import { ArrayBufferTarget, Muxer } from "mp4-muxer";
 import {
   createMotionEngine,
+  MOTION_GIF,
   MOTION_H264_CODECS,
   MOTION_NO_H264,
+  MOTION_NO_VP9,
+  MOTION_VP9_CODECS,
   motionBitrate,
   motionRenderedFrom,
   motionRenderPlan,
@@ -13,10 +16,12 @@ import {
   type MotionSpec,
 } from "@isocan/core/motion-render";
 import { getSnapshot, readBlobText } from "./api.ts";
+import { GifWriter } from "./motion-gif.ts";
+import { WebmWriter } from "./motion-webm.ts";
 
 /**
- * **A motion, frame by frame, into an MP4** (motion phase 1;
- * `docs/projects/motion/design.md` §4) — the work behind the render page.
+ * **A motion, frame by frame, into an MP4, a WebM or a GIF** (motion phases 1
+ * and 3; `docs/projects/motion/design.md` §4) — the work behind the render page.
  *
  * **No pixel comes from the motion's own frame, and none of its code runs.**
  * The motion document is an HTML item: anybody with edit rights can put a new
@@ -29,7 +34,10 @@ import { getSnapshot, readBlobText } from "./api.ts";
  * copy the document carries. The stage is never put into this page's DOM:
  * each frame is serialised, drawn as an SVG `<img>` (which runs no script and
  * fetches nothing), composited over the background on a canvas, and handed to
- * WebCodecs' `VideoEncoder` as a `VideoFrame`. `mp4-muxer` writes the file.
+ * the format's sink: WebCodecs' `VideoEncoder` as a `VideoFrame` — H.264 into
+ * `mp4-muxer` for an MP4, VP9 into our own `motion-webm.ts` for a WebM — or,
+ * for a GIF, the canvas's pixels into `motion-gif.ts`. The same frames go into
+ * all three; only the last step differs.
  *
  * Every frame `n` is `render(n / fps)` — the engine is pure in `t`, so this
  * is the frame the player showed at that time, by construction.
@@ -47,7 +55,7 @@ export interface MotionRenderStatus {
   title: string | null;
 }
 
-/** The query the page was opened with, parsed: the ask, and which version and frames to keep. */
+/** The query the page was opened with, parsed: the ask (its format among it), and which version and frames to keep. */
 export interface MotionRenderRequest {
   canvasId: string;
   itemId: string;
@@ -70,7 +78,7 @@ export function motionRenderRequest(canvasId: string, itemId: string, search: st
     canvasId,
     itemId,
     version: q.get("version"),
-    ask: { fps: q.get("fps"), size: q.get("size"), seconds: q.get("seconds"), background: q.get("background") },
+    ask: { format: q.get("format"), fps: q.get("fps"), size: q.get("size"), seconds: q.get("seconds"), background: q.get("background") },
     keep,
   };
 }
@@ -94,13 +102,15 @@ function readMotionDocument(html: string): { stage: SVGSVGElement; spec: MotionS
   return { stage: stage as unknown as SVGSVGElement, spec };
 }
 
-/** The first H.264 configuration this browser will encode at this size and rate, or the refusal in words. */
-async function h264Config(plan: MotionRenderPlan): Promise<VideoEncoderConfig> {
-  if (typeof VideoEncoder === "undefined") {
-    const why = window.isSecureContext ? "it has no WebCodecs" : "this page is not a secure context (https or localhost), and WebCodecs needs one";
-    throw new Error(`${MOTION_NO_H264} (${why})`);
-  }
-  for (const codec of MOTION_H264_CODECS) {
+const noWebCodecs = (refusal: string) => {
+  const why = window.isSecureContext ? "it has no WebCodecs" : "this page is not a secure context (https or localhost), and WebCodecs needs one";
+  return new Error(`${refusal} (${why})`);
+};
+
+/** The first configuration of these codecs this browser will encode at this size and rate, or the refusal in words. */
+async function videoConfig(plan: MotionRenderPlan, codecs: readonly string[], refusal: string, extra: Partial<VideoEncoderConfig>): Promise<VideoEncoderConfig> {
+  if (typeof VideoEncoder === "undefined") throw noWebCodecs(refusal);
+  for (const codec of codecs) {
     const config: VideoEncoderConfig = {
       codec,
       width: plan.width,
@@ -108,12 +118,107 @@ async function h264Config(plan: MotionRenderPlan): Promise<VideoEncoderConfig> {
       framerate: plan.fps,
       bitrate: motionBitrate(plan),
       latencyMode: "quality",
-      avc: { format: "avc" },
+      ...extra,
     };
     const answer = await VideoEncoder.isConfigSupported(config).catch(() => null);
     if (answer?.supported) return config;
   }
-  throw new Error(MOTION_NO_H264);
+  throw new Error(refusal);
+}
+
+/**
+ * **Where the frames go.** One per format: `frame` takes the canvas once it
+ * holds frame `n` (and may wait, for backpressure); `finish` returns the
+ * file. `codec` is what the status reports — the WebCodecs codec, or `gif`.
+ */
+interface Sink {
+  codec: string;
+  frame: (canvas: OffscreenCanvas, ctx: OffscreenCanvasRenderingContext2D, n: number) => Promise<void>;
+  finish: () => Promise<Uint8Array>;
+  close: () => void;
+}
+
+/** A `VideoEncoder` sink, H.264 or VP9, handing each chunk to a muxer. */
+function encoderSink(plan: MotionRenderPlan, config: VideoEncoderConfig, mux: { chunk: (c: EncodedVideoChunk, meta?: EncodedVideoChunkMetadata) => void; finish: () => Uint8Array }): Sink {
+  let failure = null as Error | null;
+  const encoder = new VideoEncoder({
+    output: (chunk, meta) => mux.chunk(chunk, meta),
+    error: (e) => { failure = e instanceof Error ? e : new Error(String(e)); },
+  });
+  encoder.configure(config);
+  const microseconds = (n: number) => Math.round((n * 1_000_000) / plan.fps);
+  return {
+    codec: config.codec,
+    async frame(canvas, _ctx, n) {
+      if (failure) throw failure;
+      const frame = new VideoFrame(canvas, { timestamp: microseconds(n), duration: microseconds(n + 1) - microseconds(n) });
+      // A keyframe every two seconds: a scrubbing player seeks cheaply.
+      encoder.encode(frame, { keyFrame: n % (plan.fps * 2) === 0 });
+      frame.close();
+      // Backpressure: never more than a few frames ahead of the encoder.
+      while (encoder.encodeQueueSize > 4) await new Promise((r) => encoder.addEventListener("dequeue", r, { once: true }));
+    },
+    async finish() {
+      await encoder.flush();
+      if (failure) throw failure;
+      return mux.finish();
+    },
+    close() {
+      if (encoder.state !== "closed") encoder.close();
+    },
+  };
+}
+
+/** An MP4: H.264 into `mp4-muxer`. */
+async function mp4Sink(plan: MotionRenderPlan): Promise<Sink> {
+  const config = await videoConfig(plan, MOTION_H264_CODECS, MOTION_NO_H264, { avc: { format: "avc" } });
+  const target = new ArrayBufferTarget();
+  const muxer = new Muxer({ target, video: { codec: "avc", width: plan.width, height: plan.height, frameRate: plan.fps }, fastStart: "in-memory" });
+  return encoderSink(plan, config, {
+    chunk: (c, meta) => muxer.addVideoChunk(c, meta),
+    finish: () => {
+      muxer.finalize();
+      return new Uint8Array(target.buffer);
+    },
+  });
+}
+
+/** A WebM: VP9 into `motion-webm.ts`. */
+async function webmSink(plan: MotionRenderPlan): Promise<Sink> {
+  const config = await videoConfig(plan, MOTION_VP9_CODECS, MOTION_NO_VP9, {});
+  const writer = new WebmWriter({ width: plan.width, height: plan.height, fps: plan.fps });
+  return encoderSink(plan, config, {
+    chunk: (c) => {
+      const data = new Uint8Array(c.byteLength);
+      c.copyTo(data);
+      writer.add({ data, timestamp: c.timestamp, key: c.type === "key" });
+    },
+    finish: () => writer.finish(plan.seconds),
+  });
+}
+
+/**
+ * A GIF: each frame's pixels into `motion-gif.ts`, its delay the share of
+ * hundredths of a second that keeps the whole on the clock (3, 3, 4, … at
+ * 30 fps). Held to `MOTION_GIF.bytes` as it grows — the plan refused what its
+ * estimate said would not fit, and this catches a drawing that packs worse.
+ */
+function gifSink(plan: MotionRenderPlan): Sink {
+  const writer = new GifWriter(plan.width, plan.height);
+  const cs = (n: number) => Math.round((n * 100) / plan.fps);
+  return {
+    codec: "gif",
+    async frame(_canvas, ctx, n) {
+      writer.add(ctx.getImageData(0, 0, plan.width, plan.height).data, cs(n + 1) - cs(n));
+      if (writer.bytes > MOTION_GIF.bytes) {
+        throw new Error(`this GIF passed ${Math.round(MOTION_GIF.bytes / 1e5) / 10} MB by frame ${n + 1} of ${plan.frames} — fewer seconds, fewer fps or a smaller size, or an MP4 or a WebM`);
+      }
+      // A breath between frames: the page stays responsive to whoever polls it.
+      if (n % 4 === 3) await new Promise((r) => setTimeout(r, 0));
+    },
+    finish: async () => writer.finish(),
+    close: () => {},
+  };
 }
 
 /** One picture of an SVG, decoded off the serialised markup — as an `<img>`, so nothing in it runs. */
@@ -138,7 +243,8 @@ const dataUrlOf = (blob: Blob) => new Promise<string>((resolve, reject) => {
 
 /**
  * **Render the movie.** `onProgress` hears every state change and every
- * frame; the returned bytes are an MP4 with `plan.frames` frames of H.264.
+ * frame; the returned bytes are the file — an MP4, a WebM or a GIF, as the
+ * plan's `format` says — with `plan.frames` frames.
  * `signal` stops it between frames — a page that unmounts (or StrictMode's
  * second mount) must not leave a render running beside the one it shows.
  */
@@ -160,8 +266,8 @@ export async function renderMotion(request: MotionRenderRequest, onProgress: (st
   if (!version) throw new Error(`${item.title} has no version ${versionId}`);
   const { stage, spec } = readMotionDocument(await readBlobText(request.canvasId, version.blobHash));
   const plan = motionRenderPlan(request.ask, spec);
-  const config = await h264Config(plan);
-  tell({ plan, frames: plan.frames, codec: config.codec, renderedFrom: motionRenderedFrom(item.id, version.id, plan), title: item.title, state: "rendering" });
+  const sink = plan.format === "gif" ? gifSink(plan) : plan.format === "webm" ? await webmSink(plan) : await mp4Sink(plan);
+  tell({ plan, frames: plan.frames, codec: sink.codec, renderedFrom: motionRenderedFrom(item.id, version.id, plan), title: item.title, state: "rendering" });
 
   // The stage fills the frame and letterboxes itself: its own
   // `preserveAspectRatio` (xMidYMid meet) centres it, as the player does.
@@ -170,23 +276,13 @@ export async function renderMotion(request: MotionRenderRequest, onProgress: (st
   const engine = createMotionEngine();
   const serializer = new XMLSerializer();
   const canvas = new OffscreenCanvas(plan.width, plan.height);
-  const ctx = canvas.getContext("2d", { alpha: false });
+  const ctx = canvas.getContext("2d", { alpha: false, willReadFrequently: plan.format === "gif" });
   if (!ctx) throw new Error("this browser would not give the page a 2D canvas to draw frames on");
 
-  const target = new ArrayBufferTarget();
-  const muxer = new Muxer({ target, video: { codec: "avc", width: plan.width, height: plan.height, frameRate: plan.fps }, fastStart: "in-memory" });
-  let failure = null as Error | null;
-  const encoder = new VideoEncoder({
-    output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
-    error: (e) => { failure = e instanceof Error ? e : new Error(String(e)); },
-  });
-  encoder.configure(config);
   const keep = new Set(request.keep);
   const kept: Record<number, string> = {};
-  const microseconds = (n: number) => Math.round((n * 1_000_000) / plan.fps);
   try {
     for (let n = 0; n < plan.frames; n++) {
-      if (failure) throw failure;
       signal?.throwIfAborted();
       engine.render(stage, spec, n / plan.fps);
       const picture = await pictureOf(serializer.serializeToString(stage));
@@ -194,19 +290,11 @@ export async function renderMotion(request: MotionRenderRequest, onProgress: (st
       ctx.fillRect(0, 0, plan.width, plan.height);
       ctx.drawImage(picture, 0, 0, plan.width, plan.height);
       if (keep.has(n)) kept[n] = await dataUrlOf(await canvas.convertToBlob({ type: "image/png" }));
-      const frame = new VideoFrame(canvas, { timestamp: microseconds(n), duration: microseconds(n + 1) - microseconds(n) });
-      // A keyframe every two seconds: a scrubbing player seeks cheaply.
-      encoder.encode(frame, { keyFrame: n % (plan.fps * 2) === 0 });
-      frame.close();
-      // Backpressure: never more than a few frames ahead of the encoder.
-      while (encoder.encodeQueueSize > 4) await new Promise((r) => encoder.addEventListener("dequeue", r, { once: true }));
+      await sink.frame(canvas, ctx, n);
       if (n % 6 === 0 || n === plan.frames - 1) tell({ frame: n + 1 });
     }
-    await encoder.flush();
-    if (failure) throw failure;
+    return { bytes: await sink.finish(), kept };
   } finally {
-    if (encoder.state !== "closed") encoder.close();
+    sink.close();
   }
-  muxer.finalize();
-  return { bytes: new Uint8Array(target.buffer), kept };
 }

@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { useLocation, useParams } from "react-router-dom";
+import { MOTION_FORMAT_FACTS } from "@isocan/core/motion-render";
 import { motionRenderRequest, renderMotion, type MotionRenderStatus } from "../lib/motion-render.ts";
 
 /**
- * **`MOTION_RENDER_ROUTE` — a motion, recorded** (motion phase 1;
- * `docs/projects/motion/design.md` §4).
+ * **`MOTION_RENDER_ROUTE` — a motion, recorded** (motion phases 1 and 3;
+ * `docs/projects/motion/design.md` §4) — to an MP4, a WebM or a GIF, as the
+ * address's `format` says.
  *
  * One page both surfaces open, so the movie the terminal makes and the one
  * the web will make are made by the same code: `isocan motion render` opens
@@ -20,7 +22,7 @@ import { motionRenderRequest, renderMotion, type MotionRenderStatus } from "../l
  * `status` (`state` loading | rendering | done | error, `frame` of `frames`,
  * `error` in words, the `plan`, the `codec`, and the `renderedFrom` record
  * the video item will wear), and once done `size`, `chunk(offset, length)`
- * (the MP4's bytes as base64, a slice at a time so no single answer is
+ * (the file's bytes as base64, a slice at a time so no single answer is
  * tens of megabytes) and `kept` (the pre-encode PNGs asked for by `?keep=`).
  */
 
@@ -87,7 +89,7 @@ export function MotionRenderPage() {
       )}
       {status?.state === "done" && (
         <div>
-          Rendered {title}: {status.frames} frames, {status.plan?.width} × {status.plan?.height} at {status.plan?.fps} fps
+          Rendered {title}: {status.frames} frames, {status.plan?.width} × {status.plan?.height} at {status.plan?.fps} fps{status.plan ? `, ${MOTION_FORMAT_FACTS[status.plan.format].label}` : ""}
         </div>
       )}
       {status?.state === "error" && <div>Could not render {title}: {status.error}</div>}

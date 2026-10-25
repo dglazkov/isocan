@@ -26,7 +26,7 @@ and the done column should not be flattered by either.
 finding is its claim, checked against the code, ranked by us. Each project row
 below counts the findings that name it.
 
-## What needs a person <sub>21</sub>
+## What needs a person <sub>22</sub>
 
 Built and shipped, and never once exercised by a human being — the part no
 commit can do. Each is a walk in [`verify/`](verify/README.md), written by
@@ -56,6 +56,7 @@ whoever built the thing for somebody who knows nothing about it.
 | **unverified** | [Node Focus — View, Edit, Enter, and Node-Anchored Chat](verify/2026-10-15-node-focus.md) — Whether the top-left View / Edit / Enter action strip, kind-aware View and Edit Focus studios (Image, Design System, Wireframe, Screen), and Node-Anchored Chat (⌘J) feel natural by hand across node types. | 2026-10-15 | The web app in a desktop browser with a canvas holding an HTML screen, a PNG image, a DESIGN.md, and a wireframe screen — about fifteen minutes. |
 | **unverified** | [Mood board — Explore, Keep, Swatches, Derive, and the Board Critic](verify/2026-10-17-moodboard.md) — Whether real Nano Banana 2.1 images feel evocative (≥ 8/9 non-UI across three briefs), whether keeping and branching tiles into a Mood board feels natural, and whether deriving DESIGN.md and critiquing a screen with Board works end to end by hand. | 2026-10-17 | A Gemini API key on a project with billing enabled (`isocan keys set gemini`), a desktop browser, and `isocan rc` parked on the canvas — about twenty minutes and ~$0.75 of image spend. |
 | **unverified** | [Smart contrast, by eye](verify/2026-10-19-smart-contrast.md) — Whether the ink on the canvas reads right to a person's eyes on every ground in both themes — the lifted periwinkle as "selected", black words with a glow on Desert, the glass plate under Desert's names, the crossfade when somebody changes the background — and whether anything that stands on the ground was missed. | 2026-10-19 | The web app in a desktop browser, a canvas you may change the background of (with three or four cards, a text note and a slide with speaker notes), twenty minutes, and ideally a second person on the same canvas for step 6. |
+| **unverified** | [Motion, in the browser](verify/2026-10-22-motion-in-the-browser.md) — a person animating a drawing of their own in the browser and judging whether the motion feels right — whether parts turn where they should, whether the timing reads, and whether the movie they download is the thing they watched; motion phase 3 | 2026-10-22 | the web app with Motion ticked in Settings → Experiments, a canvas with two or three SVGs of your own (a logo, an icon set, a drawing), and `isocan rc` running with an agent you are happy to spend a turn on — fifteen minutes |
 
 ## Partly built <sub>55</sub>
 

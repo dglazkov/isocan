@@ -86,7 +86,13 @@ export function validateMotionSpec(spec: MotionSpec): void {
 
 const startOf = (spec: MotionSpec, target: string): number | undefined => {
   const move = spec.moves.find((m) => m.target === target);
-  const times = Object.values(move?.channels ?? {}).flatMap((ch) => [...(ch?.keys ?? []).map((k) => k.t), ...(ch?.wave ? [ch.wave.from ?? 0] : [])]);
+  // A bell starts where it peaks: a pulse is "at" its moment, and one pulse
+  // trailing another by a beat is what a follower made of pulses means.
+  const times = Object.values(move?.channels ?? {}).flatMap((ch) => [
+    ...(ch?.keys ?? []).map((k) => k.t),
+    ...(ch?.wave ? [ch.wave.from ?? 0] : []),
+    ...(ch?.bells ?? []).map((b) => b.at),
+  ]);
   return times.length > 0 ? Math.min(...times) : undefined;
 };
 
