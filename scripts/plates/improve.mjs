@@ -1,3 +1,4 @@
+import { environmentValue, markerComment, markerRegion, markerAtStart, writeName, inBranchQueue } from './names.mjs';
 import { status as productionStatus, productionLines } from './production.mjs';
 import { milestoneSource, readMilestones, milestoneSummary } from './milestones.mjs';
 import { Saving } from './quota.mjs';
@@ -66,6 +67,7 @@ import { Saving } from './quota.mjs';
 // ratchet follows isocan's scripts/ratchet.mjs (Apache-2.0): bounds that only
 // report the wrong way.
 import { readCiUsage, ciOptions } from './ci.mjs';
+import { namesEvidenceContext, namesObservation, namesGap, namesLocalWrite, namesPreimage, namesPlanProjection, recoverNightVerification, observeVerification, verificationGit, verificationReceipt, verificationSummary, formatVerification } from './verification.mjs';
 import { reusableGate } from './gate.mjs';
 import { hygieneOptions, draftsWaiting, longFiles } from './hygiene-measures.mjs';
 import { makeHygieneProposal, formatHygieneProposal, readHygieneProposals, hygieneRobotTargetReason } from './hygiene-proposals.mjs';
@@ -107,7 +109,7 @@ export { REVIEW_DAYS, REVIEW_PRS, REVIEW_PAGES };
  * own (`renovate` local in .plates/plates.json) may group differently: its
  * renovate/ count is reported as information, not judged.
  */
-export const MACHINE_BOUNDS = Object.freeze({ 'keel/': 1, 'keel-night/': 1, 'keel-loop/': 1, 'renovate/': 4 });
+export const MACHINE_BOUNDS = Object.freeze({ [writeName('git ref:keel/')]: 1, [writeName('git ref:keel-night/')]: 1, [writeName('git ref:keel-loop/')]: 1, 'renovate/': 4 });
 export const MACHINE_PREFIXES = Object.keys(MACHINE_BOUNDS);
 export const CHECK = 'npm run check';
 export const LESSONS = 'docs/lessons.md';
@@ -251,7 +253,7 @@ const OPEN = ['planned', 'partial'];
 
 /** git in the project (PLATES_GIT stands in for it): stdout, or a throw that names the command. */
 function git(ctx, args) {
-  const bin = ctx.env.PLATES_GIT || 'git';
+  const bin = environmentValue('variable:KEEL_GIT', ctx.env) ?? 'git';
   const r = spawnSync(bin, args, { cwd: ctx.root, env: stripTest(ctx.env), encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
   if (r.error) throw new Error(`could not run git: ${r.error.message}`);
   return r;
@@ -329,7 +331,7 @@ const gateRun = ctx => once(ctx, 'gate', async () => {
 /** gh, ready to read the project's repo, or a reason it is not. */
 const ghReady = ctx => once(ctx, 'gh', () => {
   if (!ctx.config.repo) return { na: 'no repo in .plates/plates.json' };
-  const gh = ctx.env.PLATES_GH || 'gh';
+  const gh = (environmentValue('variable:KEEL_GH', ctx.env) ?? 'gh');
   const v = spawnSync(gh, ['--version'], { env: ctx.env, encoding: 'utf8' });
   if (v.error?.code === 'ENOENT') return { na: `gh is not installed (${gh})` };
   if (v.error) throw new Error(`could not run gh: ${v.error.message}`);
@@ -365,10 +367,10 @@ export const CROSS_REVIEWER = 'claude[bot]';
  * (cross-review.mjs FINDING_MARKER; tests/improve.test.mjs holds them equal).
  */
 export const CROSS_REVIEW_POSTER = 'github-actions[bot]';
-export const CROSS_REVIEW_FINDING = '<!-- keel:cross-review finding -->';
+export const CROSS_REVIEW_FINDING = markerComment('marker:keel:cross-review', 'finding');
 /** Whether a thread's first comment is a cross-review finding: the old author's, or the workflow's with the marker. */
 const crossReviewFinding = (c, reviewer) => sameLogin(c?.author?.login, reviewer)
-  || (reviewer === CROSS_REVIEWER && sameLogin(c?.author?.login, CROSS_REVIEW_POSTER) && String(c?.body ?? '').trimStart().startsWith(CROSS_REVIEW_FINDING));
+  || (reviewer === CROSS_REVIEWER && sameLogin(c?.author?.login, CROSS_REVIEW_POSTER) && markerAtStart(c?.body, 'marker:keel:cross-review', 'finding'));
 /** cross_review_valid is n/a until this many of its comments are answered. */
 export const CROSS_REVIEW_MIN = 10;
 /**
@@ -1215,7 +1217,7 @@ export const MEASURES = [
       const ready = await ghReady(ctx);
       if (ready.na) return { na: ready.na };
       const prs = ghJson(ctx, ready.gh, ['pr', 'list', '--repo', ctx.config.repo, '--state', 'open', '--json', 'headRefName', '--limit', '100']);
-      const queues = Object.fromEntries(MACHINE_PREFIXES.map(p => [p, prs.filter(x => String(x?.headRefName ?? '').startsWith(p)).length]));
+      const queues = Object.fromEntries(MACHINE_PREFIXES.map(p => [p, prs.filter(x => inBranchQueue(x?.headRefName, p)).length]));
       const info = Object.hasOwn(ctx.config.local ?? {}, 'renovate') ? ['renovate/'] : [];
       // The fullest queue relative to its own bound; ties by order.
       const judged = MACHINE_PREFIXES.filter(p => !info.includes(p));
@@ -1283,7 +1285,7 @@ export const MEASURES = [
       const dirs = [];
       for (const d of ['.', ...await packageDirs(ctx.root)]) if (await exists(join(ctx.root, d, 'package-lock.json'))) dirs.push(d);
       if (!dirs.length) return { na: 'no package-lock.json' };
-      const npm = ctx.env.PLATES_NPM || 'npm';
+      const npm = environmentValue('variable:KEEL_NPM', ctx.env) ?? 'npm';
       const rows = [];
       for (const d of dirs) {
         const at = d === '.' ? '' : ` in ${d}/`;
@@ -1557,7 +1559,7 @@ export function page({ config, date, results, proposal, tightened, by = COMMAND,
 export function climbRetireLines(config, env = process.env) {
   const jobs = config?.climb?.jobs;
   if (!Array.isArray(jobs) || !jobs.length || !config.repo) return [];
-  const gh = env.PLATES_GH || 'gh';
+  const gh = (environmentValue('variable:KEEL_GH', env) ?? 'gh');
   const r = spawnSync(gh, ['pr', 'list', '--repo', config.repo, '--state', 'all', '--json', 'headRefName,number,createdAt,mergedAt,state', '--limit', '200'], { env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
   let prs = null;
   if (!r.error && r.status === 0) try { prs = JSON.parse(r.stdout); } catch {}
@@ -1581,7 +1583,7 @@ export function readBudget(config, env = process.env) {
   const passes = budgetPasses(config);
   if (!passes.length) return null;
   if (!config.repo) return budgetLine(passes.map(p => ({ ...p, na: 'no repo in .plates/plates.json' })));
-  const gh = env.PLATES_GH || 'gh';
+  const gh = (environmentValue('variable:KEEL_GH', env) ?? 'gh');
   const api = (path, optional = false) => {
     const r = spawnSync(gh, ['api', path], { env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
     if (r.error) throw new Error(`gh api: ${r.error.code === 'ENOENT' ? `gh is not installed (${gh})` : r.error.message}`);
@@ -1668,13 +1670,29 @@ export const strip = results => results.map(({ facts, ...r }) => ({ ...r, ...(fa
  * (roadmap, diagnose, proposals) when plates runs this; without them, only
  * what the project's own files can say.
  */
-export async function improve({ root, report = false, transcripts, prInput, date = today() }, { env = process.env, measures = MEASURES, plates, by = plates ? 'plates improve' : COMMAND, remeasure = remeasureTimeProposal } = {}) {
+export async function improve({ root, report = false, transcripts, prInput, date = today(), namesEvidence = false }, { env = process.env, measures = MEASURES, plates, by = plates ? 'plates improve' : COMMAND, remeasure = remeasureTimeProposal, verificationRead, verificationSource = verificationGit } = {}) {
   const config = JSON.parse(await readFile(join(root, '.plates', 'plates.json'), 'utf8'));
   // Where the page goes, settled before anything is written: a bad `health` is a broken instrument.
   let dir = null;
   if (report) try { dir = healthDirIn(root, config); } catch (e) { throw new ImproveError(e.message, 2); }
+  const namesContext=namesEvidenceContext(namesEvidence,env), names=namesObservation('improve',namesContext);
+  const readLocal=path=>readFile(join(root,path),'utf8').catch(e=>{if(e.code==='ENOENT')return null;throw e;});
+  const beforeFiles=new Map(), beforeSnapshots=new Map();
+  if(names && report) for(const path of [BOUNDS,healthPage(dir,date),PLAN,`docs/night/${date}.json`]) { const text=await readLocal(path); beforeFiles.set(path,text); if(path!==PLAN) beforeSnapshots.set(path,namesPreimage(root,path,text)); }
+  const nightRecovery = report && env.PLATES_NIGHT_RECOVERY === '1' ? await recoverNightVerification({root,config,date,env}) : null;
+  // The managed workflow publishes on this exact recovered/resolved branch
+  // after measurement; checkout HEAD is not necessarily that destination.
+  const targetRef=nightRecovery?.branch ? `refs/heads/${nightRecovery.branch}` : undefined;
+  const observation = await observeVerification({root,config,env,read:verificationRead,git:verificationSource});
   const stored = await readBounds(root);
   const results = await measure({ root, config, env, transcripts, date, bounds: stored ?? {}, measures, plates });
+  const verification = verificationReceipt(observation, results, await verificationSource({root,env}));
+  let fleetVerification = null;
+  if (config.plates === 'self' && plates?.fleetVerification) {
+    try { fleetVerification = await plates.fleetVerification({root,env}); }
+    catch { fleetVerification = {rows:[],gaps:['fleet verification read unavailable']}; }
+  }
+  const fleetText = fleetVerification ? '\n\nFleet verification\n\n'+fleetVerification.rows.map(r=>`- ${r.repo}: ${r.verification?.state ?? 'unavailable'}; ${r.verification?.reason ?? 'repository unavailable'}. Inspect ${r.verification?.url ?? `https://github.com/${r.repo}`} and refresh the project night; no consumer gate ran here.`).join('\n')+'\n'+fleetVerification.gaps.join('; ') : '';
   const production = await productionStatus({root,config});
   let history;
   try { history = await readTimeProposals({root,healthDir:healthDirOf(config)}); }
@@ -1683,10 +1701,21 @@ export async function improve({ root, report = false, transcripts, prInput, date
   for(const p of history.proposals.filter(p=>p.lifecycle.state==='accepted')) {
     const reading=await remeasure({root,proposal:p,at:new Date().toISOString()});
     remeasurements.push({instanceId:p.instanceId,path:p.path,...reading});
+    if(names && report && !beforeFiles.has(p.path)) beforeFiles.set(p.path,await readLocal(p.path));
     if(report) await withTimeProposal({root,path:p.path,expectedInstance:p.instanceId}, async ({proposal:current,saveLifecycle}) => {
       if(current.lifecycle.state!=='accepted' || digest(current.lifecycle.transition)!==digest(p.lifecycle.transition) || digest(current.lifecycle.issue)!==digest(p.lifecycle.issue)) return;
       if(digest(current.lifecycle.remeasurement)===digest(reading)) return;
-      await saveLifecycle({...current.lifecycle,remeasurement:reading});
+      const nextLifecycle={...current.lifecycle,remeasurement:reading};
+      // Capture the actual locked preimage and intended replacement before the
+      // existing writer acts; readback alone is not proof of intended bytes.
+      const before=names ? await readLocal(p.path) : null;
+      const beforeSnapshot=names ? namesPreimage(root,p.path,before) : null;
+      const generated=names ? formatTimeProposal({...current,lifecycle:nextLifecycle}) : null;
+      const region=names ? markerRegion(before,'marker:keel:time-proposal:begin','marker:keel:time-proposal:end') : null;
+      const intended=region ? before.slice(0,region.start)+generated+before.slice(region.end) : null;
+      await saveLifecycle(nextLifecycle);
+      if(names && intended!==null) namesLocalWrite(names,namesContext,{root,targetRef,path:p.path,role:'time-remeasurement',before,beforeSnapshot,intended,after:await readLocal(p.path),fragmentText:generated,id:`remeasurement-${names.writes.length+1}`});
+      else if(names) namesGap(names,'remeasurement-preimage-unavailable');
       if(p.path!==healthPage(dir,date)) changedHistoricalHealthPaths.push(p.path);
     });
   }
@@ -1706,15 +1735,30 @@ export async function improve({ root, report = false, transcripts, prInput, date
     written = healthPage(dir, date);
     night = await nightPlan(root, date, results, written);
     await mkdir(join(root, dir), { recursive: true });
-    await writeHealthReport({root,path:written,generated:page({ config, date, results, proposal, tightened, by, climb, retire, tend, budget, remeasurements, night, production })});
+    const generated=page({ config, date, results, proposal, tightened, by, climb, retire, tend, budget, remeasurements, night, production })+'\n\n## Verification\n\n'+verificationSummary(verification)+fleetText+'\n'+formatVerification(verification)+'\n';
+    let healthIntended;
+    await writeHealthReport({root,path:written,recovered:nightRecovery?.report,generated,observeBefore:names ? (previous,next)=>{
+      beforeFiles.set(written,previous);
+      beforeSnapshots.set(written,namesPreimage(root,written,previous,nightRecovery?.report!==null && nightRecovery?.report!==undefined ? {commitSha:nightRecovery.head} : {}));
+      healthIntended=next;
+    } : undefined});
+    if(names) {
+      namesLocalWrite(names,namesContext,{root,targetRef,path:written,role:'health-report',beforeSnapshot:beforeSnapshots.get(written),before:beforeFiles.get(written),intended:healthIntended,after:await readLocal(written),fragmentText:generated,id:'health'});
+      const boundsText=`${JSON.stringify(t.bounds,null,2)}\n`;
+      namesLocalWrite(names,namesContext,{root,targetRef,path:BOUNDS,role:'bounds',beforeSnapshot:beforeSnapshots.get(BOUNDS),before:beforeFiles.get(BOUNDS),intended:boundsText,after:await readLocal(BOUNDS),fragmentText:boundsText,id:'bounds'});
+      if(!night?.plan && config.practices?.includes('night')) namesGap(names,'night-plan-output-unavailable');
+      if(night?.plan) for(const [id,path] of [['working-plan',PLAN],['record',night.record]]) {
+        namesLocalWrite(names,namesContext,{root,targetRef,path,role:id==='working-plan'?'working-plan':'night-record',beforeSnapshot:beforeSnapshots.get(path),before:beforeFiles.get(path),intended:`${JSON.stringify(night.plan,null,2)}\n`,after:await readLocal(path),fragmentText:JSON.stringify(namesPlanProjection(night.plan)),id});
+      }
+    }
   }
   changedHistoricalHealthPaths.sort();
   const code = exitCode(results);
   if (prInput) await writeFile(prInput, `${JSON.stringify({...nightPr({ date, results, proposal, report: written ?? `${dir ?? HEALTH}/` }), changedHistoricalHealthPaths}, null, 2)}\n`);
   const counts = ['ok', 'outside', 'n/a', 'broken'].map(s => `${results.filter(r => r.state === s).length} ${s}`).join(', ');
   return {
-    data: { root, date, production, changedHistoricalHealthPaths, proposalCoverage: {gaps:[...history.gaps,...hygieneHistory.gaps]}, remeasurements, ok: code === 0, measures: strip(results), proposal, report: written, bounds: report ? BOUNDS : stored ? BOUNDS : null, tightened, climb, retire, tend, budget, nightRecord: night?.record ?? null, nightPlan: night?.plan ? { shapedBy: night.plan.shapedBy, items: night.plan.items.map(i => ({ id: i.id, kind: i.kind, status: i.status })) } : night?.line ? { line: night.line } : null },
-    text: [table(results), '', counts,
+    data: { root, date, ...(names?{observation:names}:{}), production, nightRecovery:nightRecovery ? {branch:nightRecovery.branch,head:nightRecovery.head,attempts:nightRecovery.attempts} : null, verification, fleetVerification, changedHistoricalHealthPaths, proposalCoverage: {gaps:[...history.gaps,...hygieneHistory.gaps]}, remeasurements, ok: code === 0, measures: strip(results), proposal, report: written, bounds: report ? BOUNDS : stored ? BOUNDS : null, tightened, climb, retire, tend, budget, nightRecord: night?.record ?? null, nightPlan: night?.plan ? { shapedBy: night.plan.shapedBy, items: night.plan.items.map(i => ({ id: i.id, kind: i.kind, status: i.status })) } : night?.line ? { line: night.line } : null },
+    text: [table(results), '', counts, verificationSummary(verification), fleetText,
       ...(tightened.length ? [`Ratchet: ${tightened.map(t => `${t.id} ${t.from} → ${t.to}`).join(', ')} (${BOUNDS})`] : []),
       proposal ? `Proposal (${proposal.id}): ${proposal.text}` : `Proposal: ${noProposal(results)}`,
       ...(written ? [`Wrote ${written}${report ? ` and ${BOUNDS}` : ''}${night?.record ? ` and ${night.record}` : ''}.`] : [])].join('\n'),
@@ -1782,8 +1826,8 @@ export async function instrumentsFor(root) {
 }
 
 export function parseArgs(args) {
-  const flags = ['--report'], valued = { '--transcripts': 'transcripts', '--pr-input': 'prInput' };
-  const out = { report: args.includes('--report') };
+  const flags = ['--report','--names-evidence'], valued = { '--transcripts': 'transcripts', '--pr-input': 'prInput' };
+  const out = { report: args.includes('--report'), ...(args.includes('--names-evidence')?{namesEvidence:true}:{}) };
   for (let i = 0; i < args.length; i++) {
     if (flags.includes(args[i])) continue;
     if (Object.hasOwn(valued, args[i])) {

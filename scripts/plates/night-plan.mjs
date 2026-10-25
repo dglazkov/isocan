@@ -1,3 +1,5 @@
+import { namesEvidenceContext, namesObservation, namesGap, namesFragment, namesGeneratedFragment, namesDigest, namesSnapshot, namesPlanProjection } from './verification.mjs';
+import { environmentValue, labelNames, readNames, writeName, robotIssueOf } from './names.mjs';
 // The night's plan (plates practice `night`; managed: plates render rewrites it).
 // Every night has one plan, written before anything runs, and each pass
 // ticks its item with what became of it (plates phase 73; the design is
@@ -52,7 +54,7 @@
 // Exit: 0 done; 2 usage, a refused plan or tick, or an input that cannot be
 // read (nothing is written then; the message names the input). gh is
 // process.env.PLATES_GH || 'gh'.
-import { readFile, mkdir, readdir, lstat, realpath, open, rm } from 'node:fs/promises';
+import { readFile, mkdir, mkdtemp, readdir, lstat, realpath, open, rm } from 'node:fs/promises';
 import { existsSync, constants } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join, dirname, sep } from 'node:path';
@@ -62,11 +64,11 @@ import { isMain, rootOf, main, healthDirOf, cells } from './lib.mjs';
 export const SCHEMA = 1;
 export const PLAN_DIR = '.plates/night';
 export const PLAN = `${PLAN_DIR}/plan.json`;
-export const PLAN_BRANCH = 'keel-night-plan';
+export const PLAN_BRANCH = writeName('git ref:keel-night-plan');
 // The branch and blob path are durable remote identities shared with existing
 // Keel installations. Local working files use PLAN; remote readers/writers
 // retain one path so a rename cannot create or overwrite a competing plan.
-export const REMOTE_PLAN = '.keel/night/plan.json';
+export const REMOTE_PLAN = '.plates/night/plan.json';
 export const RECORD_DIR = 'docs/night';
 /** The plan as the night ended, committed in its data-only PR. */
 export const recordOf = date => `${RECORD_DIR}/${date}.json`;
@@ -95,7 +97,7 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const SOURCE = /^(?:default|owner|persona:[a-z0-9][a-z0-9-]*|loop:[A-Za-z0-9][A-Za-z0-9._-]*|health:[a-z][a-z0-9_]*|robot:#[1-9]\d*)$/;
 const LANE = /^(?:climb:[a-z][a-z0-9-]*|robot:#[1-9]\d*|loop|persona:[a-z0-9][a-z0-9-]*|night)$/;
 const READY_BY = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?(?:Z|[+-](\d{2}):(\d{2}))$/;
-const ROBOT_HEAD = /^keel\/robot-([1-9]\d*)$/;
+
 
 export class NightPlanError extends Error {
   constructor(message, exitCode = 2) { super(message); this.exitCode = exitCode; }
@@ -338,7 +340,7 @@ export async function newestHealth(root, config, date) {
 
 /** gh's JSON, or a NightPlanError naming the read. */
 function ghJson(root, env, args, what) {
-  const gh = env.PLATES_GH || 'gh';
+  const gh = (environmentValue('variable:KEEL_GH', env) ?? 'gh');
   const r = spawnSync(gh, args, { cwd: root, env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: 120_000 });
   if (r.error) throw new NightPlanError(`cannot read ${what} (${gh}): ${r.error.code === 'ENOENT' ? 'gh is not installed' : r.error.message}`);
   if (r.status !== 0) throw new NightPlanError(`cannot read ${what}: gh exited ${r.status}${(r.stderr || '').trim() ? `, ${r.stderr.trim().split('\n')[0]}` : ''}`);
@@ -352,8 +354,8 @@ const repoArgs = config => (typeof config?.repo === 'string' && config.repo ? ['
 /** The issue numbers of the robot's open PRs (keel/robot-<n>, from this repo). */
 export function openRobotPrs(root, config, env = process.env) {
   return ghJson(root, env, ['pr', 'list', ...repoArgs(config), '--state', 'open', '--limit', '200', '--json', 'number,headRefName,isCrossRepository'], 'the open PRs')
-    .filter(p => !p?.isCrossRepository && ROBOT_HEAD.test(p?.headRefName ?? ''))
-    .map(p => Number(ROBOT_HEAD.exec(p.headRefName)[1])).sort((a, b) => a - b);
+    .filter(p => !p?.isCrossRepository && robotIssueOf(p?.headRefName) !== null)
+    .map(p => robotIssueOf(p.headRefName)).sort((a, b) => a - b);
 }
 
 async function practiceScript(root, rel, what) {
@@ -387,7 +389,12 @@ async function robotInput(root, config, env) {
   const open = openRobotPrs(root, config, env);
   if (!policy.valid || !policy.enabled) return { policy: policy.valid ? 'off' : 'invalid', next: null, open };
   const { parseRobotRubric } = await practiceScript(root, 'scripts/plates/robot-rubric.mjs', 'the robot rubric');
-  const issues = ghJson(root, env, ['issue', 'list', ...repoArgs(config), '--state', 'open', '--label', 'keel:agent', '--limit', '100', '--json', 'number,title,body,createdAt'], 'the keel:agent issues')
+  const byNumber = new Map();
+  for (const label of labelNames('label:keel:agent')) {
+    const rows = ghJson(root, env, ['issue', 'list', ...repoArgs(config), '--state', 'open', '--label', label, '--limit', '100', '--json', 'number,title,body,createdAt'], 'the robot issues');
+    for (const issue of rows) if (!byNumber.has(issue.number)) byNumber.set(issue.number, issue);
+  }
+  const issues = [...byNumber.values()]
     .filter(i => Number.isSafeInteger(i?.number) && i.number > 0)
     .sort((a, b) => String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? '')) || a.number - b.number);
   for (const issue of issues) {
@@ -598,7 +605,10 @@ export async function plan({ root, date, env = process.env, now = new Date(), so
 export async function tonight({ root, date, env = process.env, branchPlan = null, branchUnread = null, sources }) {
   if (!isDate(date)) throw new NightPlanError(`--date is the night's UTC date, YYYY-MM-DD (got ${JSON.stringify(date)})`);
   let why, refused = [];
-  if (branchUnread) why = `the plan branch ${PLAN_BRANCH} could not be read (${branchUnread})`;
+  if (branchUnread) {
+    refused = [branchUnread];
+    why = `the plan branch ${PLAN_BRANCH} could not be read (${branchUnread})`;
+  }
   else if (!branchPlan) why = `no plan on ${PLAN_BRANCH}`;
   else {
     let shaped = null;
@@ -612,7 +622,7 @@ export async function tonight({ root, date, env = process.env, branchPlan = null
       else if (shaped.date !== date) why = `the plan on ${PLAN_BRANCH} is dated ${shaped.date}, not ${date}`;
       else {
         await writePlan(root, shaped);
-        const head = `Tonight's plan (${date}) is the one on ${PLAN_BRANCH}, shaped by ${shaped.shapedBy}.`;
+        const head = `Tonight's plan (${date}) is the selected branch plan, shaped by ${shaped.shapedBy}.`;
         return { data: { ok: true, path: PLAN, from: 'branch', why: head, date, plan: shaped }, text: planText(shaped, head) };
       }
     }
@@ -786,19 +796,24 @@ export async function record({ root, date, ticks, remote = 'origin', env = proce
   for (const t of ticks) tickProblem(t);
   const ref = `refs/heads/${PLAN_BRANCH}`, local = 'refs/plates/night-plan-record';
   for (let attempt = 1; attempt <= attempts; attempt++) {
+    const selected = readRemoteNightPlan({root,date,remote,env});
+    if (selected.sources.some(source => source.state === 'unavailable')) throw new NightPlanError(selected.refused.join('; '));
+    if (selected.refused.length) return { recorded: false, why: selected.refused.join('; '), ticked: [], refused: [] };
+    if (!selected.plan) return {recorded:false, why:'no valid plan dated tonight on either plan branch',ticked:[],refused:[]};
     const listed = planGit(root, ['ls-remote', '--exit-code', '--heads', remote, ref], { env, allowFail: true });
-    if (listed.status === 2) return { recorded: false, why: `no plan branch ${PLAN_BRANCH}: nothing to tick`, ticked: [], refused: [] };
-    if (listed.status !== 0) throw new NightPlanError(`cannot read the plan branch ${PLAN_BRANCH}: git ls-remote exited ${listed.status}`);
-    planGit(root, ['fetch', '-q', '--no-tags', remote, `+${ref}:${local}`], { env });
-    const tip = planGit(root, ['rev-parse', '--verify', `${local}^{commit}`], { env });
-    const shown = planGit(root, ['show', `${tip}:${REMOTE_PLAN}`], { env, allowFail: true });
-    if (shown.status !== 0) return { recorded: false, why: `${PLAN_BRANCH} holds no ${REMOTE_PLAN}: nothing to tick`, ticked: [], refused: [] };
-    if (shown.stdout.length > MAX_BYTES) return { recorded: false, why: `the plan on ${PLAN_BRANCH} is larger than ${MAX_BYTES} bytes`, ticked: [], refused: [] };
-    let plan;
-    try { plan = JSON.parse(shown.stdout); } catch { return { recorded: false, why: `the plan on ${PLAN_BRANCH} is not JSON: nothing to tick`, ticked: [], refused: [] }; }
-    const v = validatePlan(plan);
-    if (!v.ok) return { recorded: false, why: `the plan on ${PLAN_BRANCH} is refused (${v.problems[0]}): nothing to tick`, ticked: [], refused: [] };
-    if (plan.date !== date) return { recorded: false, why: `the plan on ${PLAN_BRANCH} is dated ${plan.date}, not ${date}: it is another night's, so nothing is ticked`, ticked: [], refused: [] };
+    let tip = null, plan = selected.plan;
+    if (listed.status !== 2) {
+      if (listed.status !== 0) throw new NightPlanError(`cannot read the plan branch ${PLAN_BRANCH}`);
+      planGit(root, ['fetch', '-q', '--no-tags', remote, `+${ref}:${local}`], { env });
+      tip = planGit(root, ['rev-parse', '--verify', `${local}^{commit}`], { env });
+      const text = readPlanBlob(root, tip, REMOTE_PLAN, { env });
+      if (text !== null) {
+        let current; try { current = JSON.parse(text); } catch { current = null; }
+        if (!validatePlan(current).ok) return {recorded:false,why:'canonical plan unreadable; preserved',ticked:[],refused:[]};
+        if (current.date > date) return {recorded:false,why:'canonical plan belongs to a later night; preserved',ticked:[],refused:[]};
+        if (current.date === date) plan = current;
+      }
+    }
     const ticked = [], refused = [];
     for (const t of ticks) {
       try { const r = applyTick(plan, t); plan = r.plan; ticked.push({ id: t.id, from: r.from, status: t.status }); }
@@ -807,7 +822,7 @@ export async function record({ root, date, ticks, remote = 'origin', env = proce
     if (!ticked.length) return { recorded: false, why: 'every tick was refused', ticked, refused };
     // The tip's own tree with the plan replaced, built in a private index: no checkout, no working tree touched.
     const commit = await planCommit(root, env, plan, tip, `plates night: tick ${ticked.map(t => `${t.id} ${t.status}`).join(', ')} (${date})`);
-    const pushed = planGit(root, ['push', '--porcelain', `--force-with-lease=${ref}:${tip}`, remote, `${commit}:${ref}`], { env, allowFail: true });
+    const pushed = planGit(root, ['push', '--porcelain', `--force-with-lease=${ref}:${tip ?? ''}`, remote, `${commit}:${ref}`], { env, allowFail: true });
     if (pushed.status === 0) return { recorded: true, commit, ticked, refused };
   }
   throw new NightPlanError(`the ticks could not be pushed to ${PLAN_BRANCH}: it moved under every one of ${attempts} attempts`);
@@ -820,15 +835,15 @@ export async function record({ root, date, ticks, remote = 'origin', env = proce
  */
 async function planCommit(root, env, plan, tip, message) {
   const blob = planGit(root, ['hash-object', '-w', '--stdin'], { env, input: `${JSON.stringify(plan, null, 2)}\n` });
-  const index = join(planGit(root, ['rev-parse', '--absolute-git-dir'], { env }), `keel-night-plan-${process.pid}.index`);
+  const directory = await mkdtemp(join(planGit(root, ['rev-parse', '--absolute-git-dir'], { env }), writeName('machine:keel-night-plan-')));
+  const index = join(directory, 'index');
   const withIndex = { ...env, GIT_INDEX_FILE: index };
   try {
-    await rm(index, { force: true });
     if (tip) planGit(root, ['read-tree', tip], { env: withIndex });
     planGit(root, ['update-index', '--add', '--cacheinfo', `100644,${blob},${REMOTE_PLAN}`], { env: withIndex });
     const tree = planGit(root, ['write-tree'], { env: withIndex });
     return planGit(root, ['-c', 'user.name=plates-night', '-c', 'user.email=41898282+github-actions[bot]@users.noreply.github.com', 'commit-tree', tree, ...(tip ? ['-p', tip] : []), '-m', message], { env });
-  } finally { await rm(index, { force: true }); }
+  } finally { await rm(directory, { recursive: true, force: true }); }
 }
 
 /**
@@ -848,32 +863,68 @@ async function planCommit(root, env, plan, tip, message) {
  * A push that lost a race is read again from the new tip, at most `attempts`
  * times. Returns { written, why, commit? }.
  */
-export async function publishDefault({ root, date, remote = 'origin', env = process.env, attempts = 3 }) {
+export async function publishDefault({ root, date, remote = 'origin', env = process.env, attempts = 3, namesEvidence = false }) {
+  const context=namesEvidenceContext(namesEvidence,env), observation=namesObservation('plan-publication',context);
+  const finish=result=>({...result,...(observation?{observation}:{})});
   if (!isDate(date)) throw new NightPlanError(`--date is the night's UTC date, YYYY-MM-DD (got ${JSON.stringify(date)})`);
   const plan = await readPlan(root);
-  if (!plan) return { written: false, why: `no working plan (${PLAN}): nothing to record` };
-  if (plan.date !== date) return { written: false, why: `the working plan is for ${plan.date}, not ${date}: never another night's` };
-  if (plan.shapedBy !== 'default') return { written: false, why: `tonight's plan is the owner's, read from ${PLAN_BRANCH}: nothing to write` };
+  if (!plan) return finish({ written: false, why: `no working plan (${PLAN}): nothing to record` });
+  if (plan.date !== date) return finish({ written: false, why: `the working plan is for ${plan.date}, not ${date}: never another night's` });
+  if (plan.shapedBy !== 'default') return finish({ written: false, why: `tonight's plan is the owner's, read from ${PLAN_BRANCH}: nothing to write` });
   const ref = `refs/heads/${PLAN_BRANCH}`, local = 'refs/plates/night-plan-default';
   for (let attempt = 1; attempt <= attempts; attempt++) {
+    // A rejected lease must re-read both identities, including owner repairs.
+    const existing = readRemoteNightPlan({ root, date, remote, env, namesEvidence:context });
+    if (existing.sources.some(source => source.state === 'unavailable')) throw new NightPlanError(existing.refused.join('; '));
+    if (existing.refused.length) return finish({ written: false, why: `${existing.refused.join('; ')}; cannot be read or is refused: it is left alone, never replaced` });
+    if (existing.plan) {
+      if(observation) {
+        const source=existing.sources.find(s=>s.branch===existing.branch&&s.path===existing.path);
+        const fragment=namesGeneratedFragment(observation,'retained-plan',JSON.stringify(existing.plan));
+        if(source?.commitSha&&source.blobSha&&source.sha256&&fragment) {
+          const snapshot={state:'present',commitSha:source.commitSha,blobSha:source.blobSha,sha256:source.sha256,labelIds:[],providerUpdatedAt:null};
+          observation.writes.push({producerId:'plan-publication',role:'plan-publication',sequence:1,operationId:null,target:{kind:'git',repositoryId:context.repositoryId,ref:`refs/heads/${existing.branch}`,path:existing.path},outcome:'no-change',before:snapshot,intended:{...fragment,sha256:source.sha256},after:snapshot,observedAt:new Date().toISOString()});
+        }else namesGap(observation,'retained-plan-identity-unavailable');
+      }
+      return finish({ written: false, why: `${existing.branch} holds the plan for ${date}, shaped by ${existing.plan.shapedBy}: never replaced` });
+    }
+    const later = existing.sources.find(source => source.date > date);
+    if (later) return finish({ written: false, why: `${later.branch} holds the plan for ${later.date}, shaped by ${later.shapedBy}: never replaced` });
     const listed = planGit(root, ['ls-remote', '--exit-code', '--heads', remote, ref], { env, allowFail: true });
     let tip = null, over = `the branch ${PLAN_BRANCH} is new`;
     if (listed.status !== 2) {
       if (listed.status !== 0) throw new NightPlanError(`cannot read the plan branch ${PLAN_BRANCH}: git ls-remote exited ${listed.status}`);
       planGit(root, ['fetch', '-q', '--no-tags', remote, `+${ref}:${local}`], { env });
       tip = planGit(root, ['rev-parse', '--verify', `${local}^{commit}`], { env });
-      const shown = planGit(root, ['show', `${tip}:${REMOTE_PLAN}`], { env, allowFail: true });
-      if (shown.status === 0) {
+      const text = readPlanBlob(root, tip, REMOTE_PLAN, { env });
+      if (text !== null) {
         let there = null;
-        try { there = shown.stdout.length <= MAX_BYTES ? JSON.parse(shown.stdout) : null; } catch { /* unread: left alone below */ }
-        if (!there || !validatePlan(there).ok) return { written: false, why: `${PLAN_BRANCH} holds a plan that cannot be read or is refused: it is left alone, never replaced` };
-        if (there.date >= date) return { written: false, why: `${PLAN_BRANCH} holds the plan for ${there.date}, shaped by ${there.shapedBy}: never replaced` };
+        try { there = text.length <= MAX_BYTES ? JSON.parse(text) : null; } catch { /* unread: left alone below */ }
+        if (!there || !validatePlan(there).ok) return finish({ written: false, why: `${PLAN_BRANCH} holds a plan that cannot be read or is refused: it is left alone, never replaced` });
+        if (there.date >= date) return finish({ written: false, why: `${PLAN_BRANCH} holds the plan for ${there.date}, shaped by ${there.shapedBy}: never replaced` });
         over = `on top of the plan for ${there.date} (shaped by ${there.shapedBy}), an earlier night's`;
       } else over = `${PLAN_BRANCH} held no ${REMOTE_PLAN}`;
     }
     const commit = await planCommit(root, env, plan, tip, `plates night: the default plan for the night of ${date}`);
     const pushed = planGit(root, ['push', '--porcelain', `--force-with-lease=${ref}:${tip ?? ''}`, remote, `${commit}:${ref}`], { env, allowFail: true });
-    if (pushed.status === 0) return { written: true, why: `tonight's default plan is on ${PLAN_BRANCH} (${over})`, commit };
+    if(observation) {
+      const fragment=namesGeneratedFragment(observation,`plan-${attempt}`,JSON.stringify(plan));
+      const intended=readPlanBlob(root,commit,REMOTE_PLAN,{env});
+      let before=null,after=null;
+      if(!tip) before=namesSnapshot(null);
+      else {
+        const previous=readPlanBlob(root,tip,REMOTE_PLAN,{env});
+        const blob=planGit(root,['rev-parse',`${tip}:${REMOTE_PLAN}`],{env,allowFail:true});
+        before=previous===null?namesSnapshot(null,{commitSha:tip}):namesSnapshot(previous,{commitSha:tip,blobSha:blob.status===0?blob.stdout.trim():null});
+      }
+      const check=planGit(root,['ls-remote','--exit-code','--heads',remote,ref],{env,allowFail:true});
+      if(check.status===0 && check.stdout.trim()===`${commit}\t${ref}`) {
+        const blob=planGit(root,['rev-parse',`${commit}:${REMOTE_PLAN}`],{env});
+        after=namesSnapshot(intended,{commitSha:commit,blobSha:blob});
+      }else namesGap(observation,'plan-publication-readback-unavailable');
+      if(fragment) observation.writes.push({producerId:'plan-publication',role:'plan-publication',sequence:observation.writes.length+1,operationId:null,target:{kind:'git',repositoryId:context.repositoryId,ref,path:REMOTE_PLAN},outcome:after?'confirmed':'attempted-unknown',before,intended:{...fragment,sha256:namesDigest(intended)},after,observedAt:new Date().toISOString()});
+    }
+    if (pushed.status === 0) return finish({ written: true, why: `tonight's default plan is on ${PLAN_BRANCH} (${over})`, commit });
   }
   throw new NightPlanError(`the default plan could not be pushed to ${PLAN_BRANCH}: it moved under every one of ${attempts} attempts`);
 }
@@ -900,7 +951,7 @@ const numberCell = n => (n ? `\`${n.measure}\` ${n.better === 'higher' ? '≥' :
 
 /** The health page's section: the plan as the night ended, each item and what became of it. */
 export function planSection(plan, { record } = {}) {
-  const by = plan.shapedBy === 'owner' ? `the owner (from the plan branch \`${PLAN_BRANCH}\`)` : 'plates\'s default plan (`plates night plan`): nobody shaped tonight';
+  const by = plan.shapedBy === 'owner' ? `the owner (from the selected plan branch)` : 'plates\'s default plan (`plates night plan`): nobody shaped tonight';
   return [
     '## Tonight\'s plan', '',
     `Shaped by ${by}. Each pass ticks its own item on the plan branch as it goes (climb and the robot run after the night), so an item they have not reached yet is still \`planned\` here.${record ? ` The record: \`${record}\`.` : ''}`, '',
@@ -924,6 +975,7 @@ export function parseArgs(args) {
   if (!valued) throw new NightPlanError(USAGE);
   const out = { sub }, positional = [];
   for (let i = 0; i < rest.length; i++) {
+    if(rest[i]==='--names-evidence') {out.namesEvidence=true;continue;}
     if (valued.includes(rest[i])) {
       if (rest[i + 1] === undefined || rest[i + 1].startsWith('--')) throw new NightPlanError(`${rest[i]} needs a value`);
       out[rest[i].slice(2).replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = rest[++i];
@@ -958,10 +1010,91 @@ export async function run(args, { root, env = process.env } = {}) {
     return { data: { ok: true, ...r }, text: lines.join('\n') };
   }
   if (o.sub === 'publish') {
-    const r = await publishDefault({ root, date: o.date, remote: o.remote ?? 'origin', env });
+    const r = await publishDefault({ root, date: o.date, remote: o.remote ?? 'origin', env, namesEvidence:namesEvidenceContext(o.namesEvidence,env) });
     return { data: { ok: true, ...r }, text: r.written ? `${r.why} (${r.commit.slice(0, 7)}).` : `::notice::the default plan is not written to ${PLAN_BRANCH}: ${r.why}.` };
   }
   return check({ root, file: o.file });
+}
+
+/** Branch/blob pairs are coupled: a historical plan is never mistaken for a
+ * canonical branch's missing blob. Only these explicit compatibility paths. */
+export const planLocations = () => readNames('git ref:keel-night-plan').map(branch => ({
+  branch, path: branch === nameLegacyPlan() ? '.keel/night/plan.json' : REMOTE_PLAN,
+}));
+const nameLegacyPlan = () => 'keel-night-plan';
+export function selectNightPlan(candidates, date) {
+  const sources = candidates.map(candidate => {
+    if (candidate.invalid) return { ...candidate, state: 'invalid', reason: candidate.invalid, plan: null };
+    if (candidate.unavailable) return { ...candidate, state: 'unavailable', reason: candidate.unavailable, plan: null };
+    if (candidate.text === null) return { ...candidate, state: 'absent', plan: null };
+    let plan, reason;
+    if (Buffer.byteLength(candidate.text, 'utf8') > MAX_BYTES) reason = `larger than ${MAX_BYTES} bytes`;
+    else try { plan = JSON.parse(candidate.text); } catch { reason = 'not JSON'; }
+    if (!reason) {
+      const validation = validatePlan(plan);
+      if (!validation.ok) reason = validation.problems.join('; ');
+    }
+    if (reason) return { ...candidate, state: 'invalid', reason, plan: null };
+    return { ...candidate, state: plan.date === date ? 'read' : 'another night', date: plan.date, shapedBy: plan.shapedBy, plan: plan.date === date ? plan : null };
+  });
+  const refused = sources.filter(s => ['invalid', 'unavailable'].includes(s.state)).map(s => `${s.branch}:${s.path} ${s.state === 'invalid' ? 'refused' : 'unavailable'}: ${s.reason}`);
+  const summary = sources.map(({text, plan, unavailable, invalid, ...s}) => s);
+  // Unknown owner state cannot authorize a fallback, even to another valid plan.
+  if (refused.length) return { plan: null, branch: null, sources: summary, skipped: [], refused };
+  const selected = planLocations().map(location => sources.find(s => s.branch === location.branch && s.path === location.path && s.plan)).find(Boolean);
+  const skipped = sources.filter(s => s.plan && s !== selected).map(s => `${s.branch}:${s.path}`);
+  if (!selected) return { plan: null, branch: null, sources: summary, skipped, refused };
+  const note = skipped.length ? `Plan selection: ${selected.branch} wins; skipped ${skipped.join(', ')} dated ${date}.` : null;
+  const plan = note && !selected.plan.leftOpen.includes(note) ? {...selected.plan, leftOpen:[...selected.plan.leftOpen,note]} : selected.plan;
+  if (!validatePlan(plan).ok) throw new NightPlanError('plan selection record exceeds plan bounds');
+  return { plan, branch: selected.branch, path: selected.path, sources: summary, skipped, refused };
+}
+
+/** Only a successful tree read proves absence; failed blob reads remain unknown. */
+function readPlanBlob(root, ref, path, { env = process.env } = {}) {
+  const tree = planGit(root, ['ls-tree', '-z', ref, '--', path], { env });
+  if (!tree) return null;
+  const entry = tree.split('\0').find(line => line.split('\t')[1] === path);
+  if (!entry || !/^100(?:644|755) blob /.test(entry)) throw Object.assign(new NightPlanError(`${path} is not a regular file`), { invalidPlan: true });
+  const size = Number(planGit(root, ['cat-file', '-s', `${ref}:${path}`], { env }));
+  if (!Number.isSafeInteger(size) || size < 0) throw new NightPlanError(`${path} size is unavailable`);
+  if (size > MAX_BYTES) throw Object.assign(new NightPlanError(`${path} exceeds ${MAX_BYTES} bytes`), { invalidPlan: true });
+  const shown = planGit(root, ['show', `${ref}:${path}`], { env, allowFail: true });
+  if (shown.status !== 0) throw new NightPlanError(`cannot read ${path}: git show exited ${shown.status}`);
+  return shown.stdout;
+}
+
+/** Bounded Git reads only; transport failures are never absence. */
+export function readRemoteNightPlan({root, date, remote='origin', env=process.env, namesEvidence=false}) {
+  const candidates = planLocations().map(({branch,path}) => {
+    try {
+      const ref=`refs/heads/${branch}`;
+      const listed=planGit(root,['ls-remote','--exit-code','--heads',remote,ref],{env,allowFail:true});
+      if (listed.status===2) return {branch,path,text:null};
+      if (listed.status!==0) throw new NightPlanError(`git ls-remote exited ${listed.status}`);
+      const local=`refs/remotes/${remote}/${branch}`;
+      planGit(root,['fetch','-q','--no-tags',remote,`+${ref}:${local}`],{env});
+      const commitSha=planGit(root,['rev-parse','--verify',`${local}^{commit}`],{env});
+      const text=readPlanBlob(root,commitSha,path,{env});
+      return {branch,path,text,...(namesEvidence?{commitSha,blobSha:text===null?null:planGit(root,['rev-parse',`${commitSha}:${path}`],{env}),sha256:text===null?null:namesDigest(text)}:{})};
+    } catch (error) {
+      return { branch, path, text: null, ...(error.invalidPlan
+        ? { invalid: error.message }
+        : { unavailable: `cannot read plan branch ${branch}: ${error.message}` }) };
+    }
+  });
+  return selectNightPlan(candidates,date);
+}
+
+/** Contents API adapter for read-token jobs that do not persist Git credentials. */
+export function readApiNightPlan({root, repo, date, env=process.env}) {
+  if (!/^[\w.-]+\/[\w.-]+$/.test(repo ?? '')) throw new NightPlanError('plan repository unavailable');
+  return selectNightPlan(planLocations().map(({branch,path}) => {
+    const result=spawnSync((environmentValue('variable:KEEL_GH', env) ?? 'gh'),['api','-H','Accept: application/vnd.github.raw+json',`repos/${repo}/contents/${path}?ref=${encodeURIComponent(branch)}`],{cwd:root,env,encoding:'utf8',timeout:30000,maxBuffer:MAX_BYTES});
+    if (result.status===0 && !result.error) return {branch,path,text:result.stdout};
+    if (!result.error && /HTTP 404/.test(result.stderr ?? '')) return {branch,path,text:null};
+    return { branch, path, text: null, unavailable: `cannot read plan branch ${branch}: Contents API read failed (${result.error?.code ?? result.status})` };
+  }),date);
 }
 
 if (isMain(import.meta)) await main(args => run(args, { root: rootOf(import.meta) }));

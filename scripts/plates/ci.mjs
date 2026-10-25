@@ -1,3 +1,4 @@
+import { environmentValue, writeName } from './names.mjs';
 // Actions usage estimates, not invoices. Zero dependencies; read-only REST via gh.
 // Job timing excludes queue time. Defaults are project weighting assumptions
 // dated 2026-10-09, not a universal GitHub price schedule.
@@ -34,7 +35,7 @@ export function actionsClient({ repo, env = process.env, limits = {}, request } 
     if (coverage.requests >= caps.requests) throw new Error('Actions request budget exhausted');
     coverage.requests++;
     if (request) return request(path);
-    const r = spawnSync(env.PLATES_GH || 'gh', ['api', path], { env, encoding: 'utf8', timeout: 15000, maxBuffer: 16 * 1024 * 1024 });
+    const r = spawnSync((environmentValue('variable:KEEL_GH', env) ?? 'gh'), ['api', path], { env, encoding: 'utf8', timeout: 15000, maxBuffer: 16 * 1024 * 1024 });
     if (r.error || r.status !== 0) throw new Error('Actions API unavailable');
     try { return JSON.parse(r.stdout); } catch { throw new Error('Actions API returned invalid JSON'); }
   };
@@ -185,7 +186,7 @@ export async function readCiUsage({ repo, env, config = {}, now = Date.now(), da
 }
 
 /** The artifact a workflow keeps of the test ledger's records (migration 0005); uploaded only when the ledger wrote some. */
-export const LEDGER_ARTIFACT = 'plates-test-runs';
+export const LEDGER_ARTIFACT = writeName('artifact:keel-test-runs');
 /** A job or step whose name says it runs tests. */
 const TESTS_NAMED = /\btest(?:s|ing)?\b/i;
 /** A job or step that ran to a verdict, not one skipped, cancelled or never reached. */

@@ -1,3 +1,4 @@
+import { environmentValue } from './names.mjs';
 // Bounded hygiene readers, shipped by night. Observations are not authority to
 // change PRs, delete worktrees, or issue robot work. Unknown never means zero.
 import { open, lstat, realpath } from 'node:fs/promises';
@@ -86,7 +87,7 @@ export async function draftsWaiting({ config = {}, env = process.env, now = Date
     const result = await githubRead(env, `hygiene-drafts-v1-${createHash('sha256').update(config.repo.toLowerCase()).digest('hex')}`, async () => {
       let raw;
       try {
-        raw = await (graphql ? graphql({ query: DRAFT_QUERY, owner, name }) : command(env.PLATES_GH || 'gh', ['api', 'graphql', '-f', `query=${DRAFT_QUERY}`, '-f', `owner=${owner}`, '-f', `name=${name}`], { env }));
+        raw = await (graphql ? graphql({ query: DRAFT_QUERY, owner, name }) : command((environmentValue('variable:KEEL_GH', env) ?? 'gh'), ['api', 'graphql', '-f', `query=${DRAFT_QUERY}`, '-f', `owner=${owner}`, '-f', `name=${name}`], { env }));
       } catch (e) {
         // gh may return a nonzero exit alongside a charged GraphQL response.
         if (!e.stdout) throw e;
@@ -210,7 +211,7 @@ async function localBytes(root, path, max) {
 export async function canonicalSourceBlob({ root, path, bytes, env = process.env, timeout = 3000 }) {
   if (!sourcePath(path) || !Buffer.isBuffer(bytes) || bytes.length > LONG_FILE_LIMITS.fileBytes) throw new Error('canonical source input exceeds bounds');
   if (!Number.isFinite(timeout) || timeout <= 0) throw new Error('canonical source hash reached time bound');
-  const blob = (await command(env.PLATES_GIT || 'git', ['hash-object', `--path=${path}`, '--stdin'],
+  const blob = (await command(environmentValue('variable:KEEL_GIT', env) ?? 'git', ['hash-object', `--path=${path}`, '--stdin'],
     { cwd: root, env, input: bytes, timeout: Math.min(3000, timeout), maxBuffer: 1024, rejectStderr: true, filterTree: true })).trim();
   if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(blob)) throw new Error('canonical source blob identity unavailable');
   return blob;
@@ -225,7 +226,7 @@ export async function longFiles({ root, config = {}, env = process.env, now = Da
   const git = (args, maxBuffer = cap.listBytes) => {
     const remaining = cap.ms - (Date.now() - start);
     if (remaining <= 0) throw new Error('long-file observation reached time bound');
-    return command(env.PLATES_GIT || 'git', args, { cwd: root, env, timeout: Math.max(1, Math.min(3000, remaining)), maxBuffer });
+    return command(environmentValue('variable:KEEL_GIT', env) ?? 'git', args, { cwd: root, env, timeout: Math.max(1, Math.min(3000, remaining)), maxBuffer });
   };
   try {
     root = await realpath(root);

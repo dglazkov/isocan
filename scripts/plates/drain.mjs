@@ -1,3 +1,4 @@
+import { namesEvidenceContext, namesObservation, namesGap, namesFragment, namesSnapshot } from './verification.mjs';
 // The night shift's drain (plates practice `night`; managed: plates render
 // rewrites it). A machine queue holds at most one open pull request, the
 // newest, and machinery enforces it, not a person remembering (plates
@@ -27,6 +28,7 @@
 //
 // Exit: 0 done (or nothing to do); 3 actions planned and no --yes, nothing
 // done; 1 a gh call failed; 2 usage. gh is process.env.PLATES_GH || 'gh'.
+import { environmentValue, branchPrefixes, inBranchQueue } from './names.mjs';
 import { execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -44,7 +46,7 @@ export const DATA_FILES = ['docs/INBOX.md', '.plates/bounds.json'];
  * night's. keel-loop/ (practice loop) holds Loop's findings and their page.
  */
 export const DATA_BY_PREFIX = {
-  'keel-loop/': { dirs: ['docs/loop/'], files: ['docs/LOOP.md'] },
+  ...Object.fromEntries(branchPrefixes('keel-loop/').map(p => [p, { dirs: ['docs/loop/'], files: ['docs/LOOP.md'] }])),
 };
 export const FIELDS = 'number,headRefName,createdAt,mergeable,files,isCrossRepository';
 export const SUPERSEDED = newest => `Superseded by #${newest} (plates drain). The branch is kept: reopen to recover.`;
@@ -78,7 +80,7 @@ const dataOnly = (pr, prefix, extra) => Array.isArray(pr.files) && pr.files.leng
  * not a plain repo-relative path is dropped, never trusted.
  */
 export function extraData(plates, prefix) {
-  if (prefix === 'keel-loop/') {
+  if (branchPrefixes('keel-loop/').includes(prefix)) {
     const list = plates?.loop?.afterRenderWrites;
     return Array.isArray(list) ? list.filter(isPlainPath) : [];
   }
@@ -107,7 +109,7 @@ export function checkPrefix(prefix) {
  * Returns { queue, newest, actions: [{ number, head, createdAt, action: merge|close|leave, why }] }.
  */
 export function plan(prs, prefix, { gatePassed = false, extra = [] } = {}) {
-  const queue = prs.filter(p => typeof p.headRefName === 'string' && p.headRefName.startsWith(prefix) && !p.isCrossRepository)
+  const queue = prs.filter(p => typeof p.headRefName === 'string' && inBranchQueue(p.headRefName, prefix) && !p.isCrossRepository)
     .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt) || a.number - b.number);
   if (!queue.length) return { queue: [], newest: null, actions: [] };
   const newest = queue.at(-1);
@@ -128,9 +130,10 @@ export function plan(prs, prefix, { gatePassed = false, extra = [] } = {}) {
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 /** opts: { root, prefix, yes, gatePassed }; deps: { env }. */
-export async function drain({ root, prefix, yes = false, gatePassed = false }, { env = process.env } = {}) {
+export async function drain({ root, prefix, yes = false, gatePassed = false, namesEvidence = false }, { env = process.env } = {}) {
   checkPrefix(prefix);
-  const gh = env.PLATES_GH || 'gh';
+  const context=namesEvidenceContext(namesEvidence,env), observation=namesObservation('drain',context);
+  const gh = (environmentValue('variable:KEEL_GH', env) ?? 'gh');
   let plates = {};
   try { plates = JSON.parse(await readFile(join(root, '.plates', 'plates.json'), 'utf8')) ?? {}; } catch { plates = {}; }
   const repo = plates.repo ?? null;
@@ -149,32 +152,80 @@ export async function drain({ root, prefix, yes = false, gatePassed = false }, {
     return data;
   };
 
+  const readJson=args=>{const r=call(args);if(!r.ok) throw new Error();return JSON.parse(r.out);};
+  const queue=()=>{
+    if(!/^[\w.-]+\/[\w.-]+$/.test(repo??'')) {namesGap(observation,'queue-repository-unavailable');return null;}
+    const rows=[];
+    try {
+      for(let page=1;page<=20;page++) {
+        const data=readJson(['api',`repos/${repo}/pulls?state=open&per_page=100&page=${page}`]);
+        if(!Array.isArray(data)||data.length>100) throw new Error();
+        for(const pr of data) {
+          if(!Number.isSafeInteger(pr.id)||!Number.isSafeInteger(pr.number)||typeof pr.head?.ref!=='string'||!/^[a-f0-9]{40}$/.test(pr.head?.sha??'')||pr.state!=='open') throw new Error();
+          if(rows.some(r=>r.id===pr.id)) throw new Error();
+          rows.push({id:pr.id,number:pr.number,head:pr.head.ref,headSha:pr.head.sha,state:pr.state,mergeable:typeof pr.mergeable==='boolean'?pr.mergeable:null});
+        }
+        if(data.length<100) return rows;
+      }
+    }catch{namesGap(observation,'queue-read-unavailable');return null;}
+    namesGap(observation,'queue-page-limit');return null;
+  };
+  const beforeQueue=observation?queue():null;
+  const finish=result=>{
+    if(!observation) return result;
+    const afterQueue=queue();
+    const projection=namesFragment(observation,'queue',JSON.stringify({before:beforeQueue,after:afterQueue,actions:result.data.actions.map(({number,head,action,done})=>({number,head,action,done:!!done}))}));
+    if(projection) observation.projections=[{producerId:'drain',kind:'drain-queue',...projection}];
+    for(const action of result.data.actions.filter(a=>a.done)) {
+      try {
+        const object=readJson(['api',`repos/${repo}/pulls/${action.number}`]);
+        const original=beforeQueue?.find(p=>p.number===action.number);
+        if(!original||object.id!==original.id||object.head?.sha!==original.headSha||object.state!=='closed'||(action.action==='merge'&&!object.merged)) throw new Error();
+      }catch{namesGap(observation,'action-readback-unavailable');}
+    }
+    return {...result,data:{...result.data,observation}};
+  };
   let prs = list();
-  const ours = () => prs.filter(p => p.headRefName?.startsWith(prefix) && !p.isCrossRepository);
+  const ours = () => prs.filter(p => inBranchQueue(p.headRefName, prefix) && !p.isCrossRepository);
   if (ours().some(p => p.mergeable === 'UNKNOWN' || p.mergeable === undefined)) {
     // GitHub computes mergeability lazily; the first ask starts it.
-    await sleep(Number(env.PLATES_DRAIN_WAIT_MS ?? 5000));
+    await sleep(Number(environmentValue('variable:KEEL_DRAIN_WAIT_MS', env) ?? 5000));
     prs = list();
   }
+  if(observation && (prs.length>=200 || !beforeQueue || prs.length!==beforeQueue.length || prs.some(pr=>!beforeQueue.some(q=>q.number===pr.number&&q.head===pr.headRefName)))) namesGap(observation,'queue-input-coverage');
   const p = plan(prs, prefix, { gatePassed, extra });
   const acting = p.actions.filter(a => a.action !== 'leave');
   const lines = a => `  #${a.number} ${a.head}: ${a.action} — ${a.why}`;
   const head = `plates drain ${prefix}: ${p.queue.length} open PR${p.queue.length === 1 ? '' : 's'}${p.newest ? `, newest #${p.newest}` : ''}.`;
   if (!acting.length) {
-    return { data: { ok: true, prefix, repo, newest: p.newest, actions: p.actions }, text: [head, ...p.actions.map(lines), ...(p.actions.length ? [] : ['Nothing to drain.'])].join('\n') };
+    return finish({ data: { ok: true, prefix, repo, newest: p.newest, actions: p.actions }, text: [head, ...p.actions.map(lines), ...(p.actions.length ? [] : ['Nothing to drain.'])].join('\n') });
   }
   if (!yes) {
-    return {
+    return finish({
       data: { ok: false, needs: 'yes', prefix, repo, newest: p.newest, actions: p.actions },
       text: [head, ...p.actions.map(lines), '', '⚑ Merging and closing PRs needs a yes. Nothing was done; re-run with --yes.'].join('\n'),
       exitCode: 3,
-    };
+    });
   }
 
   const done = [];
   let failed = false;
   const close = a => {
+    let prior=null;
+    if(observation) try {prior=readJson(['api',`repos/${repo}/issues/${a.number}/comments?per_page=100`]);if(!Array.isArray(prior)||prior.length>=100) prior=null;}catch{ /* readback below records gap */ }
     const r = call(['pr', 'close', String(a.number), ...R, '--comment', SUPERSEDED(p.newest)]);
+    if(observation) {
+      const intended=SUPERSEDED(p.newest), fragment=namesFragment(observation,`supersede-${a.number}`,intended,'managed-fragment');
+      let id=null,after=null;
+      try {
+        const comments=readJson(['api',`repos/${repo}/issues/${a.number}/comments?per_page=100`]);
+        if(!prior||!Array.isArray(comments)||comments.length>=100) throw new Error();
+        const matches=comments.filter(c=>c.body===intended&&!prior.some(p=>p.id===c.id));
+        if(matches.length!==1||!Number.isSafeInteger(matches[0].id)) throw new Error();
+        id=matches[0].id;after=namesSnapshot(intended,{providerUpdatedAt:matches[0].updated_at??null});
+      }catch{namesGap(observation,'comment-readback-unavailable');}
+      if(fragment) observation.writes.push({producerId:'drain',sequence:observation.writes.length+1,operationId:null,target:{kind:'comment',repositoryId:context.repositoryId,id,number:a.number,headSha:null},outcome:after?'confirmed':'attempted-unknown',before:prior?namesSnapshot(null):null,intended:{...fragment,names:[]},after,observedAt:new Date().toISOString()});
+    }
     if (r.ok) return { ...a, action: 'close', done: true };
     failed = true;
     return { ...a, action: 'close', done: false, error: r.err };
@@ -190,21 +241,21 @@ export async function drain({ root, prefix, yes = false, gatePassed = false }, {
     else done.push(close({ ...a, why: `superseded by #${p.newest}; the merge failed (${r.err})` }));
   }
   const verb = a => a.done ? (a.action === 'merge' ? 'merged' : 'closed') : a.action === 'leave' ? 'left' : `FAILED to ${a.action} (${a.error})`;
-  return {
+  return finish({
     data: { ok: !failed, prefix, repo, newest: p.newest, actions: done },
     text: [head, ...done.map(a => `  #${a.number} ${a.head}: ${verb(a)} — ${a.why}`)].join('\n'),
     exitCode: failed ? 1 : 0,
-  };
+  });
 }
 
 /** The script's own arguments: <prefix> [--gate-passed] [--yes]. */
 export function parseArgs(args) {
-  const flags = ['--gate-passed', '--yes'];
+  const flags = ['--gate-passed', '--yes','--names-evidence'];
   const unknown = args.find(a => a.startsWith('--') && !flags.includes(a));
   if (unknown) throw new DrainError(`unexpected argument: ${unknown}`, 2);
   const positional = args.filter(a => !a.startsWith('--'));
   if (positional.length !== 1) throw new DrainError(positional.length ? `unexpected argument: ${positional[1]}` : 'usage: node scripts/plates/drain.mjs <prefix> [--gate-passed] [--yes] [--json]', 2);
-  return { prefix: positional[0], yes: args.includes('--yes'), gatePassed: args.includes('--gate-passed') };
+  return { prefix: positional[0], yes: args.includes('--yes'), gatePassed: args.includes('--gate-passed'),...(args.includes('--names-evidence')?{namesEvidence:true}:{}) };
 }
 
 if (isMain(import.meta)) await main(args => drain({ root: rootOf(import.meta), ...parseArgs(args) }));

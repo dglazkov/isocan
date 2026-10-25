@@ -1,3 +1,4 @@
+import { writeName, selectArtifacts, artifactNames } from './names.mjs';
 // The canvas journal's recovery, for a fresh CI checkout (plates practice
 // `night`; managed: plates render rewrites it). Two workflows write the
 // project's canvas: plates-night.yml (`plates canvas night`, the measurements)
@@ -35,10 +36,10 @@ import { isMain } from './lib.mjs';
 
 /** The canvas writers: their artifact (name-<attempt>), the events that may run them, and whether an enabled attempt must have left one. */
 export const WRITERS = Object.freeze({
-  'keel-night.yml': Object.freeze({ artifact: 'keel-canvas-night', events: Object.freeze(['schedule', 'workflow_dispatch']), required: true }),
-  'keel-morning.yml': Object.freeze({ artifact: 'keel-canvas-card', events: Object.freeze(['schedule', 'workflow_dispatch', 'workflow_run']), required: false }),
-  'plates-night.yml': Object.freeze({ artifact: 'keel-canvas-night', events: Object.freeze(['schedule', 'workflow_dispatch']), required: true }),
-  'plates-morning.yml': Object.freeze({ artifact: 'keel-canvas-card', events: Object.freeze(['schedule', 'workflow_dispatch', 'workflow_run']), required: false }),
+  'keel-night.yml': Object.freeze({ artifact: writeName('artifact:keel-canvas-night'), artifactId: 'artifact:keel-canvas-night', events: Object.freeze(['schedule', 'workflow_dispatch']), required: true }),
+  'keel-morning.yml': Object.freeze({ artifact: writeName('artifact:keel-canvas-card'), artifactId: 'artifact:keel-canvas-card', events: Object.freeze(['schedule', 'workflow_dispatch', 'workflow_run']), required: false }),
+  'plates-night.yml': Object.freeze({ artifact: writeName('artifact:keel-canvas-night'), artifactId: 'artifact:keel-canvas-night', events: Object.freeze(['schedule', 'workflow_dispatch']), required: true }),
+  'plates-morning.yml': Object.freeze({ artifact: writeName('artifact:keel-canvas-card'), artifactId: 'artifact:keel-canvas-card', events: Object.freeze(['schedule', 'workflow_dispatch', 'workflow_run']), required: false }),
 });
 
 /** plates-morning.yml's card job and the one step of it that writes the canvas. */
@@ -126,16 +127,16 @@ export function chooseRecovery({ self, env = process.env, gh = 'gh' }) {
       if (self.endsWith('-morning.yml')) fail(`Another canvas writer (${run.writer} run ${run.id}) is still running; the plan card waits for the next pass.`, 3);
       fail('The latest canvas night is not completed; do not race or restore older state.');
     }
-    const name = `${w.artifact}-${run.run_attempt}`;
     const list = api(`repos/${repo}/actions/runs/${run.id}/artifacts?per_page=100`).artifacts;
     if (!Array.isArray(list)) fail('Cannot list the trusted night artifacts.');
-    const found = list.filter(a => a.name === name && !a.expired && a.workflow_run?.id === run.id && a.workflow_run?.head_sha === run.head_sha && a.size_in_bytes > 0 && a.size_in_bytes <= 64 * 1024 * 1024);
+    const { name, matches } = selectArtifacts(list, w.artifactId, `-${run.run_attempt}`);
+    const found = matches.filter(a => !a.expired && a.workflow_run?.id === run.id && a.workflow_run?.head_sha === run.head_sha && a.size_in_bytes > 0 && a.size_in_bytes <= 64 * 1024 * 1024);
     // A plates-morning attempt that left no card artifact is skipped only when its own job results show
     // its card step never ran (#152): a card published and then a failed upload also leaves none, and
     // restoring older state then would make a second card. Its run's earlier attempt may have run
     // the card (a rerun of a failed send after the card published, #151): that attempt takes its
     // place in time order, as after a never-ran receipt.
-    if (!w.required && found.length === 0 && !list.some(a => a.name === name)) {
+    if (!w.required && found.length === 0 && !list.some(a => artifactNames(w.artifactId, `-${run.run_attempt}`).includes(a.name))) {
       if (!cardNeverRan(run)) fail('A plates-morning attempt left no card journal, and its job results do not show that its card step never ran: it may have published the card. Manual recovery required; refusing older state.');
       if (run.run_attempt > 1) { queue.push({ ...api(`repos/${repo}/actions/runs/${run.id}/attempts/${run.run_attempt - 1}`), writer: run.writer }); queue.sort(newestFirst); }
       continue;

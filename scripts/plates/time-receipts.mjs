@@ -1,3 +1,4 @@
+import { identityEnvironmentValue } from './names-environment.mjs';
 // Versioned timing receipts. File plans are resolved before launch; observations
 // never invent the expected file set. No failure text or environment values here.
 import { glob, realpath } from 'node:fs/promises';
@@ -191,9 +192,10 @@ export function isReceiptPlan(value) {
 }
 /** @param {Record<string, string | undefined>} env @returns {Promise<ReceiptPlan | null>} */
 export async function readReceiptPlan(env = process.env) {
+  const raw=identityEnvironmentValue('variable:KEEL_SUITE_PLAN',env);
   try {
     /** @type {unknown} */
-    const value = JSON.parse(env.PLATES_SUITE_PLAN ?? 'null');
+    const value = JSON.parse(raw ?? 'null');
     return isReceiptPlan(value) ? value : null;
   } catch { return null; }
 }

@@ -1,3 +1,5 @@
+import { environmentValue } from './names.mjs';
+import {configuredLabelMatches} from './names.mjs';
 // Read-only GitHub planning source. Shipped with night: no CLI checkout needed.
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -30,7 +32,7 @@ export const MILESTONE_QUERY = `query($owner:String!,$name:String!) {
 }`;
 
 const gh = (args, env) => new Promise((resolve, reject) => {
-  execFile(env.PLATES_GH || 'gh', args, { env, encoding: 'utf8', timeout: 15000, maxBuffer: 16 * 1024 * 1024 },
+  execFile((environmentValue('variable:KEEL_GH', env) ?? 'gh'), args, { env, encoding: 'utf8', timeout: 15000, maxBuffer: 16 * 1024 * 1024 },
     (error, stdout, stderr) => {
       if (!error) return resolve(stdout);
       const message = String(stderr || error.message).trim();
@@ -89,8 +91,8 @@ export function projectMilestones(response, config) {
       const labels = connection(issue.labels, `issue ${issue.number} labels`, gaps);
       if (labels.some(l => typeof l?.name !== 'string')) throw new Error('malformed issue label');
       return { n: i + 1, number: issue.number, text: issue.title, url: issue.url, state: issue.state,
-        checked: issue.state === 'CLOSED', walk: issue.state === 'OPEN' && labels.some(l => l.name === ownerLabel),
-        ownershipKnown: issue.state === 'CLOSED' || labels.some(l => l.name === ownerLabel) || !issue.labels.pageInfo.hasNextPage };
+        checked: issue.state === 'CLOSED', walk: issue.state === 'OPEN' && labels.some(l => configuredLabelMatches(l,ownerLabel,'label:keel:owner')),
+        ownershipKnown: issue.state === 'CLOSED' || labels.some(l => configuredLabelMatches(l,ownerLabel,'label:keel:owner')) || !issue.labels.pageInfo.hasNextPage };
     });
     return { id: m.number, title: m.title, source: 'milestones', readOnly: true, url: m.url, link: m.url,
       sourceState: m.state, status: m.state === 'CLOSED' ? 'closed' : boxes.some(b => b.checked) ? 'partial' : 'planned',
