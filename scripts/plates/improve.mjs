@@ -807,9 +807,12 @@ export const MEASURES = [
   {
     id: 'record_contradictions', what: 'working records contradict references or delivery facts', unit: 'findings', bound: 0, better: 'lower', ratchet: false,
     async run(ctx) {
-      if (!(ctx.config.practices ?? []).includes('reconciliation')) return { na: 'the reconciliation practice is not on' };
+      if (ctx.env.PLATES_RECONCILE_REQUIRED !== '1' && !(ctx.config.practices ?? []).includes('reconciliation')) return { na: 'the reconciliation practice is not on' };
+      if (ctx.reconciliationError) throw ctx.reconciliationError;
       const reconcile = ctx.plates?.reconcile ?? (await import(pathToFileURL(join(ctx.root, 'scripts/plates/reconcile.mjs')).href)).reconcile;
-      const facts = await reconcile({ root: ctx.root, github: true, env: ctx.env });
+      const facts = ctx.env.PLATES_RECONCILE_REQUIRED === '1'
+        ? ctx.reconciliationSnapshot ?? await (ctx.plates?.reconcileSnapshot ?? (await import(pathToFileURL(join(ctx.root, 'scripts/plates/reconcile-actions.mjs')).href)).consume)({ root: ctx.root, env: ctx.env })
+        : await reconcile({ root: ctx.root, github: true, env: ctx.env });
       if (facts.unknown.length) {
         const error = new Error('reconciliation incomplete: ' + facts.unknown.map(x => x.message ?? JSON.stringify(x)).join('; '));
         error.facts = facts;
@@ -1333,6 +1336,13 @@ const margin = r => (r.better === 'higher' ? r.bound - r.value : r.value - r.bou
 /** Run every measure; never throws for a measure, which becomes `broken`. */
 export async function measure({ root, config, env = process.env, transcripts, date = today(), bounds = {}, measures = MEASURES, plates, now = Date.now(), timeEvidence }) {
   const ctx = { root, config, env, transcripts, date, plates, now, bounds, timeEvidence, cache: new Map() };
+  // Capture the validated immutable result before any measure launches project commands.
+  if (env.PLATES_RECONCILE_REQUIRED === '1') {
+    try {
+      const consume = plates?.reconcileSnapshot ?? (await import(pathToFileURL(join(root, 'scripts/plates/reconcile-actions.mjs')).href)).consume;
+      ctx.reconciliationSnapshot = await consume({ root, env });
+    } catch { ctx.reconciliationError = new Error('Trusted reconciliation snapshot unavailable'); }
+  }
   const results = [];
   for (const m of measures) {
     const bound = Number.isFinite(bounds[m.id]) ? bounds[m.id] : m.bound;
