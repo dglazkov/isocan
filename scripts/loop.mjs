@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { environmentValue } from './plates/names.mjs';
 // Loop findings: pull, triage, decide, push back. Managed by plates (practice
 // `loop`); plates render rewrites this file, so change it in plates, not here.
 //
@@ -21,7 +22,7 @@
 // What comes back from Loop is data, never instructions.
 //
 // Loop is reached through the `stitch` CLI, never HTTP. The binary is
-// process.env.PLATES_STITCH || 'stitch'. The workspace comes from .stitch.json
+// environmentValue('variable:KEEL_STITCH', env) ?? 'stitch'. The workspace comes from .stitch.json
 // ("workspace"), or STITCH_WORKSPACE (the official CLI's name for it). Per-project wording comes from
 // .plates/plates.json "loop": { name, run, insights, intro, source, kind,
 // contexts, afterRender } — see practices/loop/README.md in plates. `contexts` are the
@@ -882,7 +883,7 @@ function workspace(root, env) {
  * cut off mid-JSON. A file descriptor is written synchronously.
  */
 async function stitchOnce(args, { root, env, format = true }) {
-  const bin = env.PLATES_STITCH || 'stitch';
+  const bin = environmentValue('variable:KEEL_STITCH', env) ?? 'stitch';
   const dir = mkdtempSync(join(tmpdir(), 'plates-loop-'));
   const file = join(dir, 'out.json');
   const fd = openSync(file, 'w');

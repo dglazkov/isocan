@@ -1,7 +1,8 @@
+import { writeName, markerComments, markerSection } from './names.mjs';
 // Frozen long-file observations in the existing health proposal, never policy.
 import { createHash } from 'node:crypto';
 import { healthDirOf } from './lib.mjs';
-const begin = '<!-- keel:hygiene-proposal:v1 -->', end = '<!-- /keel:hygiene-proposal:v1 -->';
+const proposalId = 'marker:keel:hygiene-proposal:v1', dataId = 'marker:keel:hygiene-data';
 const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const same = (a,b) => JSON.stringify(a) === JSON.stringify(b);
 // Conservative proposal eligibility; the robot's own guards remain authoritative.
@@ -41,21 +42,25 @@ function checked(p) {
   if(!same(p,expected))throw new Error('hygiene metadata differs from derived observation/rubric');
   return expected;
 }
-export function formatHygieneProposal(value) {
-  const p=checked(value),json=JSON.stringify(p).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026');
-  return `${begin}\n**\`long_files\`** — ${p.candidate.title}\n\nObserved ${p.lines} lines; blob \`${p.blob}\`. Split points are top-level heuristics.\n\nDecision: ${p.lifecycle.state}. Acceptance requires a fresh source and approved robot policy and budget.\n\n<!-- keel:hygiene-data ${json} -->\n${end}`;
+export function formatHygieneProposal(value) { return renderHygieneProposal(checked(value)); }
+function renderHygieneProposal(p, wrapper = writeName(proposalId), data = writeName(dataId)) {
+  const begin = `<!-- ${wrapper} -->`, end = `<!-- /${wrapper} -->`;
+  const json=JSON.stringify(p).replaceAll('<','\\u003c').replaceAll('>','\\u003e').replaceAll('&','\\u0026');
+  return `${begin}\n**\`long_files\`** — ${p.candidate.title}\n\nObserved ${p.lines} lines; blob \`${p.blob}\`. Split points are top-level heuristics.\n\nDecision: ${p.lifecycle.state}. Acceptance requires a fresh source and approved robot policy and budget.\n\n<!-- ${data} ${json} -->\n${end}`;
 }
 export function parseHygieneProposal(text) {
   const fail=message=>({proposal:null,problems:[message]});
   if(typeof text!=='string'||text.length>4*1024*1024)return fail('health page exceeds read bound');
-  if(!text.includes('keel:hygiene-'))return {proposal:null,problems:[]};
-  if(text.split(begin).length!==2||text.split(end).length!==2||text.split('<!-- keel:hygiene-data ').length!==2)return fail('ambiguous hygiene proposal markers');
-  const start=text.indexOf(begin),finish=text.indexOf(end)+end.length,section=text.slice(start,finish);
-  const match=/<!-- keel:hygiene-data ([^\r\n]*) -->/.exec(section);
-  if(!match||match[1].length>24000)return fail('hygiene metadata missing or exceeds bound');
+  let selected;
+  try { selected = markerSection(text, proposalId); } catch (error) { return fail(error.message); }
+  if (!selected) return markerComments(text, dataId).name ? fail('hygiene metadata has no proposal section') : {proposal:null,problems:[]};
+  const { start, end: finish, text: section } = selected;
+  const { matches } = markerComments(text, dataId);
+  if (matches.length !== 1 || matches[0].start < start || matches[0].end > finish || matches[0].payload.length > 24000) return fail('hygiene metadata missing, ambiguous or exceeds bound');
+  const match = matches[0];
   try {
-    const proposal=checked(JSON.parse(match[1]));
-    if(formatHygieneProposal(proposal)!==section)return fail('hygiene prose and metadata disagree');
+    const proposal=checked(JSON.parse(match.payload));
+    if(renderHygieneProposal(proposal, selected.name, match.name)!==section)return fail('hygiene prose and metadata disagree');
     const headings=[...text.matchAll(/^## Proposal[ \t]*\r?\n/gm)];
     if(headings.length!==1||headings[0].index>start||/^## /m.test(text.slice(headings[0].index+headings[0][0].length,start)))return fail('hygiene metadata must belong to the Proposal section');
     return {proposal,problems:[],start,end:finish};

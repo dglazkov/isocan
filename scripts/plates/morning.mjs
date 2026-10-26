@@ -1,3 +1,7 @@
+import { environmentValue, labelNames, repositoryLabelSelection, readNames, writeName, nightBranches, finalNightBranch } from './names.mjs';
+import { planLocations } from './night-plan.mjs';
+import { retainedVerificationSummary, namesDigest, namesGeneratedFragment, namesEvidenceContext, namesObservation, namesGap, namesFragment, namesPlanProjection, namesSnapshot, namesLocalSource, namesRead, namesLocalWrite, namesPreimage } from './verification.mjs';
+import { rewriteHealthBody } from './time-proposals.mjs';
 import { status as productionStatus, productionLines } from './production.mjs';
 // The morning (plates practice `night`; managed: plates render rewrites it). When
 // the night is over, one message says what it did: the brief, in isocan's
@@ -51,7 +55,7 @@ export const TERMINAL = Object.freeze(['done', 'failed', 'skipped', 'left-alone'
 /** A plan with no readyBy is over at 17:00 UTC on its date: climb (10:17, up to four hours) and the robot have run. */
 export const READY_AT = Object.freeze({ hour: 17, minute: 0 });
 /** The branch the morning's finalization PR uses: in the night's own queue (keel-night/), so its drain merges it as data. */
-export const finalBranchOf = date => `keel-night/${date}-final`;
+export const finalBranchOf = finalNightBranch;
 export const ASSIGNEE = 'morning.assignee';
 const LOGIN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -95,15 +99,27 @@ const git = (root, args) => spawnSync('git', args, { cwd: root, encoding: 'utf8'
  * there. A remote that cannot be read throws: an unread branch is never
  * "no ticks".
  */
-function remoteFile(root, branch, path) {
+function remoteFile(root, branch, path, trace = null) {
+  if(trace) Object.assign(trace,{ref:`refs/heads/${branch}`,path,commitSha:null,blobSha:null,sha256:null,state:'unavailable',absence:null});
   const ls = git(root, ['ls-remote', '--exit-code', '--heads', 'origin', branch]);
-  if (ls.status === 2) return null;
+  if (ls.status === 2) { if(trace) Object.assign(trace,{state:'absent',absence:'ref'}); return null; }
   if (ls.status !== 0) throw new MorningError(`cannot read the branch ${branch} on origin: git ls-remote exited ${ls.status ?? ls.error?.code}`);
   const ref = `refs/remotes/origin/${branch}`;
   const f = git(root, ['fetch', '-q', '--no-tags', 'origin', `+refs/heads/${branch}:${ref}`]);
   if (f.status !== 0) throw new MorningError(`cannot fetch the branch ${branch} from origin: git fetch exited ${f.status ?? f.error?.code}`);
-  const s = git(root, ['show', `${ref}:${path}`]);
-  return s.status === 0 ? s.stdout : null;
+  const pinned=git(root,['rev-parse','--verify',`${ref}^{commit}`]);
+  if(pinned.status!==0 || !/^[a-f0-9]{40}$/.test(pinned.stdout.trim())) throw new MorningError('cannot pin the fetched branch');
+  const commit=pinned.stdout.trim();
+  if(trace) trace.commitSha=commit;
+  const tree = git(root, ['ls-tree', '-z', commit, '--', path]);
+  if (tree.status !== 0) throw new MorningError(`cannot inspect ${branch}:${path}: git ls-tree failed`);
+  if (!tree.stdout) { if(trace) Object.assign(trace,{state:'absent',absence:'path'}); return null; }
+  const blob=/^100(?:644|755) blob ([a-f0-9]{40})\t/.exec(tree.stdout)?.[1];
+  if(!blob) throw new MorningError('cannot read a nonregular plan or verify blob');
+  const s = git(root, ['cat-file', 'blob', blob]);
+  if (s.status !== 0) throw new MorningError(`cannot read ${branch}:${path}: git cat-file exited ${s.status ?? s.error?.code}`);
+  if(trace) Object.assign(trace,{state:'read',blobSha:blob,sha256:namesDigest(s.stdout)});
+  return s.stdout;
 }
 
 async function localFile(root, path) {
@@ -127,12 +143,17 @@ const hasOrigin = root => git(root, ['remote', 'get-url', 'origin']).status === 
  * the base came from, or null for the checkout: the night's health page is
  * read from there too (healthAround).
  */
-export async function finalPlan({ root, date }) {
+export async function finalPlan({ root, date, namesEvidence = false, consumer = 'morning-brief' }) {
+  const context=namesEvidenceContext(namesEvidence), observation=namesObservation(consumer==='morning-final'?'finalization':consumer==='board'?'board':'brief',context);
+  const traces=[];
   const places = [];
   const remote = hasOrigin(root);
   const record = recordOf(date);
-  const at = async (from, read, branch = null) => {
-    const text = await read();
+  const at = async (from, read, branch = null, path = null) => {
+    const trace={ref:branch?`refs/heads/${branch}`:'HEAD',path,commitSha:null,blobSha:null,sha256:null,state:'unavailable',absence:null};
+    if(observation) traces.push({from,trace});
+    const text = await read(observation?trace:null);
+    if(observation && !branch) Object.assign(trace,namesLocalSource(root,path,text));
     if (text === null) { places.push({ from, state: 'absent' }); return; }
     if (text.length > MAX_BYTES) { places.push({ from, state: `refused: larger than ${MAX_BYTES} bytes` }); return; }
     let plan;
@@ -143,19 +164,41 @@ export async function finalPlan({ root, date }) {
     else places.push({ from, state: 'read', plan, branch });
   };
   if (remote) {
-    await at(`${PLAN_BRANCH}:${REMOTE_PLAN}`, () => remoteFile(root, PLAN_BRANCH, REMOTE_PLAN), PLAN_BRANCH);
-    await at(`${finalBranchOf(date)}:${record}`, () => remoteFile(root, finalBranchOf(date), record), finalBranchOf(date));
-    await at(`keel-night/${date}:${record}`, () => remoteFile(root, `keel-night/${date}`, record), `keel-night/${date}`);
+    for (const {branch,path} of planLocations()) await at(`${branch}:${path}`, trace => remoteFile(root, branch, path, trace), branch, path);
+    for (const branch of nightBranches(date)) {
+      await at(`${branch}-final:${record}`, trace => remoteFile(root, `${branch}-final`, record, trace), `${branch}-final`, record);
+      await at(`${branch}:${record}`, trace => remoteFile(root, branch, record, trace), branch, record);
+    }
   }
-  await at(record, () => localFile(root, record));
-  await at(PLAN, () => localFile(root, PLAN));
+  await at(record, () => localFile(root, record), null, record);
+  await at(PLAN, () => localFile(root, PLAN), null, PLAN);
+  const refused = places.filter(p => p.state.startsWith('refused:'));
+  if (refused.length) throw new MorningError(refused.map(p => `${p.from} ${p.state}`).join('; '));
+  const plans = places.filter(p => p.plan && planLocations().some(l => l.branch === p.branch));
+  const winner = plans[0];
+  for (const skipped of plans.slice(1)) { skipped.state = `skipped: ${winner.branch} wins for ${date}`; delete skipped.plan; }
   const read = places.filter(p => p.plan);
   const sources = places.map(({ from, state }) => ({ from, state }));
-  if (!read.length) return { plan: null, from: null, branch: null, sources };
+  const finish=result=>{
+    if(!observation) return result;
+    const projection=namesFragment(observation,'plan',JSON.stringify(namesPlanProjection(result.plan)));
+    for(const {from,trace} of traces) {
+      const place=places.find(p=>p.from===from);
+      const contributed=!!place?.plan && result.plan?.items.some(item=>{
+        const candidates=read.map(p=>({p,item:p.plan.items.find(i=>i.id===item.id)})).filter(c=>c.item);
+        candidates.sort((a,b)=>rank(b.item.status)-rank(a.item.status));
+        return candidates[0]?.p===place;
+      });
+      namesRead(observation,context,trace,{consumer,sourceKind:'plan',selected:from===result.from,contributed,outputSection:'night-plan',projection,recordIds:place?.plan?.items.map(i=>i.id)??[]});
+    }
+    if(!remote) namesGap(observation,'plan-origin-unavailable');
+    return {...result,observation};
+  };
+  if (!read.length) return finish({ plan: null, from: null, branch: null, sources });
   const isRecord = p => p.from.endsWith(record);
   const base = read.find(isRecord) ?? read.find(p => p.from.startsWith(PLAN_BRANCH)) ?? read[0];
   const items = furthestItems(base.plan.items, read.map(p => p.plan));
-  return { plan: { ...base.plan, items }, from: base.from, branch: base.branch, sources };
+  return finish({ plan: { ...base.plan, items }, from: base.from, branch: base.branch, sources });
 }
 
 /**
@@ -190,7 +233,7 @@ export async function healthAround(root, config, date, { branch = null } = {}) {
   let names;
   try { names = (await readdir(join(root, dir))).filter(dated); }
   catch (e) { if (!['ENOENT', 'ENOTDIR'].includes(e.code)) throw new MorningError(`cannot read the health directory ${dir}: ${e.code ?? e.message}`); names = []; }
-  const ref = branch && branch !== PLAN_BRANCH ? `refs/remotes/origin/${branch}` : null;
+  const ref = branch && !readNames('git ref:keel-night-plan').includes(branch) ? `refs/remotes/origin/${branch}` : null;
   let there = [];
   if (ref) {
     const ls = git(root, ['ls-tree', '--name-only', ref, '--', `${dir}/`]);
@@ -204,10 +247,10 @@ export async function healthAround(root, config, date, { branch = null } = {}) {
     if (there.includes(name)) {
       const s = git(root, ['show', `${ref}:${file}`]);
       if (s.status !== 0) throw new MorningError(`cannot read ${file} on the branch ${branch}: git show exited ${s.status ?? s.error?.code}`);
-      return { date: name.slice(0, 10), file, rows: healthRows(s.stdout), ref: branch };
+      return { date: name.slice(0, 10), file, rows: healthRows(s.stdout), verification:retainedVerificationSummary(s.stdout), ref: branch };
     }
     const text = await localFile(root, file);
-    return text === null ? null : { date: name.slice(0, 10), file, rows: healthRows(text) };
+    return text === null ? null : { date: name.slice(0, 10), file, rows: healthRows(text), verification:retainedVerificationSummary(text) };
   };
   const day = `${date}.md`;
   return {
@@ -254,7 +297,7 @@ export function linksOf(config, { repo = null, page = null, ref = null } = {}) {
 // one brief, and only one. Read here, beside the brief, because delivery
 // requires night: the reader is always where the writer is.
 
-export const VERIFY_BRANCH = 'keel-verify';
+export const VERIFY_BRANCH = writeName('git ref:keel-verify');
 export const VERIFY_FILE = 'verify.json';
 export const VERIFY_KEEP = 30;
 /** A failure is kept this long whatever came after it: the brief that carries it is sent within a day and a half of it (PR #182 review). */
@@ -315,14 +358,24 @@ export function verifyResults(text) {
  * or { results: [], unread } when the branch cannot be read (never "no
  * failures"); { results: [] } when there is no branch yet.
  */
-export function readVerify(root) {
+export function readVerify(root, {namesEvidence=false,consumer='morning-brief'}={}) {
+  const context=namesEvidenceContext(namesEvidence), observation=namesObservation(consumer==='board'?'board':'brief',context);
+  const traces=readNames('git ref:keel-verify').map(branch=>({ref:`refs/heads/${branch}`,path:VERIFY_FILE,commitSha:null,blobSha:null,sha256:null,state:'unavailable',absence:null}));
+  let results=[], unread;
   try {
-    if (!hasOrigin(root)) return { results: [], unread: 'no origin to read keel-verify from' };
-    const text = remoteFile(root, VERIFY_BRANCH, VERIFY_FILE);
-    return { results: text === null ? [] : verifyResults(text) };
-  } catch (e) {
-    return { results: [], unread: one(e?.message ?? e) };
+    if (!hasOrigin(root)) throw new Error('no origin to read verification history');
+    for(const trace of traces) {
+      const text=remoteFile(root,trace.ref.slice('refs/heads/'.length),VERIFY_FILE,trace);
+      if(text!==null) results.push(...verifyResults(text));
+    }
+    results.sort((a,b)=>Date.parse(b.at)-Date.parse(a.at));
+  } catch(e) {results=[];unread=one(e?.message??e);}
+  if(observation) {
+    const projection=namesFragment(observation,'verify',JSON.stringify(results.map(({sha,ok,at})=>({sha,ok,at}))));
+    for(const trace of traces) namesRead(observation,context,trace,{consumer,sourceKind:'verify',contributed:!unread&&trace.state==='read',outputSection:'verify',projection});
+    if(unread) namesGap(observation,'verify-unavailable');
   }
+  return {results,...(unread?{unread}:{}),...(observation?{observation}:{})};
 }
 
 /** Production's origin, .plates/plates.json "delivery".site, or null when it names none (or none that parses). */
@@ -411,6 +464,7 @@ export function renderBrief({ plan, now = new Date(), health = {}, links = {}, v
     `# ${titleOf(plan.date)}`, '',
     `The night of ${plan.date} (UTC), ${by}: ${[count(done.length, 'done'), count(tried.length, 'tried'), count(failed.length, 'failed'), count(alone.length, 'left alone'), count(open.length, r.late ? `not finished by ${r.readyBy}` : 'still going')].join(', ')}.`, '',
     ...(linkLine ? [linkLine, ''] : []),
+    ...((health.after ?? health.before)?.verification ? ['## Retained verification', '', (health.after ?? health.before).verification, ''] : []),
     ...section('## Done', done, i => itemLine(i, health)),
     ...section('## Tried', tried, i => itemLine(i, health)),
     ...section('## Failed, and why', failed, i => itemLine(i, health, i.result?.note ? [] : ['no reason was recorded'])),
@@ -430,42 +484,66 @@ const dateOf = (date, now) => {
 };
 
 /** plates morning: the brief for the night `date` (default: the night that last started), written nowhere. */
-export async function brief({ root, date, env = process.env, now = new Date() }) {
+export async function brief(options) {
+  return briefWithConfig(options, await configOf(options.root));
+}
+async function briefWithConfig({ root, date, env = process.env, now = new Date(), namesEvidence = false }, config) {
   const night = dateOf(date, now);
-  const config = await configOf(root);
-  const found = await finalPlan({ root, date: night });
+  const found = await finalPlan({ root, date: night, namesEvidence });
   if (!found.plan) throw new MorningError(`no plan for the night of ${night}: ${found.sources.map(s => `${s.from} ${s.state}`).join('; ')}`);
   const health = await healthAround(root, config, night, { branch: found.branch });
   const tonight = health.before?.date === night ? health.before : null;
   const links = linksOf(config, { repo: repoOf(config, env), page: tonight?.file ?? null, ref: tonight?.ref ?? null });
   // Production's verifies (phase 81), with the delivery practice on: each failure of the day before the night.
-  let verify = null;
+  let verify = null, verifyObservation = null;
   if (Array.isArray(config.practices) && config.practices.includes('delivery')) {
-    const v = readVerify(root);
+    const v = readVerify(root,{namesEvidence});
+    verifyObservation=v.observation;
     verify = { failed: verifyFailuresFor(v.results, night, { production: productionOf(config) }), unread: v.unread ?? null };
   }
   const production = await productionStatus({root,config,now});
   const b = renderBrief({ plan: found.plan, now, health, links, verify, production });
-  return { data: { ok: true, date: night, title: titleOf(night), from: found.from, sources: found.sources, readiness: b.readiness, sections: b.sections, next: b.next, links, verify, production, markdown: b.markdown, plan: found.plan }, text: b.markdown.trimEnd() };
+  const observation=found.observation;
+  if(observation && verifyObservation) {
+    const projection=namesFragment(observation,'verify-displayed',JSON.stringify((verify?.failed??[]).map(({sha,ok,at})=>({sha,ok,at}))));
+    observation.reads.push(...verifyObservation.reads.map(r=>({...r,outputProjection:projection})));
+    observation.gaps.push(...verifyObservation.gaps);
+  }
+  return { data: { ok: true, date: night, title: titleOf(night), from: found.from, sources: found.sources, readiness: b.readiness, sections: b.sections, next: b.next, links, verify, production, markdown: b.markdown, plan: found.plan, ...(observation?{observation}:{}) }, text: b.markdown.trimEnd() };
 }
 
 // ---- sending -----------------------------------------------------------------
 
 function gh(root, env, args, what, { input, json = false, exitCode = 1 } = {}) {
-  const bin = env.PLATES_GH || 'gh';
+  const bin = (environmentValue('variable:KEEL_GH', env) ?? 'gh');
   const r = spawnSync(bin, args, { cwd: root, env, input, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, timeout: 120_000 });
   if (r.error) throw new MorningError(`cannot ${what} (${bin}): ${r.error.code === 'ENOENT' ? 'gh is not installed' : r.error.message}`, exitCode);
   if (r.status !== 0) throw new MorningError(`cannot ${what}: gh exited ${r.status}${(r.stderr || '').trim() ? `, ${r.stderr.trim().split('\n')[0]}` : ''}`, exitCode);
   if (!json) return r.stdout;
   try { return JSON.parse(r.stdout); } catch { throw new MorningError(`cannot ${what}: gh did not print JSON`, exitCode); }
 }
+// Preserve configured/Actions authority; only an implicit local target needs discovery.
+function sendRepository(root, config, env) {
+  const known = repoOf(config, env);
+  if (known) return known;
+  const found = gh(root, env, ['repo', 'view', '--json', 'nameWithOwner'], 'resolve checkout repository', { json: true, exitCode: 2 });
+  const repo = found?.nameWithOwner;
+  if (typeof repo !== 'string' || repo.trim() !== repo || !/^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\/[A-Za-z0-9_.-]+$/.test(repo) || ['.', '..'].includes(repo.split('/')[1])) {
+    throw new MorningError('cannot resolve checkout repository: gh returned no canonical owner/repository identity', 2);
+  }
+  return repo;
+}
 // The repository the brief links into is the one its issues go to (plates#149): repoOf, the run's own in Actions.
 const repoArgs = (config, env) => { const repo = repoOf(config, env); return repo ? ['--repo', repo] : []; };
 
 /** Every keel:morning issue, open or closed: [{ number, title, state }]. */
 export function morningIssues(root, config, env = process.env) {
-  const rows = gh(root, env, ['issue', 'list', ...repoArgs(config, env), '--label', LABEL, '--state', 'all', '--limit', '200', '--json', 'number,title,state'], `list the ${LABEL} issues`, { json: true, exitCode: 2 });
-  if (!Array.isArray(rows)) throw new MorningError(`cannot list the ${LABEL} issues: gh did not print a JSON list`);
+  const rows = [];
+  for (const label of labelNames('label:keel:morning')) {
+    const page = gh(root, env, ['issue', 'list', ...repoArgs(config, env), '--label', label, '--state', 'all', '--limit', '200', '--json', 'number,title,state'], `list the ${label} issues`, { json: true, exitCode: 2 });
+    if (!Array.isArray(page)) throw new MorningError(`cannot list the ${label} issues: gh did not print a JSON list`);
+    for (const issue of page) if (!rows.some(row => row.number === issue.number)) rows.push(issue);
+  }
   return rows.filter(i => Number.isSafeInteger(i?.number) && typeof i.title === 'string').sort((a, b) => a.number - b.number);
 }
 
@@ -482,25 +560,63 @@ export function assigneeOf(config) {
  * issues are closed. An issue with that title already (open or closed) is
  * this night's brief: nothing is sent again.
  */
-export async function send({ root, date, env = process.env, now = new Date() }) {
+export async function send({ root, date, env = process.env, now = new Date(), namesEvidence = false }) {
   const config = await configOf(root);
   const assignee = assigneeOf(config);
-  const b = await brief({ root, date, env, now });
+  // Pin the checkout identity once: later gh calls must not follow a changed default.
+  config.repo = sendRepository(root, config, env);
+  const b = await briefWithConfig({ root, date, env, now, namesEvidence }, config);
+  const observation=b.data.observation, context=namesEvidenceContext(namesEvidence);
+  const observeIssue=(number,intended,{before=null,outcome='confirmed'}={})=>{
+    if(!observation) return;
+    const fragment=namesGeneratedFragment(observation,`issue-${number}`,intended);
+    if(!fragment) return;
+    let after=null,id=null;
+    try {
+      const object=gh(root,env,['api',`repos/${config.repo}/issues/${number}`],'read back morning issue',{json:true});
+      if(!Number.isSafeInteger(object.id)||object.number!==number||typeof object.body!=='string'||!Array.isArray(object.labels)||object.labels.some(l=>!Number.isSafeInteger(l.id))) throw new Error();
+      id=object.id; after=namesSnapshot(object.body,{labelIds:object.labels.map(l=>l.id),providerUpdatedAt:object.updated_at??null});
+      if(after.sha256!==namesDigest(intended)) {outcome='attempted-unknown';namesGap(observation,'issue-readback-mismatch');}
+    } catch {outcome='attempted-unknown';namesGap(observation,'issue-readback-unavailable');}
+    observation.writes.push({producerId:'brief',role:'brief-issue',sequence:observation.writes.length+1,operationId:null,target:{kind:'issue',repositoryId:context.repositoryId,id,number,headSha:null},outcome,before:outcome==='no-change'?after:before,intended:{...fragment,sha256:namesDigest(intended)},after:outcome==='attempted-unknown'?null:after,observedAt:new Date().toISOString()});
+  };
   const title = titleOf(b.data.date);
   const issues = morningIssues(root, config, env);
   const same = issues.find(i => i.title === title);
-  if (same) return { data: { ok: true, sent: false, date: b.data.date, issue: same.number, why: 'already sent' }, text: `${title}: already sent as #${same.number}; nothing sent again.` };
-  gh(root, env, ['label', 'create', LABEL, ...repoArgs(config, env), '--force', '--color', 'FBCA04', '--description', 'plates: the morning brief'], `make the label ${LABEL}`);
-  const out = gh(root, env, ['issue', 'create', ...repoArgs(config, env), '--title', title, '--assignee', assignee, '--label', LABEL, '--body-file', '-'], `open the issue "${title}"`, { input: b.data.markdown });
+  if (same) {
+    observeIssue(same.number,b.data.markdown,{outcome:'no-change'});
+    return { data: { ok: true, sent: false, date: b.data.date, issue: same.number, why: 'already sent',...(observation?{observation}:{}) }, text: `${title}: already sent as #${same.number}; nothing sent again.` };
+  }
+  const selected = await repositoryLabelSelection({root,repo:repoOf(config,env),id:'label:keel:morning',github:async ({path})=>({status:200,data:gh(root,env,['api',path],'read current label facts',{json:true,exitCode:2})})});
+  const label=selected.name;
+  if(!selected.exists) gh(root,env,['label','create',label,...repoArgs(config,env),'--color','FBCA04','--description','plates: the morning brief'],`make the label ${label}`);
+  const out = gh(root, env, ['issue', 'create', ...repoArgs(config, env), '--title', title, '--assignee', assignee, '--label', label, '--body-file', '-'], `open the issue "${title}"`, { input: b.data.markdown });
   const url = out.trim().split('\n').at(-1);
   const number = Number(/\/issues\/(\d+)$/.exec(url)?.[1]);
   if (!Number.isSafeInteger(number)) throw new MorningError(`opened "${title}" but gh printed no issue URL (${one(url).slice(0, 200)})`, 1);
+  observeIssue(number,b.data.markdown,{before:namesSnapshot(null)});
   const closed = [];
   for (const prev of issues.filter(i => i.state === 'OPEN' && i.number !== number)) {
+    let commentsBefore=null;
+    if(observation) {try {commentsBefore=gh(root,env,['api',`repos/${config.repo}/issues/${prev.number}/comments?per_page=100`],'read prior comment identities',{json:true});if(!Array.isArray(commentsBefore)||commentsBefore.length>=100) commentsBefore=null;}catch{ /* gap retained after the existing operation */ }}
     gh(root, env, ['issue', 'close', String(prev.number), ...repoArgs(config, env), '--comment', `Superseded by #${number} (plates morning).`], `close the previous brief #${prev.number}`);
     closed.push(prev.number);
+    if(observation) {
+      const intended=`Superseded by #${number} (plates morning).`;
+      const fragment=namesFragment(observation,`close-${prev.number}`,intended,'managed-fragment');
+      let after=null,id=null;
+      try {
+        const issue=gh(root,env,['api',`repos/${config.repo}/issues/${prev.number}`],'read closure',{json:true});
+        const comments=gh(root,env,['api',`repos/${config.repo}/issues/${prev.number}/comments?per_page=100`],'read closure comment',{json:true});
+        if(!commentsBefore||!Array.isArray(comments)||comments.length>=100||issue.state!=='closed') throw new Error();
+        const matches=comments.filter(c=>c.body===intended&&!commentsBefore.some(old=>old.id===c.id));
+        if(matches.length!==1||!Number.isSafeInteger(matches[0].id)) throw new Error();
+        id=matches[0].id;after=namesSnapshot(intended,{providerUpdatedAt:matches[0].updated_at??null});
+      }catch{namesGap(observation,'closure-readback-unavailable');}
+      if(fragment) observation.writes.push({producerId:'brief',role:'closure-comment',sequence:observation.writes.length+1,operationId:null,target:{kind:'comment',repositoryId:context.repositoryId,id,number:prev.number,headSha:null},outcome:after?'confirmed':'attempted-unknown',before:commentsBefore?namesSnapshot(null):null,intended:{...fragment,names:[]},after,observedAt:new Date().toISOString()});
+    }
   }
-  return { data: { ok: true, sent: true, date: b.data.date, issue: number, url, assignee, closed, readiness: b.data.readiness }, text: `${title}: sent as ${url}, assigned to ${assignee}${closed.length ? `; closed ${closed.map(n => `#${n}`).join(', ')}` : ''}.` };
+  return { data: { ok: true, sent: true, date: b.data.date, issue: number, url, assignee, closed, readiness: b.data.readiness, ...(observation?{observation}:{}) }, text: `${title}: sent as ${url}, assigned to ${assignee}${closed.length ? `; closed ${closed.map(n => `#${n}`).join(', ')}` : ''}.` };
 }
 
 /**
@@ -509,8 +625,8 @@ export async function send({ root, date, env = process.env, now = new Date() }) 
  * whether it has a plan. Writes day, ready, sent, assignee and plan to
  * `githubOutput` when given.
  */
-export async function decide({ root, env = process.env, now = new Date(), githubOutput }) {
-  const night = lastNight(now);
+export async function decide({ root, date, env = process.env, now = new Date(), githubOutput }) {
+  const night = dateOf(date,now);
   const config = await configOf(root);
   const found = await finalPlan({ root, date: night });
   let assignee = 'set';
@@ -529,14 +645,44 @@ export async function decide({ root, env = process.env, now = new Date(), github
 
 // ---- the final record (plates#137) --------------------------------------------
 
-/** The page with its "## Tonight's plan" section replaced (to the next ## heading), or appended. Pure. */
+/** Replace only the generated plan's structure; all surrounding bytes are opaque. */
 export function withPlanSection(page, section) {
-  const lines = page.replace(/\n+$/, '').split('\n');
-  const at = lines.findIndex(l => l.trim() === '## Tonight\'s plan');
-  if (at < 0) return `${[...lines, '', ...section].join('\n').replace(/\n+$/, '')}\n`;
-  let end = lines.findIndex((l, i) => i > at && /^## /.test(l));
-  if (end < 0) end = lines.length;
-  return `${[...lines.slice(0, at), ...section, ...lines.slice(end)].join('\n').replace(/\n+$/, '')}\n`;
+  const lines = [...page.matchAll(/([^\n]*)(?:\n|$)/g)].map(match => ({
+    text: match[1].replace(/\r$/, ''), start: match.index,
+    end: match.index + match[1].replace(/\r$/, '').length,
+  }));
+  const headings = lines.map((line, index) => line.text.trim() === "## Tonight's plan" ? index : -1).filter(index => index >= 0);
+  if (headings.length > 1) throw new MorningError('ambiguous plan section boundaries; page preserved');
+  const eol = page.includes('\r\n') ? '\r\n' : '\n';
+  const replacement = section.join(eol).replace(/[\r\n]+$/, '');
+  if (!headings.length) {
+    const gap = !page || page.endsWith(eol + eol) ? '' : page.endsWith(eol) ? eol : eol + eol;
+    return page + gap + replacement + eol;
+  }
+  const at = headings[0];
+  let cursor = at + 1;
+  const skipBlank = () => { while (lines[cursor]?.text === '') cursor++; };
+  const refuse = () => { throw new MorningError('plan section structure unavailable; cannot establish owned boundaries, page preserved'); };
+  // Recognize the writer's two attribution forms, table and optional fields.
+  // Do not infer ownership from the absence of another Markdown heading.
+  const shapes = ['owner', 'default'].map(shapedBy => planSection({ shapedBy, items: [], willNotTouch: [], leftOpen: [] }));
+  for (const { branch } of planLocations()) shapes.push(shapes[0].map(line => line.replace('from the selected plan branch', `from the plan branch \`${branch}\``)));
+  skipBlank();
+  const intro = lines[cursor]?.text ?? '';
+  if (!shapes.some(shape => intro === shape[2] || (intro.startsWith(shape[2]) && /^ The record: `[^`\r\n]+`\.$/.test(intro.slice(shape[2].length))))) refuse();
+  cursor++; skipBlank();
+  if (lines[cursor]?.text !== shapes[0][4] || lines[cursor + 1]?.text !== shapes[0][5]) refuse();
+  cursor += 2;
+  const firstRow = cursor;
+  while (/^\|(?:(?:\\\||[^|\r\n])*\|){6}$/.test(lines[cursor]?.text ?? '')) cursor++;
+  if (cursor === firstRow) refuse();
+  let last = cursor - 1;
+  for (const field of ['Will not touch: ', 'Left open: ']) {
+    skipBlank();
+    if (lines[cursor]?.text.startsWith(field) && lines[cursor].text.endsWith('.')) last = cursor++;
+  }
+  // Keep the original separator, suffix and final newline(s), even at EOF.
+  return page.slice(0, lines[at].start) + replacement + page.slice(lines[last].end);
 }
 
 /**
@@ -546,23 +692,35 @@ export function withPlanSection(page, section) {
  * data-only PR in the night's queue. --pr-input writes that PR's body input
  * (scripts/plates/pr-body.mjs).
  */
-export async function finalize({ root, date, prInput }) {
+export async function finalize({ root, date, prInput, namesEvidence = false }) {
   const night = dateOf(date);
   const config = await configOf(root);
-  const found = await finalPlan({ root, date: night });
+  const found = await finalPlan({ root, date: night, namesEvidence, consumer:'morning-final' });
   if (!found.plan) throw new MorningError(`no plan for the night of ${night}: ${found.sources.map(s => `${s.from} ${s.state}`).join('; ')}`);
+  const observation=found.observation, context=namesEvidenceContext(namesEvidence);
+  const recordPath=recordOf(night), recordBefore=observation?await localFile(root,recordPath):null;
+  const recordPreimage=observation?namesPreimage(root,recordPath,recordBefore):null;
   const written = [];
   try { written.push(await writeRecord(root, found.plan)); } catch (e) { throw e instanceof NightPlanError ? new MorningError(e.message) : e; }
   let dir;
   try { dir = healthDirOf(config); } catch (e) { throw new MorningError(`the health directory: ${e.message}`); }
   const page = `${dir}/${night}.md`;
   const text = await localFile(root, page);
+  const healthPreimage=observation?namesPreimage(root,page,text):null;
   if (text !== null) {
-    try { written.push(await safeWrite(root, page, withPlanSection(text, planSection(found.plan, { record: recordOf(night) })))); }
+    try { written.push(await safeWrite(root, page, rewriteHealthBody(text, body => withPlanSection(body, planSection(found.plan, { record: recordOf(night) }))))); }
     catch (e) { throw e instanceof NightPlanError ? new MorningError(e.message) : e; }
   }
+  if(observation) {
+    const recordAfter=await localFile(root,recordPath);
+    namesLocalWrite(observation,context,{root,path:recordPath,role:'night-record',beforeSnapshot:recordPreimage,before:recordBefore,intended:`${JSON.stringify(found.plan,null,2)}\n`,after:recordAfter,fragmentText:JSON.stringify(namesPlanProjection(found.plan)),id:'record'});
+    if(text!==null) {
+      const intended=rewriteHealthBody(text,body=>withPlanSection(body,planSection(found.plan,{record:recordPath})));
+      namesLocalWrite(observation,context,{root,path:page,role:'health-plan-section',beforeSnapshot:healthPreimage,before:text,intended,after:await localFile(root,page),fragmentText:planSection(found.plan,{record:recordPath}),id:'health-plan'});
+    }
+  }
   if (prInput) await writeFile(prInput, `${JSON.stringify(finalPr(found.plan, page), null, 2)}\n`);
-  return { data: { ok: true, date: night, from: found.from, written, page: text === null ? null : page }, text: `The night of ${night}, as it finished: ${written.join(', ')}${text === null ? ` (no health page ${page} here)` : ''}.` };
+  return { data: { ok: true, date: night, from: found.from, written, page: text === null ? null : page, ...(observation?{observation}:{}) }, text: `The night of ${night}, as it finished: ${written.join(', ')}${text === null ? ` (no health page ${page} here)` : ''}.` };
 }
 
 /** The finalization PR's body input: each item's final status. */
@@ -582,10 +740,11 @@ const USAGE = 'usage: node scripts/plates/morning.mjs brief [--date d] | send [-
 
 export function parseArgs(args) {
   const [sub, ...rest] = args;
-  const valued = { brief: ['--date'], send: ['--date'], decide: ['--github-output'], finalize: ['--date', '--pr-input'] }[sub];
+  const valued = { brief: ['--date'], send: ['--date'], decide: ['--github-output','--date'], finalize: ['--date', '--pr-input'] }[sub];
   if (!valued) throw new MorningError(USAGE);
   const out = { sub };
   for (let i = 0; i < rest.length; i++) {
+    if(rest[i]==='--names-evidence') {out.namesEvidence=true;continue;}
     if (!valued.includes(rest[i])) throw new MorningError(`unexpected argument: ${rest[i]}; ${USAGE}`);
     if (rest[i + 1] === undefined || rest[i + 1].startsWith('--')) throw new MorningError(`${rest[i]} needs a value`);
     out[rest[i].slice(2).replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = rest[++i];
@@ -596,10 +755,11 @@ export function parseArgs(args) {
 
 export async function run(args, { root, env = process.env, now = new Date() } = {}) {
   const o = parseArgs(args);
-  if (o.sub === 'brief') return brief({ root, date: o.date, env, now });
-  if (o.sub === 'send') return send({ root, date: o.date, env, now });
-  if (o.sub === 'decide') return decide({ root, env, now, githubOutput: o.githubOutput });
-  return finalize({ root, date: o.date, prInput: o.prInput });
+  const namesEvidence=namesEvidenceContext(o.namesEvidence,env);
+  if (o.sub === 'brief') return brief({ root, date: o.date, env, now, namesEvidence });
+  if (o.sub === 'send') return send({ root, date: o.date, env, now, namesEvidence });
+  if (o.sub === 'decide') return decide({ root, date:o.date, env, now, githubOutput: o.githubOutput });
+  return finalize({ root, date: o.date, prInput: o.prInput, namesEvidence });
 }
 
 if (isMain(import.meta)) await main(args => run(args, { root: rootOf(import.meta) }));

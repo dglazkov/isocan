@@ -1,3 +1,4 @@
+import { environmentValue, writeName, markerComment, markerComments, markerLines, markerHeader, readNames, robotIssueOf } from './names.mjs';
 // Read-only delivery facts and a bounded GitHub REST transport; no runtime import.
 import { spawnSync } from 'node:child_process';
 export const robotRepo = value => typeof value === 'string' && /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(value) && !value.split('/').some(x => x === '.' || x === '..');
@@ -7,7 +8,7 @@ export async function robotGithub({ method = 'GET', path, body }) {
   if (!['GET', 'POST', 'PATCH'].includes(method) || !/^\/repos\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:$|[/?])/.test(path) || /[\r\n#]/.test(path)) throw new Error('invalid robot API request');
   const args = ['api', '--include', '--method', method, path];
   if (body !== undefined) args.push('--input', '-');
-  const r = spawnSync(process.env.PLATES_GH || 'gh', args, { input: body === undefined ? undefined : JSON.stringify(body), encoding: 'utf8', timeout: 30_000, maxBuffer: 16 * 1024 * 1024 });
+  const r = spawnSync((environmentValue('variable:KEEL_GH', process.env) ?? 'gh'), args, { input: body === undefined ? undefined : JSON.stringify(body), encoding: 'utf8', timeout: 30_000, maxBuffer: 16 * 1024 * 1024 });
   // Never propagate gh stderr, which may contain credentials or untrusted issue text.
   if (r.error) throw new Error('robot GitHub transport unavailable');
   const match = /^HTTP\/[\d.]+ (\d+)[^\n]*\r?\n([\s\S]*?)\r?\n\r?\n([\s\S]*)$/.exec(r.stdout ?? '');
@@ -51,48 +52,48 @@ export async function robotPages(github, path, limit = 5) {
   }
   throw new Error('GitHub coverage incomplete');
 }
-export function robotAssociation({ repo, issueNumber, instanceId, author, headSha, cursor }) {
+function association({ repo, issueNumber, instanceId, author, headSha, cursor }, name) {
   if (!robotRepo(repo) || !robotId(issueNumber) || !/^[A-Za-z0-9_-]{1,128}$/.test(instanceId) || !['claude', 'codex'].includes(author) || !robotSha(headSha) || !Number.isSafeInteger(cursor) || cursor < 0) throw new Error('invalid robot association');
-  return `<!-- keel:robot-delivery ${JSON.stringify({ version: 1, repo, issueNumber, instanceId, author, headSha, cursor })} -->`;
+  return `<!-- ${name} ${JSON.stringify({ version: 1, repo, issueNumber, instanceId, author, headSha, cursor })} -->`;
 }
+export function robotAssociation(value) { return association(value,writeName('marker:keel:robot-delivery')); }
 export function robotAssociationOf(body) {
-  const matches = [...String(body ?? '').matchAll(/^<!-- keel:robot-delivery (.+) -->$/gm)];
+  const matches = markerLines(body,'marker:keel:robot-delivery');
   if (matches.length !== 1) return null;
-  try { const value = JSON.parse(matches[0][1]); return value.version === 1 && robotAssociation(value) === matches[0][0] ? value : null; } catch { return null; }
+  try { const value = JSON.parse(matches[0].payload); return value.version === 1 && association(value,matches[0].name) === matches[0].raw ? value : null; } catch { return null; }
 }
 const hash64 = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
 function authorization(value) {
   if (!value || !robotId(value.receiptId) || !hash64(value.bodyHash) || !hash64(value.policyHash) || !/^[A-Za-z0-9-]+$/.test(value.writer ?? '')) throw new Error('invalid continuation authorization');
   return {receiptId:value.receiptId,bodyHash:value.bodyHash,writer:value.writer,policyHash:value.policyHash};
 }
-export function robotContinuation(value) {
+function continuation(value,name) {
   robotAssociation(value);
   if (!robotId(value.prNumber)) throw new Error('invalid continuation PR identity');
   const {repo,prNumber,issueNumber,instanceId,author,headSha,cursor}=value;
-  return `<!-- keel:robot-continuation ${JSON.stringify({version:1,repo,prNumber,issueNumber,instanceId,author,headSha,cursor,authorization:authorization(value.authorization)})} -->\nTrusted robot continuation.\n\n`;
+  return `<!-- ${name} ${JSON.stringify({version:1,repo,prNumber,issueNumber,instanceId,author,headSha,cursor,authorization:authorization(value.authorization)})} -->\nTrusted robot continuation.\n\n`;
 }
+export function robotContinuation(value) { return continuation(value,writeName('marker:keel:robot-continuation')); }
 export function robotContinuationOf(body) {
-  if (typeof body !== 'string' || body.length > 60000 || (body.match(/<!-- keel:robot-continuation/g) ?? []).length !== 1) return null;
-  const match = /^<!-- keel:robot-continuation (.+) -->\nTrusted robot continuation\.\n\n/.exec(body);
-  if (!match) return null;
-  try {
-    const value = JSON.parse(match[1]);
-    return value.version === 1 && body.startsWith(robotContinuation(value)) ? value : null;
-  } catch { return null; }
+  if(typeof body!=='string' || body.length>60000)return null;
+  const header=markerHeader(body,['marker:keel:robot-continuation']);
+  if(!header || !header.suffix.startsWith('Trusted robot continuation.\n\n'))return null;
+  const mark=header.marks['marker:keel:robot-continuation'];
+  try {const value=JSON.parse(mark.payload);return value.version===1 && continuation(value,mark.name)===mark.raw+'\nTrusted robot continuation.\n\n' ? value:null;}catch{return null;}
 }
 export async function robotDeliveryMetadata({repo,pr,github=robotGithub,headSha=pr?.head?.sha}) {
   const initial = robotAssociationOf(pr?.body), identity = robotRepositoryIdentity(repo, github);
-  if (!initial || !await identity.same(initial.repo) || !robotId(pr.number) || pr.html_url !== `https://github.com/${repo}/pull/${pr.number}` || pr.user?.type !== 'Bot' || pr.user.login !== 'github-actions[bot]' || pr.head?.repo?.full_name !== repo || pr.base?.repo?.full_name !== repo || pr.head?.ref !== `keel/robot-${initial.issueNumber}` || !robotSha(headSha)) throw new Error('continuation head changed or delivery provenance unavailable');
+  if (!initial || !await identity.same(initial.repo) || !robotId(pr.number) || pr.html_url !== `https://github.com/${repo}/pull/${pr.number}` || pr.user?.type !== 'Bot' || pr.user.login !== 'github-actions[bot]' || pr.head?.repo?.full_name !== repo || pr.base?.repo?.full_name !== repo || robotIssueOf(pr.head?.ref) !== initial.issueNumber || !robotSha(headSha)) throw new Error('continuation head changed or delivery provenance unavailable');
   if (initial.headSha === headSha) {
-    const marks = [...String(pr.body).matchAll(/^<!-- keel:robot-permission (.+) -->$/gm)];
+    const marks = markerLines(pr.body,'marker:keel:robot-permission');
     let permission = null;
-    if (marks.length === 1) { try { const parsed=JSON.parse(marks[0][1]); if (JSON.stringify(authorization(parsed)) === marks[0][1]) permission=parsed; } catch { /* status may still report legacy initial association */ } }
+    if (marks.length === 1) { try { const parsed=JSON.parse(marks[0].payload); if (JSON.stringify(authorization(parsed)) === marks[0].payload) permission=parsed; } catch { /* status may still report legacy initial association */ } }
     return {association:initial,authorization:permission,source:'body'};
   }
   const comments = await robotPages(github,`/repos/${repo}/issues/${pr.number}/comments`);
   const matches = [];
   for (const comment of comments) {
-    if (comment?.user?.type !== 'Bot' || comment.user.login !== 'github-actions[bot]' || !String(comment.body ?? '').includes('<!-- keel:robot-continuation')) continue;
+    if (comment?.user?.type !== 'Bot' || comment.user.login !== 'github-actions[bot]' || !markerComments(comment.body,'marker:keel:robot-continuation').name) continue;
     const value = robotContinuationOf(comment.body);
     if (!value || !robotId(comment.id) || comment.issue_url !== `https://api.github.com/repos/${repo}/issues/${pr.number}` || !await identity.same(value.repo) || value.prNumber !== pr.number || value.issueNumber !== initial.issueNumber || value.instanceId !== initial.instanceId || value.author !== initial.author || value.cursor < initial.cursor) throw new Error('malformed continuation delivery metadata');
     if (value.headSha === headSha) matches.push({value,id:comment.id});
@@ -107,7 +108,7 @@ export async function readRobotDelivery({ repo, issueNumber, instanceId, github 
   try {
     if (!robotRepo(repo) || !robotId(issueNumber) || !/^[A-Za-z0-9_-]{1,128}$/.test(instanceId)) throw new Error('invalid delivery identity');
     const identity = robotRepositoryIdentity(repo, github);
-    const rows = await robotPages(github, `/repos/${repo}/pulls?state=all&head=${encodeURIComponent(repo.split('/')[0] + ':keel/robot-' + issueNumber)}`);
+    const rows = await robotPulls(github, repo, issueNumber);
     const matches = [];
     for (const row of rows) {
       if (!robotId(row.number)) throw new Error('invalid pull request identity');
@@ -116,11 +117,24 @@ export async function readRobotDelivery({ repo, issueNumber, instanceId, github 
       if (!initial || initial.issueNumber !== issueNumber || initial.instanceId !== instanceId) continue;
       if (!await identity.same(initial.repo)) throw new Error('delivery repository identity mismatch');
       const {association:mark} = await robotDeliveryMetadata({repo,pr,github});
-      if (pr.number !== row.number || pr.head?.repo?.full_name !== repo || pr.base?.repo?.full_name !== repo || pr.head?.ref !== `keel/robot-${issueNumber}` || !robotSha(pr.head?.sha) || !robotSha(pr.base?.sha) || pr.html_url !== `https://github.com/${repo}/pull/${pr.number}` || mark.headSha !== pr.head.sha || pr.user?.type !== 'Bot' || pr.user?.login !== 'github-actions[bot]') throw new Error('pull request association does not match verified delivery');
+      if (pr.number !== row.number || pr.head?.repo?.full_name !== repo || pr.base?.repo?.full_name !== repo || robotIssueOf(pr.head?.ref) !== issueNumber || !robotSha(pr.head?.sha) || !robotSha(pr.base?.sha) || pr.html_url !== `https://github.com/${repo}/pull/${pr.number}` || mark.headSha !== pr.head.sha || pr.user?.type !== 'Bot' || pr.user?.login !== 'github-actions[bot]') throw new Error('pull request association does not match verified delivery');
       if (pr.merged_at && (!robotSha(pr.merge_commit_sha) || !Number.isFinite(Date.parse(pr.merged_at)))) throw new Error('merge facts unavailable');
       matches.push({ state: pr.merged_at ? 'merged' : pr.state === 'open' ? 'open' : pr.state === 'closed' ? 'closed' : 'unknown', pr: { number: pr.number, url: pr.html_url, headSha: pr.head.sha, baseSha: pr.base.sha, mergedAt: pr.merged_at ?? null, mergeSha: pr.merged_at ? pr.merge_commit_sha : null } });
     }
     if (matches.length > 1) return { ...result, state: 'ambiguous', reasons: ['multiple associated pull requests'] };
     return matches.length ? { ...result, ...matches[0] } : { ...result, state: 'missing' };
   } catch (error) { return { ...result, reasons: [error.message] }; }
+}
+
+/** Read both exact issue heads; duplicate API rows are one PR, never two attempts. */
+export async function robotPulls(github, repo, issueNumber) {
+  const rows = new Map();
+  for (const prefix of readNames('git ref:keel/robot-')) {
+    const found = await robotPages(github, `/repos/${repo}/pulls?state=all&head=${encodeURIComponent(repo.split('/')[0] + ':' + prefix + issueNumber)}`);
+    for (const row of found) {
+      if (!robotId(row.number)) throw new Error('invalid robot pull request identity');
+      rows.set(row.number, row);
+    }
+  }
+  return [...rows.values()];
 }

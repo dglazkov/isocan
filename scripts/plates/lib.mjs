@@ -1,11 +1,5 @@
-// The tool pin includes the old product name twice.
-if (process.env.KEEL_CANVAS_KEEL_VERSION !== undefined) process.env.PLATES_CANVAS_PLATES_VERSION ??= process.env.KEEL_CANVAS_KEEL_VERSION;
-
-// Accept established environment bindings during the product rename. Canonical names win.
-for (const [name, value] of Object.entries(process.env)) {
-  if (name.startsWith('KEEL_') && process.env[`PLATES_${name.slice(5)}`] === undefined) process.env[`PLATES_${name.slice(5)}`] = value;
-}
-
+export { environmentValue, markerHeader, markerLines, remoteLabelReceipt, repositoryLabelSelection, repositoryLabelWriter, labelNames, matchesLabel, markerComment, markerComments, markerAtStart, leadingMarkers } from './names.mjs';
+import { environmentValue, markerHeader, markerLines, remoteLabelReceipt, repositoryLabelSelection, repositoryLabelWriter, labelNames, matchesLabel, markerComment, markerComments, markerAtStart, leadingMarkers, writeName, branchSuffix, robotIssueOf } from './names.mjs';
 // What the night shift's scripts share (plates practice `night`; managed: plates
 // render rewrites it). Node built-ins only: this runs in the project's own
 // checkout, with no plates anywhere (plates docs/design.md §6, "Projects run on
@@ -1156,12 +1150,13 @@ export function climbLine(config, night) {
   const kept = night.tried.filter(a => a?.verdict === 'keep').length;
   if (kept) return `Climb: ${night.date} ${night.job}: kept ${kept}, ${Number.isInteger(night.pr) ? `PR #${night.pr}` : `no PR opened${night.gate ? '' : ' (the guard did not pass)'}`}.`;
   const none = night.job === 'hygiene' ? 'none proven steady' : `none beat the noise${Number.isFinite(night.margin) ? ` (margin ${Math.round(night.margin * 100)}%)` : ''}`;
-  const why = night.tried.length ? `${night.tried.length} tried, ${none}` : 'nothing was tried';
-  return `Climb: ${night.date} ${night.job}: kept nothing (${why}).`;
+  const why = night.tried.length ? `${night.tried.length} tried, ${none}` : 'no measured attempts recorded';
+  const unsettled = night.settlements?.length ? '; incomplete: unmeasured work recorded at settlement' : '';
+  return `Climb: ${night.date} ${night.job}: kept nothing (${why}${unsettled}).`;
 }
 
 /** A climb job's PR branch prefix. */
-export const CLIMB_PREFIX = 'keel-climb/';
+export const CLIMB_PREFIX = writeName('git ref:keel-climb/');
 /** Closed-unmerged PRs in a row that make a climb job propose its own retirement (phase 36). */
 export const RETIRE_AFTER = 3;
 
@@ -1180,7 +1175,7 @@ const closedUnmerged = p => (p.state === undefined ? !p.mergedAt : String(p.stat
 export function climbRetiring(prs, jobs) {
   const out = [];
   for (const job of jobs) {
-    const mine = prs.filter(p => typeof p?.headRefName === 'string' && p.headRefName.startsWith(`${CLIMB_PREFIX}${job}/`))
+    const mine = prs.filter(p => typeof p?.headRefName === 'string' && branchSuffix(p.headRefName, 'git ref:keel-climb/')?.startsWith(`${job}/`))
       .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))
       .slice(0, RETIRE_AFTER);
     if (mine.length === RETIRE_AFTER && mine.every(closedUnmerged)) out.push({ job, prs: mine.map(p => p.number) });
@@ -1504,9 +1499,9 @@ const firstLine = body => plainLines(body)[0]?.slice(0, 140) ?? '';
  * The line a cross-review summary carries when its findings are in the body
  * (GitHub refused them inline, cross-review.mjs summaryReview): how many.
  */
-export const fallbackFindingsMark = n => `<!-- keel:cross-review findings ${n} -->`;
+export const fallbackFindingsMark = n => markerComment('marker:keel:cross-review', `findings ${n}`);
 /** Whether a body is such a summary: the cross-review's marker first, and the line naming one finding or more. */
-const carriesFindings = body => /^\s*<!-- keel:cross-review -->/.test(String(body ?? '')) && /^<!-- keel:cross-review findings [1-9]\d* -->[ \t\r]*$/m.test(String(body));
+const carriesFindings = body => markerAtStart(body, 'marker:keel:cross-review') && markerComments(body, 'marker:keel:cross-review', mark => /^findings /.test(mark.payload)).matches.some(mark => /^findings [1-9]\d*$/.test(mark.payload) && (mark.start === 0 || String(body)[mark.start - 1] === '\n') && /^[ \t\r]*(?:\n|$)/.test(String(body).slice(mark.end)));
 /**
  * A bot's status board (a sticky comment it edits in place, opened by a hidden <!-- marker -->): listed, never owed an answer.
  * Not one: a cross-review summary carrying its findings, which are answered there and count as a finding on its push.
@@ -1522,8 +1517,8 @@ export async function prepareRobotReview(pr, github) {
   if (pr?.author?.__typename !== 'Bot' || !sameLogin(pr.author.login, 'github-actions[bot]') || pr.headRepository?.nameWithOwner !== current || pr.url !== `https://github.com/${current}/pull/${pr.number}`) return pr;
   const names = new Set([current]);
   for (const text of [pr.body, ...(pr.comments?.nodes ?? []).filter(c => c.author?.__typename === 'Bot' && sameLogin(c.author.login, 'github-actions[bot]')).map(c => c.body)]) {
-    for (const match of String(text ?? '').matchAll(/^<!-- keel:robot-(?:delivery|continuation) (.+) -->$/gm)) {
-      try { const repo = JSON.parse(match[1]).repo; if (typeof repo === 'string') names.add(repo); } catch { /* parser rejects malformed metadata */ }
+    for (const match of ['marker:keel:robot-delivery','marker:keel:robot-continuation'].flatMap(id=>markerLines(text,id))) {
+      try { const repo = JSON.parse(match.payload).repo; if (typeof repo === 'string') names.add(repo); } catch { /* parser rejects malformed metadata */ }
     }
   }
   if (names.size === 1) return pr;
@@ -1536,37 +1531,39 @@ export async function prepareRobotReview(pr, github) {
 function robotReview(pr, review) {
   const bot = author => author?.__typename === 'Bot' && sameLogin(author.login, 'github-actions[bot]');
   if (!bot(pr.author) || !bot(review.author)) return null;
-  if ((String(review.body ?? '').match(/<!-- keel:robot-review/g) ?? []).length !== 1) return null;
-  const envelope = /^<!-- keel:robot-review ((?:[a-f0-9]{40}|[a-f0-9]{64})) (claude|codex) -->\nReviewed by (claude|codex); built by (claude|codex)\.\n\n([\s\S]+)$/.exec(review.body ?? '');
+  const header=markerHeader(review.body,['marker:keel:robot-review']);
+  if(!header)return null;
+  const envelope = /^((?:[a-f0-9]{40}|[a-f0-9]{64})) (claude|codex)\nReviewed by (claude|codex); built by (claude|codex)\.\n\n([\s\S]+)$/.exec(header.marks['marker:keel:robot-review'].payload+'\n'+header.suffix);
   if (!envelope || envelope[2] !== envelope[3] || envelope[2] === envelope[4] || review.commit?.oid !== envelope[1]) return null;
-  const marks = [...String(pr.body ?? '').matchAll(/^<!-- keel:robot-delivery (.+) -->$/gm)];
+  const marks = markerLines(pr.body,'marker:keel:robot-delivery');
   if (marks.length !== 1) return null;
   let mark;
-  try { mark = JSON.parse(marks[0][1]); } catch { return null; }
+  try { mark = JSON.parse(marks[0].payload); } catch { return null; }
   const {version,repo,issueNumber,instanceId,author,headSha,cursor} = mark ?? {};
   const current = pr.repository?.nameWithOwner, verified = robotReviewRepositories.get(pr);
   const sameRepo = value => value === current || (verified?.current === current && verified.names.has(value));
-  if (version !== 1 || !/^[\w.-]+\/[\w.-]+$/.test(repo ?? '') || repo.split('/').some(part => part === '.' || part === '..') || !Number.isSafeInteger(pr.number) || pr.number < 1 || !Number.isSafeInteger(issueNumber) || issueNumber < 1 || !/^[A-Za-z0-9_-]{1,128}$/.test(instanceId ?? '') || !Number.isSafeInteger(cursor) || cursor < 0 || author !== envelope[4] || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(headSha ?? '') || pr.headRefName !== `keel/robot-${issueNumber}` || !sameRepo(repo) || pr.headRepository?.nameWithOwner !== current || pr.url !== `https://github.com/${current}/pull/${pr.number}`) return null;
-  if (marks[0][1] !== JSON.stringify({version,repo,issueNumber,instanceId,author,headSha,cursor})) return null;
+  if (version !== 1 || !/^[\w.-]+\/[\w.-]+$/.test(repo ?? '') || repo.split('/').some(part => part === '.' || part === '..') || !Number.isSafeInteger(pr.number) || pr.number < 1 || !Number.isSafeInteger(issueNumber) || issueNumber < 1 || !/^[A-Za-z0-9_-]{1,128}$/.test(instanceId ?? '') || !Number.isSafeInteger(cursor) || cursor < 0 || author !== envelope[4] || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(headSha ?? '') || robotIssueOf(pr.headRefName) !== issueNumber || !sameRepo(repo) || pr.headRepository?.nameWithOwner !== current || pr.url !== `https://github.com/${current}/pull/${pr.number}`) return null;
+  if (marks[0].payload !== JSON.stringify({version,repo,issueNumber,instanceId,author,headSha,cursor})) return null;
   if (headSha !== envelope[1]) {
     // A later review must have its own immutable bot receipt. A short window
     // cannot prove absence, uniqueness, or that nobody answered the finding.
     if (!Array.isArray(pr.comments?.nodes) || pr.comments.pageInfo?.hasNextPage !== false || pr.comments.pageInfo?.hasPreviousPage) throw new IncompleteRead('robot continuation comments are incomplete');
     const matches = new Set();
     for (const c of pr.comments.nodes) {
-      if (!bot(c.author) || !String(c.body ?? '').includes('<!-- keel:robot-continuation')) continue;
+      if (!bot(c.author) || !markerComments(c.body,'marker:keel:robot-continuation').name) continue;
       const fail = () => { throw new Error('robot continuation metadata is malformed or inconsistent'); };
-      if (!Number.isSafeInteger(c.databaseId) || c.databaseId < 1 || c.url !== `${pr.url}#issuecomment-${c.databaseId}` || (c.body.match(/<!-- keel:robot-continuation/g) ?? []).length !== 1) fail();
-      const m = /^<!-- keel:robot-continuation (.+) -->\nTrusted robot continuation\.\n\n/.exec(c.body);
-      if (!m) fail();
+      if (!Number.isSafeInteger(c.databaseId) || c.databaseId < 1 || c.url !== `${pr.url}#issuecomment-${c.databaseId}`) fail();
+      const continuation=markerHeader(c.body,['marker:keel:robot-continuation']);
+      if(!continuation || !continuation.suffix.startsWith('Trusted robot continuation.\n\n'))fail();
+      const m=continuation.marks['marker:keel:robot-continuation'];
       let v;
-      try { v = JSON.parse(m[1]); } catch { fail(); }
+      try { v = JSON.parse(m.payload); } catch { fail(); }
       const a = v?.authorization;
       if (!v || !a || !Number.isSafeInteger(a.receiptId) || a.receiptId < 1 || !/^[a-f0-9]{64}$/.test(a.bodyHash ?? '') || !/^[a-f0-9]{64}$/.test(a.policyHash ?? '') || !/^[A-Za-z0-9-]+$/.test(a.writer ?? '')) fail();
       if (!sameRepo(v.repo)) fail();
       const canonical = {version:1,repo:v.repo,prNumber:pr.number,issueNumber,instanceId,author,headSha:v.headSha,cursor:v.cursor,authorization:{receiptId:a.receiptId,bodyHash:a.bodyHash,writer:a.writer,policyHash:a.policyHash}};
-      if (JSON.stringify(canonical) !== m[1] || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(v.headSha ?? '') || !Number.isSafeInteger(v.cursor) || v.cursor < cursor) fail();
-      if (v.headSha === envelope[1]) matches.add(m[1]);
+      if (JSON.stringify(canonical) !== m.payload || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(v.headSha ?? '') || !Number.isSafeInteger(v.cursor) || v.cursor < cursor) fail();
+      if (v.headSha === envelope[1]) matches.add(m.payload);
     }
     if (matches.size !== 1) throw new Error('robot review exact-head continuation metadata is missing or conflicting');
   }
@@ -1658,12 +1655,16 @@ export const REVIEW_CLASSES = ['security', 'overwrite', 'approval', 'other'];
 /** The classes the merge rule fixes before a merge; `other` is tracked. */
 export const FIX_FIRST = ['security', 'overwrite', 'approval'];
 /** The hidden mark that records a finding's class, on a line of its own. */
-export const classMark = kind => `<!-- keel:class ${kind} -->`;
-const CLASS_LINE = /^<!-- keel:class (security|overwrite|approval|other) -->[ \t\r]*$/gm;
-/** The class a comment records: its last mark on a line of its own (a quoted line is not one), or null. */
-export const classOf = body => [...String(body ?? '').matchAll(CLASS_LINE)].at(-1)?.[1] ?? null;
-/** Whether a comment is only a class mark (it opens with one): it sorts a finding and answers nothing. */
-export const classOnly = body => /^\s*<!-- keel:class (?:security|overwrite|approval|other) -->[ \t\r]*(?:\n|$)/.test(String(body ?? ''));
+export const classMark = kind => markerComment('marker:keel:class', kind);
+const classLines = body => {
+  const text = String(body ?? '');
+  return markerComments(text, 'marker:keel:class').matches.filter(mark =>
+    REVIEW_CLASSES.includes(mark.payload) && (mark.start === 0 || text[mark.start - 1] === '\n') && /^[ \t\r]*(?:\n|$)/.test(text.slice(mark.end)));
+};
+/** Current namespace first, then its last standalone class mark. */
+export const classOf = body => classLines(body).at(-1)?.payload ?? null;
+/** Only the opening line classifies a comment as a class-only response. */
+export const classOnly = body => classLines(String(body ?? '').trimStart().split('\n')[0]).some(mark => mark.start === 0);
 
 /**
  * A PR's review rounds, from the read plates review already makes: the pushes
@@ -1789,7 +1790,7 @@ export function fromWindow(pr, reviewers = []) {
   // A missing connection stays missing, so reviewComments refuses it.
   const list = conn => conn && Array.isArray(conn.nodes) ? { pageInfo: { hasNextPage: !!conn.pageInfo?.hasPreviousPage }, nodes: conn.nodes } : conn;
   const comments = list(rest.comments), reviews = list(rest.reviews);
-  const bodies = (reviews?.nodes ?? []).some(r => String(r?.body ?? '').trim() && (String(r.body).startsWith('<!-- keel:robot-review ') || !(rest.author?.login && sameLogin(r?.author?.login, rest.author.login))));
+  const bodies = (reviews?.nodes ?? []).some(r => String(r?.body ?? '').trim() && (Boolean(markerHeader(r.body,['marker:keel:robot-review'])) || !(rest.author?.login && sameLogin(r?.author?.login, rest.author.login))));
   if (reviews?.pageInfo.hasNextPage) whole = false;
   if ((reviewers.length || bodies) && (!comments || comments.pageInfo.hasNextPage)) whole = false;
   return { pr: { ...rest, reviewThreads: { pageInfo: { hasNextPage: !!rest.reviewThreads?.pageInfo?.hasNextPage }, nodes: threads }, comments, reviews }, whole };
@@ -1992,7 +1993,7 @@ export const AGENT_GIT_DIR = '.plates/agent-git';
  * home) never resolves it, and a gate's child git never sees it in GIT_DIR.
  */
 export function agentGitArgs(cwd, env = process.env) {
-  const d = env?.PLATES_AGENT_GIT;
+  const d = environmentValue('variable:KEEL_AGENT_GIT', env ?? {});
   if (typeof d !== 'string' || !d || isAbsolute(d) || d.split(/[\\/]/).includes('..')) return [];
   const dir = resolve(cwd, d);
   return existsSync(join(dir, 'HEAD')) ? [`--git-dir=${dir}`, `--work-tree=${resolve(cwd)}`] : [];
@@ -2201,13 +2202,13 @@ export const pushTitle = sha => `plates review after ${String(sha ?? '').slice(0
  * line, text, url? }] }. `<` and `>` are escaped, so nothing in it ends the
  * comment. recordOf reads it back (null when absent or not a record). Pure.
  */
-export const recordText = record => `<!-- ${PUSH_LABEL} ${JSON.stringify(record).replace(/</g, '\\u003c').replace(/>/g, '\\u003e')} -->`;
+export const recordText = record => markerComment('marker:keel:review-after', JSON.stringify(record).replace(/</g, '\\u003c').replace(/>/g, '\\u003e'));
 export function recordOf(body) {
   // The body's first line alone (plates#65): the rest holds the agent's summary and findings, which could
   // spell a marker of their own; a pending issue starts with its own marker, so it is never a record.
-  const m = new RegExp(`^<!-- ${PUSH_LABEL} (\\{[^\\n]*\\}) -->(?:\\r?\\n|$)`).exec(String(body ?? ''));
-  if (!m) return null;
-  try { const r = JSON.parse(m[1]); return r && typeof r === 'object' && /^[0-9a-f]{40}$/.test(r.to ?? '') ? r : null; } catch { return null; }
+  const {matches} = leadingMarkers(body, 'marker:keel:review-after');
+  if (matches.length !== 1 || !/^\{[^\n]*\}$/.test(matches[0].payload)) return null;
+  try { const r = JSON.parse(matches[0].payload); return r && typeof r === 'object' && /^[0-9a-f]{40}$/.test(r.to ?? '') ? r : null; } catch { return null; }
 }
 /** An issue the cross-review workflow opened (its token's bot), never a person's: only those are the record. */
 export const byWorkflow = issue => /^(?:app\/)?github-actions(?:\[bot\])?$/.test(String(issue?.author?.login ?? ''));

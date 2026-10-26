@@ -1,3 +1,4 @@
+import { environmentValue, selectArtifacts } from './names.mjs';
 // One gate result per commit, shared by every pass (plates phase 79; plates
 // practice `night`; managed: plates render rewrites it). The design is plates's
 // docs/research/2026-10-16-delivery.md, items 7 and 9 of "What is common".
@@ -175,7 +176,7 @@ export function docsOnlyOf(config, { managed = [] } = {}) {
 // ---- git ---------------------------------------------------------------------------
 
 function git(root, env, args) {
-  const r = spawnSync(env.PLATES_GIT || 'git', args, { cwd: root, env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  const r = spawnSync(environmentValue('variable:KEEL_GIT', env) ?? 'git', args, { cwd: root, env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
   if (r.error) throw new GateError(`could not run git: ${r.error.message}`);
   return r;
 }
@@ -241,7 +242,7 @@ export function ledgerEvidence(records, { sha, tree, command }) {
 /** The artifact's bytes through gh (read-only), as the test history downloads them. */
 function ghDownload(repo, env) {
   return id => {
-    const r = spawnSync(env.PLATES_GH || 'gh', ['api', `repos/${repo}/actions/artifacts/${id}/zip`], { env, encoding: 'buffer', timeout: 60_000, maxBuffer: MAX_BYTES });
+    const r = spawnSync((environmentValue('variable:KEEL_GH', env) ?? 'gh'), ['api', `repos/${repo}/actions/artifacts/${id}/zip`], { env, encoding: 'buffer', timeout: 60_000, maxBuffer: MAX_BYTES });
     if (r.error || r.status !== 0) throw new Error('artifact download unavailable');
     return r.stdout;
   };
@@ -254,7 +255,7 @@ function ledgerVerifier({ repo, sha, tree, command, download }) {
     try {
       const listed = await client.pages(`repos/${repo}/actions/runs/${run.id}/artifacts`, 'artifacts', 'runPages');
       if (!client.coverage.complete) return { reason: "the CI run's artifact list is incomplete" };
-      const named = listed.filter(a => a?.name === LEDGER_ARTIFACT);
+      const { matches: named } = selectArtifacts(listed, 'artifact:keel-test-runs');
       if (named.length !== 1) return { reason: named.length ? `the CI run kept ${named.length} ${LEDGER_ARTIFACT} artifacts: which is the gate's cannot be told` : `the CI run kept no ${LEDGER_ARTIFACT} artifact (its workflow needs the test ledger's upload step)` };
       const a = named[0];
       if (a.expired !== false || a.workflow_run?.id !== run.id || a.workflow_run?.head_sha !== sha || !Number.isSafeInteger(a.size_in_bytes) || a.size_in_bytes < 1 || a.size_in_bytes > MAX_BYTES) return { reason: `the ${LEDGER_ARTIFACT} artifact is expired, oversized or not this run's` };

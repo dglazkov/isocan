@@ -12,7 +12,7 @@
 #   - A bot writes a pull request, never to main. The only push names
 #     refs/heads/keel-loop/<date>.
 #   - One open PR per queue, the newest; the night practice's
-#     scripts/plates/drain.mjs keel-loop/ enforces it, from this repo. Without
+#     scripts/plates/drain.mjs plates-loop/ enforces it, from this repo. Without
 #     the night practice there is no drain, and the run says so (a notice).
 #   - A merge is checked, not trusted. A GITHUB_TOKEN PR runs no CI, so this
 #     run's gate (render --check, then the project's own) is the check; the
@@ -42,7 +42,7 @@ on:
   workflow_dispatch: {}
 
 concurrency:
-  group: keel-loop
+  group: plates-loop
   cancel-in-progress: false
 
 permissions:
@@ -185,14 +185,14 @@ jobs:
             exit 0
           fi
           DAY=$(date -u +%Y-%m-%d)
-          BRANCH="keel-loop/$DAY"
+          BRANCH="plates-loop/$DAY"
           git config user.name "plates-loop"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -q -b "$BRANCH"
           # shellcheck disable=SC2086
           git add -- $PATHS
           git commit -q -m "Loop: findings pulled $DAY"
-          git push --force origin "HEAD:refs/heads/keel-loop/$DAY"
+          git push --force origin "HEAD:refs/heads/plates-loop/$DAY"
           if ! gh pr list --state open --head "$BRANCH" --json number --jq '.[0].number' | grep -q .; then
             cat > "$RUNNER_TEMP/loop-body.md" <<'PLATES_BODY'
           Stitch Loop insights, pulled as untriaged findings in docs/loop/ and generated views. No acceptance or architecture decision is made. An agent proposes; a person decides.
@@ -229,9 +229,9 @@ jobs:
             exit 0
           fi
           if [ "$GATE" = ok ]; then
-            node scripts/plates/drain.mjs keel-loop/ --yes --gate-passed
+            node scripts/plates/drain.mjs plates-loop/ --yes --gate-passed
           else
-            node scripts/plates/drain.mjs keel-loop/ --yes
+            node scripts/plates/drain.mjs plates-loop/ --yes
           fi
 
       - name: Validation verdict
