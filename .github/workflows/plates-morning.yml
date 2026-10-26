@@ -1,0 +1,784 @@
+# The morning (plates practice `night`; managed: plates render rewrites it).
+#
+# When the night is over, one message says what it did (plates phase 77; the
+# design is docs/research/2026-10-14-nightwatch.md, "The plan is a live card,
+# and the morning sends a message"). The night is over when every build item
+# in its plan is terminal (done, failed, skipped or left alone), or at the
+# plan's readyBy (default 17:00 UTC), when what is unfinished is "not finished
+# by" that time, never done. Then:
+#
+#   - Send, once a night: the brief as one issue "Good morning, <date>",
+#     assigned to .plates/plates.json "morning" "assignee" and labelled
+#     keel:morning; GitHub emails the assignee. The previous open brief is
+#     closed. No assignee is a notice, not red: nothing is sent until the
+#     owner names one.
+#   - Finalize (plates#137), on every run once the night is over, sent or not:
+#     the plan's final outcomes into the night's archive,
+#     docs/night/<date>.json and the health page's "Tonight's plan", as one
+#     data-only PR in the night's queue (keel-night/<date>-final), which the
+#     night's drain merges with the series. So a finalization that failed
+#     after the send, or a build that finished after a brief sent at
+#     readyBy, still reaches the archive; a run with nothing new commits
+#     and pushes nothing, but still opens the PR for its own branch when an
+#     earlier run pushed it and failed to open one.
+#
+#   - The card (plates phase 78), on every run, over or not: tonight's plan as
+#     it stands, republished as the canvas's live card night-plan, when the
+#     canvas is set for nightly publishing and lists night-plan live (else a
+#     notice, nothing more). It is plates canvas night's provisioning, exactly:
+#     the owner-pinned plates and isocan the project's setup installs, the
+#     dedicated isocan home, and the one canvas journal the night and the
+#     card share (scripts/plates/canvas-recovery.mjs).
+#
+# decide, finalize and send are scripts/plates/morning.mjs, a managed file of
+# this practice: no model, no install, no secret beyond the job's own token.
+# Each job holds only what it needs: decide reads; finalize writes contents
+# and a PR; only send writes issues; the card job reads (contents, and the
+# actions artifacts its journal lives in) and writes only the canvas,
+# through the isocan identity the owner provisioned. A failed send,
+# finalization or card turns the run red, and GitHub emails: a guard fires
+# into a room someone is in.
+#
+# Started by each pass finishing (plates-night, plates-climb, plates-robot; render
+# names plates-climb and plates-robot only where the climb practice installs
+# them), and once a day at 17:07 UTC, just after
+# the default readyBy, to catch "readyBy has passed" when no pass finishes
+# after it. A plan whose readyBy is another time is caught by the next pass
+# to finish or the next daily run, whichever comes first; one whose readyBy
+# falls after the next night starts (07:23 UTC) and never finishes gets no
+# brief, since decide then reads the new night. A run that finds the night
+# not over does nothing more; one that finds the brief sent only finalizes.
+name: plates-morning
+
+on:
+  workflow_run:
+    workflows: [plates-night]
+    types: [completed]
+  schedule:
+    # 17:07 UTC, just after the default readyBy (17:00 UTC).
+    - cron: "7 17 * * *"
+  workflow_dispatch:
+    inputs:
+      names_evidence:
+        description: Retain bounded name-transition evidence for this exact attempt
+        type: boolean
+        default: false
+      names_source_sha:
+        description: Exact reviewed dalmaer/plates observer source SHA (required for evidence)
+        type: string
+        default: ""
+      night_run_id:
+        description: Exact originating night Actions run ID (required for evidence)
+        type: string
+        default: ""
+      night_run_attempt:
+        description: Exact originating night attempt (required for evidence)
+        type: string
+        default: ""
+
+concurrency:
+  group: plates-morning
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  # Read the exact originating attempt before any morning writer can start.
+  names-origin:
+    if: github.event_name == 'workflow_dispatch' && inputs.names_evidence == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+    outputs:
+      day: ${{ steps.origin.outputs.day }}
+      branch: ${{ steps.origin.outputs.branch }}
+      origin: ${{ steps.origin.outputs.origin }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - name: Validate observation source
+        if: github.event_name == 'workflow_dispatch' && inputs.names_evidence == true
+        env:
+          NAMES_SOURCE_SHA: ${{ inputs.names_source_sha }}
+        run: |
+          node --input-type=module -e '
+            import {lstat,realpath} from "node:fs/promises";
+            import {join} from "node:path";
+            if(!/^[a-f0-9]{40}$/.test(process.env.NAMES_SOURCE_SHA||""))throw Error("Exact names_source_sha required");
+            for(const [base,leaf] of [[process.env.GITHUB_WORKSPACE,".plates-names-runtime"],[process.env.RUNNER_TEMP,"plates-names-runtime"]]){
+              if(!base||/[\r\n]/.test(base)||(await realpath(base))!==base)throw Error("Unsafe observation root");
+              try{await lstat(join(base,leaf));throw Error("Observation runtime path already exists");}catch(e){if(e.code!=="ENOENT")throw e;}
+            }
+          '
+      - name: Check out the exact observation source
+        if: github.event_name == 'workflow_dispatch' && inputs.names_evidence == true
+        uses: actions/checkout@v7
+        with:
+          repository: dalmaer/plates
+          ref: ${{ inputs.names_source_sha }}
+          path: .plates-names-runtime
+          fetch-depth: 1
+          persist-credentials: false
+          submodules: false
+          lfs: false
+      - name: Prepare observation runtime
+        if: github.event_name == 'workflow_dispatch' && inputs.names_evidence == true
+        env:
+          NAMES_SOURCE_SHA: ${{ inputs.names_source_sha }}
+        run: |
+          node --input-type=module -e '
+            import {lstat,realpath,rename,writeFile,appendFile} from "node:fs/promises";
+            import {execFileSync} from "node:child_process";
+            import {join} from "node:path";
+            import {pathToFileURL} from "node:url";
+            const source=join(process.env.GITHUB_WORKSPACE,".plates-names-runtime"),dest=join(process.env.RUNNER_TEMP,"plates-names-runtime"),sha=process.env.NAMES_SOURCE_SHA;
+            if(!/^[a-f0-9]{40}$/.test(sha||""))throw Error("Exact source required");
+            const verify=async root=>{
+              if((await lstat(root)).isSymbolicLink()||await realpath(root)!==root)throw Error("Unsafe runtime path");
+              const git=args=>execFileSync("git",["-C",root,...args],{encoding:"utf8",timeout:15000}).trim();
+              if(await realpath(git(["rev-parse","--show-toplevel"]))!==root||git(["rev-parse","HEAD"])!==sha)throw Error("Runtime source mismatch");
+            };
+            await verify(source);
+            try{await lstat(dest);throw Error("Runtime destination exists");}catch(e){if(e.code!=="ENOENT")throw e;}
+            await rename(source,dest);await verify(dest);
+            const {NAMES_OBSERVATION_LOADER}=await import(pathToFileURL(join(dest,"lib/names-verify.mjs")));
+            await writeFile(join(process.env.RUNNER_TEMP,"names-loader.mjs"),NAMES_OBSERVATION_LOADER,{flag:"wx",mode:0o600});
+            await appendFile(process.env.GITHUB_ENV,"PLATES_NAMES_RUNTIME_ROOT="+dest+"\n");
+          '
+      - name: Resolve the exact originating night
+        id: origin
+        env:
+          NIGHT_RUN_ID: ${{ inputs.night_run_id }}
+          NIGHT_RUN_ATTEMPT: ${{ inputs.night_run_attempt }}
+          NAMES_SOURCE_SHA: ${{ inputs.names_source_sha }}
+        run: |
+          node --input-type=module -e '
+            import {appendFile} from "node:fs/promises";
+            import {pathToFileURL} from "node:url";
+            const runtime=process.env.PLATES_NAMES_RUNTIME_ROOT;
+            const {readObservationArtifact,verifyObservationScope}=await import(pathToFileURL(runtime+"/lib/names-verify.mjs"));
+            const {namesGithub,namesRead}=await import(pathToFileURL(runtime+"/lib/names-actions.mjs"));
+            const positive=value=>/^[1-9][0-9]*$/.test(value||"")&&Number.isSafeInteger(Number(value));
+            if(!positive(process.env.NIGHT_RUN_ID)||!positive(process.env.NIGHT_RUN_ATTEMPT))throw Error("Exact night run and attempt required");
+            const github=namesGithub(process.env),repo=process.env.GITHUB_REPOSITORY,id=Number(process.env.NIGHT_RUN_ID),attempt=Number(process.env.NIGHT_RUN_ATTEMPT),repositoryId=Number(process.env.GITHUB_REPOSITORY_ID);
+            const run=await namesRead(github,`/repos/${repo}/actions/runs/${id}/attempts/${attempt}`);
+            if(run.id!==id||run.run_attempt!==attempt||run.repository?.id!==repositoryId||run.path!==".github/workflows/plates-night.yml"||run.event!=="workflow_dispatch"||run.status!=="completed")throw Error("Night attempt mismatch");
+            const loaded=await readObservationArtifact(github,repo,repositoryId,run,"night");
+            await verifyObservationScope(loaded,github,repo);
+            const identity=loaded.observation.execution.codeIdentity,a=loaded.observation.association;
+            if(identity?.repository.fullName!=="dalmaer/plates"||identity.commitSha!==process.env.NAMES_SOURCE_SHA)throw Error("Night observer source mismatch");
+            if(a?.kind!=="night"||!/^\d{4}-\d\d-\d\d$/.test(a.date)||!a.branch||/[\r\n]/.test(a.branch))throw Error("Night association unavailable");
+            const origin={repositoryId,runId:id,runAttempt:attempt,headSha:run.head_sha,artifactId:loaded.artifact.id,artifactDigest:loaded.artifact.digest};
+            await appendFile(process.env.GITHUB_OUTPUT,"day="+a.date+"\nbranch="+a.branch+"\norigin="+Buffer.from(JSON.stringify(origin)).toString("base64")+"\n");
+          '
+
+  # Read-only: is the night that last started over, and was its brief sent?
+  decide:
+    needs: names-origin
+    if: ${{ !cancelled() && (github.event_name != 'workflow_dispatch' || inputs.names_evidence != true || needs.names-origin.result == 'success') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      NAMES_EVIDENCE: ${{ github.event_name == 'workflow_dispatch' && inputs.names_evidence == true }}
+    outputs:
+      branch: ${{ needs.names-origin.outputs.branch }}
+      day: ${{ steps.decide.outputs.day }}
+      ready: ${{ steps.decide.outputs.ready }}
+      sent: ${{ steps.decide.outputs.sent }}
+      assignee: ${{ steps.decide.outputs.assignee }}
+      plan: ${{ steps.decide.outputs.plan }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - name: Is the night over?
+        id: decide
+        env:
+          ORIGIN_DAY: ${{ needs.names-origin.outputs.day }}
+        run: |
+          DATE_ARGS=()
+          if [ "$NAMES_EVIDENCE" = true ]; then DATE_ARGS=(--date "$ORIGIN_DAY"); fi
+          node scripts/plates/morning.mjs decide "${DATE_ARGS[@]}" --github-output "$GITHUB_OUTPUT"
+          if grep -q '^assignee=unset$' "$GITHUB_OUTPUT"; then
+            echo "::notice::The morning brief is not sent: set \"morning\": { \"assignee\": \"<login>\" } in .plates/plates.json."
+          fi
+
+  # The night's final outcomes, as one data-only PR in its queue (plates#137).
+  finalize:
+    needs: decide
+    if: needs.decide.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      NAMES_EVIDENCE: ${{ github.event_name == 'workflow_dispatch' && inputs.names_evidence == true }}
+      DAY: ${{ needs.decide.outputs.day }}
+      BASE: ${{ github.event.repository.default_branch }}
+    outputs:
+      finalization: ${{ steps.names_transfer.outputs.finalization }}
+      final_pr: ${{ steps.names_transfer.outputs.final_pr }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - name: Validate observation source
+        if: github.event_name == 'workflow_dispatch' && inputs.names_evidence == true
+        env:
+          NAMES_SOURCE_SHA: ${{ inputs.names_source_sha }}
+        run: |
+          node --input-type=module -e '
+            import {lstat,realpath} from "node:fs/promises";
+            import {join} from "node:path";
+            if(!/^[a-f0-9]{40}$/.test(process.env.NAMES_SOURCE_SHA||""))throw Error("Exact names_source_sha required");
+            for(const [base,leaf] of [[process.env.GITHUB_WORKSPACE,".plates-names-runtime"],[process.env.RUNNER_TEMP,"plates-names-runtime"]]){
+              if(!base||/[\r\n]/.test(base)||(await realpath(base))!==base)throw Error("Unsafe observation root");
+              try{await lstat(join(base,leaf));throw Error("Observation runtime path already exists");}catch(e){if(e.code!=="ENOENT")throw e;}
+            }
+          '
+      - name: Check out the exact observation source
+        if: github.event_name == 'workflow_dispatch' && inputs.names_evidence == true
+        uses: actions/checkout@v7
+        with:
+          repository: dalmaer/plates
+          ref: ${{ inputs.names_source_sha }}
+          path: .plates-names-runtime
+          fetch-depth: 1
+          persist-credentials: false
+          submodules: false
+          lfs: false
+      - name: Prepare observation runtime
+        if: github.event_name == 'workflow_dispatch' && inputs.names_evidence == true
+        env:
+          NAMES_SOURCE_SHA: ${{ inputs.names_source_sha }}
+        run: |
+          node --input-type=module -e '
+            import {lstat,realpath,rename,writeFile,appendFile} from "node:fs/promises";
+            import {execFileSync} from "node:child_process";
+            import {join} from "node:path";
+            import {pathToFileURL} from "node:url";
+            const source=join(process.env.GITHUB_WORKSPACE,".plates-names-runtime"),dest=join(process.env.RUNNER_TEMP,"plates-names-runtime"),sha=process.env.NAMES_SOURCE_SHA;
+            if(!/^[a-f0-9]{40}$/.test(sha||""))throw Error("Exact source required");
+            const verify=async root=>{
+              if((await lstat(root)).isSymbolicLink()||await realpath(root)!==root)throw Error("Unsafe runtime path");
+              const git=args=>execFileSync("git",["-C",root,...args],{encoding:"utf8",timeout:15000}).trim();
+              if(await realpath(git(["rev-parse","--show-toplevel"]))!==root||git(["rev-parse","HEAD"])!==sha)throw Error("Runtime source mismatch");
+            };
+            await verify(source);
+            try{await lstat(dest);throw Error("Runtime destination exists");}catch(e){if(e.code!=="ENOENT")throw e;}
+            await rename(source,dest);await verify(dest);
+            const {NAMES_OBSERVATION_LOADER}=await import(pathToFileURL(join(dest,"lib/names-verify.mjs")));
+            await writeFile(join(process.env.RUNNER_TEMP,"names-loader.mjs"),NAMES_OBSERVATION_LOADER,{flag:"wx",mode:0o600});
+            await appendFile(process.env.GITHUB_ENV,"PLATES_NAMES_RUNTIME_ROOT="+dest+"\n");
+          '
+      # The branch it starts from: its own (a rerun the same night changes
+      # only what moved), else the night's PR branch while the default branch
+      # lacks the night's page (the night's PR is still open), else the
+      # default branch. The push names its own branch.
+      - name: Open the night's final pull request
+        id: finalize
+        env:
+          ORIGIN_BRANCH: ${{ needs.decide.outputs.branch }}
+        run: |
+          case "$DAY" in [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;; *) echo "::error::No night was decided (day: $DAY)."; exit 1 ;; esac
+          if [ "$NAMES_EVIDENCE" = true ]; then
+            NIGHT="$ORIGIN_BRANCH"
+          else
+            NIGHT=$(node --input-type=module -e '
+              import {resolveNightBranch} from "./scripts/plates/verification.mjs";
+              const r=await resolveNightBranch({root:process.cwd(),date:process.env.DAY,includeFinal:true});
+              process.stdout.write(r.branch);
+            ')
+          fi
+          BRANCH="$NIGHT-final"
+          HEALTH=$(node --input-type=module -e '
+            import { readFileSync } from "node:fs";
+            import { healthDirIn } from "./scripts/plates/lib.mjs";
+            console.log(healthDirIn(".", JSON.parse(readFileSync(".plates/plates.json", "utf8"))));
+          ')
+          START=HEAD
+          OWN=0
+          if git ls-remote --exit-code --heads origin "$BRANCH" > /dev/null; then
+            git fetch -q --no-tags origin "+refs/heads/$BRANCH:refs/remotes/origin/$BRANCH"
+            START="refs/remotes/origin/$BRANCH"
+            OWN=1
+          elif [ ! -f "$HEALTH/$DAY.md" ] && git ls-remote --exit-code --heads origin "$NIGHT" > /dev/null; then
+            git fetch -q --no-tags origin "+refs/heads/$NIGHT:refs/remotes/origin/$NIGHT"
+            START="refs/remotes/origin/$NIGHT"
+          fi
+          git checkout -q -B "$BRANCH" "$START"
+          if [ "$NAMES_EVIDENCE" = true ]; then
+            PLATES_NAMES_IMPORTS_FILE="$RUNNER_TEMP/names-imports-finalization.json" PLATES_NAMES_EVIDENCE_REPOSITORY_ID="$GITHUB_REPOSITORY_ID" \
+            node --import "$RUNNER_TEMP/names-loader.mjs" scripts/plates/morning.mjs finalize --date "$DAY" --pr-input "$RUNNER_TEMP/pr.json" --names-evidence --json > "$RUNNER_TEMP/names-finalization.json"
+          else
+            node scripts/plates/morning.mjs finalize --date "$DAY" --pr-input "$RUNNER_TEMP/pr.json"
+          fi
+          export GIT_LITERAL_PATHSPECS=1
+          PATHS=("docs/night/$DAY.json")
+          if [ -f "$HEALTH/$DAY.md" ]; then PATHS+=("$HEALTH/$DAY.md"); fi
+          if [ -z "$(git status --porcelain -- "${PATHS[@]}")" ]; then
+            # Nothing to commit or push. Its own branch, pushed by an earlier
+            # run whose PR create failed, still needs its PR (plates#149) while
+            # it holds what the default branch lacks.
+            if [ "$OWN" != 1 ] || [ -z "$(git diff --name-only "refs/remotes/origin/$BASE" HEAD -- "${PATHS[@]}")" ]; then
+              echo "Nothing changed: the night's archive already holds its final outcomes."
+              if [ "$NAMES_EVIDENCE" = true ]; then
+                NAMES_BRANCH="$BRANCH" PLATES_NAMES_IMPORTS_FILE="$RUNNER_TEMP/names-imports-morning-pr-after.json" \
+                node --import "$RUNNER_TEMP/names-loader.mjs" --input-type=module -e '
+                  import {pathToFileURL} from "node:url";
+                  const {captureRetainedNamesPublication}=await import(pathToFileURL(process.env.PLATES_NAMES_RUNTIME_ROOT+"/lib/names-verify.mjs"));
+                  const {namesGithub}=await import(pathToFileURL(process.env.PLATES_NAMES_RUNTIME_ROOT+"/lib/names-actions.mjs"));
+                  await captureRetainedNamesPublication({repo:process.env.GITHUB_REPOSITORY,repositoryId:Number(process.env.GITHUB_REPOSITORY_ID),kind:"morning",branch:process.env.NAMES_BRANCH,date:process.env.DAY,outputFile:process.env.RUNNER_TEMP+"/names-morning-pr.json"},namesGithub(process.env));
+                '
+              fi
+              exit 0
+            fi
+            echo "Nothing changed since $BRANCH was pushed; making sure its PR is open."
+          else
+            git config user.name "plates-morning"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A -- "${PATHS[@]}"
+            git commit -q --only -m "plates night: $DAY, as it finished" -- "${PATHS[@]}"
+            # The branch is this workflow's alone; a rerun the same night
+            # replaces its own commit, so force is safe here and nowhere else.
+            git push --force origin "HEAD:refs/heads/$BRANCH"
+          fi
+          git show --name-only --format= HEAD > "$RUNNER_TEMP/files.txt"
+          node scripts/plates/pr-body.mjs --input "$RUNNER_TEMP/pr.json" --files "$RUNNER_TEMP/files.txt" > "$RUNNER_TEMP/body.md"
+          names_publication() {
+            [ "$NAMES_EVIDENCE" = true ] || return 0
+            NAMES_PHASE="$1" NAMES_PR="${2:-}" NAMES_BRANCH="$BRANCH" NAMES_PREIMAGE="${EXPECTED:-}" \
+            PLATES_NAMES_IMPORTS_FILE="$RUNNER_TEMP/names-imports-morning-pr-$1.json" \
+            node --import "$RUNNER_TEMP/names-loader.mjs" --input-type=module -e '
+              import {pathToFileURL} from "node:url";
+              const {captureNamesPublication}=await import(pathToFileURL(process.env.PLATES_NAMES_RUNTIME_ROOT+"/lib/names-verify.mjs"));
+              const {namesGithub}=await import(pathToFileURL(process.env.PLATES_NAMES_RUNTIME_ROOT+"/lib/names-actions.mjs"));
+              const temp=process.env.RUNNER_TEMP;
+              await captureNamesPublication({root:process.cwd(),repo:process.env.GITHUB_REPOSITORY,repositoryId:Number(process.env.GITHUB_REPOSITORY_ID),
+                kind:"morning",phase:process.env.NAMES_PHASE,branch:process.env.NAMES_BRANCH,date:process.env.DAY,
+                bodyFile:temp+"/body.md",priorFile:temp+"/names-morning-pr-before.json",outputFile:temp+"/names-morning-pr.json",
+                prNumber:process.env.NAMES_PR?Number(process.env.NAMES_PR):null,preimageHeadSha:process.env.NAMES_PREIMAGE||null},namesGithub(process.env));
+            '
+          }
+          PR=$(gh pr list --state open --head "$BRANCH" --json number --jq '.[0].number')
+          names_publication before "$PR"
+          if [ -n "$PR" ]; then
+            edit_code=0
+            gh pr edit "$PR" --body-file "$RUNNER_TEMP/body.md" || edit_code=$?
+            names_publication after "$PR"
+            [ "$edit_code" = 0 ] || exit "$edit_code"
+          else
+            code=0
+            out=$(gh pr create --base "$BASE" --head "$BRANCH" --title "plates night: $DAY, as it finished" --body-file "$RUNNER_TEMP/body.md" 2>&1) || code=$?
+            echo "$out"
+            if [ "$NAMES_EVIDENCE" = true ]; then
+              PR=""
+              if [ "$code" = 0 ]; then
+                PR=$(node -e '
+                  const repo=process.env.GITHUB_REPOSITORY;
+                  const urls=process.argv[1].trim().split(/\s+/).filter(x=>x.startsWith("https://github.com/"+repo+"/pull/"));
+                  if(urls.length!==1) process.exit(0);
+                  const url=new URL(urls[0]),n=url.pathname.split("/").at(-1);
+                  if(/^[1-9][0-9]*$/.test(n)&&Number.isSafeInteger(Number(n))&&url.pathname==="/"+repo+"/pull/"+n&&!url.search&&!url.hash)process.stdout.write(n);
+                ' "$out")
+              fi
+              names_publication after "$PR"
+            fi
+            if [ "$code" != 0 ]; then
+              if printf '%s' "$out" | grep -qi 'not permitted to create or approve pull requests'; then
+                echo "::notice::$BRANCH is pushed, but no PR was opened: allow it in Settings → Actions → General → Workflow permissions → \"Allow GitHub Actions to create and approve pull requests\"."
+              else
+                exit "$code"
+              fi
+            fi
+          fi
+
+  # The one job that writes issues: the brief, once a night.
+      - name: Transfer bounded producer observations
+        id: names_transfer
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.names_evidence == true
+        run: |
+          node --input-type=module -e '
+            import {appendFile} from "node:fs/promises";
+            import {pathToFileURL} from "node:url";
+            const {namesProducerTransfer}=await import(pathToFileURL(process.env.PLATES_NAMES_RUNTIME_ROOT+"/lib/names-verify.mjs"));
+            const temp=process.env.RUNNER_TEMP;
+            await appendFile(process.env.GITHUB_OUTPUT,"finalization="+await namesProducerTransfer({producerId:"finalization",path:temp+"/names-finalization.json",imports:temp+"/names-imports-finalization.json"})+"\n");
+            await appendFile(process.env.GITHUB_OUTPUT,"final_pr="+await namesProducerTransfer({producerId:"final-pr",path:temp+"/names-morning-pr.json",imports:temp+"/names-imports-morning-pr-after.json"})+"\n");
+          '
+
+  send:
+    needs: decide
+    if: needs.decide.outputs.ready == 'true' && (needs.decide.outputs.sent != 'true' || (github.event_name == 'workflow_dispatch' && inputs.names_evidence == true)) && needs.decide.outputs.assignee == 'set'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      NAMES_EVIDENCE: ${{ github.event_name == 'workflow_dispatch' && inputs.names_evidence == true }}
+      DAY: ${{ needs.decide.outputs.day }}
+    outputs:
+      brief: ${{ steps.names_transfer.outputs.brief }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - name: Validate observation source
+        if: github.event_name == 'workflow_dispatch' && inputs.names_evidence == true
+        env:
+          NAMES_SOURCE_SHA: ${{ inputs.names_source_sha }}
+        run: |
+          node --input-type=module -e '
+            import {lstat,realpath} from "node:fs/promises";
+            import {join} from "node:path";
+            if(!/^[a-f0-9]{40}$/.test(process.env.NAMES_SOURCE_SHA||""))throw Error("Exact names_source_sha required");
+            for(const [base,leaf] of [[process.env.GITHUB_WORKSPACE,".plates-names-runtime"],[process.env.RUNNER_TEMP,"plates-names-runtime"]]){
+              if(!base||/[\r\n]/.test(base)||(await realpath(base))!==base)throw Error("Unsafe observation root");
+              try{await lstat(join(base,leaf));throw Error("Observation runtime path already exists");}catch(e){if(e.code!=="ENOENT")throw e;}
+            }
+          '
+      - name: Check out the exact observation source
+        if: github.event_name == 'workflow_dispatch' && inputs.names_evidence == true
+        uses: actions/checkout@v7
+        with:
+          repository: dalmaer/plates
+          ref: ${{ inputs.names_source_sha }}
+          path: .plates-names-runtime
+          fetch-depth: 1
+          persist-credentials: false
+          submodules: false
+          lfs: false
+      - name: Prepare observation runtime
+        if: github.event_name == 'workflow_dispatch' && inputs.names_evidence == true
+        env:
+          NAMES_SOURCE_SHA: ${{ inputs.names_source_sha }}
+        run: |
+          node --input-type=module -e '
+            import {lstat,realpath,rename,writeFile,appendFile} from "node:fs/promises";
+            import {execFileSync} from "node:child_process";
+            import {join} from "node:path";
+            import {pathToFileURL} from "node:url";
+            const source=join(process.env.GITHUB_WORKSPACE,".plates-names-runtime"),dest=join(process.env.RUNNER_TEMP,"plates-names-runtime"),sha=process.env.NAMES_SOURCE_SHA;
+            if(!/^[a-f0-9]{40}$/.test(sha||""))throw Error("Exact source required");
+            const verify=async root=>{
+              if((await lstat(root)).isSymbolicLink()||await realpath(root)!==root)throw Error("Unsafe runtime path");
+              const git=args=>execFileSync("git",["-C",root,...args],{encoding:"utf8",timeout:15000}).trim();
+              if(await realpath(git(["rev-parse","--show-toplevel"]))!==root||git(["rev-parse","HEAD"])!==sha)throw Error("Runtime source mismatch");
+            };
+            await verify(source);
+            try{await lstat(dest);throw Error("Runtime destination exists");}catch(e){if(e.code!=="ENOENT")throw e;}
+            await rename(source,dest);await verify(dest);
+            const {NAMES_OBSERVATION_LOADER}=await import(pathToFileURL(join(dest,"lib/names-verify.mjs")));
+            await writeFile(join(process.env.RUNNER_TEMP,"names-loader.mjs"),NAMES_OBSERVATION_LOADER,{flag:"wx",mode:0o600});
+            await appendFile(process.env.GITHUB_ENV,"PLATES_NAMES_RUNTIME_ROOT="+dest+"\n");
+          '
+      - name: Restore production observations for the brief
+        id: production_restore
+        env:
+          BASE: ${{ github.event.repository.default_branch }}
+        run: |
+          code=0
+          node scripts/plates/production-night.mjs --restore-only || code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+      - name: Send the brief
+        id: send
+        run: |
+          if [ "$NAMES_EVIDENCE" = true ]; then
+            PLATES_NAMES_IMPORTS_FILE="$RUNNER_TEMP/names-imports-brief.json" PLATES_NAMES_EVIDENCE_REPOSITORY_ID="$GITHUB_REPOSITORY_ID" \
+            node --import "$RUNNER_TEMP/names-loader.mjs" scripts/plates/morning.mjs send --date "$DAY" --names-evidence --json > "$RUNNER_TEMP/names-brief.json"
+          else
+            node scripts/plates/morning.mjs send --date "$DAY"
+          fi
+      - name: Production restoration verdict
+        if: always()
+        env:
+          RESTORE_CODE: ${{ steps.production_restore.outputs.code }}
+        run: |
+          if [ "${RESTORE_CODE:-missing}" != 0 ]; then
+            echo "::error::Production restoration failed or did not report an outcome; the brief was still attempted."
+            exit 1
+          fi
+
+  # The plan's live card, after each pass (plates phase 78): tonight's plan as
+  # it stands (finalPlan: each item at its furthest tick), republished as the
+  # canvas card night-plan, so it ticks through the night with no one at a
+  # keyboard. Only when the canvas is set for nightly publishing and the
+  # binding lists night-plan live; otherwise a notice and nothing else.
+  # Exactly `plates canvas night`'s provisioning and guards (plates-night.yml's
+  # canvas step): the project's setup installs the owner-pinned plates and
+  # isocan, its .plates/plates.json env names the pins and the dedicated admitted
+  # isocan home, and the one canvas journal is restored from the newest
+  # canvas writer (the night or this job) and saved for the next
+  # (scripts/plates/canvas-recovery.mjs). No new credential: the canvas
+  # identity is that isocan home's; GitHub sees only the job's own token,
+  # which reads. A person's edit to the card stops its updates: the live
+  # card's conditional edit refuses (red, naming plates canvas rebase).
+      - name: Transfer bounded producer observations
+        id: names_transfer
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.names_evidence == true
+        run: |
+          node --input-type=module -e '
+            import {appendFile} from "node:fs/promises";
+            import {pathToFileURL} from "node:url";
+            const {namesProducerTransfer}=await import(pathToFileURL(process.env.PLATES_NAMES_RUNTIME_ROOT+"/lib/names-verify.mjs"));
+            const temp=process.env.RUNNER_TEMP;
+            await appendFile(process.env.GITHUB_OUTPUT,"brief="+await namesProducerTransfer({producerId:"brief",path:temp+"/names-brief.json",imports:temp+"/names-imports-brief.json"})+"\n");
+          '
+
+  card:
+    needs: decide
+    if: needs.decide.outputs.plan == 'found' && (github.event_name != 'workflow_run' || github.event.workflow_run.head_branch == github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      NAMES_EVIDENCE: ${{ github.event_name == 'workflow_dispatch' && inputs.names_evidence == true }}
+      DAY: ${{ needs.decide.outputs.day }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      # The canvas set for nightly publishing (plates canvas night's own
+      # switch), and the binding live with night-plan among its cards.
+      - name: Is the card set up?
+        id: gate
+        run: |
+          node -e '
+            const fs = require("fs");
+            const c = JSON.parse(fs.readFileSync(".plates/plates.json", "utf8")).canvas;
+            const why = c?.enabled !== true || c?.cadence !== "nightly"
+              ? "the canvas is not set for nightly publishing (.plates/plates.json canvas.enabled true and cadence \"nightly\", as plates canvas night needs)"
+              : c.mode !== "live" || !(c.liveKeys ?? ["pulse"]).includes("night-plan")
+                ? "the canvas binding does not list night-plan live (plates canvas live --card pulse --card night-plan --yes)"
+                : null;
+            if (why) console.log(`::notice::The plan card is not republished: ${why}. Nothing else is done.`);
+            else fs.appendFileSync(process.env.GITHUB_OUTPUT, "enabled=true\n");
+          '
+      # plates-night.yml's own two steps: the config's env for every later
+      # step, and the project's setup (setupToken, if named, here alone).
+      - name: Read the config
+        id: config
+        if: steps.gate.outputs.enabled == 'true'
+        run: |
+          node -e '
+            const fs = require("fs");
+            const c = JSON.parse(fs.readFileSync(".plates/plates.json", "utf8"));
+            const env = c.env ?? {};
+            if (!env || typeof env !== "object" || Array.isArray(env)) throw new Error(".plates/plates.json: \"env\" must be an object of NAME: \"value\"");
+            if (c.setup !== undefined && (typeof c.setup !== "string" || !c.setup.trim())) throw new Error(".plates/plates.json: \"setup\" must be a non-empty shell command");
+            const tok = c.setupToken;
+            if (tok !== undefined && (typeof tok !== "string" || !/^[A-Z_][A-Z0-9_]*$/.test(tok) || tok.startsWith("GITHUB_") || c.setup === undefined)) throw new Error(".plates/plates.json: \"setupToken\" must name a repo secret (not GITHUB_*) and needs a \"setup\"");
+            const eof = `PLATES_EOF_${Date.now()}`;
+            const lines = [];
+            for (const [k, v] of Object.entries(env)) {
+              if (!/^[A-Z_][A-Z0-9_]*$/.test(k) || typeof v !== "string") throw new Error(`.plates/plates.json: "env" ${k} must be NAME: "value"`);
+              lines.push(`${k}<<${eof}`, v, eof);
+              console.log(`env: ${k}`);
+            }
+            if (lines.length) fs.appendFileSync(process.env.GITHUB_ENV, `${lines.join("\n")}\n`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `setup<<${eof}\n${c.setup ?? ""}\n${eof}\n`);
+            // Only the secret NAME, never its value: the Install step looks it up.
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `setup_token=${tok ?? ""}\n`);
+            if (tok) console.log(`setupToken: ${tok} (a repo secret, for the Install step only)`);
+          '
+      - name: Install
+        if: steps.gate.outputs.enabled == 'true'
+        # setupToken (a secret's name in .plates/plates.json) becomes GH_TOKEN here
+        # and in no other step, as in plates-night.yml. Never echoed.
+        env:
+          SETUP: ${{ steps.config.outputs.setup }}
+          GH_TOKEN: ${{ secrets[steps.config.outputs.setup_token] || github.token }}
+        run: |
+          if [ -n "$SETUP" ]; then
+            echo "setup (.plates/plates.json): $SETUP"
+            bash -e -c "$SETUP"
+          elif [ -f package-lock.json ]; then
+            npm ci
+          fi
+      - name: Publish the plan card
+        id: canvas
+        if: steps.gate.outputs.enabled == 'true'
+        env:
+          REPO: ${{ github.repository }}
+          BASE: ${{ github.event.repository.default_branch }}
+        run: |
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+          # A preflight failure never reaches the canvas: it leaves a receipt
+          # saying so, and the next writer recovers from the attempt before it.
+          preflight_fail() {
+            node -e 'const fs = require("node:fs"); fs.mkdirSync(require("node:path").dirname(process.argv[1]), { recursive: true }); fs.writeFileSync(process.argv[1], JSON.stringify({ neverRan: true, provenance: { repo: process.env.GITHUB_REPOSITORY, workflow: ".github/workflows/plates-morning.yml", runId: String(process.env.GITHUB_RUN_ID), attempt: Number(process.env.GITHUB_RUN_ATTEMPT), headSha: process.env.GITHUB_SHA } }))' "$RUNNER_TEMP/plates-canvas-card/never-ran.json"
+            echo "::error::$1"
+            exit 1
+          }
+          # Honor legacy provisioning only when the canonical setting is absent.
+          # An explicitly empty canonical value must still fail the preflight.
+          export PLATES_CANVAS_PLATES_VERSION="${PLATES_CANVAS_PLATES_VERSION-${KEEL_CANVAS_KEEL_VERSION-}}"
+          export PLATES_CANVAS_ISOCAN_VERSION="${PLATES_CANVAS_ISOCAN_VERSION-${KEEL_CANVAS_ISOCAN_VERSION-}}"
+          export PLATES_CANVAS_ISOCAN_HOME="${PLATES_CANVAS_ISOCAN_HOME-${KEEL_CANVAS_ISOCAN_HOME-}}"
+          for tool in plates isocan; do
+            command -v "$tool" >/dev/null 2>&1 || preflight_fail "Canvas night requires $tool explicitly installed and pinned by the project setup."
+          done
+          if [ -z "${PLATES_CANVAS_PLATES_VERSION:-}" ] || [ -z "${PLATES_CANVAS_ISOCAN_VERSION:-}" ]; then
+            preflight_fail "Canvas night requires owner-pinned PLATES_CANVAS_PLATES_VERSION and PLATES_CANVAS_ISOCAN_VERSION."
+          fi
+          if [ "$(plates --version)" != "$PLATES_CANVAS_PLATES_VERSION" ] || [ "$(isocan --version)" != "$PLATES_CANVAS_ISOCAN_VERSION" ]; then
+            preflight_fail "Canvas executable version does not match its owner-provisioned pin."
+          fi
+          if [ -z "${PLATES_CANVAS_ISOCAN_HOME:-}" ] || [ ! -d "$PLATES_CANVAS_ISOCAN_HOME" ]; then
+            preflight_fail "Canvas night requires a dedicated owner-provisioned admitted isocan home (PLATES_CANVAS_ISOCAN_HOME)."
+          fi
+          case "$DAY" in [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;; *) preflight_fail "No night was decided (day: $DAY)." ;; esac
+          # The newest canvas writer's journal (the night's or a card's). Exit 3:
+          # a writer is still running; this pass waits, and the next one republishes.
+          found=0
+          recovery=$(node scripts/plates/canvas-recovery.mjs --workflow plates-morning.yml) || found=$?
+          if [ "$found" = 3 ]; then
+            echo "::notice::Another canvas writer is still running; the plan card waits for the next pass. The canvas was not touched."
+            exit 0
+          fi
+          [ "$found" = 0 ] || preflight_fail "Canvas recovery stopped before the canvas was touched; this attempt is recorded as never run."
+          export PLATES_CANVAS_RECOVERY="$recovery"
+          export PLATES_CANVAS_PERSISTENCE=artifact-v1
+          export PLATES_ISOCAN="$(command -v isocan)"
+          export ISOCAN_HOME="$PLATES_CANVAS_ISOCAN_HOME"
+          export PLATES_CANVAS_OUTPUT="$RUNNER_TEMP/plates-canvas-card"
+          plates morning --card --yes --date "$DAY" --json
+
+      - name: Keep the canvas journal
+        if: always() && steps.canvas.outputs.enabled == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: plates-canvas-card-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/plates-canvas-card/
+          if-no-files-found: ignore
+          retention-days: 90
+
+  # Final collection waits for BOTH writing jobs; absent/failed outcomes remain gaps.
+  names-observation:
+    needs: [names-origin, decide, finalize, send]
+    if: always() && github.event_name == 'workflow_dispatch' && inputs.names_evidence == true && needs.names-origin.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      issues: read
+      pull-requests: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - name: Validate observation source
+        if: github.event_name == 'workflow_dispatch' && inputs.names_evidence == true
+        env:
+          NAMES_SOURCE_SHA: ${{ inputs.names_source_sha }}
+        run: |
+          node --input-type=module -e '
+            import {lstat,realpath} from "node:fs/promises";
+            import {join} from "node:path";
+            if(!/^[a-f0-9]{40}$/.test(process.env.NAMES_SOURCE_SHA||""))throw Error("Exact names_source_sha required");
+            for(const [base,leaf] of [[process.env.GITHUB_WORKSPACE,".plates-names-runtime"],[process.env.RUNNER_TEMP,"plates-names-runtime"]]){
+              if(!base||/[\r\n]/.test(base)||(await realpath(base))!==base)throw Error("Unsafe observation root");
+              try{await lstat(join(base,leaf));throw Error("Observation runtime path already exists");}catch(e){if(e.code!=="ENOENT")throw e;}
+            }
+          '
+      - name: Check out the exact observation source
+        if: github.event_name == 'workflow_dispatch' && inputs.names_evidence == true
+        uses: actions/checkout@v7
+        with:
+          repository: dalmaer/plates
+          ref: ${{ inputs.names_source_sha }}
+          path: .plates-names-runtime
+          fetch-depth: 1
+          persist-credentials: false
+          submodules: false
+          lfs: false
+      - name: Prepare observation runtime
+        if: github.event_name == 'workflow_dispatch' && inputs.names_evidence == true
+        env:
+          NAMES_SOURCE_SHA: ${{ inputs.names_source_sha }}
+        run: |
+          node --input-type=module -e '
+            import {lstat,realpath,rename,writeFile,appendFile} from "node:fs/promises";
+            import {execFileSync} from "node:child_process";
+            import {join} from "node:path";
+            import {pathToFileURL} from "node:url";
+            const source=join(process.env.GITHUB_WORKSPACE,".plates-names-runtime"),dest=join(process.env.RUNNER_TEMP,"plates-names-runtime"),sha=process.env.NAMES_SOURCE_SHA;
+            if(!/^[a-f0-9]{40}$/.test(sha||""))throw Error("Exact source required");
+            const verify=async root=>{
+              if((await lstat(root)).isSymbolicLink()||await realpath(root)!==root)throw Error("Unsafe runtime path");
+              const git=args=>execFileSync("git",["-C",root,...args],{encoding:"utf8",timeout:15000}).trim();
+              if(await realpath(git(["rev-parse","--show-toplevel"]))!==root||git(["rev-parse","HEAD"])!==sha)throw Error("Runtime source mismatch");
+            };
+            await verify(source);
+            try{await lstat(dest);throw Error("Runtime destination exists");}catch(e){if(e.code!=="ENOENT")throw e;}
+            await rename(source,dest);await verify(dest);
+            const {NAMES_OBSERVATION_LOADER}=await import(pathToFileURL(join(dest,"lib/names-verify.mjs")));
+            await writeFile(join(process.env.RUNNER_TEMP,"names-loader.mjs"),NAMES_OBSERVATION_LOADER,{flag:"wx",mode:0o600});
+            await appendFile(process.env.GITHUB_ENV,"PLATES_NAMES_RUNTIME_ROOT="+dest+"\n");
+          '
+      - name: Observe the actual board
+        id: board
+        run: |
+          PLATES_NAMES_IMPORTS_FILE="$RUNNER_TEMP/names-imports-board.json" PLATES_NAMES_EVIDENCE_REPOSITORY_ID="$GITHUB_REPOSITORY_ID" \
+          node --import "$RUNNER_TEMP/names-loader.mjs" "$PLATES_NAMES_RUNTIME_ROOT/bin/plates.mjs" board --names-evidence --fresh --json > "$RUNNER_TEMP/names-board.json"
+      - name: Collect managed-name observations
+        id: names_collect
+        if: always()
+        env:
+          FINALIZATION: ${{ needs.finalize.outputs.finalization }}
+          FINAL_PR: ${{ needs.finalize.outputs.final_pr }}
+          BRIEF: ${{ needs.send.outputs.brief }}
+          NIGHT_ORIGIN: ${{ needs.names-origin.outputs.origin }}
+        run: |
+          PLATES_NAMES_IMPORTS_FILE="$RUNNER_TEMP/names-imports-collector.json" node --import "$RUNNER_TEMP/names-loader.mjs" --input-type=module -e '
+            import {appendFile} from "node:fs/promises";
+            import {pathToFileURL} from "node:url";
+            import {resolve,relative,isAbsolute} from "node:path";
+            const runtime=process.env.PLATES_NAMES_RUNTIME_ROOT,temp=process.env.RUNNER_TEMP;
+            const {collectNamesRun,decodeNamesProducerTransfer}=await import(pathToFileURL(runtime+"/lib/names-verify.mjs"));
+            const {namesGithub}=await import(pathToFileURL(runtime+"/lib/names-actions.mjs"));
+            const inputs=[["finalization","FINALIZATION"],["final-pr","FINAL_PR"],["brief","BRIEF"]].map(([producerId,key])=>process.env[key]?decodeNamesProducerTransfer(process.env[key]):{producerId,value:null,loads:[],loadGaps:["missing-job-output"]});
+            inputs.push({producerId:"board",path:temp+"/names-board.json",imports:temp+"/names-imports-board.json"});
+            const originatingNight=JSON.parse(Buffer.from(process.env.NIGHT_ORIGIN,"base64").toString("utf8"));
+            const directory=temp+"/names-observation";
+            const result=await collectNamesRun({root:process.cwd(),kind:"morning",directory,inputs,originatingNight,installedRuntime:{root:runtime,repo:"dalmaer/plates",entrypoint:"bin/plates.mjs"}},namesGithub(process.env));
+            const paths=result.files.map(file=>{const path=resolve(directory,file),rel=relative(directory,path);if(!rel||rel.startsWith("..")||isAbsolute(rel)||/[\r\n]/.test(path))throw Error("Unsafe artifact member");return path;});
+            await appendFile(process.env.GITHUB_OUTPUT,"name="+result.name+"\npaths<<PLATES_NAMES_FILES\n"+paths.join("\n")+"\nPLATES_NAMES_FILES\n");
+          '
+      - name: Retain immutable observation for this attempt
+        if: always() && steps.names_collect.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.names_collect.outputs.name }}
+          path: ${{ steps.names_collect.outputs.paths }}
+          retention-days: 14
+          overwrite: false
+          if-no-files-found: error

@@ -79,6 +79,9 @@ export const RELEASE_DEPENDENCIES = {
 export const RELEASE_SCRIPTS = {
   "scripts/canvas-shot.mjs": "canvas-shot",
   "scripts/deck-export.mjs": "deck-export",
+  // `isocan motion render` (motion phase 1): the same headless browser, the
+  // web app's render page, and the bytes read back.
+  "scripts/motion-render.mjs": "motion-render",
 };
 
 /** Where their bundles land, under CLI_BUNDLE_DIR — a directory of their own, because they are a build of their own (see buildCliBundle). */
@@ -91,7 +94,7 @@ const RELEASE_SCRIPTS_DIR = "scripts";
 export const RELEASE_DROPS = [
   ["docs"],
   ["test"],
-  // keel's tests (keel practice `loop`, 5 Oct 2026): the suite for scripts
+  // Plates's tests (adopted as Keel practice `loop`, 5 Oct 2026): the suite for scripts
   // that are dropped below, so as inert here as `test/`.
   ["tests"],
   [":(glob)packages/**/test/**"],

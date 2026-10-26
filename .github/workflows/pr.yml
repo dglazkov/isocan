@@ -95,6 +95,8 @@ jobs:
       # one, which would leave pull requests green while main went red, and a
       # comment asking two files to stay in step is not a guard.
       - uses: ./.github/actions/suite-setup
+        with:
+          stage: suite-${{ matrix.shard }}
 
       # `test:ci` — the same command `release.yml` runs, with every anti-skip
       # switch on, and for the same reason. A pull-request check that can pass
@@ -135,5 +137,7 @@ jobs:
       # and lint need, but the same setup the suite gets, and one setup is
       # the point of the action.
       - uses: ./.github/actions/suite-setup
+        with:
+          stage: checks
       - run: npm run typecheck
       - run: npm run lint

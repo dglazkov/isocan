@@ -156,6 +156,39 @@ export function workbenchUrl(origin: string, canvasId: string, itemId?: string):
 }
 
 /**
+ * **A motion, rendered to a movie** (motion phase 1; `docs/projects/motion/design.md` §4).
+ *
+ * One page both surfaces open: `isocan motion render` in the headless browser
+ * `canvas shot` drives, and phase 2's *Render movie…* in a hidden frame — so
+ * the two cannot drift. Under the canvas's address like the deck view, because
+ * every read the page makes (the snapshot, the motion's blob) is a read OF the
+ * canvas, and the home answers it with exactly the access a person has to the
+ * item. The design wrote `/render/motion/:itemId`; an item id alone names no
+ * canvas to ask.
+ */
+const MOTION_RENDER_PATH_SEGMENT = "render/motion";
+/** The router's pattern for the render page, built from `CANVAS_ROUTE`. */
+export const MOTION_RENDER_ROUTE = `${CANVAS_ROUTE}/${MOTION_RENDER_PATH_SEGMENT}/:itemId`;
+
+/**
+ * The render page's whole address. The query is how the movie is asked for —
+ * `format` (`mp4`, `webm` or `gif`), `version`, `fps`, `size` (`1080` or `1920x1080`), `seconds`, `background`
+ * (`#rrggbb`) and `keep` (frame numbers whose pre-encode picture the page
+ * keeps, for a proof to compare with) — each left out when not given.
+ */
+export function motionRenderUrl(
+  origin: string,
+  canvasId: string,
+  itemId: string,
+  query: Partial<Record<"format" | "version" | "fps" | "size" | "seconds" | "background" | "keep", string | number>> = {},
+): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) if (value !== undefined && String(value) !== "") params.set(key, String(value));
+  const search = params.toString();
+  return `${origin.replace(/\/+$/, "")}${canvasPath(canvasId)}/${MOTION_RENDER_PATH_SEGMENT}/${encodeURIComponent(itemId)}${search ? `?${search}` : ""}`;
+}
+
+/**
  * The whole invitation: origin + path.
  *
  * `origin` is whatever the caller is standing at — the home's address for a

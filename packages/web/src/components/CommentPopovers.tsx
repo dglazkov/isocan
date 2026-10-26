@@ -30,6 +30,7 @@ import { usePresentation } from "../lib/canvasPresentation.ts";
 import { FloatingHandles, useFloatingBox } from "../lib/floatingbox.tsx";
 import { presentedOffset } from "../lib/presentation.ts";
 import { makeComment } from "./CommentLayer.tsx";
+import { motionTimeOf } from "../lib/motionclock.ts";
 
 /**
  * **A pin's open thread and a new comment's composer, loaded when the first
@@ -154,6 +155,7 @@ export function ThreadPopover({
           <div className="comment" key={comment.id}>
             <span className="who">{actorNameIn(names, comment.author)}</span>
             <CommentWhen comment={comment} />
+            {comment.at !== undefined && <span className="worked" data-comment-at={comment.at}>at {comment.at.toFixed(1)} s</span>}
             {workedFor(comment) && (
               <span className="worked" title={`Posted, then rewritten ${workedFor(comment)} later`}>
                 edited · {workedFor(comment)}
@@ -292,6 +294,8 @@ export function ComposePopover({
   const context = useMessageContext(canvasId, messageContextRoots(canvas, body, [pending.aboutItemId, pending.anchorItemId].filter((id): id is string => Boolean(id))));
   const sending = useMessageSend(canvasId, context, body);
   const presentation = usePresentation();
+  // Pinned to a motion its person paused or scrubbed: the comment keeps the moment (motion phase 2).
+  const [moment] = useState(() => motionTimeOf(pending.anchorItemId));
 
   // Pending world position: anchored offsets resolve against the item.
   let wx = pending.x;
@@ -330,12 +334,13 @@ export function ComposePopover({
             y: pending.y,
             anchorItemId: pending.anchorItemId,
             ...(pending.textAnchor ? { textAnchor: pending.textAnchor } : {}),
-            comment: withMessageContext(withAbout(makeComment(trimmed), pending.aboutItemId), context.request),
+            comment: withMessageContext(withAbout({ ...makeComment(trimmed), ...(moment !== undefined ? { at: moment } : {}) }, pending.aboutItemId), context.request),
           }), () => { onSent?.(); if (useUiStore.getState().pendingComment === pending) useUiStore.getState().setPendingComment(null); });
         }}
         style={{ display: "block" }}
       >
         {pending.textAnchor && <blockquote className="thread-text-anchor">{pending.textAnchor.quote}</blockquote>}
+        {moment !== undefined && <p className="thread-moment" data-comment-at={moment}>At {moment.toFixed(1)} s</p>}
         {needsContextManifestPreview(context, anchorIds) && <MessageContextPreview context={context} />}
         {sending.error && <p role="alert">{sending.error}</p>}
         <MentionField

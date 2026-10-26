@@ -22,5 +22,6 @@
 .compose-popover .row { display: flex; justify-content: flex-end; gap: 6px; margin-top: 6px; }
 
 .thread-text-anchor { margin: 0 0 12px; overflow-wrap: anywhere; }
+.thread-moment { margin: 0 0 8px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 .thread-text-anchor blockquote { margin: 0 0 8px; padding-left: 12px; border-left: 2px solid var(--accent); white-space: pre-wrap; max-height: 160px; overflow: auto; }
 .thread-text-anchor small { color: var(--ink-muted); }

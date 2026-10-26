@@ -1,0 +1,185 @@
+{
+  "practice": "0.8.34",
+  "files": {
+    ".agents/skills/plates/SKILL.md": {
+      "practice": "agents-md",
+      "sha256": "115ae849b91ddbf40cb8c4e9661514fdc97263871916ed46b75b4d28155b84a2"
+    },
+    ".claude/skills/plates": {
+      "practice": "agents-md",
+      "sha256": "0ebe11ef469d62f5e440dbfce0ae172bc125879b3fb3390f6e083c826d198850"
+    },
+    ".github/workflows/plates-loop.yml": {
+      "practice": "loop",
+      "sha256": "1c7570ac68c74229bb849dda2068876a393ebc0b773f559514e593e451e6fef4"
+    },
+    ".github/workflows/plates-morning.yml": {
+      "practice": "night",
+      "sha256": "906e5debfefd3e732f5ddb7cb4b8765cb4754cd525e17daa572b6df56a9e03fa"
+    },
+    ".github/workflows/plates-night.yml": {
+      "practice": "night",
+      "sha256": "a7c9619df1c6e16189cd03be08ba14480a1f7f5ec469bb059851c4a6d4c1ff7f"
+    },
+    "AGENTS.md#agents-md": {
+      "practice": "agents-md",
+      "sha256": "ea5a1a83c8469e2cb2154005293f32341d86eeb6730556027540c53ab250e411"
+    },
+    "AGENTS.md#lessons": {
+      "practice": "lessons",
+      "sha256": "5c1892ae5f120c8415e3eb71c3a28171cc5bfe1b28c1e52fe89937b57639f113"
+    },
+    "AGENTS.md#loop": {
+      "practice": "loop",
+      "sha256": "78859d74b034f6ae952c9761d3cd2d98b03d0d1e8657c3bcfdfb5d571ee6861d"
+    },
+    "AGENTS.md#night": {
+      "practice": "night",
+      "sha256": "58df090e15953042f6865e73deda3a0935b5caeadc56ee38303966da111ca561"
+    },
+    "CLAUDE.md": {
+      "practice": "agents-md",
+      "sha256": "afc2da8653649abeb8ecce9a8792e12e755e69986b27659462e790c7d410708a"
+    },
+    "docs/plates-lessons.md": {
+      "practice": "lessons",
+      "sha256": "69d23ce123482ecb80d9b1ccee429dd0c86b60fe359085f4c7447e8a8c6f665e"
+    },
+    "renovate.json": {
+      "practice": "renovate",
+      "sha256": "e46373a8cd62a321f0cee3dfab16f573789b68e6179b149d8ad8775b56fcf745"
+    },
+    "scripts/loop.mjs": {
+      "practice": "loop",
+      "sha256": "dcf8dfa6276430d184218cb312f1d2e994854429e891af964ba2b9c207c060fd"
+    },
+    "scripts/plates/canvas-recovery.mjs": {
+      "practice": "night",
+      "sha256": "f210f789c7fb79659eda6dabad9ab8f840a6fd83a4a28b468ecfc989fe11df58"
+    },
+    "scripts/plates/ci.mjs": {
+      "practice": "night",
+      "sha256": "f971394c913bc36cee493a02521d5d7e6f4727d6b85f00a62eb39f6a73c6c1ba"
+    },
+    "scripts/plates/drain.mjs": {
+      "practice": "night",
+      "sha256": "abb282e172c8e45abbce3f87e37d40a62f8a384b0782d5f379cea8c37029a0e2"
+    },
+    "scripts/plates/gate.mjs": {
+      "practice": "night",
+      "sha256": "0ccdfbfcfd985ca3dfd83ae4cd785c2c79cbe284735860818eb7f31d2c9e8179"
+    },
+    "scripts/plates/hygiene-measures.mjs": {
+      "practice": "night",
+      "sha256": "5911b8c23e2661156c1b4f71c17bf3b773969682046bc2bcd5db6822ca045796"
+    },
+    "scripts/plates/hygiene-proposals.mjs": {
+      "practice": "night",
+      "sha256": "05863d3e102e80009749b6b56a71ad58ffc526a70c27feb14c9456f2db5493ea"
+    },
+    "scripts/plates/improve.mjs": {
+      "practice": "night",
+      "sha256": "bba8026b00a096982e7693c85e167f55aad7f7a32fac37d601211fac3af673a2"
+    },
+    "scripts/plates/lib.mjs": {
+      "practice": "night",
+      "sha256": "0a224f841d6ccd23c2710c1e336af7c5b4943fce61648e4a708118c85bbdcc44"
+    },
+    "scripts/plates/milestones.mjs": {
+      "practice": "night",
+      "sha256": "5f6d9ecafd2432bdb3a9bf4ddf90578dbd8bafa58a6dcae1e0f47627f8429853"
+    },
+    "scripts/plates/morning.mjs": {
+      "practice": "night",
+      "sha256": "6a49e061350f78c9a28c090ca1d58eefed109ceae9617974a80b98cd570048f0"
+    },
+    "scripts/plates/names-environment.d.mts": {
+      "practice": "night",
+      "sha256": "0a7d19788c21f1468f9af4ed9fe079ee7d29769ffc89320ef56276567eca283a"
+    },
+    "scripts/plates/names-environment.mjs": {
+      "practice": "night",
+      "sha256": "edbbf5138d1128c2b3f852e1786808f42e5cdc833d6c36e9083c3d7738f1dee2"
+    },
+    "scripts/plates/names.mjs": {
+      "practice": "night",
+      "sha256": "7e6e72a1dc405a9166d19a739345a4a39f24f6a1ed0a616ab2e86f42b26abb73"
+    },
+    "scripts/plates/night-plan.mjs": {
+      "practice": "night",
+      "sha256": "6e2ebcab928ee9fea363a729473816442d9a1efdaf6cdefc5d1291a5c0d91f07"
+    },
+    "scripts/plates/planning-config.mjs": {
+      "practice": "night",
+      "sha256": "f47844a4e5e1f2259d67c4e3d8e4a6e43a4cb036ed1f6357438fee801f03ef3e"
+    },
+    "scripts/plates/pr-body.mjs": {
+      "practice": "night",
+      "sha256": "f4ba82489b7c3cde03c75c0ba18a4ee14b93fec8e2a46a8b5900662b4accf36f"
+    },
+    "scripts/plates/production-collectors.mjs": {
+      "practice": "night",
+      "sha256": "5da0812a17367dad05e9c19bc3dce19cfae23f6863983110cda18baf12d3a980"
+    },
+    "scripts/plates/production-night.mjs": {
+      "practice": "night",
+      "sha256": "e496379d8d048355c0ffbd63224c0947ebc3fa25d8a84dc83b7348d4515b7b11"
+    },
+    "scripts/plates/production-store.mjs": {
+      "practice": "night",
+      "sha256": "fe0d3ad8d833a31b8f36dfdc38d2065607775371e98d85a1830ebf8b280705d6"
+    },
+    "scripts/plates/production.mjs": {
+      "practice": "night",
+      "sha256": "d903d9555c040775bf0c270c6e47f604f8757a2c1a0afa7add9556c7f22488d1"
+    },
+    "scripts/plates/quota.mjs": {
+      "practice": "night",
+      "sha256": "a498d93b39fbb85039dbbcf002ab474dc27e12a12e466391976e1b6715f1108d"
+    },
+    "scripts/plates/robot-budget.mjs": {
+      "practice": "night",
+      "sha256": "7680bb21b62cb52266cc59f644ce7a97ce8a135baab0221d0f7f5d4ee800ee45"
+    },
+    "scripts/plates/robot-delivery.mjs": {
+      "practice": "night",
+      "sha256": "df4f7334e81ffd983cb5e8720b05d7081ff9acbd941350feb4065450a49973ee"
+    },
+    "scripts/plates/stalls.mjs": {
+      "practice": "night",
+      "sha256": "c904dba5ba3ff5b19518353edc2dbeaee5a29ebcf6aceb958b20c5daeb1d15d0"
+    },
+    "scripts/plates/test-history.mjs": {
+      "practice": "night",
+      "sha256": "45cb3b9aeed8f21bcb02720849bb07c3ddfffed9b09c21c580fd9bef8bc9c162"
+    },
+    "scripts/plates/test-ledger.mjs": {
+      "practice": "night",
+      "sha256": "14f971d82a51979c41fe4aed6625c959b63b11b2b87632e61654ec5e98de3f59"
+    },
+    "scripts/plates/time-measures.mjs": {
+      "practice": "night",
+      "sha256": "912c3deac5440efcd3de459fb51e02346d6bbdb7e1ba6e62e340a416ebcc1aac"
+    },
+    "scripts/plates/time-proposal-remeasurement.mjs": {
+      "practice": "night",
+      "sha256": "cc2e40051406bbe8bd90dc4d233bdf8b5fd3dee76e5646443ec7988c9448461b"
+    },
+    "scripts/plates/time-proposals.mjs": {
+      "practice": "night",
+      "sha256": "cc4b35b4f0595a51dfcc710a1f49e46e2f40f9a2290affa0152182da7389dede"
+    },
+    "scripts/plates/time-receipts.mjs": {
+      "practice": "night",
+      "sha256": "a490eaef57bf84cd6331fd4fa8a96f85dcbae5e5b8b5a1e32364d17213b6b21d"
+    },
+    "scripts/plates/verification.mjs": {
+      "practice": "night",
+      "sha256": "6428b9bb959e198f05e89bf2d4c284efa7196b9785e977cdc8ce991e7277f4f7"
+    },
+    "tests/loop.test.mjs": {
+      "practice": "loop",
+      "sha256": "a4da76a6d24ab4cc0f5abe061222acecd63fb2e9f84fa25b54a47e2d998e4ea3"
+    }
+  }
+}

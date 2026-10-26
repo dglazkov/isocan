@@ -2,7 +2,7 @@ import { Suspense, lazy, useCallback, useEffect, useState, type ReactNode } from
 import { preloadMarkdown } from "./lib/markdown.tsx";
 import { BrowserRouter, matchPath, Route, Routes, useLocation } from "react-router-dom";
 import type { Actor } from "@isocan/core";
-import { CANVAS_ROUTE, DECK_ROUTE, ITEM_ROUTE, MODULE_PAGE_ROUTE, WORKBENCH_ITEM_ROUTE, WORKBENCH_ROUTE } from "@isocan/core";
+import { CANVAS_ROUTE, DECK_ROUTE, ITEM_ROUTE, MODULE_PAGE_ROUTE, MOTION_RENDER_ROUTE, WORKBENCH_ITEM_ROUTE, WORKBENCH_ROUTE } from "@isocan/core";
 import { ApiError, getSnapshot } from "./lib/api.ts";
 import { CANVAS_GROUPS_REQUIRED } from "@isocan/core";
 import { Viewer } from "./components/LazyViewer.tsx";
@@ -50,6 +50,13 @@ const CanvasListPage = lazy(() =>
 );
 const NotHerePage = lazy(() => import("./pages/NotHerePage.tsx").then((m) => ({ default: m.NotHerePage })));
 const PublicPage = lazy(() => import("./pages/PublicPage.tsx").then((m) => ({ default: m.PublicPage })));
+/**
+ * **The movie renderer** (motion phase 1): a page a terminal's headless
+ * browser opens, never a first visit — and it carries the H.264 muxer, which
+ * nothing else in the app needs. Not behind the `motion` experiment: the
+ * CLI's browser has no settings to turn one on.
+ */
+const MotionRenderPage = lazy(() => import("./pages/MotionRenderPage.tsx").then((m) => ({ default: m.MotionRenderPage })));
 /**
  * **The operator's prove page, behind the same boundary** (operator phase 1).
  *
@@ -178,6 +185,9 @@ export function App({ arrival, signIn }: { arrival: Arrival; signIn: SignIn }) {
                 flipping to them. */}
             <Route path={WORKBENCH_ROUTE} element={<CanvasPage actor={who} onIdentity={setActor} />} />
             <Route path={WORKBENCH_ITEM_ROUTE} element={<CanvasPage actor={who} onIdentity={setActor} />} />
+            {/* A motion recorded to an MP4 — its own page, not a cover over
+                the canvas: it reads the canvas and draws nothing of it. */}
+            <Route path={MOTION_RENDER_ROUTE} element={<MotionRenderPage />} />
             {/* The catch-all, and it is required rather than tidy. The daemon's
                 SPA fallback answers every path with the app shell and a 200, so
                 without a route here a mistyped or doc-shaped share link renders

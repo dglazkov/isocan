@@ -630,7 +630,6 @@ export async function runTool(
       const comment = {
         id: newCommentId(),
         body,
-        at: new Date().toISOString(),
         ...(attached.length > 0 ? { items: [...attached] } : {}),
         ...(from.record ? { record: true as const } : {}),
       };

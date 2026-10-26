@@ -21,6 +21,18 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 25 October 2026
+
+- **Make a drawing move.** With **Motion** on in Settings → Experiments,
+  select one or more SVGs, right-click → **Animate…**, and pick a recipe
+  (**assemble**, **idle**, **reveal**, **orbit**, **emphasis**) or say how it
+  should move and ask your agent. A motion appears beside them and plays on
+  the canvas, with a scrubber; leave a comment at a moment and opening it
+  takes the player back there. Ask for changes in the Chat and the motion
+  gains a version; **Refresh from sources** picks up a drawing you've
+  edited. **Render movie…** puts an MP4, WebM or GIF beside it — the same
+  frames you watched. From the CLI: `isocan motion new|edit|refresh|render`.
+
 ## 17 October 2026
 
 - **Explore a look before drawing screens.** With **Mood board** on in
