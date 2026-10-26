@@ -1,5 +1,5 @@
 {
-  "practice": "0.8.34",
+  "practice": "0.8.35",
   "files": {
     ".agents/skills/plates/SKILL.md": {
       "practice": "agents-md",
@@ -79,7 +79,7 @@
     },
     "scripts/plates/improve.mjs": {
       "practice": "night",
-      "sha256": "bba8026b00a096982e7693c85e167f55aad7f7a32fac37d601211fac3af673a2"
+      "sha256": "240bb10e43edd4cbdd1c8ed626340dd8b7e1b6c6227d1fd9002a649e210a96dc"
     },
     "scripts/plates/lib.mjs": {
       "practice": "night",
@@ -91,7 +91,7 @@
     },
     "scripts/plates/morning.mjs": {
       "practice": "night",
-      "sha256": "6a49e061350f78c9a28c090ca1d58eefed109ceae9617974a80b98cd570048f0"
+      "sha256": "cd01904354fd08198ae8360b656b0fbb3204673442179a8400242df6f6caf221"
     },
     "scripts/plates/names-environment.d.mts": {
       "practice": "night",
@@ -151,7 +151,7 @@
     },
     "scripts/plates/test-history.mjs": {
       "practice": "night",
-      "sha256": "45cb3b9aeed8f21bcb02720849bb07c3ddfffed9b09c21c580fd9bef8bc9c162"
+      "sha256": "2cf60a228b3534b4ca1b9e194ef493eeb054b2e076449bae2391ab6de8672d25"
     },
     "scripts/plates/test-ledger.mjs": {
       "practice": "night",

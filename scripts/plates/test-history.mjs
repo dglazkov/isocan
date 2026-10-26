@@ -10,6 +10,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { isStallsReceipt } from './time-receipts.mjs';
 import { gateWorkflowIn } from './lib.mjs';
+import { ignoreRuns } from './test-ledger.mjs';
 
 const exec = promisify(execFile);
 const MAX = Object.freeze({ discovery: 500, bytes: 256 * 1024 * 1024, records: 4000 });
@@ -79,13 +80,21 @@ function stallsWrapper(value) {
       onlyKeys(r.identity, ['kind','scope','runner','configHash','flagsHash','target']) && onlyKeys(r.identity.target, ['file','name']));
 }
 async function ledgerDir(root) {
-  let dir = await realpath(root); // Supports macOS /tmp -> /private/tmp.
+  const canonicalRoot = await realpath(root); // Supports macOS /tmp -> /private/tmp.
+  let dir = canonicalRoot;
   for (const part of ['.plates', 'test-runs', 'recovery']) {
     dir = join(dir, part);
     try { await mkdir(dir); } catch (e) { if (e.code !== 'EEXIST') throw e; }
     const stat = await lstat(dir);
     if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error('unsafe ledger destination');
   }
+  // The shared initializer writes this file; validate it as well as its parents
+  // before using it. Artifact-provided ignore rules never become local policy.
+  try {
+    const stat = await lstat(join(dir, '..', '.gitignore'));
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1) throw new Error('unsafe ledger ignore destination');
+  } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  await ignoreRuns(canonicalRoot);
   return dir;
 }
 async function boundedRead(path) {

@@ -12,7 +12,7 @@ import { status as productionStatus, productionLines } from './production.mjs';
 // docs/research/2026-10-14-nightwatch.md, "The plan is a live card, and the
 // morning sends a message"). plates's `plates morning` is this same module.
 //
-//   node scripts/plates/morning.mjs brief [--date d]       the brief, markdown (no write)
+//   node scripts/plates/morning.mjs brief [--date d] [--observation]  the brief, markdown (no write)
 //   node scripts/plates/morning.mjs send [--date d]        the brief as the issue "Good morning, <d>"
 //   node scripts/plates/morning.mjs decide [--github-output f]
 //                                   plates-morning.yml's first job: is the last night over, and sent?
@@ -432,13 +432,40 @@ const itemLine = (it, health, tail = []) => {
 };
 const isPr = link => /^https:\/\/[^/]+\/[^/]+\/[^/]+\/pull\/\d+$/.test(link ?? '');
 
+// Observation is an output mode, never a completion rule or a publication intent.
+function checkReportMode(mode, readOnly = true) {
+  if (!['final', 'observation'].includes(mode)) throw new MorningError('reportMode must be final or observation');
+  if (!readOnly && mode === 'observation') throw new MorningError('observation reports are read-only; use brief');
+}
+
+/** Supplied delivery observations are displayed, not verified or used as authority. */
+function deliveryView(delivery) {
+  if (delivery != null && (typeof delivery !== 'object' || Array.isArray(delivery))) throw new MorningError('delivery must be an observation object');
+  const states = {
+    installation: ['unknown', 'pending', 'installed', 'failed'],
+    verification: ['unavailable', 'pending', 'passed', 'failed'],
+    retirement: ['unavailable', 'not-required', 'pending', 'complete'],
+  };
+  const view = { attribution: 'Supplied observations; not independently verified by morning.' };
+  for (const [key, allowed] of Object.entries(states)) {
+    const supplied = delivery?.[key];
+    if (supplied != null && (typeof supplied !== 'object' || Array.isArray(supplied) || !allowed.includes(supplied.state))) {
+      throw new MorningError(`delivery.${key}.state must be ${allowed.join(', ')}`);
+    }
+    view[key] = supplied == null ? { state: allowed[0], gaps: ['No delivery observation supplied.'] } : structuredClone(supplied);
+  }
+  return view;
+}
+
 /**
  * The brief, pure: { sections, next, markdown }. Isocan's order: done (the
  * build items that finished, sure), tried (everything else that ran: measure,
  * review, triage), failed and why, left alone (skipped, left alone, will not
  * touch), not finished (by readyBy when it passed), and the owner's next.
  */
-export function renderBrief({ plan, now = new Date(), health = {}, links = {}, verify = null, production = null }) {
+export function renderBrief({ plan, now = new Date(), health = {}, links = {}, verify = null, production = null, reportMode = 'final', delivery = null }) {
+  checkReportMode(reportMode);
+  const deliveryObservation = reportMode === 'observation' ? deliveryView(delivery) : null;
   const r = readiness(plan, now);
   const done = plan.items.filter(i => i.kind === 'build' && i.status === 'done');
   const tried = plan.items.filter(i => i.kind !== 'build' && i.status === 'done');
@@ -461,7 +488,12 @@ export function renderBrief({ plan, now = new Date(), health = {}, links = {}, v
   const linkLine = [links.canvas && `Canvas: ${links.canvas}`, links.health && `Health page: ${links.health}`].filter(Boolean).join(' · ');
   const section = (head, items, line) => [head, '', ...(items.length ? items.map(line) : ['Nothing.']), ''];
   const markdown = [
-    `# ${titleOf(plan.date)}`, '',
+    `# ${reportMode === 'observation' ? `Morning observation, ${plan.date}` : titleOf(plan.date)}`, '',
+    ...(deliveryObservation ? [
+      `Partial observation; the final brief remains ${titleOf(plan.date)}. Reporting does not complete work or grant execution authority.`, '',
+      '## Delivery observations', '', deliveryObservation.attribution, '',
+      ...['installation', 'verification', 'retirement'].map(key => `- ${key[0].toUpperCase() + key.slice(1)}: ${deliveryObservation[key].state}`), '',
+    ] : []),
     `The night of ${plan.date} (UTC), ${by}: ${[count(done.length, 'done'), count(tried.length, 'tried'), count(failed.length, 'failed'), count(alone.length, 'left alone'), count(open.length, r.late ? `not finished by ${r.readyBy}` : 'still going')].join(', ')}.`, '',
     ...(linkLine ? [linkLine, ''] : []),
     ...((health.after ?? health.before)?.verification ? ['## Retained verification', '', (health.after ?? health.before).verification, ''] : []),
@@ -474,7 +506,7 @@ export function renderBrief({ plan, now = new Date(), health = {}, links = {}, v
     '## Your next', '',
     ...(next.length ? next.map(n => `- ${n}`) : ['Nothing waits for you this morning.']), '',
   ].join('\n');
-  return { readiness: r, sections: { done: done.map(i => i.id), tried: tried.map(i => i.id), failed: failed.map(i => i.id), leftAlone: alone.map(i => i.id), unfinished: open.map(i => i.id) }, next, markdown };
+  return { ...(deliveryObservation ? { report: { mode: reportMode, partial: true, finalTitle: titleOf(plan.date) }, delivery: deliveryObservation } : {}), readiness: r, sections: { done: done.map(i => i.id), tried: tried.map(i => i.id), failed: failed.map(i => i.id), leftAlone: alone.map(i => i.id), unfinished: open.map(i => i.id) }, next, markdown };
 }
 
 const dateOf = (date, now) => {
@@ -487,7 +519,8 @@ const dateOf = (date, now) => {
 export async function brief(options) {
   return briefWithConfig(options, await configOf(options.root));
 }
-async function briefWithConfig({ root, date, env = process.env, now = new Date(), namesEvidence = false }, config) {
+async function briefWithConfig({ root, date, env = process.env, now = new Date(), namesEvidence = false, reportMode = 'final', delivery = null }, config) {
+  checkReportMode(reportMode);
   const night = dateOf(date, now);
   const found = await finalPlan({ root, date: night, namesEvidence });
   if (!found.plan) throw new MorningError(`no plan for the night of ${night}: ${found.sources.map(s => `${s.from} ${s.state}`).join('; ')}`);
@@ -502,14 +535,14 @@ async function briefWithConfig({ root, date, env = process.env, now = new Date()
     verify = { failed: verifyFailuresFor(v.results, night, { production: productionOf(config) }), unread: v.unread ?? null };
   }
   const production = await productionStatus({root,config,now});
-  const b = renderBrief({ plan: found.plan, now, health, links, verify, production });
+  const b = renderBrief({ plan: found.plan, now, health, links, verify, production, reportMode, delivery });
   const observation=found.observation;
   if(observation && verifyObservation) {
     const projection=namesFragment(observation,'verify-displayed',JSON.stringify((verify?.failed??[]).map(({sha,ok,at})=>({sha,ok,at}))));
     observation.reads.push(...verifyObservation.reads.map(r=>({...r,outputProjection:projection})));
     observation.gaps.push(...verifyObservation.gaps);
   }
-  return { data: { ok: true, date: night, title: titleOf(night), from: found.from, sources: found.sources, readiness: b.readiness, sections: b.sections, next: b.next, links, verify, production, markdown: b.markdown, plan: found.plan, ...(observation?{observation}:{}) }, text: b.markdown.trimEnd() };
+  return { data: { ok: true, date: night, title: reportMode === 'observation' ? `Morning observation, ${night}` : titleOf(night), ...(b.report ? { report: b.report, delivery: b.delivery } : {}), from: found.from, sources: found.sources, readiness: b.readiness, sections: b.sections, next: b.next, links, verify, production, markdown: b.markdown, plan: found.plan, ...(observation?{observation}:{}) }, text: b.markdown.trimEnd() };
 }
 
 // ---- sending -----------------------------------------------------------------
@@ -560,7 +593,8 @@ export function assigneeOf(config) {
  * issues are closed. An issue with that title already (open or closed) is
  * this night's brief: nothing is sent again.
  */
-export async function send({ root, date, env = process.env, now = new Date(), namesEvidence = false }) {
+export async function send({ root, date, env = process.env, now = new Date(), namesEvidence = false, reportMode = 'final' }) {
+  checkReportMode(reportMode, false);
   const config = await configOf(root);
   const assignee = assigneeOf(config);
   // Pin the checkout identity once: later gh calls must not follow a changed default.
@@ -692,7 +726,8 @@ export function withPlanSection(page, section) {
  * data-only PR in the night's queue. --pr-input writes that PR's body input
  * (scripts/plates/pr-body.mjs).
  */
-export async function finalize({ root, date, prInput, namesEvidence = false }) {
+export async function finalize({ root, date, prInput, namesEvidence = false, reportMode = 'final' }) {
+  checkReportMode(reportMode, false);
   const night = dateOf(date);
   const config = await configOf(root);
   const found = await finalPlan({ root, date: night, namesEvidence, consumer:'morning-final' });
@@ -736,7 +771,7 @@ export function finalPr(plan, page) {
 
 // ---- the script --------------------------------------------------------------
 
-const USAGE = 'usage: node scripts/plates/morning.mjs brief [--date d] | send [--date d] | decide [--github-output f] | finalize --date d [--pr-input f] [--json]';
+const USAGE = 'usage: node scripts/plates/morning.mjs brief [--date d] [--observation] | send [--date d] | decide [--github-output f] | finalize --date d [--pr-input f] [--json]';
 
 export function parseArgs(args) {
   const [sub, ...rest] = args;
@@ -744,6 +779,7 @@ export function parseArgs(args) {
   if (!valued) throw new MorningError(USAGE);
   const out = { sub };
   for (let i = 0; i < rest.length; i++) {
+    if (rest[i] === '--observation' && sub === 'brief') { out.reportMode = 'observation'; continue; }
     if(rest[i]==='--names-evidence') {out.namesEvidence=true;continue;}
     if (!valued.includes(rest[i])) throw new MorningError(`unexpected argument: ${rest[i]}; ${USAGE}`);
     if (rest[i + 1] === undefined || rest[i + 1].startsWith('--')) throw new MorningError(`${rest[i]} needs a value`);
@@ -756,7 +792,7 @@ export function parseArgs(args) {
 export async function run(args, { root, env = process.env, now = new Date() } = {}) {
   const o = parseArgs(args);
   const namesEvidence=namesEvidenceContext(o.namesEvidence,env);
-  if (o.sub === 'brief') return brief({ root, date: o.date, env, now, namesEvidence });
+  if (o.sub === 'brief') return brief({ root, date: o.date, env, now, namesEvidence, reportMode: o.reportMode });
   if (o.sub === 'send') return send({ root, date: o.date, env, now, namesEvidence });
   if (o.sub === 'decide') return decide({ root, date:o.date, env, now, githubOutput: o.githubOutput });
   return finalize({ root, date: o.date, prInput: o.prInput, namesEvidence });
