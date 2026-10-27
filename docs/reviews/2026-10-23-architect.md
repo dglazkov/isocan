@@ -15,7 +15,7 @@ Run by `scripts/persona-run.mjs` at `9dff0ad`. **Nothing was changed.**
 | Finding | Outcome |
 | --- | --- |
 | lines in the files every feature must edit is 26983, past 25267 | unanswered |
-| tokens an agent reads before its first act is 3505, past 3500 | unanswered |
+| tokens an agent reads before its first act is 3505, past 3500 | accepted — 27 Oct: the reading was correct. Motion phase 0 (`29bd7a62c`) raised only the test budget to 3600, leaving the architect at 3500. Trimmed redundant opening prose in `packages/cli/src/agent-guide.md`; `node scripts/measure.mjs agent-help-tokens` now reports 3477 with every verb and topic retained. Restored the test budget to 3500 and added a regression assertion that it agrees with the architect's parsed goal. The nightly bound and three-day review gate are unchanged. |
 
 `unanswered` until somebody writes `accepted` or `rejected`. **After 3 days
 an unanswered row fails `npm test`** — the queue can fail, so a correct report

@@ -18,7 +18,7 @@ built, 11 designed, 0 blocked, and
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
 read lately.
 
-12 more are `noted` — read, absorbed, owing nothing — and
+13 more are `noted` — read, absorbed, owing nothing — and
 8 superseded. Neither counts as done: reading is not building,
 and the done column should not be flattered by either.
 
@@ -192,10 +192,11 @@ whoever built the thing for somebody who knows nothing about it.
 | **project** | [workbench](projects/workbench/design.md) | 2026-08-29 |  · see workbench |
 | research | [WYSIWYG on the stage](research/2026-08-26-wysiwyg.md) | 2026-08-29 | the text stage built 26–27 Aug (the V0, then the parse5 upgrade — edits name a node by ordinal and splice by source range); element properties built 4 Sep — click an element in the frozen frame, edit its class and inline styles, saved as attribute splices by the same rule · see atlas |
 
-## Noted — read, owing nothing <sub>12</sub>
+## Noted — read, owing nothing <sub>13</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
+| research | [27 October 2026 — Isocan's nightly gate evidence](research/2026-10-27-nightly-gate.md) | 2026-10-27 | The clean nightly source reproduces the overdue cold-start review; the original run's complete failure details were not retained. The guide now meets 3500 tokens and the nightly/test budgets are checked for agreement. Shared Plates diagnostics remain upstream work; full validation awaits resource coordination. · see practice |
 | research | [Agents on the canvas: what the field shipped in a year](research/2026-08-23-agents-on-the-canvas.md) | 2026-08-30 | the category converged on MCP + a skill, which isocan has; edges deliberately declined |
 | research | [An inbox for the person](research/2026-08-29-the-inbox.md) | 2026-08-29 | established the shared inbox routing and private high-water mark argument; current implementation and acceptance live in docs/projects/inbox, with the CLI and seen-marks already built · [#147](https://github.com/dglazkov/isocan/issues/147) |
 | research | [Antigravity over ACP](research/2026-09-04-antigravity-acp.md) | 2026-09-04 | measured 4 Sep — Google ships an official ACP server for Antigravity (registry entry 20 Aug, 1.1.1 on 3 Sep) as a 316 MB per-platform zip from dl.google.com, not npm; it speaks ACP 1 with session load/resume, keeps its own login apart from the IDE's and the CLI's, and its Google login rejected this account as "not eligible for Antigravity". First call: not worth building on. Revisited the same evening: the server's gemini-api-key method skips the gate, so it is built on a key · see harnesses, on-demand |
