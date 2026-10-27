@@ -1290,3 +1290,132 @@ it("creates and revises a text note offline with its Markdown blob staged locall
 });
 
 
+
+it("creates speaker notes offline, restores their bytes after reload, and flushes once before the op", async () => {
+  const { useCanvasStore, disconnect } = await store();
+  const { addSpeakerNote } = await import("../src/lib/notes.ts");
+  await connected(2);
+  await goOffline();
+  const slide = useCanvasStore.getState().canvas!.items["itm_1"]!;
+  const itemId = await addSpeakerNote("prj_1", priya, slide, "Acme speaker notes");
+  const item = useCanvasStore.getState().canvas!.items[itemId]!;
+  expect(item.properties).toMatchObject({ noteFor: slide.id });
+  const hash = item.versions[0]!.blobHash;
+  expect(await (await api()).readBlobText("prj_1", hash)).toBe("Acme speaker notes");
+  expect(disk.get("prj_1")!.queue).toHaveLength(1);
+  expect(disk.get("prj_1")!.queue[0]!.stagedBlob?.text).toBe("Acme speaker notes");
+
+  disconnect();
+  vi.resetModules();
+  const reloaded = await store();
+  const reloadedApi = await api();
+  reloadedApi.onOfflineWrite(reloaded.queueOfflineWrite, reloaded.queuedWriteOrigin);
+  (await import("../src/lib/replica.ts")).setReplicaStore(diskStore());
+  reloaded.connectToCanvas("prj_1", priya);
+  await settle();
+  expect(await reloadedApi.readBlobText("prj_1", hash)).toBe("Acme speaker notes");
+  events = [];
+  seqs = [3];
+  await comeBack();
+  await vi.waitFor(() => expect(posted).toHaveLength(1));
+  expect(events.slice(0, 2)).toEqual([`blob:${hash}`, `post:${posted[0]!.opId}`]);
+  FakeSocket.last.deliver({ type: "op-applied", entry: { seq: 3, envelope: { ...posted[0], id: posted[0]!.opId, ts: "2026-08-24T00:00:00Z" }, inverse: null } });
+  await settle();
+  expect(reloaded.useCanvasStore.getState().queue).toEqual([]);
+  expect(reloaded.useCanvasStore.getState().canvas!.items[itemId]!.versions).toHaveLength(1);
+  await comeBack();
+  expect(posted).toHaveLength(1);
+});
+
+it("places duplicate stickers and replaces one offline through the module host, then flushes each operation once", async () => {
+  const { useCanvasStore } = await store();
+  await connected(2);
+  useCanvasStore.setState({ capability: "edit" });
+  await goOffline();
+  const { webHostFor } = await import("../src/lib/modulehost.ts");
+  const { stickersWeb } = await import("../../modules/stickers/src/web.tsx");
+  const { STICKERS, STICKER_MIME, stickerFile } = await import("../../modules/stickers/src/core.ts");
+  const host = webHostFor("prj_1", priya);
+  const drop = stickersWeb.drops![0]!;
+  const ids: string[] = [];
+  for (const x of [100, 300]) {
+    const ops = await drop.run({ canvasId: "prj_1", data: "star", mimeType: drop.mimes[0]!, at: { x, y: 100 }, host });
+    expect(ops?.[0]?.type).toBe("item.add");
+    if (!ops || ops[0]?.type !== "item.add") throw new Error("sticker drop did not create an item");
+    ids.push(ops[0].itemId);
+    await host.send(ops, "grp_stickers");
+  }
+  const file = stickerFile(STICKERS[1]!);
+  const put = await host.putBlob(new Blob([file.body], { type: STICKER_MIME }), file.filename);
+  await host.send([{ type: "item.addVersion", itemId: ids[0]!, version: { id: "ver_heart", ...put, mimeType: STICKER_MIME, filename: file.filename } }]);
+  const queue = useCanvasStore.getState().queue;
+  expect(queue).toHaveLength(3);
+  expect(queue[0]!.stagedBlob!.blobHash).toBe(queue[1]!.stagedBlob!.blobHash);
+  expect(queue[2]!.stagedBlob!.text).toBe(file.body);
+  expect(disk.get("prj_1")!.queue).toHaveLength(3);
+  expect(useCanvasStore.getState().canvas!.items[ids[0]!]!.versions).toHaveLength(2);
+  expect(await (await api()).readBlobText("prj_1", put.blobHash)).toBe(file.body);
+
+  events = [];
+  seqs = [3, 4, 5];
+  await comeBack();
+  await vi.waitFor(() => expect(posted).toHaveLength(3));
+  expect(events.slice(0, 6)).toEqual(queue.flatMap((write) => [`blob:${write.stagedBlob!.blobHash}`, `post:${write.opId}`]));
+  for (const [i, op] of posted.entries()) {
+    FakeSocket.last.deliver({ type: "op-applied", entry: { seq: 3 + i, envelope: { ...op, id: op.opId, ts: "2026-08-24T00:00:00Z" }, inverse: null } });
+  }
+  await settle();
+  expect(useCanvasStore.getState().queue).toEqual([]);
+  expect(useCanvasStore.getState().canvas!.items[ids[0]!]!.versions).toHaveLength(2);
+  expect(useCanvasStore.getState().canvas!.items[ids[1]!]!.versions).toHaveLength(1);
+  await comeBack();
+  expect(posted).toHaveLength(3);
+});
+
+it("keeps module binary uploads and permission refusals out of the offline text path", async () => {
+  const { useCanvasStore } = await store();
+  await connected(2);
+  useCanvasStore.setState({ capability: "edit" });
+  await goOffline();
+  const { webHostFor } = await import("../src/lib/modulehost.ts");
+  const host = webHostFor("prj_1", priya);
+  await expect(host.putBlob(new Blob([new Uint8Array([255, 0])], { type: "image/png" }), "image.png")).rejects.toMatchObject({ offline: true });
+  const put = await host.putBlob(new Blob(["Acme"], { type: "text/plain" }), "note.txt");
+  useCanvasStore.setState({ capability: "read" });
+  await expect(host.send([{ type: "item.addVersion", itemId: "itm_1", version: { id: "ver_denied", ...put, mimeType: "text/plain", filename: "note.txt" } }])).rejects.toThrow("reading this canvas");
+  expect(useCanvasStore.getState().queue).toEqual([]);
+});
+
+it.each(["accepted", "refused"] as const)("keeps shared sticker bytes locally when one queued reference is %s and another is still offline", async (outcome) => {
+  const { useCanvasStore } = await store();
+  await connected(2);
+  useCanvasStore.setState({ capability: "edit" });
+  if (outcome === "refused") await goOffline();
+  else online = false; // POSTs fail, but the socket can still deliver a confirmed echo.
+  const { webHostFor } = await import("../src/lib/modulehost.ts");
+  const host = webHostFor("prj_1", priya);
+  const put = await host.putBlob(new Blob(["⭐"], { type: "text/vnd.isocan.sticker" }), "star.sticker");
+  // A single put may feed more than one operation, even in separate sends.
+  for (const id of ["itm_star1", "itm_star2"]) {
+    await host.send([{ type: "item.add", itemId: id, width: 120, height: 120, placement: { x: 0, y: 0 }, version: { id: `ver_${id}`, ...put, filename: "star.sticker", mimeType: "text/vnd.isocan.sticker" } }]);
+  }
+  const first = useCanvasStore.getState().queue[0]!;
+  if (outcome === "refused") refusals.set(first.opId, { status: 403, error: "Synthetic refusal", code: "view-only" });
+  seqs = [3];
+  globalThis.fetch = (async (url: string, init?: { body?: any }) => {
+    const response = await fakeFetch(url, init);
+    if (String(url).endsWith("/api/ops")) online = false;
+    return response;
+  }) as typeof fetch;
+  if (outcome === "accepted") {
+    FakeSocket.last.deliver({ type: "op-applied", entry: { seq: 3, envelope: { id: first.opId, canvasId: "prj_1", actor: first.actor, op: first.op, ts: "2026-08-24T00:00:00Z" }, inverse: null } });
+  } else {
+    await comeBack();
+    await vi.waitFor(() => expect(posted).toHaveLength(1));
+  }
+  await vi.waitFor(() => expect(useCanvasStore.getState().queue).toHaveLength(1));
+  expect(useCanvasStore.getState().refused).toHaveLength(outcome === "refused" ? 1 : 0);
+  expect((await api()).blobUrl("prj_1", put.blobHash)).toMatch(/^data:/);
+  expect(await (await api()).readBlobText("prj_1", put.blobHash)).toBe("⭐");
+  expect(disk.get("prj_1")!.queue[0]!.stagedBlob?.text).toBe("⭐");
+});

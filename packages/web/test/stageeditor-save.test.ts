@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { webcrypto } from "node:crypto";
 import { act, createElement as h } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { EditorView } from "@codemirror/view";
@@ -57,6 +58,7 @@ let host: HTMLDivElement;
 const props = (item: Item) => ({ canvasId: "prj_acme", item, actor: acme, onDraft: () => {} });
 
 beforeEach(async () => {
+  vi.stubGlobal("crypto", webcrypto);
   try { localStorage.clear(); } catch { /* none */ }
   edge.upload.mockReset().mockResolvedValue({ blobHash: "f".repeat(64), size: 9 });
   edge.send.mockReset();
@@ -70,6 +72,7 @@ beforeEach(async () => {
 afterEach(() => {
   act(() => root.unmount());
   host.remove();
+  vi.unstubAllGlobals();
 });
 
 function editor(): EditorView {
@@ -128,5 +131,40 @@ describe("your own save is not somebody else's version (RH-3)", () => {
     const theirs = { id: "ver_2", blobHash: "2".repeat(64), mimeType: "text/markdown", filename: "acme.md", size: 7, author: other } as unknown as ItemVersion;
     await act(async () => root.render(h(StageEditor, props(itemAt([v1, theirs])))));
     expect(host.textContent).toContain("v2 landed while you edited");
+  });
+});
+
+
+describe("offline Stage saves", () => {
+  async function saveWithKey() {
+    await act(async () => editor().contentDOM.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "s", code: "KeyS", keyCode: 83, ctrlKey: true, bubbles: true, cancelable: true,
+    })));
+  }
+
+  it.each(["accepted", "refused"] as const)("stages the saved bytes once and retains newer typing when the home says %s", async (status) => {
+    edge.upload.mockRejectedValue(Object.assign(new Error("Offline"), { offline: true }));
+    let finish!: (value: { status: "accepted" | "refused"; message?: string }) => void;
+    const completion = new Promise((resolve) => { finish = resolve; });
+    edge.send.mockResolvedValue({ status: "queued", completion });
+    await type(" offline");
+    await saveWithKey();
+    await act(async () => { await vi.waitFor(() => expect(edge.send).toHaveBeenCalledTimes(1)); });
+    expect(edge.send.mock.calls[0]![5]).toMatchObject({ text: "hello offline", mimeType: "text/markdown", filename: "acme.md" });
+    const version = (edge.send.mock.calls[0]![2] as { version: NewVersion }).version;
+    expect(version.blobHash).toBe(edge.send.mock.calls[0]![5].blobHash);
+    expect(version.size).toBe(new TextEncoder().encode("hello offline").length);
+    await type(" and newer edits");
+    await saveWithKey();
+    expect(edge.send).toHaveBeenCalledTimes(1);
+    expect(edge.upload).toHaveBeenCalledTimes(1);
+    // The old draft remains until acceptance; a refusal never clears it.
+    const originalKey = "isocan.draft.prj_acme.itm_acme.ver_1";
+    await vi.waitFor(() => expect(localStorage.getItem(originalKey)).toBe("hello offline and newer edits"));
+    await act(async () => finish({ status, message: "Synthetic refusal" }));
+    expect(editor().state.doc.toString()).toBe("hello offline and newer edits");
+    const key = status === "accepted" ? `isocan.draft.prj_acme.itm_acme.${version.id}` : originalKey;
+    expect(localStorage.getItem(key)).toBe("hello offline and newer edits");
+    expect([...host.querySelectorAll("button")].some((b) => b.textContent === "Save version" && !b.disabled)).toBe(true);
   });
 });

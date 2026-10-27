@@ -495,7 +495,9 @@ export interface WebHost {
    *  `group` for one undo, exactly as a multi-op action groups today. */
   send: (ops: readonly Operation[], group?: string) => Promise<void>;
   /** Bytes in, a hash out — the half no operation carries. What a module does
-   *  with the hash is an `item.add` or an `item.addVersion` of its own. */
+   *  with the hash is an `item.add` or an `item.addVersion` of its own. Text
+   *  and SVG can be staged offline: send their ops through this same host so
+   *  the existing outbox can retain and upload the bytes before the ops. */
   putBlob: (
     bytes: Blob,
     filename: string,

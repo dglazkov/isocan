@@ -1,6 +1,9 @@
 import { useMemo } from "react";
 import { useUiStore } from "../stores/uiStore.ts";
 import type { Actor, EnrolAsk, Operation, WebHost } from "@isocan/core";
+import { editableText } from "@isocan/core";
+import type { StagedBlob } from "./replica.ts";
+import { uploadOrStageTextBlob } from "./upload.ts";
 import { askEnrolAgent, undo, uploadBlob } from "./api.ts";
 import { canEditNow, useCanEdit } from "./capability.ts";
 import { creationDestination, QueuedItemError, sendCreatedItem } from "./groupplacement.ts";
@@ -38,6 +41,9 @@ import { postToMain } from "./mainthread.ts";
  * tray will seem slower than the menu that does the same thing.
  */
 export function webHostFor(canvasId: string, actor: Actor, destination = creationDestination(), couldEdit = canEditNow()): WebHost {
+  // Bridge putBlob to send on this host. The durable owner is the existing
+  // operation outbox; keep bytes here too so one hash can feed several ops.
+  const staged = new Map<string, StagedBlob>();
   return {
     async send(ops: readonly Operation[], group?: string): Promise<void> {
       if (!couldEdit || (useCanvasStore.getState().canvasId === canvasId && !canEditNow())) {
@@ -50,11 +56,12 @@ export function webHostFor(canvasId: string, actor: Actor, destination = creatio
          right and skipped the offline queue, the inflight fold and the
          scrubber's refusal. Caught by that guard on the first run. */
       for (const op of ops) {
-        if (op.type === "item.add") await sendCreatedItem(canvasId, actor, { ...op, ...(op.containerId === undefined ? destination : {}), originGroupMode: destination.originGroupMode }, group);
+        const stagedBlob = op.type === "item.add" || op.type === "item.addVersion" ? staged.get(op.version.blobHash) : undefined;
+        if (op.type === "item.add") await sendCreatedItem(canvasId, actor, { ...op, ...(op.containerId === undefined ? destination : {}), originGroupMode: destination.originGroupMode }, group, { allowQueued: !!stagedBlob, ...(stagedBlob ? { stagedBlob } : {}) });
         else {
-          const result = await sendEchoedResult(canvasId, actor, op, group, destination.originGroupMode);
+          const result = await sendEchoedResult(canvasId, actor, op, group, destination.originGroupMode, stagedBlob);
           if (result.status === "refused") throw new Error(result.message || "This change could not be made.");
-          if (result.status === "queued") throw new QueuedItemError();
+          if (result.status === "queued" && !stagedBlob) throw new QueuedItemError();
         }
       }
     },
@@ -67,6 +74,12 @@ export function webHostFor(canvasId: string, actor: Actor, destination = creatio
        * would refuse a reader twice for one gesture and say the wrong thing
        * the first time.
        */
+      if (editableText(bytes.type)) {
+        const { upload, stagedBlob } = await uploadOrStageTextBlob(canvasId, await bytes.text(), bytes.type, filename);
+        if (stagedBlob) staged.set(upload.blobHash, stagedBlob);
+        else staged.delete(upload.blobHash);
+        return upload;
+      }
       const upload = await uploadBlob(canvasId, bytes, filename);
       return { blobHash: upload.blobHash, size: upload.size };
     },

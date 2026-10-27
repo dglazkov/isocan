@@ -12,7 +12,8 @@ import { json } from "@codemirror/lang-json";
 import { markdown } from "@codemirror/lang-markdown";
 import { isocanSyntax } from "../lib/cmtheme.ts";
 import { sendEchoedResult, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
-import { getSnapshot, readBlobText, uploadBlob } from "../lib/api.ts";
+import { getSnapshot, readBlobText } from "../lib/api.ts";
+import { uploadOrStageTextBlob } from "../lib/upload.ts";
 import { everyWhileVisible } from "../lib/whilevisible.ts";
 import "./stage-editor.css";
 
@@ -244,9 +245,10 @@ export function StageEditor({
     let pending: { text: string; versionId: string; blobHash: string } | null = null;
     let submitted = false;
     try {
-      const upload = await uploadBlob(
+      const { upload, stagedBlob } = await uploadOrStageTextBlob(
         canvasId,
-        new Blob([doc], { type: source.mimeType }),
+        doc,
+        source.mimeType,
         source.filename,
       );
       const version: NewVersion = {
@@ -262,7 +264,7 @@ export function StageEditor({
       mine.current.add(version.id);
       pending = { text: doc, versionId: version.id, blobHash: version.blobHash };
       submitted = true;
-      const receipt = await sendEchoedResult(canvasId, actor, op, undefined, originGroupMode);
+      const receipt = await sendEchoedResult(canvasId, actor, op, undefined, originGroupMode, stagedBlob);
       if (receipt.status === "queued") setNotice("Version queued — awaiting home confirmation. Your draft is still here.");
       const outcome = receipt.status === "queued" && receipt.completion ? await receipt.completion : receipt;
       if (outcome.status === "accepted") {
