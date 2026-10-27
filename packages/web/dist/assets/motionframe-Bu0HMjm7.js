@@ -1,0 +1,1 @@
+import"./index-wIN2T9jm.js";import{m,a as n}from"./motion-messages-FCjn3yab.js";import{n as r}from"./motionclock-xqVIvGV7.js";function p(o,t,e,s){const i=m(t);i&&(i.kind==="time"?r(o,i.at):s!==null&&e?.postMessage(n(s),"*"))}function c(o,t){for(const e of o)e?.postMessage(n(t),"*")}export{p as heardFromMotion,c as seekMotion};

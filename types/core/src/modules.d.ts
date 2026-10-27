@@ -336,8 +336,13 @@ export interface WebHost {
      *  `group` for one undo, exactly as a multi-op action groups today. */
     send: (ops: readonly Operation[], group?: string) => Promise<void>;
     /** Bytes in, a hash out — the half no operation carries. What a module does
-     *  with the hash is an `item.add` or an `item.addVersion` of its own. */
-    putBlob: (bytes: Blob, filename: string) => Promise<{
+     *  with the hash is an `item.add` or an `item.addVersion` of its own.
+     *  `stageOffline` opts a single primary text/SVG blob into local staging;
+     *  send its single item operation through this same host. Secondary faces
+     *  and multi-operation transactions do not support this opt-in. */
+    putBlob: (bytes: Blob, filename: string, options?: {
+        stageOffline?: boolean;
+    }) => Promise<{
         blobHash: string;
         size: number;
     }>;

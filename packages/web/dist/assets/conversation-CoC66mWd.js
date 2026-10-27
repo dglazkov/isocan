@@ -1,0 +1,1 @@
+import{g as r,bf as i,bg as c,G as d,bh as p}from"./index-wIN2T9jm.js";function f(a,o){const e=r.getState();if(e.canvasId!==a)return;const t=e.canvas?.threads[o];if(t?.main)i(a,!0);else if(t&&e.canvas){const s=c(e.canvas,t),n=d.getState();n.setViewport(p(n.viewport,s.x,s.y,window.innerWidth,window.innerHeight)),n.setOpenThread(t.id)}}export{f as openConversation};
