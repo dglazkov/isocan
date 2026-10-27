@@ -65,7 +65,7 @@ export function webHostFor(canvasId: string, actor: Actor, destination = creatio
         }
       }
     },
-    async putBlob(bytes: Blob, filename: string): Promise<{ blobHash: string; size: number }> {
+    async putBlob(bytes: Blob, filename: string, options?: { stageOffline?: boolean }): Promise<{ blobHash: string; size: number }> {
       /**
        * No permission test, deliberately, and it is worth saying why rather
        * than looking like an omission: a blob nothing names is invisible and
@@ -74,7 +74,7 @@ export function webHostFor(canvasId: string, actor: Actor, destination = creatio
        * would refuse a reader twice for one gesture and say the wrong thing
        * the first time.
        */
-      if (editableText(bytes.type)) {
+      if (options?.stageOffline && editableText(bytes.type)) {
         const { upload, stagedBlob } = await uploadOrStageTextBlob(canvasId, await bytes.text(), bytes.type, filename);
         if (stagedBlob) staged.set(upload.blobHash, stagedBlob);
         else staged.delete(upload.blobHash);

@@ -26,9 +26,10 @@ Verified in packages/modules/stickers/src/web.tsx:129-141 (StickerInspector onCl
 ## Implementation — 27 October 2026
 
 Addressed in the offline-save cluster: speaker notes and Stage use
-`uploadOrStageTextBlob`; `webHostFor` carries staged editable text/SVG into the
-existing operation outbox. Current stickers use deterministic UTF-8 emoji text,
+`uploadOrStageTextBlob`; the two sticker callers explicitly request
+`stageOffline` from `webHostFor`, which carries their primary blobs into the
+existing operation outbox. Default module uploads remain unchanged. Current stickers use deterministic UTF-8 emoji text,
 not SVG. `packages/web/test/offline.test.ts` covers offline creation, reload,
 ordered reconnect and shared hashes; `stageeditor-save.test.ts` covers queued
-Stage saves, duplicate prevention and retained drafts. The accepted decision
+Stage saves, duplicate prevention and retained drafts across remounts. The accepted decision
 above is preserved; no external Loop decision was sent.

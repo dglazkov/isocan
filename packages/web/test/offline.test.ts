@@ -1334,7 +1334,7 @@ it("places duplicate stickers and replaces one offline through the module host, 
   await goOffline();
   const { webHostFor } = await import("../src/lib/modulehost.ts");
   const { stickersWeb } = await import("../../modules/stickers/src/web.tsx");
-  const { STICKERS, STICKER_MIME, stickerFile } = await import("../../modules/stickers/src/core.ts");
+  const { STICKERS, stickerFile } = await import("../../modules/stickers/src/core.ts");
   const host = webHostFor("prj_1", priya);
   const drop = stickersWeb.drops![0]!;
   const ids: string[] = [];
@@ -1346,9 +1346,14 @@ it("places duplicate stickers and replaces one offline through the module host, 
     await host.send(ops, "grp_stickers");
   }
   const file = stickerFile(STICKERS[1]!);
-  const put = await host.putBlob(new Blob([file.body], { type: STICKER_MIME }), file.filename);
-  await host.send([{ type: "item.addVersion", itemId: ids[0]!, version: { id: "ver_heart", ...put, mimeType: STICKER_MIME, filename: file.filename } }]);
+  // Invoke the real inspector action as well as the real drop handler above.
+  // Both callers must explicitly opt in; a host-only test could miss either.
+  const inspector = stickersWeb.inspectors![0]!.component({ canvasId: "prj_1", item: useCanvasStore.getState().canvas!.items[ids[0]!]!, readText: async () => "⭐", host });
+  const heart = inspector.props.children.find((button: { props: { title: string } }) => button.props.title === STICKERS[1]!.name);
+  heart.props.onClick();
+  await vi.waitFor(() => expect(useCanvasStore.getState().queue).toHaveLength(3));
   const queue = useCanvasStore.getState().queue;
+  const put = queue[2]!.stagedBlob!;
   expect(queue).toHaveLength(3);
   expect(queue[0]!.stagedBlob!.blobHash).toBe(queue[1]!.stagedBlob!.blobHash);
   expect(queue[2]!.stagedBlob!.text).toBe(file.body);
@@ -1380,7 +1385,7 @@ it("keeps module binary uploads and permission refusals out of the offline text 
   const { webHostFor } = await import("../src/lib/modulehost.ts");
   const host = webHostFor("prj_1", priya);
   await expect(host.putBlob(new Blob([new Uint8Array([255, 0])], { type: "image/png" }), "image.png")).rejects.toMatchObject({ offline: true });
-  const put = await host.putBlob(new Blob(["Acme"], { type: "text/plain" }), "note.txt");
+  const put = await host.putBlob(new Blob(["Acme"], { type: "text/plain" }), "note.txt", { stageOffline: true });
   useCanvasStore.setState({ capability: "read" });
   await expect(host.send([{ type: "item.addVersion", itemId: "itm_1", version: { id: "ver_denied", ...put, mimeType: "text/plain", filename: "note.txt" } }])).rejects.toThrow("reading this canvas");
   expect(useCanvasStore.getState().queue).toEqual([]);
@@ -1394,7 +1399,7 @@ it.each(["accepted", "refused"] as const)("keeps shared sticker bytes locally wh
   else online = false; // POSTs fail, but the socket can still deliver a confirmed echo.
   const { webHostFor } = await import("../src/lib/modulehost.ts");
   const host = webHostFor("prj_1", priya);
-  const put = await host.putBlob(new Blob(["⭐"], { type: "text/vnd.isocan.sticker" }), "star.sticker");
+  const put = await host.putBlob(new Blob(["⭐"], { type: "text/vnd.isocan.sticker" }), "star.sticker", { stageOffline: true });
   // A single put may feed more than one operation, even in separate sends.
   for (const id of ["itm_star1", "itm_star2"]) {
     await host.send([{ type: "item.add", itemId: id, width: 120, height: 120, placement: { x: 0, y: 0 }, version: { id: `ver_${id}`, ...put, filename: "star.sticker", mimeType: "text/vnd.isocan.sticker" } }]);
@@ -1418,4 +1423,25 @@ it.each(["accepted", "refused"] as const)("keeps shared sticker bytes locally wh
   expect((await api()).blobUrl("prj_1", put.blobHash)).toMatch(/^data:/);
   expect(await (await api()).readBlobText("prj_1", put.blobHash)).toBe("⭐");
   expect(disk.get("prj_1")!.queue[0]!.stagedBlob?.text).toBe("⭐");
+});
+
+
+it("leaves ordinary module text uploads unchanged unless staging is explicitly requested", async () => {
+  const { useCanvasStore } = await store();
+  await connected(2);
+  useCanvasStore.setState({ capability: "edit" });
+  const { webHostFor } = await import("../src/lib/modulehost.ts");
+  const host = webHostFor("prj_1", priya);
+  const original = new Blob([new Uint8Array([0xef, 0xbb, 0xbf, 65])], { type: "text/plain" });
+  let uploaded: unknown;
+  globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+    uploaded = init?.body;
+    return new Response(JSON.stringify({ blobHash: "hash_acme", size: 4 }), { status: 201 });
+  }) as typeof fetch;
+  await host.putBlob(original, "acme.txt");
+  expect(uploaded).toBe(original); // no UTF-8/BOM decoding on the default path
+  globalThis.fetch = fakeFetch as typeof fetch;
+  await goOffline();
+  await expect(host.putBlob(new Blob(["Acme"], { type: "text/html" }), "visual.html")).rejects.toMatchObject({ offline: true });
+  expect(useCanvasStore.getState().queue).toEqual([]);
 });

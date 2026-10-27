@@ -4,7 +4,7 @@ import { webcrypto } from "node:crypto";
 import { act, createElement as h } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { EditorView } from "@codemirror/view";
-import type { Actor, Item, ItemVersion, NewVersion } from "@isocan/core";
+import type { Actor, CanvasState, Item, ItemVersion, NewVersion } from "@isocan/core";
 
 /**
  * **The stage editor's save is the save of the item on screen, and its own
@@ -45,6 +45,8 @@ vi.mock("../src/stores/canvasStore.ts", async (original) => ({
 }));
 vi.mock("../src/lib/groupplacement.ts", () => ({ creationDestination: () => ({ originGroupMode: "groups" }) }));
 
+const { useCanvasStore } = await import("../src/stores/canvasStore.ts");
+const { newWrite } = await import("../src/lib/writequeue.ts");
 const { StageEditor } = await import("../src/components/StageEditor.tsx");
 
 const acme: Actor = { id: "usr_acme", name: "Acme" };
@@ -59,6 +61,7 @@ const props = (item: Item) => ({ canvasId: "prj_acme", item, actor: acme, onDraf
 
 beforeEach(async () => {
   vi.stubGlobal("crypto", webcrypto);
+  useCanvasStore.setState({ canvasId: null, confirmed: null, queue: [], refused: [] });
   try { localStorage.clear(); } catch { /* none */ }
   edge.upload.mockReset().mockResolvedValue({ blobHash: "f".repeat(64), size: 9 });
   edge.send.mockReset();
@@ -167,4 +170,66 @@ describe("offline Stage saves", () => {
     expect(localStorage.getItem(key)).toBe("hello offline and newer edits");
     expect([...host.querySelectorAll("button")].some((b) => b.textContent === "Save version" && !b.disabled)).toBe(true);
   });
+});
+
+
+describe("reopening an offline Stage save", () => {
+  it.each([
+    ["accepted", ""], ["accepted", " and newer edits"],
+    ["refused", ""], ["refused", " and newer edits"],
+  ] as const)("keeps the pending identity and draft on %s with suffix %j", async (status, suffix) => {
+    edge.upload.mockRejectedValue(Object.assign(new Error("Offline"), { offline: true }));
+    let finish!: (value: { status: "accepted" | "refused" }) => void;
+    edge.send.mockResolvedValue({ status: "queued", completion: new Promise((resolve) => { finish = resolve; }) });
+    await type(" offline");
+    await act(async () => [...host.querySelectorAll("button")].find((b) => b.textContent === "Save version")!.click());
+    await act(async () => { await vi.waitFor(() => expect(edge.send).toHaveBeenCalledTimes(1)); });
+    const op = edge.send.mock.calls[0]![2] as { type: "item.addVersion"; itemId: string; version: NewVersion };
+    const ours = { ...op.version, author: acme } as unknown as ItemVersion;
+    const queued = itemAt([v1, ours]);
+    const stateAt = (item: Item) => ({ project: { id: "prj_acme" }, canvas: { items: { itm_acme: item } } }) as unknown as CanvasState;
+    await act(async () => {
+      useCanvasStore.setState({ canvasId: "prj_acme", confirmed: stateAt(itemAt([v1])), queue: [newWrite("op_stage", acme, op, undefined, "groups", edge.send.mock.calls[0]![5])] });
+      root.render(h(StageEditor, props(queued)));
+    });
+    if (suffix) await type(suffix);
+    await act(async () => root.unmount());
+    edge.read.mockResolvedValue("hello offline");
+    root = createRoot(host);
+    await act(async () => root.render(h(StageEditor, props(queued))));
+    expect(editor().state.doc.toString()).toBe(`hello offline${suffix}`);
+    await act(async () => editor().contentDOM.dispatchEvent(new KeyboardEvent("keydown", { key: "s", code: "KeyS", keyCode: 83, ctrlKey: true, bubbles: true, cancelable: true })));
+    expect(edge.send).toHaveBeenCalledTimes(1);
+    // The old component's completion must not clear the new component's draft.
+    await act(async () => finish({ status }));
+    await act(async () => useCanvasStore.setState({ queue: [], confirmed: stateAt(status === "accepted" ? queued : itemAt([v1])) }));
+    expect(editor().state.doc.toString()).toBe(`hello offline${suffix}`);
+    const key = `isocan.draft.prj_acme.itm_acme.${status === "accepted" ? ours.id : v1.id}`;
+    expect(localStorage.getItem(key)).toBe(status === "accepted" && !suffix ? null : `hello offline${suffix}`);
+    const save = [...host.querySelectorAll("button")].find((b) => b.textContent === "Save version");
+    if (status === "accepted" && !suffix) expect(save).toBeUndefined();
+    else expect(save?.disabled).toBe(false);
+  });
+});
+
+
+it.each(["canvas", "actor"] as const)("replaces the editor when its %s changes without letting the old completion touch the replacement", async (identity) => {
+  edge.upload.mockRejectedValue(Object.assign(new Error("Offline"), { offline: true }));
+  let finish!: (value: { status: "accepted" }) => void;
+  edge.send.mockResolvedValue({ status: "queued", completion: new Promise((resolve) => { finish = resolve; }) });
+  await type(" offline");
+  await act(async () => [...host.querySelectorAll("button")].find(b => b.textContent === "Save version")!.click());
+  await act(async () => { await vi.waitFor(() => expect(edge.send).toHaveBeenCalledTimes(1)); });
+  const originalView = editor();
+  const originalMarker = localStorage.getItem("isocan.pending-stage.prj_acme.itm_acme.usr_acme");
+  expect(originalMarker).not.toBeNull();
+  const next = { ...props(itemAt([v1])), ...(identity === "canvas" ? { canvasId: "prj_other" } : { actor: other }) };
+  await act(async () => root.render(h(StageEditor, next)));
+  expect(editor()).not.toBe(originalView);
+  await type(" different context");
+  const text = editor().state.doc.toString();
+  await act(async () => finish({ status: "accepted" }));
+  expect(editor().state.doc.toString()).toBe(text);
+  expect(localStorage.getItem("isocan.pending-stage.prj_acme.itm_acme.usr_acme")).toBe(originalMarker);
+  expect([...host.querySelectorAll("button")].find(b => b.textContent === "Save version")?.disabled).toBe(false);
 });

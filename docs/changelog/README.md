@@ -17,7 +17,7 @@ screen per day, one row per week, open to anyone with the address.
 
 | Day | | What happened |
 | --- | --- | --- |
-| **[27 Oct](2026-10-27.md)** | Offline notes, Stage saves and stickers | Existing text staging and outbox now cover speaker notes, Stage versions and module text/SVG; shared blob bytes survive partial retirement or refusal. |
+| **[27 Oct](2026-10-27.md)** | Offline notes, Stage saves and stickers | Existing text staging and outbox now cover speaker notes, Stage versions and explicitly staged sticker blobs; shared blob bytes survive partial retirement or refusal. |
 | **[25 Oct](2026-10-25.md)** | Every motion format, and a nightly red that was a missing login | Motion phase 3: WebM and GIF beside MP4 from our own encoders, and the `reveal`, `orbit` and `emphasis` recipes; waits on a person's walk. plates-night's production collection switched off — `gcloud` on the runner was never signed in. |
 | **[23 Oct](2026-10-23.md)** | Bounded suite installation, pending integrated proof | Shared setup retains diagnostics before terminating stalled installs; a read-only planner proposes at most one manual setup retry. Focused controls pass; full gates and exact-head PR review remain pending. |
 | **[22 Oct](2026-10-22.md)** | Motion, from a still drawing to a movie | Motion phases 0–2: a pure-in-time engine, `isocan motion new` and `render` to H.264 MP4 with decoded frames matching the preview, and the browser's *Animate…*, scrubber, comments at a moment and *Render movie…*. A real agent printed the command instead of running it; the ask now says RUN. |
