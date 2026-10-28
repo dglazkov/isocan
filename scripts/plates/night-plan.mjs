@@ -833,6 +833,32 @@ export async function record({ root, date, ticks, remote = 'origin', env = proce
  * checkout, no working tree touched): on top of `tip` with the tip's tree and
  * the plan replaced, or, with no tip, a commit of the plan alone with no parent.
  */
+/**
+ * A storage branch is not the app. The plan branch (like the verify branch)
+ * holds a JSON file and nothing to build, yet a host that deploys every
+ * pushed branch tries, and mails the owner a failed build each time
+ * (ledger, 17 and 26 Oct 2026: "Root Directory "web" does not exist"). Vercel
+ * reads `vercel.json` from the commit it builds, so the opt-out has to be on
+ * the branch itself: wherever the project's own tree has a `vercel.json` (its
+ * root, or one folder down where the app lives), the branch gets one that
+ * turns deployments off. A project without Vercel gets nothing.
+ */
+export const HOSTING_OPT_OUT = `${JSON.stringify({ git: { deploymentEnabled: false } }, null, 2)}\n`;
+
+export function hostingOptOutPaths(root, env = process.env) {
+  const r = planGit(root, ['ls-tree', '-r', '--name-only', 'HEAD'], { env, allowFail: true });
+  if (r.status !== 0) return [];
+  return r.stdout.split('\n').map(p => p.trim()).filter(p => /^(?:[^/]+\/)?vercel\.json$/.test(p));
+}
+
+/** Add the opt-out to an index, at each of `paths` the index does not already hold. */
+export function addHostingOptOut(root, env, paths) {
+  if (!paths.length) return;
+  const held = new Set(planGit(root, ['ls-files'], { env }).split('\n'));
+  const blob = planGit(root, ['hash-object', '-w', '--stdin'], { env, input: HOSTING_OPT_OUT });
+  for (const p of paths) if (!held.has(p)) planGit(root, ['update-index', '--add', '--cacheinfo', `100644,${blob},${p}`], { env });
+}
+
 async function planCommit(root, env, plan, tip, message) {
   const blob = planGit(root, ['hash-object', '-w', '--stdin'], { env, input: `${JSON.stringify(plan, null, 2)}\n` });
   const directory = await mkdtemp(join(planGit(root, ['rev-parse', '--absolute-git-dir'], { env }), writeName('machine:keel-night-plan-')));
@@ -841,6 +867,7 @@ async function planCommit(root, env, plan, tip, message) {
   try {
     if (tip) planGit(root, ['read-tree', tip], { env: withIndex });
     planGit(root, ['update-index', '--add', '--cacheinfo', `100644,${blob},${REMOTE_PLAN}`], { env: withIndex });
+    addHostingOptOut(root, withIndex, hostingOptOutPaths(root, env));
     const tree = planGit(root, ['write-tree'], { env: withIndex });
     return planGit(root, ['-c', 'user.name=plates-night', '-c', 'user.email=41898282+github-actions[bot]@users.noreply.github.com', 'commit-tree', tree, ...(tip ? ['-p', tip] : []), '-m', message], { env });
   } finally { await rm(directory, { recursive: true, force: true }); }

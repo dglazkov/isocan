@@ -217,7 +217,7 @@ jobs:
   # The night's final outcomes, as one data-only PR in its queue (plates#137).
   finalize:
     needs: decide
-    if: needs.decide.outputs.ready == 'true'
+    if: ${{ !cancelled() && needs.decide.result == 'success' && (needs.decide.outputs.ready == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -425,7 +425,7 @@ jobs:
 
   send:
     needs: decide
-    if: needs.decide.outputs.ready == 'true' && (needs.decide.outputs.sent != 'true' || (github.event_name == 'workflow_dispatch' && inputs.names_evidence == true)) && needs.decide.outputs.assignee == 'set'
+    if: ${{ !cancelled() && needs.decide.result == 'success' && (needs.decide.outputs.ready == 'true' && (needs.decide.outputs.sent != 'true' || (github.event_name == 'workflow_dispatch' && inputs.names_evidence == true)) && needs.decide.outputs.assignee == 'set') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -547,7 +547,7 @@ jobs:
 
   card:
     needs: decide
-    if: needs.decide.outputs.plan == 'found' && (github.event_name != 'workflow_run' || github.event.workflow_run.head_branch == github.event.repository.default_branch)
+    if: ${{ !cancelled() && needs.decide.result == 'success' && (needs.decide.outputs.plan == 'found' && (github.event_name != 'workflow_run' || github.event.workflow_run.head_branch == github.event.repository.default_branch)) }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:

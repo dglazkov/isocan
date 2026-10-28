@@ -1,5 +1,5 @@
 {
-  "practice": "0.8.35",
+  "practice": "0.8.37",
   "files": {
     ".agents/skills/plates/SKILL.md": {
       "practice": "agents-md",
@@ -15,11 +15,11 @@
     },
     ".github/workflows/plates-morning.yml": {
       "practice": "night",
-      "sha256": "906e5debfefd3e732f5ddb7cb4b8765cb4754cd525e17daa572b6df56a9e03fa"
+      "sha256": "9eb993be71937c6394102a161ccf3fcfaf487ad0a22236d2483aec40c8fdded3"
     },
     ".github/workflows/plates-night.yml": {
       "practice": "night",
-      "sha256": "a7c9619df1c6e16189cd03be08ba14480a1f7f5ec469bb059851c4a6d4c1ff7f"
+      "sha256": "3cfd1966438bd27404ac6e3c8ede0968bee51ed2f58e7d3c7aeba4c8ea59e441"
     },
     "AGENTS.md#agents-md": {
       "practice": "agents-md",
@@ -43,7 +43,7 @@
     },
     "docs/plates-lessons.md": {
       "practice": "lessons",
-      "sha256": "69d23ce123482ecb80d9b1ccee429dd0c86b60fe359085f4c7447e8a8c6f665e"
+      "sha256": "d2f3a6b65c0ea33585856fe7dbccef4f427529b7c03e4efa3e553b2b877d21f5"
     },
     "renovate.json": {
       "practice": "renovate",
@@ -52,6 +52,14 @@
     "scripts/loop.mjs": {
       "practice": "loop",
       "sha256": "dcf8dfa6276430d184218cb312f1d2e994854429e891af964ba2b9c207c060fd"
+    },
+    "scripts/plates/autonomy-context.mjs": {
+      "practice": "night",
+      "sha256": "46c84fc689a4854c34efeb7b5c3d809d032dd2c40420d0f27d22e143810b4c83"
+    },
+    "scripts/plates/autonomy-policy.mjs": {
+      "practice": "night",
+      "sha256": "9e73164b35ec87132076456df873f9bc0e3b85600472a56086b75856717c4c70"
     },
     "scripts/plates/canvas-recovery.mjs": {
       "practice": "night",
@@ -79,7 +87,7 @@
     },
     "scripts/plates/improve.mjs": {
       "practice": "night",
-      "sha256": "240bb10e43edd4cbdd1c8ed626340dd8b7e1b6c6227d1fd9002a649e210a96dc"
+      "sha256": "1e0caac187a87afc568c1ee825badfbf283e1ff781debe06580bcca459814f05"
     },
     "scripts/plates/lib.mjs": {
       "practice": "night",
@@ -107,7 +115,7 @@
     },
     "scripts/plates/night-plan.mjs": {
       "practice": "night",
-      "sha256": "6e2ebcab928ee9fea363a729473816442d9a1efdaf6cdefc5d1291a5c0d91f07"
+      "sha256": "9611ed5e7ed273263c6b75e1c17888745eab0b6072662818c5f8602057b8a926"
     },
     "scripts/plates/planning-config.mjs": {
       "practice": "night",
@@ -155,7 +163,7 @@
     },
     "scripts/plates/test-ledger.mjs": {
       "practice": "night",
-      "sha256": "14f971d82a51979c41fe4aed6625c959b63b11b2b87632e61654ec5e98de3f59"
+      "sha256": "8e6f58ab701d5441cb76e2f8b7be7dafbafabceed03fe0cefb380b499758bb96"
     },
     "scripts/plates/time-measures.mjs": {
       "practice": "night",

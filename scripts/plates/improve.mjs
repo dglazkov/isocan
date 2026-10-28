@@ -321,11 +321,16 @@ const gateRun = ctx => once(ctx, 'gate', async () => {
   }
   // Never a test runner's context (lesson 14); the project's .plates/plates.json `env` over it.
   const r = await timedCommand(command, { cwd: ctx.root, env: gateEnv(ctx.env, ctx.config), preparedEnv: true, configured: true });
-  if (r.error) throw new Error(`could not run \`${command}\`: ${r.error.message}`);
-  if (r.status === null) throw new Error(`\`${command}\` was killed (${r.signal}) before it finished`);
+  const execution = { command, source: 'local-command', reused: false, reuseUnavailable: reuse.reason,
+    status: r.status, signal: r.signal, ms: r.ms, execution: r.execution, diagnostics: r.diagnostics };
+  if (r.error || r.status === null) {
+    const error = new Error(r.error ? `gate execution failed (${r.diagnostics?.errorCode ?? 'unknown'})` : `gate was killed (${r.signal}) before it finished`);
+    error.facts = { ...execution, tests: null };
+    throw error;
+  }
   const out = `${r.stdout ?? ''}\n${r.stderr ?? ''}`;
   const counts = [...out.matchAll(/^(?:ℹ|#) tests (\d+)$/gm)].map(m => Number(m[1]));
-  return { command, source: 'local-command', reused: false, reuseUnavailable: reuse.reason, status: r.status, tests: counts.length ? counts.reduce((a, b) => a + b, 0) : null, ms: r.ms };
+  return { ...execution, tests: counts.length ? counts.reduce((a, b) => a + b, 0) : null };
 });
 
 /** gh, ready to read the project's repo, or a reason it is not. */
