@@ -1,3 +1,4 @@
+import { selectArtifacts } from './names.mjs';
 import { isMain } from './lib.mjs';
 import { providerEnv } from './production-collectors.mjs';
 // Immutable per-attempt artifacts. Missing newest evidence never falls back to older state.
@@ -11,8 +12,8 @@ import { collect, productionConfig } from './production.mjs';
 const WORKFLOW='.github/workflows/plates-night.yml';
 // Workflow filenames and uploaded artifacts are immutable provenance, not branding.
 const HISTORIES = [
-  { workflow: WORKFLOW, config: '.plates/plates.json', artifact: 'plates-production-' },
-  { workflow: '.github/workflows/keel-night.yml', config: '.keel/keel.json', artifact: 'keel-production-' },
+  { workflow: WORKFLOW, config: '.plates/plates.json' },
+  { workflow: '.github/workflows/keel-night.yml', config: '.keel/keel.json' },
 ];
 const missing = error => error?.status === 404 || error?.statusCode === 404 || /\(HTTP 404\)/.test(String(error?.stderr ?? ''));
 const historyOf = path => HISTORIES.find(history => history.workflow === path);
@@ -87,8 +88,7 @@ export async function recoverNight({root,config,env=process.env,api,download,rea
     if(run.status!=='completed') fail('production previous writer still active');
     const listed=await api(`repos/${repo}/actions/runs/${run.id}/artifacts?per_page=100`);
     if(!Array.isArray(listed.artifacts)||listed.total_count!==listed.artifacts.length) fail('production artifact list incomplete');
-    const artifact = `${history.artifact}${run.run_attempt}`;
-    const matches=listed.artifacts.filter(a=>a.name===artifact);
+    const { name: artifact, matches } = selectArtifacts(listed.artifacts, 'artifact:keel-production-', String(run.run_attempt));
     if(matches.length!==1||matches[0].expired||matches[0].size_in_bytes>16*1024*1024) fail('newest production artifact missing, expired or oversized; no fallback');
     const envelope=await download(run,artifact);
     if (!await sameRepository(envelope?.provenance?.repo)) fail('production recovery repository identity mismatch');

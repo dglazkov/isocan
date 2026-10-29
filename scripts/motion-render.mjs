@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * **A motion, recorded to an MP4, from the terminal** (motion phase 1;
- * `docs/projects/motion/design.md` §4).
+ * **A motion, recorded to an MP4, a WebM or a GIF, from the terminal**
+ * (motion phases 1 and 3; `docs/projects/motion/design.md` §4). The address's
+ * `format` says which; this script only carries the bytes.
  *
  *   node scripts/motion-render.mjs --url <render address> --canvas prj_… --out movie.mp4
  *       [--report report.json] [--keep-dir <dir>] [--owner-from-stdin]
@@ -46,7 +47,7 @@ const url = arg("--url");
 const canvasId = arg("--canvas");
 const out = arg("--out");
 if (!url || !canvasId || !out) {
-  console.error("usage: motion-render.mjs --url <render address> --canvas <canvas> --out <file.mp4> [--report <file.json>] [--keep-dir <dir>]");
+  console.error("usage: motion-render.mjs --url <render address> --canvas <canvas> --out <file> [--report <file.json>] [--keep-dir <dir>]");
   process.exit(2);
 }
 const address = new URL(url);

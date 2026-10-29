@@ -1,3 +1,4 @@
+import {markerDiagnostic,identityEnvironmentValue,scrubEnvironment} from './names.mjs';
 // plates's test ledger (plates practice `night`; managed: plates render rewrites
 // it). Every test run is remembered, and a flaky or slower test becomes
 // hygiene work (plates phase 33; docs/research/2026-10-06-spec-rigor.md, lever 2).
@@ -326,15 +327,16 @@ export async function writeUsual(root, runs) {
  * preparedEnv is only for gateEnv's result: inherited runner context has already
  * been removed before explicit project environment overrides were applied. */
 export async function timedCommand(command, { cwd = process.cwd(), env = process.env, stdio = 'pipe', preparedEnv = false, configured = false } = {}) {
+  for(const id of ['variable:KEEL_USUAL','variable:KEEL_GATE_ACTIVE','variable:KEEL_GATE_INVOCATION','variable:KEEL_SUITE_PLAN','variable:KEEL_RUN_START']) identityEnvironmentValue(id,env);
   // A nested project's gate belongs to that project, never the enclosing Git repository.
   const root = real(cwd), config = await projectConfig(root, { strict: true });
   const options = { cwd, shell: true, stdio, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, timeout: 60 * 60_000 };
   let parent = null;
-  if (/^[a-f0-9-]{36}$/.test(env.PLATES_GATE_INVOCATION ?? '')) {
+  if (/^[a-f0-9-]{36}$/.test(identityEnvironmentValue('variable:KEEL_GATE_INVOCATION',env) ?? '')) {
     try {
-      const p = JSON.parse(await readFile(join(root, RUNS, `active-${env.PLATES_GATE_INVOCATION}`), 'utf8'));
+      const p = JSON.parse(await readFile(join(root, RUNS, `active-${identityEnvironmentValue('variable:KEEL_GATE_INVOCATION',env)}`), 'utf8'));
       process.kill(p.pid, 0);
-      if (p.root === root && p.id === env.PLATES_GATE_INVOCATION && p.completed === false) parent = p;
+      if (p.root === root && p.id === identityEnvironmentValue('variable:KEEL_GATE_INVOCATION',env) && p.completed === false) parent = p;
     } catch { /* inherited labels without a live outer receipt confer no provenance */ }
   }
   if (parent) {
@@ -359,7 +361,7 @@ export async function timedCommand(command, { cwd = process.cwd(), env = process
   } catch { /* missing declared plan leaves file coverage unavailable */ }
   try { active = join(await ignoreRuns(root), `active-${invocationId}`); await writeFile(active, JSON.stringify({ id: invocationId, root, pid: process.pid, commandHash: sha12(command), completed: false })); } catch { active = null; }
   const start = await busySample(), started = Date.now();
-  const childEnv = Object.fromEntries(Object.entries(env).filter(([k]) => (preparedEnv || !k.startsWith('NODE_TEST_')) && !['PLATES_USUAL', 'PLATES_GATE_ACTIVE', 'PLATES_GATE_INVOCATION', 'PLATES_SUITE_PLAN', 'PLATES_RUN_START'].includes(k)));
+  const childEnv = Object.fromEntries(Object.entries(scrubEnvironment(['variable:KEEL_USUAL','variable:KEEL_GATE_ACTIVE','variable:KEEL_GATE_INVOCATION','variable:KEEL_SUITE_PLAN','variable:KEEL_RUN_START'],env)).filter(([k]) => preparedEnv || !k.startsWith('NODE_TEST_')));
   const result = spawnSync(command, { ...options, env: { ...childEnv, PLATES_GATE_ACTIVE: root, ...(active ? { PLATES_GATE_INVOCATION: invocationId } : {}), ...(plan ? {PLATES_SUITE_PLAN: JSON.stringify(plan)} : {}), ...(usual ? { PLATES_USUAL: usual } : {}), PLATES_RUN_START: JSON.stringify(start) } });
   const ms = Date.now() - started, busy = busyBetween(start, await busySample());
   let innerPayloadHash = null;
@@ -855,8 +857,8 @@ const outcomeOf = e => {
 
 /** What a test said it could not judge (`t.diagnostic('keel:inconclusive <what it measured>')`), or null. */
 export function inconclusiveOf(message) {
-  const m = /^keel:inconclusive(?:\s+([\s\S]*))?$/.exec(String(message ?? '').trim());
-  return m ? (m[1] ?? '').trim() || 'the machine kept it from judging' : null;
+  const value=markerDiagnostic(message,'marker:keel:inconclusive');
+  return value===null ? null : value || 'the machine kept it from judging';
 }
 
 /**
@@ -1054,7 +1056,7 @@ export default async function* ledger(source) {
     const here = relative(root, real(cwd)).split(sep).join('/') || '.';
     // flags: the node flags a rerun of this suite carries (runnerFlags), so plates test reuses this run as a
     // baseline only under the same ones; the config hash, and so the lanes, are as they were.
-    const run = { ...finishedIdentity(initialIdentity, root), suite: suite.finish(), commandHash: plan?.available ? plan.commandHash : digest({argv:process.argv.slice(1),execArgv:process.execArgv}), invocationId: plan?.invocationId ?? randomUUID(), parentInvocationId: process.env.PLATES_GATE_INVOCATION ?? null, completed: true, busy: busyBetween(start, await busySample()), wallMs: Date.now() - started, dir: here, config: configHash({ configEnv }), setting: settingOf({ configEnv }), flags: runnerFlags(process.execArgv), ...(narrowed() ? { filtered: true } : {}), ...workflow, date: new Date().toISOString(), tests };
+    const run = { ...finishedIdentity(initialIdentity, root), suite: suite.finish(), commandHash: plan?.available ? plan.commandHash : digest({argv:process.argv.slice(1),execArgv:process.execArgv}), invocationId: plan?.invocationId ?? randomUUID(), parentInvocationId: identityEnvironmentValue('variable:KEEL_GATE_INVOCATION',process.env) ?? null, completed: true, busy: busyBetween(start, await busySample()), wallMs: Date.now() - started, dir: here, config: configHash({ configEnv }), setting: settingOf({ configEnv }), flags: runnerFlags(process.execArgv), ...(narrowed() ? { filtered: true } : {}), ...workflow, date: new Date().toISOString(), tests };
     const w = config?.tests?.window;
     await record(root, run, { window: Number.isInteger(w) && w >= 2 && w <= MAX_WINDOW ? w : DEFAULTS.window });
     let opts;
@@ -1248,7 +1250,7 @@ const FRESH_SLACK_MS = 2000;
 /** A start sample's time in ms, or null when it has none. */
 const sampledAt = s => { const t = Date.parse(s?.at); return Number.isFinite(t) ? t : null; };
 /** The gate's own start sample (timedCommand's PLATES_RUN_START), or null. */
-const gateStart = env => { try { return JSON.parse(env?.PLATES_RUN_START ?? 'null'); } catch { return null; } };
+const gateStart = env => { const raw=identityEnvironmentValue('variable:KEEL_RUN_START',env); try { return JSON.parse(raw ?? 'null'); } catch { return null; } };
 
 /**
  * Read a JUnit file into the ledger, as the reporter records a node run, and
@@ -1315,7 +1317,7 @@ export async function junitRun({ junit, runner, status = null, cwd = process.cwd
       ...where(root, { exclude: shown === at ? [] : [shown] }), runner: kind, dir: here,
       config: configHash({ configEnv, preload: [], runner: kind }), setting: settingOf({ configEnv, preload: [] }),
       // The gate invocation it ran under, as a node run's: gate.mjs reuses a CI result only with its test runs.
-      parentInvocationId: env.PLATES_GATE_INVOCATION ?? null,
+      parentInvocationId: identityEnvironmentValue('variable:KEEL_GATE_INVOCATION',env) ?? null,
       ...workflow, junit: hash, date: new Date().toISOString(), tests: parsed.tests,
     };
     const w = config?.tests?.window;

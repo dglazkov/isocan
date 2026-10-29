@@ -1,3 +1,4 @@
+import { scrubEnvironment, environmentValue } from './names.mjs';
 // plates's stalls (plates practice `night`; managed: plates render rewrites it).
 // A test that judges the wall clock passes on a quiet machine and fails on a
 // busy one, and the usual "fix" is a longer sleep: still the wall clock, only
@@ -82,7 +83,7 @@ export function planOf(seed, n, shape = SHAPE) {
 
 /** The shape, from PLATES_STALLS_SHAPE when it is set (a test seam); a bad one throws. */
 export function shapeOf(env = process.env) {
-  const raw = env.PLATES_STALLS_SHAPE;
+  const raw = environmentValue('variable:KEEL_STALLS_SHAPE', env);
   if (!raw) return SHAPE;
   let s;
   try { s = JSON.parse(raw); } catch { throw new Error('PLATES_STALLS_SHAPE is not JSON'); }
@@ -108,7 +109,7 @@ export const flagsOfScript = script => runnerFlags(nodeWords(script));
 export const preloadsOfScript = script => flagsIn(nodeWords(script)).filter(f => PRELOADS.has(f.name)).flatMap(f => f.words);
 
 /** Never a test runner's context: its node --test would run nothing and pass (lesson 14). */
-const runnerFree = env => Object.fromEntries(Object.entries(env).filter(([k]) => !k.startsWith('NODE_TEST_') && k !== 'PLATES_STALLS_SHAPE'));
+const runnerFree = env => Object.fromEntries(Object.entries(scrubEnvironment(['variable:KEEL_STALLS_SHAPE'],env)).filter(([k]) => !k.startsWith('NODE_TEST_')));
 
 /**
  * Run `files` under `node --test` in a process group of its own; with a

@@ -27,7 +27,7 @@ import {
   type MotionSpec,
   type MotionWriter,
 } from "@isocan/core/motion";
-import { MOTION_RENDER_CAPS, motionRenderPlan, type MotionRenderedFrom } from "@isocan/core/motion-render";
+import { MOTION_FORMAT_FACTS, MOTION_FORMATS, MOTION_GIF, MOTION_RENDER_CAPS, motionRenderPlan, type MotionFormat, type MotionRenderedFrom } from "@isocan/core/motion-render";
 import { motionModule } from "./core.ts";
 
 /**
@@ -92,7 +92,7 @@ async function howItMoves(opts: BuildOpts): Promise<Pick<MotionBuildInput, "reci
     throw new Error("--say keeps the words a motion was made from; write the spec from them (--spec <file.json>) or pick a recipe — this CLI runs no model");
   }
   const recipe = opts.recipe ?? "assemble";
-  if (!isMotionRecipe(recipe)) throw new Error(`--recipe is ${MOTION_RECIPES.join(" or ")}, not "${recipe}"`);
+  if (!isMotionRecipe(recipe)) throw new Error(`--recipe is one of ${MOTION_RECIPES.join(", ")}, not "${recipe}"`);
   const out: Pick<MotionBuildInput, "recipe" | "seconds" | "loop"> = { recipe };
   if (opts.seconds !== undefined) {
     const seconds = Number(opts.seconds);
@@ -228,6 +228,9 @@ async function showSpec(host: CliHost, ref: string, cmd: Command): Promise<void>
 
 interface RenderOpts {
   canvas?: string;
+  mp4?: boolean;
+  webm?: boolean;
+  gif?: boolean;
   fps?: string;
   seconds?: string;
   size?: string;
@@ -243,12 +246,20 @@ interface RenderReport {
   renderedFrom: MotionRenderedFrom;
 }
 
+/** `--mp4`, `--webm` or `--gif` — one of them, an MP4 when none. */
+function formatOf(opts: RenderOpts): MotionFormat {
+  const asked = MOTION_FORMATS.filter((f) => opts[f] === true);
+  if (asked.length > 1) throw new Error(`one format at a time: ${asked.map((f) => `--${f}`).join(" or ")}, not both`);
+  return asked[0] ?? "mp4";
+}
+
 /**
- * **`isocan motion render <motion>`** (motion phase 1; design §4, §6): the
- * motion recorded to an MP4 by the web app's render page, in the headless
- * browser `canvas shot` drives, and added as a `video/mp4` item beside it
- * wearing `renderedFrom` — by `addMotionMovie`, the write *Render movie…*
- * makes too. The caps are asked here first, off the motion's own
+ * **`isocan motion render <motion>`** (motion phases 1 and 3; design §4, §6):
+ * the motion recorded to an MP4 (`--mp4`, the default), a WebM (`--webm`) or
+ * a GIF (`--gif`) by the web app's render page, in the headless browser
+ * `canvas shot` drives, and added beside it as a `video/mp4`, `video/webm`
+ * or `image/gif` item wearing `renderedFrom` — by `addMotionMovie`, the write
+ * *Render movie…* makes too. The caps are asked here first, off the motion's own
  * properties, so a movie past them is refused before a browser starts; the
  * page asks again over the document it fetched, and what IT reports is what
  * `renderedFrom` says.
@@ -263,12 +274,14 @@ async function render(host: CliHost, ref: string, opts: RenderOpts, cmd: Command
   const version = current(motion);
   if (!version) throw new Error(`${motion.title} has no version to render`);
   const length = Number(motion.properties[MOTION_PROPS.seconds]);
+  const format = formatOf(opts);
   const plan = motionRenderPlan(
-    { fps: opts.fps, size: opts.size, seconds: opts.seconds, background: opts.background },
+    { format, fps: opts.fps, size: opts.size, seconds: opts.seconds, background: opts.background },
     { seconds: Number.isFinite(length) && length > 0 ? length : MOTION_RENDER_CAPS.seconds, loop: motion.properties[MOTION_PROPS.loop] === "true" },
   );
   const origin = (await ctx.homeOf(canvas.id)) ?? ctx.client.base;
   const url = motionRenderUrl(origin, canvas.id, motion.id, {
+    format: plan.format,
     version: version.id,
     fps: plan.fps,
     size: `${plan.width}x${plan.height}`,
@@ -277,7 +290,7 @@ async function render(host: CliHost, ref: string, opts: RenderOpts, cmd: Command
   });
   const scratch = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-motion-render-"));
   try {
-    const file = path.join(scratch, "movie.mp4");
+    const file = path.join(scratch, `movie.${MOTION_FORMAT_FACTS[plan.format].extension}`);
     const reportFile = path.join(scratch, "report.json");
     // The owner's identity rides on stdin for a personal canvas, exactly as
     // `canvas shot` hands it; the script uses it only when the home says the
@@ -306,7 +319,7 @@ function register(host: CliHost): void {
   const motion = host.program.command("motion").description("Motion: make selected SVGs move, as an HTML item that plays on the canvas");
   const shaping = (c: Command) => c
     .option("--canvas <canvas>")
-    .option("--recipe <recipe>", `how it moves: ${MOTION_RECIPES.join(" or ")}`)
+    .option("--recipe <recipe>", `how it moves: ${MOTION_RECIPES.join(", ")}`)
     .option("--spec <file.json>", "how it moves, as a spec you wrote: seconds, loop and moves (isocan --agent-help motion)")
     .option("--say <words>", "the words this motion was made from, kept as its description")
     .option("--seconds <seconds>", `with --recipe: fit it to this length (at most ${MOTION_MAX_SECONDS})`)
@@ -333,13 +346,16 @@ function register(host: CliHost): void {
     .action(host.run(async (ref: string, _opts: unknown, cmd: Command) => showSpec(host, ref, cmd)));
   motion
     .command("render <motion>")
-    .description(`Record a motion to an MP4 video item beside it (at most ${MOTION_RENDER_CAPS.short}p, ${MOTION_RENDER_CAPS.fps} fps, ${MOTION_RENDER_CAPS.seconds} s) — through the headless browser canvas shot uses`)
+    .description(`Record a motion to an MP4, WebM or GIF item beside it (at most ${MOTION_RENDER_CAPS.short}p, ${MOTION_RENDER_CAPS.fps} fps, ${MOTION_RENDER_CAPS.seconds} s) — through the headless browser canvas shot uses`)
     .option("--canvas <canvas>")
-    .option("--fps <fps>", `frames a second (default 60, at most ${MOTION_RENDER_CAPS.fps})`)
+    .option("--mp4", "an H.264 MP4 (the default)")
+    .option("--webm", "a VP9 WebM")
+    .option("--gif", `an animated GIF (${MOTION_GIF.fps} fps unless --fps, at most ${MOTION_GIF.maxFps}; refused past about ${MOTION_GIF.bytes / 1e6} MB)`)
+    .option("--fps <fps>", `frames a second (default 60, ${MOTION_GIF.fps} for a GIF; at most ${MOTION_RENDER_CAPS.fps})`)
     .option("--seconds <seconds>", "how long (default: the motion's length — one loop, for a loop)")
     .option("--size <size>", "1080 for a square, or WIDTHxHEIGHT (default 1080)")
     .option("--background <color>", "what is behind the stage, #rrggbb (default #ffffff)")
-    .option("--out <file.mp4>", "also write the movie here")
+    .option("--out <file>", "also write the movie here")
     .action(host.run(async (ref: string, opts: RenderOpts, cmd: Command) => render(host, ref, opts, cmd)));
 }
 

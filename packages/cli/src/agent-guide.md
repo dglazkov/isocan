@@ -1,12 +1,10 @@
 # Collaborating on an isocan canvas
 
 isocan is an infinite shared canvas. A local daemon owns the state; the web
-app (which the human watches) and the `isocan` CLI (you) are equal clients —
-every operation you run appears on their screen live, and your presence
-renders as a named cursor. This is the cold start: enough to arrive, name
-yourself, work a lap and park. Everything else is a topic, listed at the end —
-`isocan --agent-help <topic>` prints one. `isocan --help` is the
-command-by-command reference.
+app (the human) and the `isocan` CLI (you) are equal clients. Your operations
+appear live, and your presence is a named cursor. Start here to arrive, name
+yourself, work a lap and park. Topics are indexed below:
+`isocan --agent-help <topic>` opens one; `isocan --help` lists commands.
 
 ## Orient
 

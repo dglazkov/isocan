@@ -3885,9 +3885,11 @@ export default async function act({ prompt, cli, cwd }) {
      * the moment, and opening that comment again later scrubs the player
      * back there. Render movie… records 6 s at 60 fps, 1080 × 1080 — the
      * progress line counts frames — and lands a video item wearing
-     * `renderedFrom`.
+     * `renderedFrom`. Then (motion phase 3) Render movie… again with WebM
+     * picked lands a `video/webm` item whose `renderedFrom` says so, and
+     * Animate… → reveal builds the logo's reveal beside it.
      */
-    what: "select SVGs → Animate… (recipe in the browser; words through the parked agent's spec) → a version by talking → scrub, comment at a time, reopen it → Render movie…",
+    what: "select SVGs → Animate… (recipe in the browser; words through the parked agent's spec) → a version by talking → scrub, comment at a time, reopen it → Render movie… (MP4, then WebM) → Animate… reveal",
     async run(rig) {
       const { b } = rig;
       const home = mkdtempSync(path.join(tmpdir(), "isocan-journey-motion-"));
@@ -4270,9 +4272,52 @@ export default async function act({ prompt, cli, cwd }) {
           writeFileSync(process.env.MOTION_MOVIE, Buffer.from(b64, "base64"));
         }
         await shot("movie");
+
+        // 3b. Render movie… → WebM (motion phase 3): the format picked by a
+        // real press, the rest as the dialog offers it — the motion's own length.
+        await rig.click(".zoom-pct", "the zoom menu");
+        await rig.clickText(".zoom-menu-row", "Zoom to Fit", "Zoom to Fit");
+        await sleep(800);
+        await press(await pointOn(spoken.id, 0.5, 0.05));
+        await menuRow(await pointOn(spoken.id, 0.5, 0.05), "Render movie…");
+        await until(b, `!!document.querySelector("[data-motion-format=webm]")`, "the Render movie dialog, with its formats", 10_000);
+        await rig.click("[data-motion-format=webm]", "the WebM format");
+        await until(b, `document.querySelector("[data-motion-format=webm]").checked && /^Render WebM$/.test(document.querySelector("[data-motion-render-go]").textContent)`, "WebM picked, and the button saying so", 3000);
+        const webmSeconds = Number(await b.ev(`[...document.querySelectorAll("[data-motion-render] input[type=number]")][1].value`));
+        await shot("render-webm-dialog");
+        await rig.click("[data-motion-render-go]", "Render WebM");
+        await until(b, `fetch('/api/projects/${id}/canvas', ${FEATURES}).then(r => r.json()).then(r => Object.values(r.canvas.items).some(i => i.properties.renderedFrom && JSON.parse(i.properties.renderedFrom).format === "webm"))`, "the WebM beside the motion", 240_000);
+        canvas = await served(id);
+        const webm = Object.values(canvas.items).find((i) => i.properties.renderedFrom && JSON.parse(i.properties.renderedFrom).format === "webm");
+        const webmFrom = JSON.parse(webm.properties.renderedFrom);
+        const wv = webm.versions[0];
+        if (wv.mimeType !== "video/webm" || !wv.filename.endsWith(".webm") || webmFrom.item !== spoken.id || webmFrom.fps !== 60 || webmFrom.seconds !== webmSeconds) {
+          throw new Error(`the WebM is not the motion at 60 fps for ${webmSeconds} s: ${JSON.stringify({ mime: wv.mimeType, filename: wv.filename, from: webmFrom })}`);
+        }
+        await until(b, `[...document.querySelectorAll('.item[data-item-id="${webm.id}"] video')].some((v) => v.readyState >= 1 && v.videoWidth === 1080)`, "the WebM loaded on the canvas", 20_000);
+        await shot("movie-webm");
+
+        // 4. A recipe of phase 3's: Animate… → reveal, picked by a real press.
+        // The WebM's arrival glides the camera to it; let that finish first.
+        await sleep(2500);
+        await selectLogo();
+        await menuRow(await pointOn(wordmark, 0.5, 0.5), "Animate…");
+        await until(b, `!!document.querySelector("[data-motion-animate] input[value=reveal]")`, "the Animate dialog, offering reveal", 10_000);
+        await rig.click("[data-motion-animate] input[value=reveal]", "the reveal recipe");
+        await until(b, `/^Animate with reveal$/.test(document.querySelector("[data-motion-recipe-go]").textContent)`, "Animate with reveal", 3000);
+        await rig.click("[data-motion-recipe-go]", "Animate with reveal");
+        await until(b, `!document.querySelector('.modal-backdrop')`, "the reveal motion to land", 20_000);
+        canvas = await served(id);
+        const revealed = Object.values(canvas.items).find((i) => i.properties.motion === "true" && / — reveal$/.test(i.title));
+        if (!revealed) throw new Error(`no reveal motion after Animate with reveal: ${Object.values(canvas.items).map((i) => i.title).join(" | ")}`);
+        const revealSpec = runCli("--canvas", id, "motion", "spec", revealed.id);
+        if (revealSpec.recipe !== "reveal" || revealSpec.spec.moves.length !== 3 || revealSpec.spec.loop !== false) throw new Error(`the reveal motion is not the reveal recipe over the logo: ${JSON.stringify({ recipe: revealSpec.recipe, moves: revealSpec.spec.moves.length, loop: revealSpec.spec.loop })}`);
+        await until(b, `!!document.querySelector('.item[data-item-id="${revealed.id}"] iframe')`, "the reveal motion playing on the canvas", 20_000);
+        await shot("revealed");
+
         const errors = b.takeErrors();
         if (errors.length > 0) throw new Error(`the page threw: ${errors[0]}`);
-        return { screenshots: shots, recipeMotion: recipeMotion.id, spoken: spoken.id, scrubbed, commentAt: pinned.comments[0].at, progress, movie: { id: movie.id, renderedFrom: from, bytes: v.size } };
+        return { screenshots: shots, recipeMotion: recipeMotion.id, spoken: spoken.id, scrubbed, commentAt: pinned.comments[0].at, progress, movie: { id: movie.id, renderedFrom: from, bytes: v.size }, webm: { id: webm.id, renderedFrom: webmFrom, bytes: wv.size }, reveal: revealed.id };
       } catch (err) {
         await shot("failure").catch(() => {});
         throw new Error(`${err.message}\n(screens: ${JSON.stringify(shots)})\n--- rc ---\n${rcOut.slice(-3000)}`);

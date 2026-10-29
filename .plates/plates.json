@@ -14,7 +14,7 @@
   "phases": {
     "shape": "projects"
   },
-  "practice": "0.8.33",
+  "practice": "0.8.35",
   "practices": [
     "base",
     "agents-md",
@@ -61,7 +61,7 @@
   ],
   "production": {
     "version": 1,
-    "enabled": true,
+    "enabled": false,
     "sources": [
       {
         "id": "isocan-production",

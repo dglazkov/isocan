@@ -12,11 +12,11 @@ and a person's walk.
 
 **Phase citations name their project**: `motion phase 1`.
 
-**Where we are, 22 Oct 2026:** phases 0–2 CLOSED — the engine and
-recipes, `isocan motion new|edit|refresh|render`, and the web's
-*Animate…*, scrubber, comments at a moment and *Render movie…*. Next:
-motion phase 3, WebM, GIF and the remaining recipes, then a person's walk.
-Dion decided [`design.md`](design.md) §7 and asked for every phase.
+**Where we are, 25 Oct 2026:** every phase is built. Phases 0–2 are
+CLOSED; motion phase 3 is PART-DONE, waiting only on a person's
+[walk](../../verify/2026-10-22-motion-in-the-browser.md) — whether motion
+feels right on their own drawings, which no check can say. Nothing is
+waiting on code.
 
 ---
 
@@ -86,7 +86,7 @@ hand writing Scene 1's spec from the words.
 
 ## Phase 3 — Formats and a person's walk
 
-**Status: NOT STARTED.**
+**Status: PART-DONE, 25 Oct 2026 — WebM (VP9) and GIF beside MP4 from our own encoders, and the `reveal`, `orbit` and `emphasis` recipes; every format decodes cleanly outside isocan (ffmpeg, zero errors), each decoded frame nearest its own picture, the hidden-frame path matching the CLI's (the GIF byte for byte). A person's [walk](../../verify/2026-10-22-motion-in-the-browser.md) is owed.**
 
 - WebM (VP9) and GIF; the remaining recipes (`reveal`, `orbit`,
   `emphasis`).
@@ -94,3 +94,11 @@ hand writing Scene 1's spec from the words.
 **Proof:** each format plays on the canvas and outside isocan; a
 `docs/verify/` walk: a person animates something of their own and judges
 whether the motion feels right, which no check can say.
+
+### Trajectory
+
+- **2026-10-25** — Both new encoders are our own — a WebM muxer (~130 lines, with SeekHead and Cues so players can seek) and a GIF encoder (~270 lines, exact palettes up to 256 colours, median cut beyond) — because `webm-muxer` is deprecated like `mp4-muxer` and its successor is MPL. That leaves `mp4-muxer` the one deprecated muxer, replaceable the same way.
+- **2026-10-25** — GIF defaults to 30 fps, refuses above 50 (delays are hundredths of a second; browsers slow anything under two to a tenth) and refuses past 64 MB on an estimate made before any frame is drawn. The estimate is generous (0.05 bytes a pixel against 0.004 measured on the logo); a busier drawing is its real test.
+- **2026-10-25** — The follower check now reads a bell's start, so pulses that fire together warn; before, bell-only moves were skipped silently. `orbit` carries its one-beat lag in each wave's phase, not `follows`: a loop has no start for a follower to trail.
+- **2026-10-25** — Open: the person's walk in `docs/verify/2026-10-22-motion-in-the-browser.md` — whether motion feels right on their own drawings, whether the WebM and GIF play in Safari, Slack and a slide, and whether GIF palettes band. Waits on Dion.
+

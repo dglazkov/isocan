@@ -1,3 +1,4 @@
+import { writeName } from './names.mjs';
 // The body of every pull request plates opens (plates practice `night`; managed:
 // plates render rewrites it). A PR asks a person for a minute; the body is
 // built so that minute is enough (plates phase 39; docs/research/
@@ -133,7 +134,7 @@ function notes(n) {
 function impact(i) {
   if (i === undefined || i === null) return [];
   if (!i.declaration || typeof i.declaration !== 'object') fail('impact is { note?, declaration }');
-  return ['', '## Record impact', '', ...(i.note ? [text(i.note, 'impact.note'), ''] : []), '```keel-impact', JSON.stringify(i.declaration), '```'];
+  return ['', '## Record impact', '', ...(i.note ? [text(i.note, 'impact.note'), ''] : []), '```' + writeName('fence:keel-impact'), JSON.stringify(i.declaration), '```'];
 }
 
 /** The body: Summary, Evidence, Merge danger, then notes, then the keel-impact block. Throws PrBodyError on bad input. */

@@ -108,6 +108,6 @@
     }
   ],
   "prBodyNotes": [
-    "Review any dependency change that alters a recorded architecture choice or acceptance claim, update its records, and replace this declaration with the actual impact. The check validates the diff regardless of author.\n\n```keel-impact\n{\"version\":1,\"phases\":[],\"decisions\":[],\"supersedes\":[],\"evidence\":[],\"reconciliation\":\"none\",\"reason\":\"Dependency versions, lockfiles, or runtime pins only; this update makes no phase acceptance, next-action, or architecture-decision claim.\"}\n```"
+    "Review any dependency change that alters a recorded architecture choice or acceptance claim, update its records, and replace this declaration with the actual impact. The check validates the diff regardless of author.\n\n```plates-impact\n{\"version\":1,\"phases\":[],\"decisions\":[],\"supersedes\":[],\"evidence\":[],\"reconciliation\":\"none\",\"reason\":\"Dependency versions, lockfiles, or runtime pins only; this update makes no phase acceptance, next-action, or architecture-decision claim.\"}\n```"
   ]
 }

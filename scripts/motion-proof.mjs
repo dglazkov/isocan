@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * **Motion's browser proof, phases 0 and 1** (`docs/projects/motion/phases.md`).
+ * **Motion's browser proof, phases 0, 1 and 3** (`docs/projects/motion/phases.md`).
  *
- *     node scripts/motion-proof.mjs [--out <dir>] [--no-movie]
+ *     node scripts/motion-proof.mjs [--out <dir>] [--no-movie] [--no-mp4]
  *
  * On a scratch home of its own — a temp `ISOCAN_HOME`, a free port, and an
  * unbound temp directory as the working directory, never the repo (whose
@@ -39,6 +39,24 @@
  * 6. The video item on the canvas: loaded at 1080 × 1080 and 6 s long, its
  *    clock moves once it is played, screenshotted.
  *
+ * Phase 3, the other formats (skipped with `--no-movie`; `--no-mp4` skips 3–6
+ * and keeps these), for a WebM and then a GIF in turn:
+ *
+ * 7. `isocan motion render <assemble> --webm` (and `--gif`), at the motion's
+ *    own 2.4 s and the format's own rate — 60 fps, and a GIF's 30. `ffprobe`
+ *    must read vp9 (gif) at 1080x1080 with fps × 2.4 frames — 144 and 72 —
+ *    and the canvas must carry a `video/webm` (`image/gif`) item whose
+ *    `renderedFrom` says the format.
+ * 8. The same page in a hidden frame, keeping its pictures of the first, the
+ *    middle (1.2 s) and the last frame. Each decoded CLI frame must sit
+ *    within the format's bound of the picture that was encoded, and nearer it
+ *    than any other kept picture; the hidden frame's file must decode to the
+ *    CLI's within the same bound. A GIF has its own, looser bound (below).
+ * 9. On the canvas: the WebM loads at 1080 × 1080 and its clock moves once
+ *    played; the GIF loads as a picture at 1080 × 1080; and for each, two
+ *    screenshots 0.6 s apart differ INSIDE the item's own rectangle — it is
+ *    moving there, not elsewhere on the page.
+ *
  * Exit 0 when every comparison holds; the screenshots and movies stay in
  * `--out` (default: a temp directory, printed). Needs a built
  * `packages/web/dist`, Chrome, and for phase 1 `ffmpeg`/`ffprobe` on PATH.
@@ -65,6 +83,7 @@ const out = outArg ? path.resolve(outArg) : mkdtempSync(path.join(tmpdir(), "iso
 mkdirSync(out, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const movie = !argv.includes("--no-movie");
+const mp4 = movie && !argv.includes("--no-mp4");
 
 /**
  * **How far a decoded frame may sit from the picture that was encoded**: a
@@ -78,6 +97,20 @@ const movie = !argv.includes("--no-movie");
  * from its neighbour rather than merely "a frame of this logo".
  */
 const MAD_LIMIT = 3;
+
+/**
+ * **The other formats' bounds** (motion phase 3). A WebM is VP9 — lossy the
+ * same way H.264 is, so the same bound. A GIF loses differently: no chroma
+ * subsampling and no blocks, but a palette of at most 256 colours a frame,
+ * so wherever a frame has more (the logo's anti-aliased edges, a fade) a
+ * colour lands on its nearest entry. Those losses are small and few: on
+ * 22 Oct 2026 the logo's GIF frames measured 0.000, 0.005 and 0.005 (the
+ * first frame, all white, kept exactly; the others' worst pixel 7 off), so
+ * the bound is 1 — tighter than the movies', yet looser than what was
+ * measured, for a drawing with more colours than this one. The same
+ * nearest-its-own-picture check holds the GIF to telling frames apart.
+ */
+const FORMAT_LIMIT = { webm: MAD_LIMIT, gif: 1 };
 
 const scratch = mkdtempSync(path.join(tmpdir(), "isocan-motion-home-"));
 const home = path.join(scratch, "home");
@@ -150,6 +183,18 @@ function changedBox(a, b) {
     x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y);
   }
   return x1 < 0 ? null : { x0, y0, x1, y1 };
+}
+
+/** How many pixels differ between two screenshots inside one rectangle of the screen. */
+function differingIn(a, b, r) {
+  let n = 0;
+  for (let y = Math.max(0, Math.ceil(r.y0)); y < Math.min(a.height, Math.floor(r.y1)); y++) {
+    for (let x = Math.max(0, Math.ceil(r.x0)); x < Math.min(a.width, Math.floor(r.x1)); x++) {
+      const i = (y * a.width + x) * 4;
+      if (a.rgba[i] !== b.rgba[i] || a.rgba[i + 1] !== b.rgba[i + 1] || a.rgba[i + 2] !== b.rgba[i + 2]) n++;
+    }
+  }
+  return n;
 }
 
 /** Pixels that are not the page's white — the drawing that is there. */
@@ -291,7 +336,7 @@ try {
   const inside = moved && idleRect && moved.x0 >= idleRect.x0 - 1 && moved.y0 >= idleRect.y0 - 1 && moved.x1 <= idleRect.x1 + 1 && moved.y1 <= idleRect.y1 + 1;
   check(differing(c1, c2) > 0 && inside, `the idle motion moved on the canvas between two shots a second apart (${differing(c1, c2)} pixels, all inside its frame: ${JSON.stringify(moved)} within ${JSON.stringify(idleRect)})`);
 
-  if (movie) {
+  if (mp4) {
     // --- 3. the movie, from the CLI ---------------------------------------
     const cliMovie = path.join(out, "movie-cli.mp4");
     const started = Date.now();
@@ -375,6 +420,108 @@ try {
     await shot("canvas-video.png");
     check(facts.width === 1080 && facts.height === 1080 && Math.abs(facts.duration - 6) < 0.05 && facts.after > facts.before && !facts.paused,
       `the video item plays on the canvas: ${facts.width}x${facts.height}, ${facts.duration.toFixed(3)} s, clock ${facts.before.toFixed(2)} → ${facts.after.toFixed(2)}`);
+  }
+
+  if (movie) {
+    // --- 7–9. the same motion as a WebM, then a GIF -----------------------
+    const fitCanvas = async () => {
+      for (const type of ["keyDown", "keyUp"]) {
+        await b.send("Input.dispatchKeyEvent", { type, key: "!", code: "Digit1", modifiers: 8, windowsVirtualKeyCode: 49 });
+      }
+      await sleep(2000);
+    };
+    for (const [format, codec, mime, fps] of [["webm", "vp9", "video/webm", 60], ["gif", "gif", "image/gif", 30]]) {
+      const limit = FORMAT_LIMIT[format];
+      const frames = Math.round(fps * spec.seconds);
+      const file = path.join(out, `movie-cli.${format}`);
+      const started = Date.now();
+      const rendered = isocan("motion", "render", motionId, ...on, `--${format}`, "--size", "1080", "--out", file);
+      process.stdout.write(rendered.stdout + rendered.stderr);
+      const took = (Date.now() - started) / 1000;
+      const probe = ffprobe(file);
+      const bytes = readFileSync(file).length;
+      check(probe.codec === codec && probe.width === 1080 && probe.height === 1080 && probe.frames === frames,
+        `${format}: ffprobe reads ${probe.frames} frames of ${probe.codec} at ${probe.width}x${probe.height}, ${(bytes / 1e6).toFixed(2)} MB, rendered in ${took.toFixed(1)} s (want ${frames} = ${fps} fps × ${spec.seconds} s of ${codec})`);
+      const itemId = /^(itm_\S+)\s/m.exec(rendered.stdout)?.[1];
+      const shown = itemId ? JSON.parse(isocan("show", itemId, ...on, "--json").stdout) : null;
+      const version = shown?.versions?.find((v) => v.id === shown.currentVersionId);
+      const from = shown?.properties?.renderedFrom ? JSON.parse(shown.properties.renderedFrom) : null;
+      check(version?.mimeType === mime && from?.format === format && from.item === motionId && from.fps === fps && from.size === "1080x1080" && from.seconds === spec.seconds,
+        `${format}: the CLI added a ${version?.mimeType} item (${itemId}) wearing renderedFrom ${JSON.stringify(from)}`);
+
+      // The same page in a hidden frame, keeping the first, middle and last pictures.
+      const keep = [0, frames / 2, frames - 1];
+      const hiddenUrl = motionRenderUrl(origin, canvasId, motionId, { format, size: 1080, keep: keep.join(",") });
+      await b.ev(`(() => {
+        document.getElementById("motion-render-frame")?.remove();
+        const f = document.createElement("iframe");
+        f.id = "motion-render-frame";
+        f.style.cssText = "position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none;border:0";
+        f.src = ${JSON.stringify(hiddenUrl)};
+        document.body.appendChild(f);
+        return true;
+      })()`);
+      const inFrame = `document.getElementById("motion-render-frame").contentWindow`;
+      await until(b, `!!${inFrame}.isocanMotionRender && ["done", "error"].includes(${inFrame}.isocanMotionRender.status.state)`, `the hidden frame's ${format}`, 600_000);
+      const hidden = await b.ev(`${inFrame}.isocanMotionRender.status`);
+      check(hidden.state === "done" && (format === "gif" ? hidden.codec === "gif" : hidden.codec.startsWith("vp09.")) && hidden.frames === frames,
+        `${format}: the hidden frame rendered: ${hidden.state}${hidden.error ? ` — ${hidden.error}` : ""} (${hidden.frames} frames, ${hidden.codec})`);
+      const size = await b.ev(`${inFrame}.isocanMotionRender.size`);
+      const parts = [];
+      for (let o = 0; o < size; o += 4 << 20) parts.push(Buffer.from(await b.ev(`${inFrame}.isocanMotionRender.chunk(${o}, ${4 << 20})`), "base64"));
+      const frameFile = path.join(out, `movie-hidden-frame.${format}`);
+      const frameBytes = Buffer.concat(parts);
+      writeFileSync(frameFile, frameBytes);
+      const keptUrls = await b.ev(`${inFrame}.isocanMotionRender.kept`);
+      await b.ev(`document.getElementById("motion-render-frame").remove()`);
+      const kept = {};
+      for (const n of keep) {
+        const png = Buffer.from(keptUrls[n].replace(/^data:image\/png;base64,/, ""), "base64");
+        writeFileSync(path.join(out, `pre-encode-${format}-${n}.png`), png);
+        kept[n] = rgbOf(pixels(png));
+      }
+      const hiddenProbe = ffprobe(frameFile);
+      check(hiddenProbe.frames === frames && hiddenProbe.codec === codec, `${format}: the hidden frame's file: ${hiddenProbe.frames} frames of ${hiddenProbe.codec}${format === "gif" ? ` — ${frameBytes.equals(readFileSync(file)) ? "byte for byte the CLI's" : "not byte-identical to the CLI's"}` : ""}`);
+
+      // Decoded frames against the pictures that were encoded.
+      const decoded = {};
+      for (const n of keep) {
+        decoded[n] = decodeFrame(file, n, 1080, 1080);
+        writePpm(path.join(out, `decoded-cli-${format}-${n}.ppm`), decoded[n], 1080, 1080);
+        const vsPicture = mad(decoded[n], kept[n]);
+        const vsFrame = mad(decoded[n], decodeFrame(frameFile, n, 1080, 1080));
+        check(vsPicture < limit, `${format} frame ${n}: decoded against the page's pre-encode picture — mean abs diff ${vsPicture.toFixed(3)} (max ${maxDiff(decoded[n], kept[n])}) < ${limit}`);
+        check(vsFrame < limit, `${format} frame ${n}: the hidden frame's decoded frame against the CLI's — mean abs diff ${vsFrame.toFixed(3)} < ${limit}`);
+      }
+      for (const n of keep) {
+        const distances = keep.map((k) => [k, mad(decoded[n], kept[k])]);
+        const nearest = distances.reduce((a, c) => (c[1] < a[1] ? c : a));
+        check(nearest[0] === n && distances.every(([k, d]) => k === n || d > limit), `${format}: decoded frame ${n} is nearest its own picture, and outside the bound of the others (${distances.map(([k, d]) => `${k}: ${d.toFixed(2)}`).join(", ")})`);
+      }
+
+      // On the canvas: loaded, and moving inside its own rectangle.
+      await fitCanvas();
+      const selector = format === "gif" ? `.item[data-item-id="${itemId}"] img.img-view` : `.item[data-item-id="${itemId}"] video.video-view`;
+      await until(b, format === "gif" ? `document.querySelector('${selector}')?.complete && document.querySelector('${selector}').naturalWidth > 0` : `document.querySelector('${selector}')?.readyState >= 2`, `the ${format} item to load on the canvas`, 30_000);
+      const facts = await b.ev(`(async () => {
+        const el = document.querySelector('${selector}');
+        const r = el.getBoundingClientRect();
+        const rect = { x0: r.left, y0: r.top, x1: r.right, y1: r.bottom };
+        if (el.tagName === "IMG") return { width: el.naturalWidth, height: el.naturalHeight, rect };
+        const before = el.currentTime;
+        await el.play();
+        await new Promise((res) => setTimeout(res, 300));
+        return { width: el.videoWidth, height: el.videoHeight, duration: el.duration, before, after: el.currentTime, paused: el.paused, rect };
+      })()`);
+      const s1 = await shot(`canvas-${format}-1.png`);
+      await sleep(600);
+      const s2 = await shot(`canvas-${format}-2.png`);
+      const inside = differingIn(s1, s2, facts.rect);
+      const loadedOk = facts.width === 1080 && facts.height === 1080 && (format === "gif" || (Math.abs(facts.duration - spec.seconds) < 0.05 && facts.after > facts.before && !facts.paused));
+      check(loadedOk, `${format}: on the canvas at ${facts.width}x${facts.height}${format === "gif" ? "" : `, ${facts.duration?.toFixed(3)} s, clock ${facts.before?.toFixed(2)} → ${facts.after?.toFixed(2)}`}`);
+      const area = Math.round((facts.rect.x1 - facts.rect.x0) * (facts.rect.y1 - facts.rect.y0));
+      check(inside > 0, `${format}: two screenshots 0.6 s apart differ inside the item (${inside} of ${area} pixels in ${JSON.stringify(Object.fromEntries(Object.entries(facts.rect).map(([k, v]) => [k, Math.round(v)])))})`);
+    }
   }
 } finally {
   await b?.close();

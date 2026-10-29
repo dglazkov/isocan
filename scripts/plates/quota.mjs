@@ -1,3 +1,4 @@
+import { environmentValue } from './names.mjs';
 // What plates's GitHub reads cost the owner, and how plates stops spending it
 // (docs: the 2026-10-08 outage, when the owner's GraphQL allowance, 5000
 // points an hour shared by every tool on their login, ran out twice in
@@ -32,13 +33,13 @@ export const GH_TTL = 10 * 60_000;
 
 /** The floor under which optional reads stop: PLATES_QUOTA_FLOOR (tests), else QUOTA_FLOOR. */
 export function quotaFloor(env = process.env) {
-  const raw = env.PLATES_QUOTA_FLOOR;
+  const raw = environmentValue('variable:KEEL_QUOTA_FLOOR', env);
   const n = Number(raw);
   return raw !== undefined && raw !== '' && Number.isFinite(n) && n >= 0 ? n : QUOTA_FLOOR;
 }
 
 /** plates's cache: $PLATES_CACHE, else $XDG_CACHE_HOME/plates, else ~/.cache/plates (every platform, macOS too). */
-export const cacheDir = env => env.PLATES_CACHE || join(env.XDG_CACHE_HOME || join(env.HOME || homedir(), '.cache'), 'plates');
+export const cacheDir = env => environmentValue('variable:KEEL_CACHE', env) || join(env.XDG_CACHE_HOME || join(env.HOME || homedir(), '.cache'), 'plates');
 
 const exec = (cmd, args, env, timeout = 10_000) => new Promise(done => {
   execFile(cmd, args, { env, encoding: 'utf8', timeout, maxBuffer: 64 * 1024 * 1024 }, (error, stdout, stderr) =>
@@ -74,7 +75,7 @@ export async function lastQuota(env) {
 /** The probe: GraphQL's own rateLimit, the number that governs (it answers even at 0, and was charged nothing on 2026-10-08); a query refused for the limit is 0 left. */
 export const PROBE_QUERY = 'query { rateLimit { remaining resetAt } }';
 async function probeQuota(env) {
-  const r = await exec(env.PLATES_GH || 'gh', ['api', 'graphql', '-f', `query=${PROBE_QUERY}`], env);
+  const r = await exec((environmentValue('variable:KEEL_GH', env) ?? 'gh'), ['api', 'graphql', '-f', `query=${PROBE_QUERY}`], env);
   if (!r.ok) return /rate limit/i.test(r.why) ? { remaining: 0, resetAt: null, from: 'GitHub refused a query for the limit' } : null;
   try {
     const rl = JSON.parse(r.stdout)?.data?.rateLimit;
@@ -195,7 +196,7 @@ export const readRepoUnanswered = async (x, opts) => (await readRepoReviewState(
  */
 export async function readRepoReviewState({ repo, reviewers = [] }, { env = process.env, today, spend, timeout = 15_000 } = {}) {
   const graphql = async args => {
-    const r = await exec(env.PLATES_GH || 'gh', args, env, timeout);
+    const r = await exec((environmentValue('variable:KEEL_GH', env) ?? 'gh'), args, env, timeout);
     if (!r.ok) throw new Error(r.why);
     return graphqlData(r.stdout, spend);
   };

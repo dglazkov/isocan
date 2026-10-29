@@ -15,7 +15,7 @@ import { newGroupId, newItemId, newVersionId } from "./ids.ts";
 import type { Item } from "./model.ts";
 import type { Operation } from "./ops.ts";
 import { MOTION_CONTROLS_HEIGHT, MOTION_MIME, motionProperties, motionSlug, type MotionBuild } from "./motion.ts";
-import { RENDERED_FROM, type MotionRenderedFrom } from "./motion-render.ts";
+import { MOTION_FORMAT_FACTS, RENDERED_FROM, type MotionRenderedFrom } from "./motion-render.ts";
 
 /** How a surface uploads bytes and sends one op in one group — the two things that differ between them. */
 export interface MotionWriter {
@@ -76,8 +76,9 @@ export async function versionMotionItem(w: MotionWriter, motion: Pick<Item, "id"
 
 /**
  * **A movie of a motion, beside it** — `isocan motion render`'s and *Render
- * movie…*'s one write: a `video/mp4` item as wide as the motion, as tall as
- * the frame's shape says, wearing `renderedFrom`.
+ * movie…*'s one write: a `video/mp4`, `video/webm` or `image/gif` item, as
+ * `renderedFrom.format` says (an MP4 when it says nothing), as wide as the
+ * motion, as tall as the frame's shape says, wearing `renderedFrom`.
  */
 export async function addMotionMovie(
   w: MotionWriter,
@@ -85,16 +86,19 @@ export async function addMotionMovie(
   bytes: Uint8Array,
   renderedFrom: MotionRenderedFrom,
 ): Promise<{ itemId: string; title: string; filename: string }> {
-  const filename = `${slug(motion.title)}.mp4`;
-  const uploaded = await w.upload(bytes, "video/mp4", filename);
+  const format = renderedFrom.format ?? "mp4";
+  const { mimeType, extension } = MOTION_FORMAT_FACTS[format];
+  const filename = `${slug(motion.title)}.${extension}`;
+  const uploaded = await w.upload(bytes, mimeType, filename);
   const [fw, fh] = renderedFrom.size.split("x").map(Number) as [number, number];
   const width = Math.max(160, Math.round(motion.width));
   const itemId = newItemId();
-  const title = `${motion.title} — movie`;
+  // A GIF is a picture that moves, not a movie, to most people who will see one.
+  const title = `${motion.title} — ${format === "gif" ? "GIF" : "movie"}`;
   await w.send({
     type: "item.add",
     itemId,
-    version: { id: newVersionId(), blobHash: uploaded.blobHash, mimeType: "video/mp4", filename, size: uploaded.size },
+    version: { id: newVersionId(), blobHash: uploaded.blobHash, mimeType, filename, size: uploaded.size },
     width,
     height: Math.round((width * fh) / fw),
     placement: { x: motion.x + motion.width + MOTION_BESIDE, y: motion.y },

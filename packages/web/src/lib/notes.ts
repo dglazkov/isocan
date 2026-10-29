@@ -1,6 +1,6 @@
 import type { Actor, Item } from "@isocan/core";
 import { TEXT_FILENAME, TEXT_MIME, newItemId, newVersionId, noteProperties, noteSpot, textTitle } from "@isocan/core";
-import { uploadBlob } from "./api.ts";
+import { uploadOrStageTextBlob } from "./upload.ts";
 import { creationDestination, sendCreatedItem } from "./groupplacement.ts";
 
 /**
@@ -12,8 +12,7 @@ import { creationDestination, sendCreatedItem } from "./groupplacement.ts";
  */
 export async function addSpeakerNote(canvasId: string, actor: Actor, slide: Item, body: string): Promise<string> {
   const destination = creationDestination(slide.containerId ?? null);
-  const blob = new Blob([body], { type: TEXT_MIME });
-  const upload = await uploadBlob(canvasId, blob, TEXT_FILENAME);
+  const { upload, stagedBlob } = await uploadOrStageTextBlob(canvasId, body, TEXT_MIME, TEXT_FILENAME);
   const itemId = newItemId();
   const spot = noteSpot(slide);
   await sendCreatedItem(canvasId, actor, {
@@ -27,7 +26,7 @@ export async function addSpeakerNote(canvasId: string, actor: Actor, slide: Item
     placement: { x: spot.x, y: spot.y, chosen: true },
     title: textTitle(body),
     properties: noteProperties(slide.id),
-  });
+  }, undefined, { allowQueued: true, ...(stagedBlob ? { stagedBlob } : {}) });
   return itemId;
 }
 

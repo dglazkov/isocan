@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { type Daemon } from "@isocan/server";
 import { startDaemon } from "@isocan/server/daemon";
 import vm from "node:vm";
-import { MOTION_CONTROLS_HEIGHT, MOTION_PROPS, motionEngine, type MotionEngine, type MotionSpec } from "@isocan/core/motion";
+import { MOTION_CONTROLS_HEIGHT, MOTION_PROPS, MOTION_RECIPES, motionEngine, type MotionEngine, type MotionSpec } from "@isocan/core/motion";
 import { cliEnv, runCli, type Run } from "./cli.ts";
 
 /**
@@ -125,9 +125,10 @@ describe("isocan motion new", () => {
   }, 60_000);
 
   it("refuses a recipe it does not know and an item that is not an SVG", async () => {
-    const recipe = await isocan("motion", "new", ids.circle!, "--recipe", "orbit");
+    const recipe = await isocan("motion", "new", ids.circle!, "--recipe", "acme-wobble");
     expect(recipe.code).not.toBe(0);
-    expect(recipe.stderr).toContain('--recipe is assemble or idle, not "orbit"');
+    expect(recipe.stderr).toContain(`--recipe is one of ${MOTION_RECIPES.join(", ")}, not "acme-wobble"`);
+    expect(recipe.stderr).toContain("assemble, reveal, idle, orbit, emphasis");
     const note = path.join(home, "note.md");
     await fs.writeFile(note, "# Acme\n");
     const noteId = await added(note, "Note", "900,0", "200x100");
