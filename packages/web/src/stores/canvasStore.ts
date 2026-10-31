@@ -311,7 +311,7 @@ function confirm(state: CanvasState, lastSeq: number, observed?: OpEnvelope): vo
   const prevQueue = useCanvasStore.getState().queue;
   const queue = retire(prevQueue, lastSeq).filter((write) => write.opId !== observed?.id);
   for (const write of prevQueue) {
-    if (write.stagedBlob && !queue.some((kept) => kept.opId === write.opId)) {
+    if (write.stagedBlob && !queue.some((kept) => kept.stagedBlob?.blobHash === write.stagedBlob!.blobHash)) {
       unstageLocalBlob(state.project.id, write.stagedBlob.blobHash);
     }
   }
@@ -499,7 +499,7 @@ async function drainQueue(): Promise<boolean> {
         useCanvasStore.getState().lastSeq,
       );
       for (const write of prevQueue) {
-        if (write.stagedBlob && !nextQueue.some((kept) => kept.opId === write.opId)) {
+        if (write.stagedBlob && !nextQueue.some((kept) => kept.stagedBlob?.blobHash === write.stagedBlob!.blobHash)) {
           unstageLocalBlob(canvasId, write.stagedBlob.blobHash);
         }
       }
@@ -522,12 +522,15 @@ async function drainQueue(): Promise<boolean> {
 
 /** The home said no to something a person already saw happen. */
 function refuse(write: QueuedWrite, err: ApiError): void {
-  const canvasId = useCanvasStore.getState().canvasId;
+  const { canvasId, queue, refused } = useCanvasStore.getState();
   if (canvasId) {
     settleWrite(canvasId, write.opId, { status: "refused", message: err.message, ...(err.code ? { code: err.code } : {}) });
-    if (write.stagedBlob) unstageLocalBlob(canvasId, write.stagedBlob.blobHash);
+    // Content-addressed bytes can belong to several writes (identical stickers).
+    // Refusing one must not make the others unreadable while still offline.
+    if (write.stagedBlob && !queue.some((kept) => kept.opId !== write.opId && kept.stagedBlob?.blobHash === write.stagedBlob!.blobHash)) {
+      unstageLocalBlob(canvasId, write.stagedBlob.blobHash);
+    }
   }
-  const { queue, refused } = useCanvasStore.getState();
   useCanvasStore.setState({
     queue: queue.filter((other) => other.opId !== write.opId),
     refused: [

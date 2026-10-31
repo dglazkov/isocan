@@ -21,3 +21,14 @@ note: "Holds: addSpeakerNote (notes.ts:13-32) awaits raw uploadBlob instead of u
 ## Our read
 
 Verified in packages/web/src/lib/notes.ts:13-32 (addSpeakerNote): line 16 calls uploadBlob(canvasId, blob, TEXT_FILENAME) directly and line 19 calls sendCreatedItem without allowQueued or stagedBlob. By contrast, ordinary markdown text creation in packages/web/src/lib/text.ts:63-111 uses uploadOrStageTextBlob(canvasId, body, TEXT_MIME, TEXT_FILENAME) from packages/web/src/lib/upload.ts:440-457 and passes { allowQueued: true, stagedBlob } so notes work offline and flush on reconnect. Switching addSpeakerNote to uploadOrStageTextBlob is a one-line consistency fix.
+
+## Implementation — 27 October 2026
+
+Addressed in the offline-save cluster: speaker notes and Stage use
+`uploadOrStageTextBlob`; the two sticker callers explicitly request
+`stageOffline` from `webHostFor`, which carries their primary blobs into the
+existing operation outbox. Default module uploads remain unchanged. Current stickers use deterministic UTF-8 emoji text,
+not SVG. `packages/web/test/offline.test.ts` covers offline creation, reload,
+ordered reconnect and shared hashes; `stageeditor-save.test.ts` covers queued
+Stage saves, duplicate prevention and retained drafts across remounts. The accepted decision
+above is preserved; no external Loop decision was sent.

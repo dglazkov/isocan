@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { parsePersona } from "../../core/src/persona.ts";
 import {
   TOPIC_MARKER,
   agentHelp,
@@ -35,18 +36,26 @@ import { CLI_MODULES } from "../src/modules.ts";
  * topic. The answer to "my verb does not fit" is almost always one more line
  * in the verb index and the prose in a topic.
  *
- * **3,600 on 22 Oct 2026** (motion phase 0): measured 3,505 once the
- * `motion` module's index line arrived — the margin above was spent by the
- * five modules added since (fourteen now), one generated index line each — the growth
- * it was set aside for. Nothing moved into the cold start's prose; a module's
- * line is how its topic is found, so it cannot be a topic itself.
+ * On 22 Oct the test alone rose to 3,600 for motion's index line (3,505
+ * measured), leaving the architect's 3,500 goal behind. On 27 Oct redundant
+ * introductory prose was trimmed instead, retaining every verb and topic.
+ * The test and the nightly now agree, and the assertion below holds them
+ * together so a future edit cannot silently split the two budgets again.
  */
-const COLD_START_BUDGET = 3_600;
+const COLD_START_BUDGET = 3_500;
 
 const modules = CLI_MODULES.map((m) => ({ name: m.core.name, guide: m.guide }));
 const guideFile = fileURLToPath(new URL("../src/agent-guide.md", import.meta.url));
 
 describe("the cold start", () => {
+  it("uses the same budget as the architect's nightly measurement", () => {
+    const source = readFileSync(new URL("../../../.agents/personas/architect.md", import.meta.url), "utf8");
+    const persona = parsePersona(source, "architect.md");
+    const goals = persona?.goals.filter((goal) => goal.measuredBy === "node scripts/measure.mjs agent-help-tokens");
+    expect(goals).toHaveLength(1);
+    expect(goals![0]!.bound).toEqual({ kind: "at most", value: COLD_START_BUDGET });
+  });
+
   it(`stays under ${COLD_START_BUDGET} tokens`, () => {
     const tokens = estimateTokens(coldStart(guideTopics(modules)));
     expect(

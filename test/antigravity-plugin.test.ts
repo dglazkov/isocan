@@ -501,8 +501,9 @@ describe("the canvas pane's routes", () => {
     };
 
     const booted = makeManagedSidecar("aaaa111", "acme-old");
-    makeManagedSidecar("bbbb222", "acme-new");
-    fs.symlinkSync(path.join("builds", "bbbb222"), path.join(home, "current"), "dir");
+    const active = makeManagedSidecar("bbbb222", "acme-new");
+    const current = path.join(home, "current");
+    fs.symlinkSync(path.join("builds", "bbbb222"), current, "dir");
 
     const env = paneEnv({ ISOCAN_HOME: home });
     expect(sidecarDir(env, booted)).toBe(
@@ -522,7 +523,12 @@ describe("the canvas pane's routes", () => {
       expect(await ok.text()).toContain("acme-new");
 
       // If `current` itself is gone too, GET / answers 500 JSON rather than crashing the server.
-      fs.rmSync(path.join(home, "current"), { force: true });
+      // Remove only the link. rmSync without recursive rejects directory
+      // symlinks on some Node/platform combinations before this route is tested.
+      expect(fs.lstatSync(current).isSymbolicLink()).toBe(true);
+      fs.unlinkSync(current);
+      expect(fs.existsSync(current)).toBe(false);
+      expect(fs.readFileSync(path.join(active, "public", "index.html"), "utf8")).toContain("acme-new");
       const missing = await fetch(`${base}/`);
       expect(missing.status).toBe(500);
       expect(await missing.json()).toEqual({ error: expect.stringContaining("ENOENT") });

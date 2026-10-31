@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, writeFileSync, rmSync, existsSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync, rmSync, existsSync, renameSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
@@ -34,7 +34,15 @@ function run(dir, source, options = {}) {
     reportPath: path.join(dir, "report.json"), deadlineMs: 1000, graceMs: 100,
     heartbeatMs: 100, stdout: sink, stderr: sink, ...options });
 }
+// Shared with fixture child scripts through its source; fs is passed explicitly.
+function publishPid(fs, file, pid) {
+  // Existence is the readiness signal: never expose empty or partial PID bytes.
+  const pending = `${file}.pending`;
+  fs.writeFileSync(pending, String(pid));
+  fs.renameSync(pending, file);
+}
 function live(pid) {
+  assert.ok(Number.isSafeInteger(pid) && pid > 1, "expected a safe process PID greater than 1");
   try { process.kill(pid, 0); } catch (error) { if (error.code === "ESRCH") return false; throw error; }
   // A descendant's PID is NOT its process-group ID. Inspect that PID directly.
   const state = spawnSync("ps", ["-p", String(pid), "-o", "stat="], { encoding: "utf8", timeout: 1000, maxBuffer: 4096 });
@@ -44,6 +52,32 @@ async function gone(pid) {
   for (let i = 0; i < 50; i++) { if (!live(pid)) return; await delay(20); }
   assert.fail(`process ${pid} survived group cleanup`);
 }
+
+test("PID readiness stays absent during empty and partial writes", async () => fixture(async (dir) => {
+  // This is a synthetic value, never passed to a process probe or cleanup.
+  const ready = path.join(dir, "ready.pid");
+  const pid = 424242;
+  let writeObserved = false;
+  publishPid({
+    writeFileSync(file, value) {
+      writeObserved = true;
+      for (const incomplete of ["", "42"]) {
+        writeFileSync(file, incomplete);
+        assert.equal(existsSync(ready), false, "incomplete bytes must not advertise PID readiness");
+      }
+      writeFileSync(file, value);
+    },
+    renameSync,
+  }, ready, pid);
+  assert.equal(writeObserved, true);
+  assert.equal(readFileSync(ready, "utf8"), String(pid));
+}));
+
+test("liveness rejects invalid PIDs before probing a process or group", () => {
+  for (const pid of [Number(""), 1, -42, NaN, Infinity, 2.5]) {
+    assert.throws(() => live(pid), /expected a safe process PID greater than 1/);
+  }
+});
 
 test("successful output and exit status remain unchanged; output is not retained in diagnostics", async () => fixture(async (dir) => {
   let output = "";
@@ -204,9 +238,9 @@ test("a noisy non-exiting child hits the absolute deadline, with evidence before
 }));
 
 test("TERM-resistant group descendants are killed even after the leader exits", async () => fixture(async (dir) => {
-  const descendant = `const fs=require('node:fs'); process.on('SIGTERM',()=>{}); fs.writeFileSync('descendant.pid',String(process.pid)); setInterval(()=>{},1000)`;
+  const descendant = `const fs=require('node:fs'); process.on('SIGTERM',()=>{}); (${publishPid})(fs,'descendant.pid',process.pid); setInterval(()=>{},1000)`;
   const source = `const {spawn}=require('node:child_process'); const fs=require('node:fs');
-    fs.writeFileSync('leader.pid',String(process.pid));
+    (${publishPid})(fs,'leader.pid',process.pid);
     spawn(process.execPath,['-e',${JSON.stringify(descendant)}],{stdio:'ignore'}).unref();
     const ready=setInterval(()=>{ if(fs.existsSync('descendant.pid')&&fs.existsSync('allow-exit')){clearInterval(ready);process.exit(0)} },10);`;
   const running = run(dir, source);
@@ -252,8 +286,9 @@ test("spawn and evidence-write failures cannot pass", async () => fixture(async 
 
 test("cancelling the wrapper kills the entire group and retains cancellation", async () => fixture(async (dir) => {
   const module = new URL("./lib/install-watchdog.mjs", import.meta.url).href;
+  const installer = `const fs=require('node:fs');process.on('SIGTERM',()=>{});(${publishPid})(fs,'child.pid',process.pid);setInterval(()=>{},1000)`;
   const script = `import {superviseInstall} from ${JSON.stringify(module)};
-    const result=await superviseInstall({command:process.execPath,args:['-e',"const fs=require('node:fs');process.on('SIGTERM',()=>{});fs.writeFileSync('child.pid',String(process.pid));setInterval(()=>{},1000)"],cwd:${JSON.stringify(dir)},reportPath:${JSON.stringify(path.join(dir, "report.json"))},deadlineMs:10000,graceMs:100,heartbeatMs:100});process.exitCode=result.code;`;
+    const result=await superviseInstall({command:process.execPath,args:['-e',${JSON.stringify(installer)}],cwd:${JSON.stringify(dir)},reportPath:${JSON.stringify(path.join(dir, "report.json"))},deadlineMs:10000,graceMs:100,heartbeatMs:100});process.exitCode=result.code;`;
   writeFileSync(path.join(dir, "wrapper.mjs"), script);
   const child = spawn(process.execPath, [path.join(dir, "wrapper.mjs")], { stdio: "ignore" });
   const closed = new Promise((resolve) => child.once("exit", (code, signal) => resolve({ code, signal })));
