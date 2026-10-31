@@ -6,12 +6,23 @@ import { describe, expect, it } from "vitest";
 import {
   EXTENSION_COLORS,
   IDENTITY_COLORS,
+  PANEL_BRIDGE_VERSION,
+  PANEL_OP_MESSAGE_TYPE,
+  PANEL_OP_RESULT_TYPE,
+  panelActorId,
+  panelActorRoute,
+  panelSubject,
   readPanelExtension,
   type CanvasContents,
   type Item,
+  type PanelOpResult,
 } from "@isocan/core";
 import { ExtensionPanelSurface } from "../src/components/ExtensionPanel.tsx";
 import { panelFrame, type ContentOrigin } from "../src/lib/frame.ts";
+import {
+  bridgePanelFrame,
+  clearPanelBridgeCredentials,
+} from "../src/lib/panelBridge.ts";
 import {
   extensionColor,
   panelUnavailableSentence,
@@ -209,5 +220,269 @@ describe("extensions phase 4: the panel frame on the content origin", () => {
     openPanel("prj_acme", null, false, false);
     expect(useUiStore.getState().extensionPanelOpen).toBe(false);
     expect(useUiStore.getState().extensionPanelId).toBeNull();
+  });
+});
+
+describe("extensions phase 6: the narrow door (postMessage bridge)", () => {
+  function makeMockWindow() {
+    const listeners = new Set<(e: MessageEvent) => void>();
+    return {
+      addEventListener(type: string, fn: EventListener) {
+        if (type === "message") listeners.add(fn as (e: MessageEvent) => void);
+      },
+      removeEventListener(type: string, fn: EventListener) {
+        if (type === "message") listeners.delete(fn as (e: MessageEvent) => void);
+      },
+      dispatch(event: Partial<MessageEvent>) {
+        for (const fn of listeners) fn(event as MessageEvent);
+      },
+    };
+  }
+
+  it("ignores messages from any origin other than the content origin", async () => {
+    clearPanelBridgeCredentials();
+    const win = makeMockWindow();
+    const calls: string[] = [];
+    const replies: PanelOpResult[] = [];
+    const frameReplies: unknown[] = [];
+    const fakeFrame = {
+      postMessage(msg: unknown) {
+        frameReplies.push(msg);
+      },
+    } as unknown as Window;
+
+    const cleanup = bridgePanelFrame({
+      canvasId: "prj_acme",
+      itemId: "itm_panel",
+      contentOrigin: "http://127.0.0.1:4442",
+      frameWindow: () => fakeFrame,
+      win,
+      fetchImpl: async (input) => {
+        calls.push(String(input));
+        return new Response("{}", { status: 200 });
+      },
+      onReply: (res) => replies.push(res),
+    });
+
+    for (const badOrigin of [
+      "http://127.0.0.1:4441",
+      "https://evil.example",
+      "null",
+      "",
+    ]) {
+      win.dispatch({
+        origin: badOrigin,
+        source: fakeFrame,
+        data: {
+          type: PANEL_OP_MESSAGE_TYPE,
+          version: PANEL_BRIDGE_VERSION,
+          requestId: "req_ignore",
+          op: { type: "item.move", itemId: "itm_page", x: 10, y: 20 },
+        },
+      });
+    }
+
+    await new Promise((r) => setTimeout(r, 20));
+    expect(calls).toEqual([]);
+    expect(replies).toEqual([]);
+    expect(frameReplies).toEqual([]);
+    cleanup();
+  });
+
+  it("refuses an unknown protocol version rather than guessing at it", async () => {
+    clearPanelBridgeCredentials();
+    const win = makeMockWindow();
+    const calls: string[] = [];
+    const frameReplies: Array<{ msg: PanelOpResult; targetOrigin: string }> = [];
+    const fakeFrame = {
+      postMessage(msg: PanelOpResult, targetOrigin: string) {
+        frameReplies.push({ msg, targetOrigin });
+      },
+    } as unknown as Window;
+
+    const cleanup = bridgePanelFrame({
+      canvasId: "prj_acme",
+      itemId: "itm_panel",
+      contentOrigin: "http://127.0.0.1:4442",
+      frameWindow: () => fakeFrame,
+      win,
+      fetchImpl: async (input) => {
+        calls.push(String(input));
+        return new Response("{}", { status: 200 });
+      },
+    });
+
+    win.dispatch({
+      origin: "http://127.0.0.1:4442",
+      source: fakeFrame,
+      data: {
+        type: PANEL_OP_MESSAGE_TYPE,
+        version: 2,
+        requestId: "req_v2",
+        op: { type: "item.move", itemId: "itm_page", x: 10, y: 20 },
+      },
+    });
+
+    expect(calls).toEqual([]);
+    expect(frameReplies).toHaveLength(1);
+    expect(frameReplies[0]!.targetOrigin).toBe("http://127.0.0.1:4442");
+    expect(frameReplies[0]!.msg).toEqual({
+      type: PANEL_OP_RESULT_TYPE,
+      version: PANEL_BRIDGE_VERSION,
+      requestId: "req_v2",
+      ok: false,
+      code: "bad-version",
+      error: expect.stringContaining("not supported"),
+    });
+    expect(Object.isFrozen(frameReplies[0]!.msg)).toBe(true);
+    cleanup();
+  });
+
+  it("refuses an operation outside the vocabulary, tells the panel that proposing a new op is proposing a product feature, and writes nothing", async () => {
+    clearPanelBridgeCredentials();
+    const win = makeMockWindow();
+    const calls: string[] = [];
+    const frameReplies: PanelOpResult[] = [];
+    const fakeFrame = {
+      postMessage(msg: PanelOpResult) {
+        frameReplies.push(msg);
+      },
+    } as unknown as Window;
+
+    const cleanup = bridgePanelFrame({
+      canvasId: "prj_acme",
+      itemId: "itm_panel",
+      contentOrigin: "http://127.0.0.1:4442",
+      frameWindow: () => fakeFrame,
+      win,
+      fetchImpl: async (input) => {
+        calls.push(String(input));
+        return new Response("{}", { status: 200 });
+      },
+    });
+
+    win.dispatch({
+      origin: "http://127.0.0.1:4442",
+      source: fakeFrame,
+      data: {
+        type: PANEL_OP_MESSAGE_TYPE,
+        version: PANEL_BRIDGE_VERSION,
+        requestId: "req_unknown",
+        op: { type: "panel.secretWrite", itemId: "itm_page" },
+      },
+    });
+
+    expect(calls).toEqual([]);
+    expect(frameReplies).toEqual([
+      {
+        type: PANEL_OP_RESULT_TYPE,
+        version: PANEL_BRIDGE_VERSION,
+        requestId: "req_unknown",
+        ok: false,
+        code: "unknown-op",
+        error: expect.stringContaining("proposing a new op is proposing a product feature"),
+      },
+    ]);
+    cleanup();
+  });
+
+  it("stamps valid operations with the panel's actor, sends them through /api/ops, and never hands the frame any object other than the frozen PanelOpResult", async () => {
+    clearPanelBridgeCredentials();
+    const win = makeMockWindow();
+    const requests: Array<{ url: string; headers: Record<string, string>; body: unknown }> = [];
+    const frameReplies: PanelOpResult[] = [];
+    const fakeFrame = {
+      postMessage(msg: PanelOpResult) {
+        frameReplies.push(msg);
+      },
+    } as unknown as Window;
+
+    const cleanup = bridgePanelFrame({
+      canvasId: "prj_acme",
+      itemId: "itm_panel",
+      contentOrigin: "http://127.0.0.1:4442",
+      frameWindow: () => fakeFrame,
+      win,
+      fetchImpl: async (input, init) => {
+        const url = String(input);
+        const headers = (init?.headers ?? {}) as Record<string, string>;
+        const body = init?.body ? JSON.parse(String(init.body)) : null;
+        requests.push({ url, headers, body });
+
+        if (url === panelActorRoute("prj_acme", "itm_panel")) {
+          return new Response(
+            JSON.stringify({
+              actor: { id: panelActorId("itm_panel"), name: "Acme Review" },
+              color: "#5b7a8c",
+              grant: {
+                id: "gnt_panel_1",
+                canvasId: "prj_acme",
+                subject: panelSubject("itm_panel"),
+                grantedBy: "bdg_owner",
+                at: "2026-09-06T00:00:00Z",
+              },
+              badgeId: "bdg_panel_secret",
+              token: "tok_panel_secret_do_not_leak",
+            }),
+            { status: 200 },
+          );
+        }
+        if (url === "/api/ops") {
+          return new Response(
+            JSON.stringify({
+              seq: 17,
+              envelope: {
+                id: "op_17",
+                canvasId: "prj_acme",
+                actor: { id: panelActorId("itm_panel"), name: "Acme Review" },
+                timestamp: "2026-09-06T00:00:01Z",
+                op: (body as { op: unknown }).op,
+              },
+              internalStoreHandle: { secret: "never_leak" },
+            }),
+            { status: 200 },
+          );
+        }
+        return new Response("not found", { status: 404 });
+      },
+    });
+
+    win.dispatch({
+      origin: "http://127.0.0.1:4442",
+      source: fakeFrame,
+      data: {
+        type: PANEL_OP_MESSAGE_TYPE,
+        version: PANEL_BRIDGE_VERSION,
+        requestId: "req_move_1",
+        op: { type: "item.move", itemId: "itm_page", x: 120, y: 240 },
+      },
+    });
+
+    await new Promise((r) => setTimeout(r, 20));
+    expect(requests).toHaveLength(2);
+    expect(requests[1]!.url).toBe("/api/ops");
+    expect(requests[1]!.headers["Authorization"]).toBe("Bearer tok_panel_secret_do_not_leak");
+    expect(requests[1]!.body).toMatchObject({
+      canvasId: "prj_acme",
+      actor: { id: panelActorId("itm_panel"), name: "Acme Review" },
+      op: { type: "item.move", itemId: "itm_page", x: 120, y: 240 },
+    });
+
+    expect(frameReplies).toHaveLength(1);
+    const reply = frameReplies[0]!;
+    expect(Object.isFrozen(reply)).toBe(true);
+    expect(Object.keys(reply).sort()).toEqual(["id", "ok", "requestId", "seq", "type", "version"]);
+    expect(reply).toEqual({
+      type: PANEL_OP_RESULT_TYPE,
+      version: PANEL_BRIDGE_VERSION,
+      requestId: "req_move_1",
+      ok: true,
+      seq: 17,
+      id: "op_17",
+    });
+    expect(JSON.stringify(reply)).not.toContain("tok_panel_secret_do_not_leak");
+    expect(JSON.stringify(reply)).not.toContain("bdg_panel_secret");
+    expect(JSON.stringify(reply)).not.toContain("never_leak");
+    cleanup();
   });
 });

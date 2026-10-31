@@ -153,5 +153,8 @@ export class OplogFencedError extends Error {
  */
 export function unknownOperation(op: never): never {
   const type = (op as { type?: unknown }).type;
-  throw new OpValidationError("unknown-op", `unknown operation: ${String(type)}`);
+  throw new OpValidationError(
+    "unknown-op",
+    `unknown operation: ${String(type)} — proposing a new operation is proposing a product feature`,
+  );
 }
