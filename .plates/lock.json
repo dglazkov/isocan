@@ -1,5 +1,5 @@
 {
-  "practice": "0.8.35",
+  "practice": "0.8.36",
   "files": {
     ".agents/skills/plates/SKILL.md": {
       "practice": "agents-md",
@@ -15,7 +15,7 @@
     },
     ".github/workflows/plates-morning.yml": {
       "practice": "night",
-      "sha256": "906e5debfefd3e732f5ddb7cb4b8765cb4754cd525e17daa572b6df56a9e03fa"
+      "sha256": "9eb993be71937c6394102a161ccf3fcfaf487ad0a22236d2483aec40c8fdded3"
     },
     ".github/workflows/plates-night.yml": {
       "practice": "night",
@@ -43,7 +43,7 @@
     },
     "docs/plates-lessons.md": {
       "practice": "lessons",
-      "sha256": "69d23ce123482ecb80d9b1ccee429dd0c86b60fe359085f4c7447e8a8c6f665e"
+      "sha256": "d2f3a6b65c0ea33585856fe7dbccef4f427529b7c03e4efa3e553b2b877d21f5"
     },
     "renovate.json": {
       "practice": "renovate",
@@ -107,7 +107,7 @@
     },
     "scripts/plates/night-plan.mjs": {
       "practice": "night",
-      "sha256": "6e2ebcab928ee9fea363a729473816442d9a1efdaf6cdefc5d1291a5c0d91f07"
+      "sha256": "9611ed5e7ed273263c6b75e1c17888745eab0b6072662818c5f8602057b8a926"
     },
     "scripts/plates/planning-config.mjs": {
       "practice": "night",
