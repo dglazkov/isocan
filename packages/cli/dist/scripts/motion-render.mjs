@@ -5,7 +5,7 @@ import {
   browser,
   throughTheDoor,
   until
-} from "./chunk-NCPWVLPN.mjs";
+} from "./chunk-K4D3YEBX.mjs";
 import "./chunk-JYOOXWJZ.mjs";
 
 // scripts/motion-render.mjs

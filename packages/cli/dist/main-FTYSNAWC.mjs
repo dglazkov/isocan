@@ -28251,7 +28251,7 @@ if (agentHelpAt >= 0) {
     ...CLI_MODULES.map((m) => ({ name: m.core.name, guide: m.guide })),
     ...runtimeModules.flatMap((m) => m.guide ? [{ name: m.name, guide: m.guide }] : [])
   ];
-  void import("./agent-guide-5UN4E6HT.mjs").then(({ agentHelp }) => {
+  void import("./agent-guide-NDACJYQ2.mjs").then(({ agentHelp }) => {
     const answer = agentHelp(topic, modules);
     process.stdout.write(answer.out);
     process.stderr.write(answer.err);

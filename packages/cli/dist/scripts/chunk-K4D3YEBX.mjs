@@ -80,6 +80,7 @@ async function browser({ proxyServer = null, args = [], headless = true } = {}) 
     `--user-data-dir=${dir}`,
     "--no-first-run",
     "--hide-scrollbars",
+    "--disable-features=MacAppCodeSignClone",
     ...proxyServer ? [`--proxy-server=${proxyServer}`, "--proxy-bypass-list=<-loopback>", "--disable-quic", "--force-webrtc-ip-handling-policy=disable_non_proxied_udp"] : [],
     ...args,
     "about:blank"
