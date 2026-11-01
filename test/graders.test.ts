@@ -46,6 +46,13 @@ describe("the graders can actually start", () => {
     expect(code).not.toMatch(/spawn\(\s*["'`]\//);
   });
 
+  it("starts Chrome without a code-sign clone", () => {
+    // A killed Chrome leaves its clone behind, and every clone is one more
+    // "Google Chrome" row in macOS's Local Network list.
+    const code = grader.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(code).toContain('"--disable-features=MacAppCodeSignClone"');
+  });
+
   it("says what it looked for rather than throwing a bare ENOENT", () => {
     // The whole failure above was somebody reading an error that did not name
     // its own cause — inside a step allowed to fail.
