@@ -2136,7 +2136,8 @@ const [, , file, out, w, h] = process.argv;
 const port = 9222 + Math.floor(process.pid % 500);
 const chrome = spawn(process.env.CHROME ?? "google-chrome", [
   "--headless=new", `--remote-debugging-port=${port}`, `--window-size=${w},${h}`,
-  "--hide-scrollbars", "--no-first-run", "--force-device-scale-factor=1", "about:blank",
+  "--hide-scrollbars", "--no-first-run", "--force-device-scale-factor=1",
+  "--disable-features=MacAppCodeSignClone", "about:blank",
 ], { stdio: "ignore" });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let target = null;
@@ -2160,6 +2161,9 @@ ws.close(); chrome.kill();
 ```
 
 On macOS, `CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"`.
+`--disable-features=MacAppCodeSignClone` stops Chrome leaving a copy of itself
+in a temp folder when the script kills it; each leftover copy adds a "Google
+Chrome" row to the Mac's Local Network settings.
 `ws` comes with isocan, so `node --input-type=module` from the isocan checkout
 finds it; anywhere else, `npm i ws` first. If there is no Chrome, say so and
 deliver the SVG — a real vector asset with a note beats a missing one.
