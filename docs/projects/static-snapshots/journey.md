@@ -28,9 +28,11 @@ and the hosting model of
 [`docs/research/2026-08-26-attaching-a-directory.md`](../../research/2026-08-26-attaching-a-directory.md)
 (Issue #141):
 
-- **Standard MIME blobs**: Snapshots are stored as ordinary binary blobs wearing
-  `multipart/related` (MHTML) or `application/pdf` (PDF), mapped via
-  `packages/core/src/filenames.ts`.
+- **Standard MIME blobs**: The design stores snapshots as ordinary binary blobs
+  wearing `multipart/related` (MHTML) or `application/pdf` (PDF). Existing MIME
+  mappings live in `packages/core/src/media.ts` and include PDF; MHTML MIME
+  registration is still owed alongside capture and rendering. Until registered,
+  a CLI `.mhtml` import falls back to `application/octet-stream`.
 - **Zero new operations**: Saving a snapshot emits standard `item.add`. Re-capturing
   a page over time emits `item.addVersion`, preserving the visual and textual
   chronology of the site in the version stack.
