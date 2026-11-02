@@ -17,6 +17,7 @@ screen per day, one row per week, open to anyone with the address.
 
 | Day | | What happened |
 | --- | --- | --- |
+| **[31 Oct](2026-10-31.md)** | *Draft* | Not written up yet: the day's commits, quoted in full. Whoever writes the entry replaces this row. |
 | **[30 Oct](2026-10-30.md)** | *Draft* | Not written up yet: the day's commits, quoted in full. Whoever writes the entry replaces this row. |
 | **[29 Oct](2026-10-29.md)** | *Draft* | Not written up yet: the day's commits, quoted in full. Whoever writes the entry replaces this row. |
 | **[28 Oct](2026-10-28.md)** | *Draft* | Not written up yet: the day's commits, quoted in full. Whoever writes the entry replaces this row. |
