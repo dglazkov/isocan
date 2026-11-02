@@ -183,8 +183,17 @@ export async function browser({ proxyServer = null, args = [], headless = true }
   // `headless: false` opens a real window — for a measurement that must not be
   // taken in headless mode (the local judge's GPU timings). Every other caller
   // keeps the default.
+  //
+  // **No code-sign clone.** On macOS, Chrome copies itself into a temp folder
+  // at every start and deletes the copy when it quits. A grader that kills
+  // Chrome leaves the copy behind, and each copy that touches the network gets
+  // its own "Google Chrome" row in System Settings' Local Network list — 117
+  // copies and 13 extra rows built up this way before anyone noticed. The
+  // feature only exists to survive an update mid-run, which a throwaway
+  // profile never needs. A caller's own `--disable-features` would replace
+  // this one (Chrome keeps the last), so pass more features here, not there.
   const proc = spawn(chromeOrDie(), [...(headless ? ["--headless=new"] : []), "--remote-debugging-port=0",
-    `--user-data-dir=${dir}`, "--no-first-run", "--hide-scrollbars",
+    `--user-data-dir=${dir}`, "--no-first-run", "--hide-scrollbars", "--disable-features=MacAppCodeSignClone",
     ...(proxyServer ? [`--proxy-server=${proxyServer}`, "--proxy-bypass-list=<-loopback>", "--disable-quic", "--force-webrtc-ip-handling-policy=disable_non_proxied_udp"] : []),
     ...args,
     "about:blank"], { stdio: "ignore" });

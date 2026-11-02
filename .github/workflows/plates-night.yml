@@ -355,7 +355,9 @@ jobs:
             if (r.error) console.log(`improve: ${r.error}`);
           ' "$RUNNER_TEMP/improve.json" "$GITHUB_OUTPUT"
 
-      # Tonight's history, gate run included, for tomorrow night: the ledger
+      # Tonight's history includes bounded, redacted failure output in the gate
+      # receipt, bound to its invocation and commit. No raw logs are uploaded.
+      # For tomorrow night: the ledger
       # persists between nights only as this artifact (it is never committed).
       - name: Keep the test ledger
         if: always()

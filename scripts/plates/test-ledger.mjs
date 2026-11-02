@@ -298,6 +298,32 @@ export function redactedText(value, env = process.env, { configEnv = [] } = {}) 
   return redacted + text.slice(copied);
 }
 
+const validRedactionConfig = tests => tests === undefined || (tests !== null && typeof tests === 'object' && !Array.isArray(tests)
+  && (tests.configEnv === undefined || (Array.isArray(tests.configEnv) && tests.configEnv.every(v => typeof v === 'string' && /^[A-Za-z_][A-Za-z0-9_]*$/.test(v)))));
+
+/** Bounded failure evidence for any gate runner, without guessing compound stages.
+ * Redact the complete captured stream before retaining its tail: slicing first
+ * can separate an assignment key from its secret or expose a split credential. */
+export function gateDiagnostics(result, env = process.env, tests) {
+  if (!result.error && result.status === 0 && !result.signal) return null;
+  // Optional evidence must never replace the gate outcome or retain text when
+  // configured secret names cannot be determined. Match the reporter's boundary.
+  const valid = validRedactionConfig(tests), configEnv = valid ? tests?.configEnv ?? [] : [];
+  const stream = value => {
+    if (!valid) return { available: false, reason: 'invalid-redaction-config', text: null, observedBytes: null, retainedBytes: 0, truncated: false };
+    if (typeof value !== 'string') return { available: false, text: null, observedBytes: null, retainedBytes: 0, truncated: false };
+    const redacted = redactedText(value, env, { configEnv }).replace(/\r\n?/g, '\n').replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, ' ');
+    let text = redacted.split('\n').slice(-80).join('\n').slice(-8192);
+    while (Buffer.byteLength(text) > 8192) text = text.slice(1);
+    return { available: true, text, observedBytes: Buffer.byteLength(value), retainedBytes: Buffer.byteLength(text), truncated: text !== redacted };
+  };
+  const codes = ['ENOENT', 'EACCES', 'EPERM', 'ETIMEDOUT', 'ENOBUFS', 'E2BIG', 'ENOMEM', 'EMFILE', 'ENFILE', 'EIO', 'EINVAL'];
+  return { schema: 1, scope: 'whole-command', stage: null,
+    outcome: result.error ? 'execution-error' : result.signal ? 'signal' : 'exit',
+    errorCode: result.error ? codes.includes(result.error.code) ? result.error.code : 'unknown' : null,
+    stdout: stream(result.stdout), stderr: stream(result.stderr) };
+}
+
 /** Each lane and machine keeps its own last ten passing observations, including coverage. */
 export function usualTimes(runs) {
   const groups = new Map();
@@ -341,9 +367,10 @@ export async function timedCommand(command, { cwd = process.cwd(), env = process
   }
   if (parent) {
     try { await writeFile(join(root, RUNS, `payload-${parent.id}`), sha12(command)); } catch {}
-    const started = Date.now();
+    const identity = where(root), started = Date.now();
     const result = spawnSync(command, { ...options, env });
-    return { ...result, ms: Date.now() - started };
+    return { ...result, ms: Date.now() - started, diagnostics: gateDiagnostics(result, env, config.tests),
+      execution: { invocationId: parent.id, commandHash: sha12(command), commit: identity.commit, nested: true } };
   }
   let usual;
   const telemetry = { usual: false, recorded: false };
@@ -364,6 +391,8 @@ export async function timedCommand(command, { cwd = process.cwd(), env = process
   const childEnv = Object.fromEntries(Object.entries(scrubEnvironment(['variable:KEEL_USUAL','variable:KEEL_GATE_ACTIVE','variable:KEEL_GATE_INVOCATION','variable:KEEL_SUITE_PLAN','variable:KEEL_RUN_START'],env)).filter(([k]) => preparedEnv || !k.startsWith('NODE_TEST_')));
   const result = spawnSync(command, { ...options, env: { ...childEnv, PLATES_GATE_ACTIVE: root, ...(active ? { PLATES_GATE_INVOCATION: invocationId } : {}), ...(plan ? {PLATES_SUITE_PLAN: JSON.stringify(plan)} : {}), ...(usual ? { PLATES_USUAL: usual } : {}), PLATES_RUN_START: JSON.stringify(start) } });
   const ms = Date.now() - started, busy = busyBetween(start, await busySample());
+  const diagnostics = gateDiagnostics(result, childEnv, config.tests);
+  const execution = { invocationId, commandHash: sha12(command), commit: identity.commit, nested: false };
   let innerPayloadHash = null;
   try { innerPayloadHash = await readFile(join(root, RUNS, `payload-${invocationId}`), 'utf8'); } catch {}
   if (active) await rm(active, {force:true}).catch(() => {});
@@ -372,10 +401,10 @@ export async function timedCommand(command, { cwd = process.cwd(), env = process
     await record(root, { ...finishedIdentity(identity, root), invocationId, completed: true, startedAt: new Date(started).toISOString(), provenance: { version: 1, source: 'outer-launcher', invocationId, outerCommandHash: sha12(command), innerPayloadHash, scope: '.' }, kind: 'gate', runner: 'gate', dir: relative(root, real(cwd)) || '.',
     config: configHash({ env, preload: [], configEnv: config.tests?.configEnv ?? [], runner: 'gate' }),
     gateSource: configured && command === (config.check ?? 'npm run check') ? 'configured-check' : 'explicit-command', commandHash: sha12(command), date: new Date().toISOString(), tests: [], ms, busy,
-    status: result.status, signal: result.signal });
+    status: result.status, signal: result.signal, diagnostics });
     telemetry.recorded = true;
   } catch (error) { unavailable('gate timing record', error); }
-  return { ...result, ms, telemetry };
+  return { ...result, ms, telemetry, diagnostics, execution };
 }
 
 // ---- config ------------------------------------------------------------------
@@ -782,7 +811,7 @@ export async function readStalls(root) {
 async function projectConfig(root, { strict = false, redaction = false } = {}) {
   try {
     const config = JSON.parse(await readFile(join(root, '.plates', 'plates.json'), 'utf8'));
-    if (redaction && (!config || typeof config !== 'object' || Array.isArray(config) || (config.tests !== undefined && (!config.tests || typeof config.tests !== 'object' || Array.isArray(config.tests))) || (config.tests?.configEnv !== undefined && !(Array.isArray(config.tests.configEnv) && config.tests.configEnv.every(v => typeof v === 'string' && /^[A-Za-z_][A-Za-z0-9_]*$/.test(v)))))) return null;
+    if (redaction && (!config || typeof config !== 'object' || Array.isArray(config) || !validRedactionConfig(config.tests))) return null;
     if (strict && (!config || typeof config !== 'object' || Array.isArray(config) || (config.check !== undefined && (typeof config.check !== 'string' || !config.check.trim())))) throw new Error('invalid gate configuration');
     return config;
   } catch (error) {
