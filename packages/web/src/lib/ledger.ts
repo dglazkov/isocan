@@ -21,6 +21,8 @@
  * called `step-2.html`, agents named for models. Nothing here is lifted from a
  * canvas anybody actually has.
  */
+
+import { shortcut } from "@isocan/core";
 type LedgerRow = {
   /** What a person does with a pointer or a key. */
   did: string;
@@ -74,7 +76,7 @@ export const LEDGER: readonly LedgerRow[] = [
     command: "isocan browse http://localhost:5173",
   },
   {
-    did: "Press ⌘Z",
+    did: `Press ${shortcut("Z")}`,
     note: "Per person — you never undo somebody else's work",
     command: "isocan undo",
   },

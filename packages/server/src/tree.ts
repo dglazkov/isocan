@@ -79,14 +79,8 @@ export async function boundDirs(home: string, canvasId: string): Promise<string[
   const dirs: string[] = [];
   for (const [dir, id] of Object.entries(cache)) {
     if (id !== canvasId) continue;
-    try {
-      const marker = JSON.parse(
-        await fs.readFile(path.join(dir, ".isocan", "project.json"), "utf8"),
-      ) as { projectId?: string; canvasId?: string };
-      if ((marker.canvasId ?? marker.projectId) === canvasId) dirs.push(path.resolve(dir));
-    } catch {
-      // No marker, no binding.
-    }
+    const marker = await readMarker(dir, home);
+    if (marker?.canvasId === canvasId) dirs.push(path.resolve(dir));
   }
   return dirs;
 }
@@ -264,7 +258,7 @@ export async function pickList(home: string, at: string | null): Promise<PickLis
     const full = path.join(real, entry.name);
     // The marker is the fact that travels; the roster is this machine's
     // memory of it. A fresh clone has the first and not the second.
-    const marker = await readMarker(full);
+    const marker = await readMarker(full, home);
     const claim: DirClaim | undefined = marker
       ? { canvasId: marker.canvasId, ...(marker.title ? { title: marker.title } : {}) }
       : bound[full] !== undefined

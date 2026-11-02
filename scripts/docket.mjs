@@ -48,6 +48,9 @@ import { register } from "tsx/esm/api";
 
 register();
 const { connect } = await import("@isocan/api");
+// The marks are core's, so `isocan docket answer` and this script cannot
+// disagree about which emoji is which verdict.
+const { DOCKET_MARKS, DOCKET_CLAIM, docketVerdict } = await import("@isocan/core");
 const { reviewPages, isAnswered, findingKey, askedAgain } = await import("./reviews.mjs");
 
 const repo = fileURLToPath(new URL("..", import.meta.url));
@@ -58,7 +61,7 @@ const READ_ONLY = argv.includes("--read-only");
 
 /** ✅ accepts, ❌ rejects. Two marks and no more for a VERDICT: a docket where
  *  six emoji mean six things is a docket nobody can read at a glance. */
-export const MARKS = { "✅": "accepted", "❌": "rejected" };
+export const MARKS = Object.fromEntries(Object.entries(DOCKET_MARKS).map(([verdict, emoji]) => [emoji, verdict]));
 
 /**
  * **✋ — I am taking this** (#206 phase 4).
@@ -77,7 +80,7 @@ export const MARKS = { "✅": "accepted", "❌": "rejected" };
  * Presence and `narrate` already say where somebody is STANDING. This is the
  * half that does not exist: what they are standing there for.
  */
-export const CLAIM = "✋";
+export const CLAIM = DOCKET_CLAIM;
 
 /**
  * **The open questions**, one per `findingKey` identity, newest value first.
@@ -171,9 +174,9 @@ export function decisionsIn(items, names = {}) {
   for (const item of items) {
     const slug = item.properties?.docket;
     if (!slug) continue;
-    const marks = Object.entries(MARKS).filter(([emoji]) => (item.reactions?.[emoji] ?? []).length > 0);
-    if (marks.length !== 1) continue;
-    const [emoji, verdict] = marks[0];
+    const verdict = docketVerdict(item);
+    if (verdict !== "accepted" && verdict !== "rejected") continue;
+    const emoji = DOCKET_MARKS[verdict];
     // `names` is core's `ActorNames` — a plain id → name record, which is what
     // a snapshot carries. It was a Map for one draft and the walk caught it.
     const who = (item.reactions[emoji] ?? []).map((id) => names[id] ?? id);

@@ -2,11 +2,12 @@ import type {
   Actor,
   CanvasContents,
   Capability,
+  CursorSignal,
   Operation,
   PresenceActivity,
   PresenceSession,
 } from "@isocan/core";
-import { narrowed, newId, textAttention } from "@isocan/core";
+import { cursorSignal, groupChangeItemIds, narrowed, newId, presenceDrag, textAttention } from "@isocan/core";
 
 /**
  * The ephemeral plane. Presence lives in daemon memory and WS fan-out only —
@@ -105,6 +106,9 @@ export class PresenceHub {
       cursor?: { x: number; y: number } | null;
       selection?: string[];
       textSelection?: import("@isocan/core").TextAttention | null;
+      signal?: CursorSignal | string | null;
+      /** The drag the hand is making; `null` ends it. Omit to leave it. */
+      drag?: unknown;
       status?: string | null;
       statusSource?: "explicit" | "lifecycle" | "inferred";
       activity?: PresenceActivity | null;
@@ -157,6 +161,7 @@ export class PresenceHub {
       ...session,
       via: origin,
       ...(session.textSelection !== undefined ? { textSelection: textAttention(session.textSelection) } : {}),
+      ...(session.signal !== undefined ? { signal: cursorSignal(session.signal) } : {}),
     }));
   }
 
@@ -232,10 +237,13 @@ export class PresenceHub {
       // "which side is this on", and holding it here would have this daemon
       // repeat somebody else's perspective as its own. `roster()` derives it
       // fresh from `origin` below.
-      const { via: _theirs, ...incoming } = session;
+      const { via: _theirs, drag: theirDrag, ...incoming } = session;
+      const drag = presenceDrag(theirDrag);
       const next: SessionState = {
         ...incoming,
+        ...(drag ? { drag } : {}),
         ...(incoming.textSelection !== undefined ? { textSelection: textAttention(incoming.textSelection) } : {}),
+        ...(incoming.signal !== undefined ? { signal: cursorSignal(incoming.signal) } : {}),
         origin,
         lastSeenMs: Date.now(),
         statusSource: null,
@@ -367,7 +375,9 @@ function patchSession(
     actor?: Actor;
     cursor?: { x: number; y: number } | null;
     selection?: string[];
-      textSelection?: import("@isocan/core").TextAttention | null;
+    textSelection?: import("@isocan/core").TextAttention | null;
+    signal?: CursorSignal | string | null;
+    drag?: unknown;
     status?: string | null;
     statusSource?: "explicit" | "lifecycle" | "inferred";
     activity?: PresenceActivity | null;
@@ -380,6 +390,15 @@ function patchSession(
   if (patch.cursor !== undefined) session.cursor = patch.cursor;
   if (patch.selection !== undefined) session.selection = patch.selection;
   if (patch.textSelection !== undefined) session.textSelection = textAttention(patch.textSelection);
+  if (patch.signal !== undefined) session.signal = cursorSignal(patch.signal);
+  // Absent, not null, when there is none: every web face rides every roster,
+  // and a field on all of them for the one moment one of them is dragging is
+  // bytes for nothing.
+  if (patch.drag !== undefined) {
+    const drag = presenceDrag(patch.drag);
+    if (drag) session.drag = drag;
+    else delete session.drag;
+  }
   if (patch.status !== undefined) {
     // Words the actor said outrank narration the system derived; lifecycle
     // turns (parking, waking, a posted comment) outrank everything. The
@@ -411,13 +430,19 @@ export function opLocus(op: Operation, canvas: CanvasContents): { x: number; y: 
     return item ? { x: item.x + item.width / 2, y: item.y + item.height / 2 } : null;
   };
   switch (op.type) {
+    case "group.change": {
+      const first = groupChangeItemIds(op)[0];
+      return first ? itemCenter(first) : null;
+    }
     case "item.add":
     case "item.move":
     case "item.resize":
     case "item.update":
     case "item.addVersion":
+    case "item.edit":
     case "item.setCurrentVersion":
     case "item.restoreVersion":
+    case "item.pruneVersions":
     case "item.delete":
     case "item.restore":
       return itemCenter(op.itemId);

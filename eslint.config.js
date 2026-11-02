@@ -33,6 +33,28 @@ import reactHooks from "eslint-plugin-react-hooks";
  * nothing to say about only invites rules that are opinions.
  */
 export default [
+  /**
+   * **What eslint is not asked to look at**, which is the difference between a
+   * three-second check and a fifty-second one.
+   *
+   * `files` above scopes the RULES; it does not scope the walk. `eslint .`
+   * still opened every file in the tree, and this tree contains
+   * `.claude/worktrees/` — up to twenty other checkouts of this same
+   * repository, each with its own `packages/web/dist` full of minified
+   * bundles. Fifty seconds, almost all of it parsing build output belonging to
+   * work nobody asked about.
+   *
+   * Slow was the smaller half. **The lint gate was reading other sessions'
+   * uncommitted work**: a hook bug in somebody's worktree counted toward
+   * `measure.mjs lint-violations`, which is qa-tester's "eslint errors at most
+   * 0" goal, so the board could go red for code that is not on this branch and
+   * may never be. A check whose answer depends on what another agent happens
+   * to have checked out is not a check. `dist` goes for the plainer reason:
+   * nobody fixes a hook in a bundle.
+   */
+  {
+    ignores: [".claude/**", "**/dist/**"],
+  },
   {
     files: ["packages/web/src/**/*.ts", "packages/web/src/**/*.tsx", "packages/modules/*/src/**/*.tsx"],
     languageOptions: {

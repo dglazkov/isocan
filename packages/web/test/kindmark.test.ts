@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
 const item = read("../src/components/ItemView.tsx");
+const chromeSource = read("../src/lib/chrome.ts");
 const fan = read("../src/components/VersionFanOut.tsx");
 const css = read("../src/styles.css");
 
@@ -23,19 +24,24 @@ describe("the kind mark stands in for the chrome that hid", () => {
   });
 
   it("exempts the kinds that already say what they are", () => {
-    /* An image, a video and a drawing ARE their small form — a mark over one
-       says nothing it did not already say and covers the thing it names. It is
-       the pale rectangles that become indistinguishable. This is the same rule
-       `textIsLegible` applies to words, reaching the other kinds. */
+    /* An image, a video, a drawing and an HTML screen ARE their small form —
+       a mark over one says nothing it did not already say and covers the
+       thing it names (`useHtmlSnapshot` gives HTML screens a lightweight WebP
+       proxy that scales down cleanly without mounting an iframe). It is the
+       remaining pale rectangles that become indistinguishable. This is the
+       same rule `textIsLegible` applies to words, reaching the other kinds. */
     expect(item).toContain('const picture = kind === "image" || kind === "video" || kind === "drawing"');
-    expect(item).toMatch(/kindMark = !roomy && !isText && !picture/);
+    expect(item).toMatch(/kindMark = !roomy && !isText && !picture && !htmlScreen/);
   });
 
   it("is sized by the item, using the rule the text mark already uses", () => {
     // "Forty oversized glyphs are the same smear in a different hat" — the
     // text mark's own comment, and the reason this shares its size rule rather
     // than picking a second one.
-    expect(item).toContain("textMarkSize(width, height, scale) / scale");
+    // Both marks wear the one CSS form of `textMarkSize(...) / scale` from
+    // lib/chrome.ts (held to it in chrome.test.ts), so they cannot drift apart.
+    expect(item).toContain("fontSize: TEXT_MARK_CSS");
+    expect(item).toContain('"--mark": TEXT_MARK_CSS');
   });
 
   it("stops drawing once it would be too small to read", () => {
@@ -51,8 +57,11 @@ describe("the kind mark stands in for the chrome that hid", () => {
      * thing to draw is nothing — the minimap answers "what is where" at that
      * scale, and answers it better.
      */
-    expect(item).toContain("markPx >= KIND_MARK_MIN");
-    expect(item, "sized once, not twice").not.toMatch(/textMarkSize\(width, height, scale\)[\s\S]{0,40}textMarkSize\(/);
+    // The floor is one of the zoom decisions now (`zoomDecisions`, lib/chrome.ts),
+    // and the item reads it as a bit.
+    expect(chromeSource).toContain("textMarkSize(width, height, scale) >= KIND_MARK_MIN");
+    expect(item).toContain("(zoom & Z_MARK) !== 0");
+    expect(item, "sized once, not twice").not.toMatch(/textMarkSize\(/);
   });
 
   it("does not paint state colours, because state is the outline's job", () => {
@@ -61,7 +70,12 @@ describe("the kind mark stands in for the chrome that hid", () => {
        minimap peek use it too — so colouring hover or selection by TYPE would
        spend that invariant, and add a fourth colour language to pixels already
        carrying three. */
-    const block = css.slice(css.indexOf(".kind-mark"), css.indexOf(".text-mark"));
+    // The `.text-mark` AFTER the kind mark's block: the sheet names
+    // `.text-mark` earlier too (smart contrast's mid rules), and slicing to
+    // the first one read nothing at all.
+    const start = css.indexOf(".kind-mark");
+    const block = css.slice(start, css.indexOf(".text-mark", start));
+    expect(block.length, "the kind mark's block was not found").toBeGreaterThan(0);
     expect(block).toContain("var(--ink-soft)");
     expect(block).not.toContain("--accent");
   });
@@ -81,9 +95,10 @@ describe("the version fan hands over the same facts as the canvas", () => {
   });
 
   it("tells it about a canvas card too, for the same reason", () => {
-    // Otherwise a canvas item's earlier versions are its ADDRESS as text
-    // rather than the place drawn small.
-    expect(fan).toContain("canvasOf={canvasIdOf(item)}");
+    // Raw declarations must survive a changed kind: otherwise an earlier
+    // image version can skip the source classifier and show a private picture.
+    expect(fan).toContain("canvasOf={item.properties.canvas ?? null}");
+    expect(fan).not.toContain("canvasOf={canvasIdOf(item)}");
     expect(fan).toContain("canvasSource={sourceOf(item)}");
   });
 

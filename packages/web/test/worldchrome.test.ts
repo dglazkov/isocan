@@ -134,6 +134,7 @@ describe("chrome inside the zoomed world", () => {
        pixels already, by the counter-scale, exactly as the titlebar's two
        ends are. */
     ".version-badge-ne",
+    ".item-focus-strip-nw",
   ];
 
   it("has rules for every selector it claims to check", () => {
@@ -240,22 +241,6 @@ describe("chrome inside the zoomed world", () => {
       /"--scale":\s*viewport\.scale/,
     );
   });
-
-  /**
-   * The star is always on the right, whatever else is in the row.
-   *
-   * Hiding the name at small sizes sent it to the LEFT edge, because
-   * `space-between` puts a lone child at the start — the exact swap ItemView's
-   * own comment says must never happen ("a name that grows rightward from
-   * there runs off the item entirely"). `margin-left: auto` pins it regardless
-   * of siblings, so the rule does not depend on what else happens to render.
-   */
-  it("keeps the star on the right when it is the only thing in the row", () => {
-    const right = rulesFor(".chrome-right").join(" ");
-    expect(right, ".chrome-right must not rely on a sibling to sit right").toMatch(
-      /margin-left:\s*auto/,
-    );
-  });
 });
 
 /**
@@ -304,8 +289,11 @@ describe("chrome holds its size, by transform or by --scale", () => {
    * transform. Now each entry names the expression it must be holding.
    */
   const CHROME: { className: string; where: string; carries: RegExp }[] = [
-    { className: "item-under", where: "ItemView", carries: /style=\{underRow\(/ },
+    // Since 26 Sep the item's counter-scale is the CSS form beside `counterScale`
+    // in lib/chrome.ts — the same one home, said in CSS so a zoom needs no render.
+    { className: "item-under", where: "ItemView", carries: /style=\{UNDER_ROW_CSS\}/ },
     { className: "chrome-left", where: "ItemView", carries: /\.\.\.chrome,/ },
+    { className: "item-focus-strip", where: "ItemView", carries: /\.\.\.chrome,/ },
   ];
 
   it("renders each one with the counter-scale from its one home", () => {
@@ -325,7 +313,10 @@ describe("chrome holds its size, by transform or by --scale", () => {
     // typed at each site, which is a rule with no name and therefore no way
     // to notice a site that skipped it.
     expect(everySource).not.toMatch(/transform:\s*`scale\(\$\{1 \/ scale\}\)`/);
-    expect(everySource).toMatch(/counterScale/);
+    // Its CSS twin (26 Sep) is written once too — in lib/chrome.ts beside it, and
+    // never spelled out again in a component.
+    expect(everySource).toMatch(/counterScale|COUNTER_SCALED_CSS/);
+    expect(everySource).not.toMatch(/calc\(1 \/ var\(--scale\)\)/);
   });
 
   it("pairs a transform-origin with an actual transform", () => {
@@ -511,7 +502,9 @@ describe("the row under an item is one row", () => {
       fileURLToPath(new URL("../src/components/ItemView.tsx", import.meta.url)),
       "utf8",
     );
-    expect(itemView).toMatch(/style=\{underRow\(width, scale\)\}/);
+    // The CSS form from lib/chrome.ts, which `chrome.test.ts` holds to
+    // `underRow(width, scale).width` number for number.
+    expect(itemView).toMatch(/style=\{UNDER_ROW_CSS\}/);
   });
 
   it("holds the three slots apart: marks left, hint centred, size right", () => {

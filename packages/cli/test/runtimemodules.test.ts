@@ -1,14 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
-import { spawn, type ChildProcess } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { startDaemon, type Daemon } from "@isocan/server";
-import { harnessVars } from "@isocan/api";
+import { type Daemon } from "@isocan/server";
+import { startDaemon } from "@isocan/server/daemon";
+import { cliEnv, runCli, type Run } from "./cli.ts";
 
 
-const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 const kit = { id: "usr_kit", name: "Kit" };
 
 let home: string;
@@ -28,27 +26,8 @@ afterEach(async () => {
   await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
-interface Run {
-  code: number;
-  stdout: string;
-  stderr: string;
-}
-
 function isocan(...args: string[]): Promise<Run> {
-  const env = { ...process.env };
-  for (const name of harnessVars) delete env[name];
-  const child: ChildProcess = spawn(process.execPath, [cliBin, ...args], {
-    env: { ...env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(base).port },
-    cwd: home,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  let stdout = "";
-  let stderr = "";
-  child.stdout!.setEncoding("utf8");
-  child.stdout!.on("data", (chunk) => (stdout += chunk));
-  child.stderr!.setEncoding("utf8");
-  child.stderr!.on("data", (chunk) => (stderr += chunk));
-  return new Promise((resolve) => child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })));
+  return runCli(args, { cwd: home, env: cliEnv({ ISOCAN_HOME: home, ISOCAN_PORT: new URL(base).port }) });
 }
 
 async function json(...args: string[]): Promise<any> {
@@ -103,8 +82,10 @@ describe("isocan module", () => {
     expect(hello.code, hello.stderr).toBe(0);
     expect(hello.stdout).toContain("hi from a module; kinds here:");
     expect(hello.stdout).toContain("greeting");
-    const guide = await isocan("--agent-help");
-    expect(guide.stdout).toContain("## Hello");
+    // A module is a topic (#124): named in the cold start's index, printed
+    // in full by its name.
+    expect((await isocan("--agent-help")).stdout).toContain("- `hello` — Hello");
+    expect((await isocan("--agent-help", "hello")).stdout).toContain("## Hello");
     const rows = await json("module", "ls");
     expect(rows).toContainEqual({ name: "@acme/hello", version: "1.2.0", refused: null });
     expect(rows.some((r: { version: string }) => r.version === "built in")).toBe(true);
@@ -112,19 +93,19 @@ describe("isocan module", () => {
     const removed = await json("module", "rm", "hello");
     expect(removed).toEqual({ removed: "hello" });
     expect((await isocan("hello")).code).not.toBe(0);
-    expect((await isocan("--agent-help")).stdout).not.toContain("## Hello");
+    expect((await isocan("--agent-help", "all")).stdout).not.toContain("## Hello");
   });
 
   it("refuses a module built for another isocan, at add and in the list", async () => {
     const dir = await builtModule("future", { name: "@acme/future", version: "9.0.0", engines: ">=9.0.0", cli: "dist/cli.mjs" }, HELLO_CLI);
     const refused = await isocan("module", "add", dir, "--yes");
     expect(refused.code).not.toBe(0);
-    expect(refused.stderr).toContain("needs module API >=9.0.0, and this build is 0.2.0");
+    expect(refused.stderr).toContain("needs module API >=9.0.0, and this build is 0.2.11");
     // Dropped in by hand — the check at load is the one that protects a home
     // whose isocan moved after the module was installed.
     await fs.cp(dir, path.join(home, "modules", "future"), { recursive: true });
     const rows = await json("module", "ls");
-    expect(rows).toContainEqual({ name: "@acme/future", version: "9.0.0", refused: "needs module API >=9.0.0, and this build is 0.2.0" });
+    expect(rows).toContainEqual({ name: "@acme/future", version: "9.0.0", refused: "needs module API >=9.0.0, and this build is 0.2.11" });
     expect((await isocan("hello")).code).not.toBe(0);
   });
 

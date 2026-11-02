@@ -1,14 +1,18 @@
 ---
-status: designed
-since: 2026-09-07
+status: partial
+since: 2026-09-08
 issue: 206
 see: personas, standing-agents, on-demand, evals
-note: six systems already run this project and none of them knows about the others — a persona declares a cadence nothing observes, a finding carries an outcome nothing can decide except by hand-editing markdown, and the board that shows it all is read-only ON PURPOSE. The spine is one rule from #148 applied to five kinds of row: derived, or decided, never both. The canvas decides and the repo keeps, so the guard never has to reach a network. No new op.
+note: phases 1–6 and D7's CLI half (`isocan docket` and `isocan docket answer`) built — cadence observed (`scripts/cadence.mjs`), the docket as a panel where a finding is decided by a ✅/❌ reaction and the repo keeps the commit (`scripts/docket.mjs`), the ✋ claim, `docs/decisions.md` derived from the Dn lines, trust folded into the reviews index, and `isocan docket` / `isocan docket answer` on the CLI. Still open — phase 7, CI reaching the canvas, which waits on Dion minting a bearer. No new op.
 ---
 
 # The docket: what a project knows about itself
 
-**7 September 2026.** Research. Nothing built.
+**7 September 2026.** Research. Nothing built that day.
+
+**Where this stands: phases 1–6 and D7's CLI half (`isocan docket` / `isocan docket answer`) are built** (7–8 Sep — 1efd5000,
+1f04f853, cec25ceb, plus `isocan docket` in `packages/cli/src/main.ts`), each marked below. **One thing is owed:** phase 7, CI
+reaching the canvas, which needs a credential only Dion can mint.
 
 > "I need to fully flesh out the system of building with standing agents and
 > personas etc. I want the ledger and learnings and issues and research and all
@@ -282,13 +286,16 @@ make the declaration true, and only the second is safe to do without deciding
 how often the journeys walk. A filter that got "is it due" subtly wrong would
 stop a persona silently, which is the failure this row exists to end.
 
-**Phase 2 — The docket as a derived panel.** Every open finding, its number,
+**Phase 2 — The docket as a derived panel.** ✅ Built 7 Sep (1f04f853,
+`scripts/docket.mjs`, one item per question). Every open finding, its number,
 its bound, its persona, its age, and how many nights it has been asked — all of
 which `scripts/reviews.mjs` already computes. Read-only, and explicitly a
 projection. Worth little alone, by #148's own argument, which is why it is not
 where this stops.
 
-**Phase 3 — The outcome, decided on the canvas.** D3. A click on a row emits a
+**Phase 3 — The outcome, decided on the canvas.** ✅ Built 7 Sep, the same
+commit — the "click" became a reaction: ✅ accepts, ❌ rejects, a question
+wearing both stays on the docket. D3. A click on a row emits a
 commit through the watcher; the run page is edited; the guard is untouched. This
 is the phase the whole note is for, and the first moment the canvas is somewhere
 work happens rather than somewhere work is displayed.
@@ -343,6 +350,15 @@ secret.
         ISOCAN_BOARD_CANVAS: prj_…
         ISOCAN_BEARER: ${{ secrets.ISOCAN_BEARER }}
       run: node scripts/docket.mjs --no-commit
+
+**Measured 15 Sep 2026, and this case is still BLOCKED** — see [the bearer is
+mostly built](2026-09-15-the-bearer-is-mostly-built.md). The credential, the
+listing and the kill all exist, and the framing below outlived its facts; but
+the decision taken that day covers a CELL in its owner's own secrets store,
+NOT a public repository's CI, which is a different risk that had been bundled
+with it. Repository secrets are reachable by anyone with write access and by
+misconfigured workflow triggers, and that has nothing to do with isocan. This
+nightly stays unbuilt until somebody argues it on its own evidence.
 
 **Gated on the secret so it is inert until the secret exists**, which is the
 same shape sheep's station project uses for its ⚑ steps. Left unbuilt rather

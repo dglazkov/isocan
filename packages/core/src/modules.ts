@@ -1,7 +1,13 @@
 import type { ContextPiece } from "./context.ts";
-import type { CanvasContents, Item } from "./model.ts";
-import type { Operation } from "./ops.ts";
-import type { SlashCommand } from "./commands.ts";
+import type { Actor, Canvas, CanvasContents, CommentThread, Item, ItemVersion } from "./model.ts";
+import type { NodeCapabilities } from "./capabilities.ts";
+import type { Operation, Placement } from "./ops.ts";
+import type { JudgmentRequest } from "./judgment.ts";
+import type { TextRequest } from "./text.ts";
+import type { CopyDeck, CopyEdit } from "./copy-deck.ts";
+import type { CopyVoice } from "./copy-voice.ts";
+import type { CommandMetadata, SlashCommand } from "./commands.ts";
+import { inCanvasScope } from "./canvas-scope.ts";
 
 /**
  * **The module registry** (`docs/projects/modules/design.md`).
@@ -19,9 +25,26 @@ import type { SlashCommand } from "./commands.ts";
  * registry instead of calling anything by name.
  */
 
+/**
+ * A connection a module says exists between two items — read off the canvas each time,
+ * never stored, and written out as an edge when the canvas exports as JSON Canvas.
+ */
 export interface ModuleEdge {
   from: Item;
   to: Item;
+}
+
+/**
+ * **A flow a module plays** (proactive-agent phase 9, design §11: "a walk
+ * follows a real path"): the screens one item stands for — a wireframe
+ * prototype's kept screens — the one it opens on, and where each screen's
+ * hotspots go. Item ids. Core walks it (`walk.ts`, `walkFlow`); the module
+ * only says what its own file means.
+ */
+export interface WalkGraph {
+  start: string;
+  screens: readonly string[];
+  links: readonly { from: string; to: string }[];
 }
 
 /**
@@ -45,6 +68,58 @@ export interface ModuleKind {
   icon?: string;
 }
 
+/**
+ * **A mark a module puts on an item** — the slide deck's 🎬, generalised
+ * (wireframes phase 2). A property whose presence is the mark, never a
+ * reaction: a reaction belongs to whoever left it, and a mark is a fact about
+ * the item that anybody may take off (`core/slides.ts` argues it). Data, so
+ * the shell can draw it, offer it in the item menu and answer its key without
+ * importing the module — take the module away and the property is inert.
+ */
+export interface ModuleMark {
+  /**
+   * The property whose presence is the mark; set to `"yes"`, removed to
+   * unmark. Beside it, `<property>By` says who put it on — the actor's id
+   * (`moduleMarkPatch`), taken off with it: a mark somebody chose and one a
+   * machine chose are different evidence (wireframes, 24 Sep 2026).
+   */
+  property: string;
+  emoji: string;
+  /** What the mark says on the item, as its tooltip. */
+  title: string;
+  /** The menu's words to put it on and to take it off. */
+  on: string;
+  off: string;
+  /** The letter that toggles it on the selection, held with Shift (`"K"` is ⇧K). */
+  key?: string;
+  /** Offered only on items whose properties carry these values (`{ fidelity: "wireframe" }`); unset, on any item. */
+  offeredOn?: Readonly<Record<string, string>>;
+  /**
+   * **What follows a gesture on this mark**, in the gesture's own op group —
+   * so one undo takes back the mark and what it set off (wireframes, 24 Sep
+   * 2026: a screen used in or removed from the prototype re-versions the
+   * prototype). Supplied by a module's LAZY half, never the record first
+   * paint carries: the shell awaits it after the mark's ops have landed in
+   * the replica, so it reads the canvas as the mark left it.
+   */
+  follow?: (facts: MarkFollow) => Promise<void>;
+}
+
+/** What a mark's `follow` is handed: the gesture, its group, and the viewer's hands. */
+interface MarkFollow {
+  canvasId: string;
+  /** The gesture's op group — every write `follow` makes rides it. */
+  group: string;
+  /** The items the gesture moved, and which way. */
+  changed: readonly Item[];
+  on: boolean;
+  host: Pick<DialogHost, "send" | "putBlob" | "readText" | "getCanvas" | "viewer">;
+}
+
+/**
+ * What a module hands core: its name, the property keys it owns, and the pure readers core
+ * calls without knowing the module by name.
+ */
 export interface CoreModule {
   /** The package name — `@isocan/<name>` — which is also how an item made by
    *  a module that is not installed can be named from its mime alone. */
@@ -52,9 +127,24 @@ export interface CoreModule {
   /** The property keys it owns. Namespaced, and forever: keys replay, and a
    *  removed module's keys must read as orphaned rather than be reused. */
   propertyKeys?: readonly string[];
+  /** Item-valued properties remap on copy and lose cross-canvas external references. */
+  itemReferenceProperties?: readonly string[];
+  /** Family identities remap once per copy, keeping copied members in one new family. */
+  groupIdentityProperties?: readonly string[];
   contextPieces?: (canvas: CanvasContents) => ContextPiece[];
   edges?: (canvas: CanvasContents) => ModuleEdge[];
+  /** The flow an item of this module's plays, read from its file — or null when it is not one (a walk's path; `WalkGraph`). */
+  walkFlow?: (item: Item, html: string) => WalkGraph | null;
   kinds?: readonly ModuleKind[];
+  /** Marks on items, each a property — drawn on the item, toggled from its menu and a key. */
+  marks?: readonly ModuleMark[];
+  /**
+   * **Items worth finding on a busy canvas** (wireframes phase 8): properties
+   * whose presence the minimap lights up strongly while a pointer is on it —
+   * a prototype among forty screens. Data, like `marks`: the shell tests the
+   * property and never meets the module.
+   */
+  spotlights?: readonly string[];
   /**
    * **Slash commands** (phase 4): instructions an agent carries out, merged
    * under the built-ins and the home's own — a third source, `module`, that
@@ -62,6 +152,190 @@ export interface CoreModule {
    * command; a module's agent tool is a command plus a verb.
    */
   commands?: readonly SlashCommand[];
+  /**
+   * **Named lists this module reads, which other modules may add to**
+   * (proposed: `points`, 11 Sep 2026 — `docs/projects/design-competition/module-gaps.md` §2).
+   *
+   * Until now contribution ran one way: a module added to core's registries
+   * and nothing could add to a module's. A second package wanting to add a
+   * fighter to the design competition would have had to import it, which the
+   * removability guard forbids. A point is VS Code's extension point in this
+   * registry's shape: the declaring module names it and says what it accepts,
+   * and `contributions(id)` is the one reader.
+   */
+  points?: readonly ContributionPoint[];
+  /**
+   * **What this module adds to other modules' points**, by point id. DATA —
+   * JSON-serialisable, so it rides the manifest and is known before any code
+   * runs, the way `kinds` already are. A module whose whole content is this
+   * plus `assets/` is a **data-only module**: a manifest and some files, which
+   * runs nothing.
+   */
+  contributes?: Readonly<Record<string, readonly unknown[]>>;
+  /**
+   * **Vote rounds the curtain honours** (proposed: `rounds`). The sprint's
+   * curtain hid counts and bylines on its own Vote sheet while a vote phase's
+   * clock ran and knew nothing else; a module running a vote of its own on
+   * another area names it here, and the same lens draws the same curtain.
+   */
+  rounds?: (canvas: CanvasContents) => readonly VoteRound[];
+  /**
+   * **Node capability overrides** (`docs/projects/node-focus/design.md`).
+   * A module whose items have rich View/Edit focus studios or interactive card
+   * interiors can refine `{ view, edit, enter, file }` for items it claims.
+   */
+  capabilities?: (item: Item, version: ItemVersion) => Partial<NodeCapabilities> | null | undefined;
+}
+
+/**
+ * **One vote in progress, on one area** — what the curtain needs to know and
+ * nothing more: WHERE (the area whose contents are behind it), WHICH marks are
+ * the votes, and UNTIL when. The record is never hidden; this is etiquette the
+ * lens keeps, and the chip says so.
+ */
+export interface VoteRound {
+  /** The area item whose contents are curtained. */
+  areaId: string;
+  /** The reactions that are votes in this round — 🥇, 🔴, ⭐… */
+  marks: readonly string[];
+  /** ISO time the curtain lifts. */
+  until: string;
+}
+
+/** A named list a module reads and other modules may add to. */
+export interface ContributionPoint {
+  /** Namespaced like a property key, and forever: `design-competition.fighters`. */
+  id: string;
+  /** One line, printed by `isocan module ls`. */
+  describe: string;
+  /** What is wrong with one contributed value; empty means accepted. */
+  validate: (value: unknown) => string[];
+}
+
+/** One accepted contribution, tagged with the module it came from — which is
+ *  how a reader finds that module's assets. */
+export interface Contribution<T> {
+  module: string;
+  value: T;
+}
+
+/** A contribution a point refused, or one to a point nobody declares. */
+export interface RefusedContribution {
+  module: string;
+  point: string;
+  /** Why: the validator's sentences, or that no loaded module declares the point. */
+  problems: string[];
+}
+
+function declaredPoint(id: string): ContributionPoint | null {
+  for (const m of modules()) {
+    const hit = (m.points ?? []).find((p) => p.id === id);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+/**
+ * **Every accepted contribution to a point**, in module order. A value the
+ * declaring module's validator refuses is left out here and listed by
+ * `refusedContributions()`; a point no loaded module declares has no
+ * contributions at all, which is what removing the module that owns it means.
+ */
+export function contributions<T>(pointId: string): Contribution<T>[] {
+  const point = declaredPoint(pointId);
+  if (!point) return [];
+  const out: Contribution<T>[] = [];
+  for (const m of modules()) {
+    for (const value of m.contributes?.[pointId] ?? []) {
+      if (point.validate(value).length === 0) out.push({ module: m.name, value: value as T });
+    }
+  }
+  return out;
+}
+
+/** What `isocan module ls` says about contributions that did not land. */
+export function refusedContributions(): RefusedContribution[] {
+  const out: RefusedContribution[] = [];
+  for (const m of modules()) {
+    for (const [pointId, values] of Object.entries(m.contributes ?? {})) {
+      const point = declaredPoint(pointId);
+      if (!point) {
+        out.push({ module: m.name, point: pointId, problems: [`no loaded module declares ${pointId} — orphaned, not an error`] });
+        continue;
+      }
+      values.forEach((value, i) => {
+        const problems = point.validate(value);
+        if (problems.length > 0) out.push({ module: m.name, point: pointId, problems: problems.map((p) => `#${i + 1}: ${p}`) });
+      });
+    }
+  }
+  return out;
+}
+
+/** Every vote round a loaded module says is running on this canvas. */
+/**
+ * **Every loaded module's rounds, asked once per canvas.**
+ *
+ * `roundsOn` runs inside a store selector for every item on screen, and a
+ * selector runs on every store change — so unmemoised, one remote move on a
+ * canvas of 250 items asked every module for its rounds 250 times. Keyed on
+ * the canvas OBJECT, as `sprintForCanvas` and `wallIdsFor` already are (the
+ * store hands out a new one on every change, so a stale key is exactly a
+ * stale answer), and on the registry's version, because a module that loads
+ * after first paint brings rounds of its own to the same canvas.
+ */
+let registryVersion = 0;
+const roundsMemo = new WeakMap<CanvasContents, { version: number; rounds: VoteRound[] }>();
+function moduleRounds(canvas: CanvasContents): VoteRound[] {
+  const hit = roundsMemo.get(canvas);
+  if (hit && hit.version === registryVersion) return hit.rounds;
+  const rounds = modules().flatMap((m) => [...(m.rounds?.(canvas) ?? [])]);
+  roundsMemo.set(canvas, { version: registryVersion, rounds });
+  return rounds;
+}
+
+/**
+ * **The rounds an item is IN** — explicit group membership, or legacy area geometry; the same
+ * geometry every area uses — running or finished. Running ones curtain it;
+ * finished ones still say which marks are votes, so the heat map draws at the
+ * bell and stays drawn.
+ */
+export function roundsOn(canvas: CanvasContents, item: Item): VoteRound[] {
+  return moduleRounds(canvas).filter((round) => {
+    const area = canvas.items[round.areaId];
+    return area !== undefined && inCanvasScope(canvas, area, item);
+  });
+}
+
+/** Is this round's clock still running — the curtain's half of it. */
+export function roundRunning(round: VoteRound, nowMs: number): boolean {
+  return Date.parse(round.until) > nowMs;
+}
+
+/**
+ * **Where a module's files are reached from** (proposed: `assets`).
+ *
+ * A build-time module reaches its own `assets/` with `new URL("../assets/…",
+ * import.meta.url)`, which Vite rewrites and a runtime build leaves for the
+ * browser to resolve against `/modules/<slug>/dist/web.js` — the same relative
+ * path in both layouts, the trick `agent-guide.md` already relies on. What
+ * that cannot do is reach ANOTHER module's files, which is exactly what a
+ * contribution needs: a fighter contributed by a data-only module names its
+ * avatar relative to that module. So the loaders record each runtime module's
+ * base here — a URL prefix on the web, a directory on the CLI — and a reader
+ * resolves a contribution's paths against its module's base.
+ */
+const BASES = new Map<string, string>();
+
+/** Record where a runtime module's files are — a loader's act, once per load. */
+export function registerModuleBase(name: string, base: string): void {
+  BASES.set(name, base.endsWith("/") ? base : `${base}/`);
+}
+
+/** The base a module's relative paths resolve against, or null for a module
+ *  that reaches its own files itself (every build-time module). */
+export function moduleBase(name: string): string | null {
+  return BASES.get(name) ?? null;
 }
 
 /** Every loaded module's slash commands, in name order. */
@@ -78,8 +352,8 @@ export function moduleCommands(): SlashCommand[] {
  * hold — the daemon's, or the compiled built-ins — because the daemon
  * registers no module and the list it serves cannot know them.
  */
-export function withModuleCommands(commands: readonly SlashCommand[]): SlashCommand[] {
-  const byName = new Map<string, SlashCommand>();
+export function withModuleCommands<T extends CommandMetadata>(commands: readonly T[]): (T | SlashCommand)[] {
+  const byName = new Map<string, T | SlashCommand>();
   for (const command of moduleCommands()) byName.set(command.name, command);
   for (const command of commands) byName.set(command.name, command);
   return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
@@ -90,16 +364,21 @@ const REGISTRY = new Map<string, CoreModule>();
 /** Idempotent by name, so a surface that registers twice (HMR, a test) holds one. */
 export function registerModule(record: CoreModule): void {
   REGISTRY.set(record.name, record);
+  registryVersion++;
 }
 
+/** Forget a module by name — the "removed means removed" half of `registerModule`. */
 export function unregisterModule(name: string): void {
   REGISTRY.delete(name);
+  registryVersion++;
 }
 
+/** Every module registered right now, in the order they first registered. A copy. */
 export function modules(): CoreModule[] {
   return [...REGISTRY.values()];
 }
 
+/** What every loaded module adds to the context an agent is handed about this canvas. */
 export function moduleContextPieces(canvas: CanvasContents): ContextPiece[] {
   return modules().flatMap((m) => m.contextPieces?.(canvas) ?? []);
 }
@@ -108,13 +387,48 @@ export function moduleEdges(canvas: CanvasContents): ModuleEdge[] {
   return modules().flatMap((m) => m.edges?.(canvas) ?? []);
 }
 
+/** Every kind every loaded module adds — what `itemKind()` asks before its own mime tests. */
 export function moduleKinds(): ModuleKind[] {
   return modules().flatMap((m) => m.kinds ?? []);
+}
+
+/** Every mark every loaded module offers. */
+export function moduleMarks(): ModuleMark[] {
+  return modules().flatMap((m) => m.marks ?? []);
+}
+
+/** Does a loaded module want this item found — does it carry one of their `spotlights`? */
+export function spotlit(item: Item): boolean {
+  return modules().some((m) => m.spotlights?.some((p) => item.properties?.[p] !== undefined));
 }
 
 /** The module kind that owns a mime, if a loaded module claims it. */
 export function moduleKindOf(mime: string): ModuleKind | null {
   return moduleKinds().find((k) => k.mimes.includes(mime)) ?? null;
+}
+
+let cachedCapabilityModulesVersion = -1;
+let cachedCapabilityModules: CoreModule[] = [];
+
+/**
+ * Capability overrides contributed by loaded modules for an item and version,
+ * merged in module registration order. Null when no loaded module refines it.
+ */
+export function moduleCapabilitiesFor(item: Item, version: ItemVersion): Partial<NodeCapabilities> | null {
+  if (cachedCapabilityModulesVersion !== registryVersion) {
+    cachedCapabilityModules = [];
+    for (const m of REGISTRY.values()) {
+      if (m.capabilities) cachedCapabilityModules.push(m);
+    }
+    cachedCapabilityModulesVersion = registryVersion;
+  }
+  if (cachedCapabilityModules.length === 0) return null;
+  let merged: Partial<NodeCapabilities> | null = null;
+  for (const m of cachedCapabilityModules) {
+    const patch = m.capabilities!(item, version);
+    if (patch) merged = { ...(merged ?? {}), ...patch };
+  }
+  return merged;
 }
 
 /**
@@ -163,21 +477,171 @@ export function moduleKindOf(mime: string): ModuleKind | null {
  * ## Who gets it
  *
  * The slots a person interacts with: overlays, inspectors and pages.
- * Underlays and renderers DRAW, and nothing has needed to write from one yet
- * — so they do not get it, and the day a module needs that it is a review
- * question rather than a private import, which is the rule `CliHost` already
- * carries and the reason this interface exists at all.
+ * Renderers DRAW, and nothing has needed to write from one yet — so they do
+ * not get it, and the day a module needs that it is a review question rather
+ * than a private import, which is the rule `CliHost` already carries and the
+ * reason this interface exists at all.
+ *
+ * **Underlays asked, on 23 Sep 2026, and got it** (wireframes phase 8,
+ * research *Flow arrows*). The arrows between kept screens became something
+ * a person clicks: select one, drag its head onto another screen, remove it.
+ * Every one of those writes is the `item.update` that `isocan wire link`
+ * already sends, so the host adds no authority — it only lets the arrow make
+ * the write the terminal could. `UnderlayFacts.host` is this object, with
+ * `canEdit` beside it so a reader is never offered a write the door refuses.
  */
 export interface WebHost {
   /** Sent as the viewer, through the door the palette already uses. One
    *  `group` for one undo, exactly as a multi-op action groups today. */
   send: (ops: readonly Operation[], group?: string) => Promise<void>;
   /** Bytes in, a hash out — the half no operation carries. What a module does
-   *  with the hash is an `item.add` or an `item.addVersion` of its own. */
+   *  with the hash is an `item.add` or an `item.addVersion` of its own.
+   *  `stageOffline` opts a single primary text/SVG blob into local staging;
+   *  send its single item operation through this same host. Secondary faces
+   *  and multi-operation transactions do not support this opt-in. */
   putBlob: (
     bytes: Blob,
     filename: string,
+    options?: { stageOffline?: boolean },
   ) => Promise<{ blobHash: string; size: number }>;
+  /**
+   * **Ask the parked rc to enrol an agent** (proposed: `templates`, 11 Sep
+   * 2026). The web cannot enrol by sending `agent.enroll` — the actor is born
+   * first-claim on the machine that answers for it (agent custody) — so this
+   * rides the same ask `AddAgent` makes, and resolves when the op lands.
+   *
+   * **The canvas names a template; the machine runs it.** `template` is an id
+   * and `args` are strings: the rc honours ids from modules its operator
+   * installed and refuses the rest by name, so nothing that arrives from a
+   * canvas becomes code on anybody's machine. Refused with a sentence when no
+   * rc is parked — which the component already knew, from `rcParked`.
+   */
+  enrol: (ask: EnrolAsk) => Promise<{ actorId: string }>;
+  /**
+   * **Who is acting** (proposed: `host`, 11 Sep 2026) — the actor every op
+   * `send` writes goes out as. A ballot tray has to know which medal is YOURS
+   * and whether you are the one who decides; a component had no way to ask.
+   * The identity already rides every write; this only lets the component read
+   * it.
+   */
+  viewer: { id: string; name: string };
+  /**
+   * **Show these items** — glide this viewer's camera to them (proposed:
+   * `host`). Nothing is written: a camera is one person's, not the canvas's.
+   * For the moment a dialog closes on something it just made off-screen.
+   */
+  reveal: (itemIds: readonly string[]) => void;
+  /**
+   * **Pick these out for this viewer** (proposed: `host`) — the sibling of
+   * `reveal`, and one for the same reason: a selection is one person's, not
+   * the canvas's, so nothing is written and nobody else's screen moves.
+   *
+   * It exists because the voice session could already be TOLD to select
+   * something and had no way to do it: `selection_set` was declared, the
+   * model called it, and the dialog answered with an internal token. An empty
+   * list clears.
+   */
+  select: (itemIds: readonly string[]) => void;
+  /**
+   * **The commands this canvas's composer offers** (proposed: `host`) — the
+   * built-ins, the home's own, and every loaded module's, in the one list the
+   * Chat's menu shows.
+   *
+   * It exists because the voice session was handed a DIFFERENT list: the
+   * compiled built-ins alone. So `/wire`, a module command the menu offers,
+   * was a word the voice had never heard, and asked for it by name, the model
+   * reached for `agent_enroll` instead — "I encountered an issue while trying
+   * to enroll the wireframing skill". A list a surface re-derives is a list
+   * that drifts; this hands over the composer's own.
+   */
+  commands: () => readonly CommandMetadata[];
+  /**
+   * **Run this line the way the composer's send does** (proposed: `host`) —
+   * not a second implementation of it. A module command that opens a dialog
+   * opens it here, in the browser (`/wire <request>` composes on the spot);
+   * anything else is posted to the Chat as the viewer, with the selection
+   * attached, for an agent to carry out.
+   *
+   * The answer says which, because they are different claims: `"local"` ran,
+   * `"posted"` has only been ASKED for. A voice that said "done" about a
+   * posted command would be claiming work nobody has done — and with no agent
+   * parked, nobody will.
+   */
+  runCommand: (text: string) => Promise<"local" | "posted">;
+  /**
+   * **Who leads here, for this viewer** (proposed: `host`; proactive-agent
+   * phase 8) — the night watch's reading (`nightLead`, `nightAnswerable`):
+   * the agent the canvas names with `proactive=`, else its first standing
+   * agent, and why it cannot answer this viewer (null when it can). A module
+   * that asks the lead — the critique module's room — addresses one agent,
+   * not every parked one. Absent on an older host: say nothing leads.
+   */
+  lead?: () => Promise<{ lead: { id: string; name: string } | null; cannot: string | null }>;
+  /**
+   * **Take back this viewer's last change** (proposed: `host`, voice-agent
+   * phase 7, 30 Sep 2026) — exactly what ⌘Z does: the home's actor-scoped
+   * undo for the actor `send` writes as. No new operation and no inverse
+   * computed here: the home walks the viewer's own stack, so one `group`
+   * sent through `send` is one retract.
+   *
+   * It exists because the voice session's `undo` tool had to be refused in
+   * the browser ("undo is not carried by the browser voice dialog yet") — and
+   * the fast path announces every act with "say undo", which would have been
+   * a promise nobody could keep. Note what "this viewer" means: a module
+   * writing through `send` writes AS the viewer, so this takes back the
+   * viewer's last change whoever made it — the module's act or the person's
+   * own drag — which is what ⌘Z on the same screen would take back too.
+   * Refused with a sentence for a reader, and when there is nothing to undo.
+   */
+  retract: () => Promise<void>;
+}
+
+/** What a component asks the parked rc to enrol. */
+export interface EnrolAsk {
+  name: string;
+  /** A template id a module on the rc's machine registered: `design-competition.fighter`. */
+  template?: string;
+  args?: Readonly<Record<string, string>>;
+  /**
+   * **Ring for an agent that already stands** (module API 0.2.10). Without it
+   * a name already enrolled resolves at once and nothing is asked. With it and
+   * a `template`, the ask still goes, and the rc that answers for the agent
+   * writes its directory afresh from the template — no op, so nothing lands
+   * to wait for, and this resolves once the ask is delivered. What `reuse`
+   * does for `CliHost.enrol`, asked from the canvas.
+   */
+  reuse?: boolean;
+}
+
+/** A template id: `<module>.<name>`, lowercase, the shape a property key has. */
+const TEMPLATE_ID = /^[a-z][a-z0-9-]*\.[a-z][a-z0-9.-]*$/;
+
+/**
+ * **The template half of an ask, or why not** — read once, where the ask
+ * enters the home (`/api/projects/:id/agents/ask`), and never trusted
+ * further down: an id in the template shape, and at most sixteen string args
+ * of at most 512 characters. What crosses from a canvas to a machine is a
+ * name and some strings, and this is the line that keeps it so.
+ */
+export function askTemplate(
+  raw: { template?: unknown; args?: unknown },
+): { template?: string; args?: Record<string, string> } | { error: string } {
+  if (raw.template === undefined && raw.args === undefined) return {};
+  if (typeof raw.template !== "string" || !TEMPLATE_ID.test(raw.template)) {
+    return { error: "a template is named by an id like `module.name`" };
+  }
+  const args: Record<string, string> = {};
+  if (raw.args !== undefined) {
+    if (!raw.args || typeof raw.args !== "object" || Array.isArray(raw.args)) return { error: "template args are an object of strings" };
+    const entries = Object.entries(raw.args as Record<string, unknown>);
+    if (entries.length > 16) return { error: "at most 16 template args" };
+    for (const [k, v] of entries) {
+      if (!/^[a-z][a-z0-9-]{0,31}$/.test(k)) return { error: `template arg "${k}" is not a plain key` };
+      if (typeof v !== "string" || v.length > 512) return { error: `template arg "${k}" is not a string of at most 512 characters` };
+      args[k] = v;
+    }
+  }
+  return { template: raw.template, ...(Object.keys(args).length ? { args } : {}) };
 }
 
 /**
@@ -189,9 +653,57 @@ export interface WebHost {
  */
 export interface UnderlayFacts {
   canvas: CanvasContents;
-  /** The live drag, so a line can ride the gesture before the replica moves. */
-  drag: { itemIds: readonly string[]; dx: number; dy: number } | null;
+  presentation?: WorkspacePresentation["items"] | undefined;
+  /** Workspace-scoped activation, e.g. following a graph connection. */
+  activateItem?: ((itemId: string) => boolean) | undefined;
+  // No `drag` since 30 Sep 2026: the shell folds whichever gesture is live —
+  // a legacy drag's delta or a groups canvas's preview boxes — into `canvas`,
+  // so a line rides the hand without knowing there are two kinds. A module
+  // that still reads `drag` gets undefined and draws from `canvas`, which is
+  // already right.
+  /**
+   * **This viewer's selection** (wireframes, 24 Sep 2026) — one person's,
+   * never the canvas's, so what an underlay does with it is transient and
+   * writes nothing: a selected prototype lights the screens it plays.
+   */
+  selection?: readonly string[] | undefined;
+  /**
+   * **A blob of this canvas, as text** (wireframes phase 5) — for an underlay
+   * whose lines are computed from what a file SAYS rather than from item
+   * metadata: the wireframe arrows between kept screens read each screen's
+   * spec, because links are computed and never stored (design §7). Cached by
+   * the shell per hash, so asking every render costs one fetch per version.
+   */
+  readText?: ((blobHash: string) => Promise<string>) | undefined;
+  /**
+   * **Writing from under the work** (wireframes phase 8) — see `WebHost`'s
+   * "Who gets it". Absent where the shell has no viewer to write as.
+   */
+  host?: WebHost | undefined;
+  /** Whether the viewer may write here: a reader can still select, play and go to. */
+  canEdit?: boolean | undefined;
+  /** The scrubber's past is on screen: draw, but offer nothing to click. */
+  past?: boolean | undefined;
+  /**
+   * **Open an item full screen, at an anchor** (wireframes phase 8, *Play
+   * from here*). The anchor becomes the fragment on the item's frame — the
+   * frame is a blob address, so a fragment costs no fetch and no cache — and
+   * the item's own document decides what it means: a prototype opens at the
+   * screen it names. The route carries it as `?at=` (never the route's own
+   * `#`, which is where a pass rides), so the address bar holds the exact view.
+   */
+  openItem?: ((itemId: string, anchor?: string) => void) | undefined;
 }
+
+/*
+ * **What an underlay may paint ABOVE the items** (wireframes phase 8). The
+ * slot promises it draws beneath the work, and it still does — with one
+ * exception, measured against that promise: a transient, `pointer-events:
+ * none` mark around the thing the person is pointing at (the hotspot an
+ * arrow leaves from, a loose end's "needs Settings"), and the one handle and
+ * toolbar of an arrow the person selected. Nothing that stays, nothing a
+ * pointer can hit by accident, nothing drawn at rest.
+ */
 
 /**
  * **A palette action a module adds**, as data over facts: the shell reads
@@ -205,6 +717,10 @@ export interface ModuleActionFacts {
   selection: readonly string[];
 }
 
+/**
+ * One ⌘K palette entry a module adds: offered when `available` says so, and either the ops it
+ * sends or a dialog it opens.
+ */
 export interface ModuleAction {
   id: string;
   name: string;
@@ -212,7 +728,91 @@ export interface ModuleAction {
   /** Offered only when this says so — a menu that lists what it cannot do lies. */
   available?: (facts: ModuleActionFacts) => boolean;
   /** The ops to send, in order; nothing means nothing to do. */
-  run: (facts: ModuleActionFacts) => readonly Operation[] | void;
+  run?: (facts: ModuleActionFacts) => readonly Operation[] | void;
+  /**
+   * **Open one of this module's dialogs instead** (proposed: `dialogs`) — by
+   * its id. An action that opens is a door, not a write: it is offered on a
+   * read-only canvas too, and the dialog decides what it can do there.
+   */
+  opens?: string;
+  /** With `opens`: the words the dialog opens with, as if typed after its command (`/wire prototypes`). */
+  args?: string;
+}
+
+/**
+ * **What a dialog is handed** (proposed: `dialogs`, 11 Sep 2026).
+ *
+ * Overlays are edges and pages are cover routes; neither is a thing that
+ * opens over where you are because you asked — a picker. So an eighth slot,
+ * and the shell owns the box: one dialog at a time, mounted in the app's own
+ * `Modal`, Esc and the backdrop close it, focus is trapped and returned. A
+ * module fills the inside and cannot position, stack or re-open itself.
+ *
+ * It opens only from a door a person used — a slash command they typed, a
+ * palette entry they chose — never on load, from a renderer, or from an op
+ * arriving. That is the whole of its risk budget.
+ */
+export interface DialogFacts {
+  canvasId: string;
+  /** The saved canvas mode, so structural producers use the native group intent. */
+  groupMode: "groups" | "legacy";
+  canvas: CanvasContents;
+  selection: readonly string[];
+  /** What followed the slash command that opened it; "" from the palette. */
+  args: string;
+  /** Whether an rc is parked here — the `AddAgent` gate, as a fact. */
+  rcParked: boolean;
+  /** Whether the viewer may write here — a read-only canvas opens the dialog
+   *  and the dialog says what it cannot do. */
+  canEdit: boolean;
+  host: DialogHost;
+}
+
+/** The home's judgment route (`judgment.ts` has the rest: its limits and refusal codes). */
+export const JUDGMENT_ROUTE = "/api/judgment";
+
+/**
+ * **What a dialog's host adds to `WebHost`** (wireframes phase 5). A dialog
+ * that composes — reads the canvas it is writing to, the files on it, and
+ * asks the home a typed question — needs the three reads a workspace host
+ * already has, and a way to say how it went after it has closed.
+ */
+export interface DialogHost extends WebHost {
+  close: () => void;
+  /** Authenticated, hash-cached UTF-8 blob read for this canvas — `WorkspaceHost.readText`. */
+  readText: (blobHash: string) => Promise<string>;
+  /** The canvas as it is NOW, not as it was when the dialog opened — `WorkspaceHost.getCanvas`. */
+  getCanvas: () => CanvasContents;
+  /**
+   * **Ask the home's judge** (`JUDGMENT_ROUTE`): a question file in the
+   * judge's request shape, answered with the home's key — which never reaches
+   * the browser. Throws the home's refusal, with its `code`
+   * (`judgment-unavailable` when the home holds no key).
+   */
+  judge: (question: JudgmentRequest) => Promise<unknown>;
+  /**
+   * **Ask the home's text model** (`TEXT_ROUTE`, module API 0.2.4): a prompt
+   * and the JSON Schema its answer must satisfy, written with the home's key
+   * — which never reaches the browser. Resolves to the route's
+   * `TextResponse` (`{ model, value }`); throws the home's refusal, with its
+   * `code` (`text-unavailable` when the home holds no text-model key). Absent
+   * on a host older than 0.2.4: a module falls back the way it would on that
+   * refusal.
+   */
+  generate?: (request: TextRequest) => Promise<unknown>;
+  /** Say something in the canvas's notice bar — a problem stays until seen; anything else flashes. */
+  notice: (text: string, problem?: boolean) => void;
+}
+
+/** A dialog a module fills and the shell opens (proposed: `dialogs`). */
+export interface ModuleDialog<D> {
+  /** Unique within the module: an action's or a command's `opens` names it. */
+  id: string;
+  /** The Modal's heading, and its accessible name. */
+  title: string;
+  /** The Modal's wider width. The shell owns both. */
+  wide?: boolean;
+  component: D;
 }
 
 /**
@@ -222,6 +822,10 @@ export interface ModuleAction {
  * blob path.
  */
 export interface RendererFacts {
+  /** Local workspace emphasis; saved file content and native geometry are unchanged. */
+  presentation?: { detail: "full" | "compact" | "marker"; emphasis?: boolean } | undefined;
+  /** Native metadata for structured files whose title lives on the item. */
+  item?: Item | undefined;
   canvasId: string;
   blobHash: string;
   mimeType: string;
@@ -231,10 +835,26 @@ export interface RendererFacts {
   readText: () => Promise<string>;
 }
 
+/** How a module draws its own mimes on a card and the stage, ahead of the built-in chain. */
 export interface ModuleRenderer<R> {
   /** The mimes this draws — the same list the module's kind claims. */
   mimes: readonly string[];
+  /**
+   * **Only items carrying this property** (module API 0.2.8, critique phase
+   * 0). A critic is an ordinary markdown item, so claiming `text/markdown`
+   * outright would take every note on every canvas; naming the property that
+   * marks it claims those items and leaves the rest to the built-in chain.
+   * Data, like `marks` and `spotlights`: the shell tests the property.
+   */
+  property?: string;
   component: R;
+}
+
+/** Does this renderer claim this version of this item? The one test, so the
+ *  card and its compact face cannot disagree about who draws it. */
+export function rendererClaims(renderer: { mimes: readonly string[]; property?: string }, mimeType: string, item?: Pick<Item, "properties"> | null): boolean {
+  if (!renderer.mimes.includes(mimeType)) return false;
+  return renderer.property === undefined || item?.properties?.[renderer.property] !== undefined;
 }
 
 /**
@@ -252,6 +872,7 @@ export interface InspectorFacts {
   host: WebHost;
 }
 
+/** A panel beside the workbench stage, mounted for items of the kinds it names. */
 export interface ModuleInspector<I> {
   /** The kinds it inspects — built-in ids or a module's. */
   kinds: readonly string[];
@@ -271,12 +892,69 @@ export interface PageFacts {
   host: WebHost;
 }
 
+/** A whole page a module adds, served at `x/<segment>` under the canvas's path. */
 export interface ModulePage<P> {
   /** The path segment: lowercase letters, digits, dashes. */
   segment: string;
   label: string;
   hint?: string;
   component: P;
+}
+
+/** A module can frame the native canvas without owning its replica or camera. */
+export interface WorkspaceHost extends WebHost {
+  /** Temporary bounds for native items. Null restores their saved canvas layout.
+   * The host resolves animation, hit targets, edges and anchored discussion. */
+  present: (view: WorkspacePresentation | null) => void;
+  /** Addressable local exploration state. Null removes a key; one call is one Back step. */
+  navigateView: (state: Record<string, string | null>, replace?: boolean) => void;
+  readText: (blobHash: string) => Promise<string>;
+  getCanvas: () => CanvasContents;
+  select: (itemIds: readonly string[]) => void;
+  focus: (itemIds: readonly string[]) => void;
+  openItem: (itemId: string) => void;
+  openChat: () => void;
+  /** Handle native item double-clicks and underlay links. Return true to consume
+   * the activation; false preserves the normal viewer. Unsubscribe on cleanup. */
+  onActivateItem: (handler: (itemId: string) => boolean) => () => void;
+}
+
+/** A local layout over existing item IDs; it never mutates the shared canvas. */
+export interface WorkspacePresentation {
+  /** Show just this view’s items, keeping other analyses and attachments out of the stage. */
+  isolate?: boolean;
+  items: Record<string, { x: number; y: number; width: number; height: number;
+    detail: "full" | "compact" | "marker"; emphasis?: boolean }>;
+  /** Only a navigation act frames the camera. Live content changes omit this. */
+  focusIds?: string[];
+  /** Cap framing magnification without forcing distant context onto the screen. */
+  maxScale?: number;
+}
+
+/** Reactive facts plus one host-created viewport, mounted wherever the module needs it. */
+export interface WorkspaceFacts<Surface> {
+  viewState: Readonly<Record<string, string>>;
+  canvasId: string;
+  project: Canvas;
+  canvas: CanvasContents;
+  selection: readonly string[];
+  canEdit: boolean;
+  host: WorkspaceHost;
+  /** Place this once in the workspace layout. The host owns its lifecycle. */
+  canvasView: Surface;
+}
+
+/** An addressable workspace composes module chrome around the existing canvas. */
+export interface ModuleWorkspace<W> {
+  segment: string;
+  label: string;
+  hint?: string;
+  /** The terminal question this workspace answers. */
+  cli: string;
+  component: W;
+  /** A project-specific door, shared by its More menu and right tool rail.
+   * Returning null hides it when this module has no work on that project. */
+  projectEntry?: (facts: { project: Canvas; canvas: CanvasContents }) => { label: string; glyph: string } | null;
 }
 
 /**
@@ -303,6 +981,11 @@ export interface OverlayFacts {
   canvasId: string;
   canvas: CanvasContents;
   host: WebHost;
+  /** The saved canvas mode — the same fact the dialog slot has carried since
+   *  dialogs landed, so an overlay can shape structural writes (a groups
+   *  canvas requires named insertion; a legacy canvas refuses group fields).
+   *  Added with the talk module, the first overlay that writes items. */
+  groupMode: "groups" | "legacy";
 }
 
 /**
@@ -325,6 +1008,8 @@ export interface OverlayFacts {
  * than adding one of its own.
  */
 export interface DropFacts {
+  /** Captured explicit destination; async module work must not reread changing UI scope. */
+  containerId?: string | null;
   canvasId: string;
   /** The dragged payload, by the mime this drop matched. */
   data: string;
@@ -344,6 +1029,81 @@ export interface ModuleDrop {
   run: (facts: DropFacts) => Promise<readonly Operation[] | void>;
 }
 
+/**
+ * **What a module's `fileProperties` slot is handed** when a native file is
+ * dropped onto the canvas (moodboard phase 2: a reference photo dropped onto
+ * the Mood board wears `mood=reference` and `moodSwatches`).
+ */
+export interface FileDropFacts {
+  file: File;
+  mimeType: string;
+  placement: Placement;
+  destination: { containerId?: string | null; originGroupMode: "legacy" | "groups" };
+  items: Readonly<Record<string, Item>> | undefined;
+}
+
+/**
+ * **What a composer control draws with, and how it asks for the row**
+ * (proposed: `composer`).
+ *
+ * An overlay names an EDGE and may never cover the middle. That rule is right
+ * and it is why voice had nowhere to go: the gesture people expect is a mic
+ * among the composer's own buttons, which is neither an edge nor the middle —
+ * it is inside a piece of the shell's chrome.
+ *
+ * So the shell offers the row and keeps owning it. A module contributes ONE
+ * control, which sits with the send button. When the control wants the whole
+ * row — a live voice session replacing the message box, the way the reference
+ * app flips — it calls `takeOver(true)` and the shell puts its own input and
+ * send button away until it hears otherwise.
+ *
+ * **The module reports; it does not seize.** The shell decides what yielding
+ * the row means and can refuse, and a module that forgets to give it back is
+ * a bug the person can see rather than a composer nobody can type in: the
+ * shell drops a takeover when the module unloads.
+ */
+export interface ComposerFacts {
+  canvasId: string;
+  canvas: CanvasContents;
+  host: WebHost;
+  /** The saved canvas mode, for the same reason the overlay slot carries it. */
+  groupMode: "groups" | "legacy";
+  /**
+   * **Light or dark, already resolved** — the person's choice when they made
+   * one, the system's when they did not.
+   *
+   * Handed over rather than sniffed because the app's theme is a CHOICE and
+   * `prefers-color-scheme` is not: a canvas whose owner picked Light under a
+   * dark system would otherwise get a control that disagreed with everything
+   * around it. It is here for the same reason `groupMode` is — a module
+   * cannot read the shell's stores without becoming unremovable.
+   */
+  theme: "light" | "dark";
+  /**
+   * **What the person has selected**, by item id, or empty.
+   *
+   * Selection is the shell's — it is UI state, not canvas state, so a module
+   * cannot read it and a second collaborator does not share it. It is here
+   * for the same reason `theme` and `groupMode` are: the alternative is a
+   * module reaching into the shell's stores and becoming unremovable.
+   */
+  selection: readonly string[];
+  /** Ask for the composer's row, or hand it back. */
+  takeOver: (active: boolean) => void;
+  /** Whether this control currently has it — the shell's answer, not the
+   *  module's memory of what it asked for. */
+  active: boolean;
+}
+
+/** One control a module puts in the message composer's row. Not exported for
+ *  the same reason `ModuleOverlay` is not: a module names it through
+ *  `WebModule`. */
+interface ModuleComposer<X> {
+  /** For the chrome registry, and for the control's accessible name. */
+  label: string;
+  component: X;
+}
+
 /** A tray or dock a module hangs against one edge of the canvas. Not
  *  exported: a module names its overlays through `WebModule`, the way it
  *  names its renderers, and nothing outside core has needed the type itself. */
@@ -356,7 +1116,59 @@ interface ModuleOverlay<O> {
   component: O;
 }
 
-export interface WebModule<C, R = never, I = never, P = never, O = never> {
+/**
+ * **A sub-part of a focused node** (`docs/projects/node-focus/design.md` §5–6):
+ * a wireframe slot (`main.pricing-cards`), a design-system token
+ * (`colors.primary`), a DOM element on a screen, or a region on an image.
+ * Carried as a removable pill in the Node-Anchored Chat composer so an agent
+ * makes surgical edits rather than rewriting the whole artifact.
+ */
+export interface FocusSubtarget {
+  kind: string;
+  id: string;
+  label: string;
+  metadata?: Readonly<Record<string, unknown>> | undefined;
+}
+
+/**
+ * **What a node focus facet (`ModuleFocus.view` / `ModuleFocus.edit`) is handed**
+ * (`docs/projects/node-focus/design.md` §5).
+ */
+export interface FocusFacts {
+  canvasId: string;
+  canvas: CanvasContents;
+  item: Item;
+  version: ItemVersion;
+  actor: Actor;
+  canEdit: boolean;
+  capabilities: NodeCapabilities;
+  host: WebHost;
+  readText: () => Promise<string>;
+  subtarget: FocusSubtarget | null;
+  setSubtarget: (subtarget: FocusSubtarget | null) => void;
+  askAgent: (seedPrompt?: string) => void;
+}
+
+/**
+ * **A kind-aware View / Edit focus studio contributed by a module or built-in
+ * kind** (`docs/projects/node-focus/design.md` §5). Generic over the view and
+ * edit component types so `@isocan/core` stays free of React.
+ */
+export interface ModuleFocus<V = unknown, E = unknown> {
+  id: string;
+  matches: (item: Item, version: ItemVersion) => boolean;
+  priority?: number | undefined;
+  capabilities?: ((item: Item, version: ItemVersion) => Partial<NodeCapabilities>) | undefined;
+  view?: V | undefined;
+  edit?: E | undefined;
+  agentPrompts?: readonly { label: string; prompt: string }[] | undefined;
+}
+
+/**
+ * The browser half of a module: its `CoreModule` plus the pieces only the web app mounts.
+ * Generic in each component type so core never imports React.
+ */
+export interface WebModule<C, R = never, I = never, P = never, O = never, D = never, W = never, X = never, F = never> {
   core: CoreModule;
   /** Drawn inside `.world`, under the items, in world units. */
   underlays?: readonly C[];
@@ -369,11 +1181,150 @@ export interface WebModule<C, R = never, I = never, P = never, O = never> {
   inspectors?: readonly ModuleInspector<I>[];
   /** Whole sections of the app, each a cover route with an address. */
   pages?: readonly ModulePage<P>[];
+  /** Proposed: a module's UI around one native canvas, at an x/ route. */
+  workspaces?: readonly ModuleWorkspace<W>[];
   /** Screen-space chrome above the viewport, against a named edge. */
   overlays?: readonly ModuleOverlay<O>[];
+  /** **Controls in the message composer's row** (proposed: `composer`).
+   *  At most one per module: the row is small, and two modules quietly
+   *  competing for it is the bug the overlay regions exist to prevent. */
+  composer?: readonly ModuleComposer<X>[];
   /** Drags this module catches on the canvas, by mime. */
   drops?: readonly ModuleDrop[];
+  /**
+   * **Properties a loaded module adds to a dropped native file** (moodboard
+   * phase 2) — e.g. `mood=reference` and `moodSwatches` when an image is
+   * dropped onto the Mood board.
+   */
+  fileProperties?: (facts: FileDropFacts) => Promise<Record<string, string> | undefined>;
+  /** Popups a person opens by a command or a palette entry. */
+  dialogs?: readonly ModuleDialog<D>[];
+  /** **Rows in an item's right-click menu** — only once the module's lazy half is loaded (`ModuleMenuFacts`). */
+  menu?: (facts: ModuleMenuFacts) => readonly ModuleMenuRow[];
+  /** **Buttons under one comment in a thread** (module API 0.2.10) — the item menu's rows, under a comment instead (`ModuleCommentFacts`). */
+  comments?: (facts: ModuleCommentFacts) => readonly ModuleMenuRow[];
+  /**
+   * **Who writes the words of a screen this module draws** (copy-edit
+   * phases 1–2, module API 0.2.5) — `WebCopyWriter`. A screen whose copy deck
+   * has this `kind` (`"wire"`) keeps its words somewhere other than its HTML.
+   * Read only once the lazy half is loaded.
+   */
+  copy?: WebCopyWriter;
+  /**
+   * **View (`/i/:itemId`) and Edit (`/w/:itemId`) focus studios**
+   * (`docs/projects/node-focus/design.md` §5).
+   */
+  focus?: readonly ModuleFocus<F, F>[];
 }
+
+/**
+ * **Who writes a screen's words from the browser, when the screen is not
+ * just HTML** — one member, two doors into the same words.
+ *
+ * - `variant` (copy-edit phase 2): *Vary the copy…* hands it the screen's
+ *   HTML and one voice's edits and gets back the variant's file and the
+ *   properties a screen of this kind wears. Pure: nothing is sent — the
+ *   shell adds every variant the same way (`copyVariantOps`). The CLI's twin
+ *   is `CliModule.copy.variant`.
+ * - `at` and `apply` (the stage's in-place text edit): the stage splices
+ *   plain HTML itself, but a wireframe's words are its embedded spec's and a
+ *   splice would be undone by the next re-render, so `at` names the word a
+ *   double-clicked node draws and `apply` writes the edits as one version in
+ *   one op group (one undo) — the twin of `CliModule.copy.apply`. Optional:
+ *   without them the stage refuses to edit that kind in place rather than
+ *   splice it. `html` is the screen with the person's edits already spliced
+ *   in: a module whose file is its own render draws from the new words; one
+ *   whose file was crafted by hand keeps those bytes and carries the new
+ *   words in its spec.
+ * - `flow` (copy-edit phase 5, module API 0.2.6): *Choose a voice…* — a
+ *   whole flow's words as one deck, and one voice landed on every screen as
+ *   one op group with the prototype rebuilt once. The twin of `isocan wire
+ *   voice`; both call the module's one reading and one landing.
+ */
+export interface WebCopyWriter {
+  /** The `CopyDeck.kind` this writes: `"wire"`. */
+  kind: string;
+  /** One voice's file for *Vary the copy…*, and the properties a screen of this kind wears. */
+  variant: (html: string, edits: readonly CopyEdit[], by: string, sourceId: string) => Promise<{ html: string; properties: Record<string, string> }>;
+  /** Which word a rendered text node of `html` draws — its section's `data-sec`, nearest `data-wf` and text — or why it is not one word of its own. Async so a module can fetch the reading half when asked. */
+  at?: (html: string, place: { slot?: string; wf?: string; text: string }) => Promise<{ ok: true; address: string; text: string } | { ok: false; reason: string }>;
+  /** Write in-place edits to the screen's words as one version in one op group. */
+  apply?: (
+    host: Pick<DialogHost, "send" | "putBlob" | "readText" | "getCanvas"> & Partial<Pick<DialogHost, "viewer">>,
+    canvasId: string,
+    itemId: string,
+    edits: readonly CopyEdit[],
+    opts: { by: string; html?: string },
+  ) => Promise<{ changed: string[] }>;
+  /** A flow's voice: whether an item offers it, the flow's words read, and one voice landed. Optional: a module with no flows has none. */
+  flow?: WebFlowVoice;
+}
+
+/** What one screen of a flow says, for *Choose a voice…*: its id, its title, its own deck and its current file. */
+interface FlowVoiceScreen {
+  itemId: string;
+  title: string;
+  deck: CopyDeck;
+  html: string;
+}
+
+/** **A whole flow's words, from the browser** (copy-edit phase 5) — `WebCopyWriter.flow`. */
+export interface WebFlowVoice {
+  /** Whether *Choose a voice…* is offered on this item: a screen of a fleshed flow, or its prototype. Synchronous — a menu cannot wait. */
+  offers: (canvas: CanvasContents, item: Item) => boolean;
+  /** The flow this item is in, read: its fleshed screens in flow order, the flow as one deck (addresses `<screen>::<address>`), and the product's Voice. */
+  read: (
+    host: Pick<DialogHost, "readText" | "getCanvas">,
+    canvasId: string,
+    itemId: string,
+  ) => Promise<{ flow: string; screens: FlowVoiceScreen[]; deck: CopyDeck; voice: CopyVoice | null }>;
+  /** One voice's edits (flow addresses) on every screen they touch, as ONE op group, the prototype rebuilt once. */
+  apply: (
+    host: Pick<DialogHost, "send" | "putBlob" | "readText" | "getCanvas"> & Partial<Pick<DialogHost, "viewer">>,
+    canvasId: string,
+    itemId: string,
+    edits: readonly CopyEdit[],
+    by: string,
+    choice?: { stance: string; against: readonly string[] },
+  ) => Promise<{ group: string; changed: Array<{ itemId: string; title: string; strings: number }>; prototypes: number }>;
+}
+
+/**
+ * **What a module's item-menu rows are handed** (wireframes, 24 Sep 2026:
+ * *right-click a wire → Style ▸*). The items the menu is for, the canvas
+ * they are on, and one door: `open`, the module's own dialog with the words
+ * a slash command would have typed after it — the same door ⌘K's `opens` /
+ * `args` use, so a row runs exactly what `/wire style material` runs and
+ * never grows a third code path. The shell asks only a module whose half is
+ * loaded, so the rows cost the entry chunk one call and no data.
+ */
+export interface ModuleMenuFacts {
+  canvas: CanvasContents;
+  items: readonly Item[];
+  open: (dialog: string, args: string) => void;
+}
+
+/**
+ * **What a module's comment buttons are handed** (critique phase 4, module
+ * API 0.2.10: the posted read's *Build both*). One comment, its thread and
+ * the canvas, and the same one door the item menu has — `open`, the module's
+ * own dialog with the words a command would have typed — so a button under a
+ * comment runs what the dialog runs and never grows a path of its own. Asked
+ * only of a module whose half is loaded. Only a row's `label` and `run` are
+ * read here — a separator, a tick, a submenu or `disabled` is not drawn — so
+ * a button that cannot act now is left out rather than greyed.
+ */
+export interface ModuleCommentFacts {
+  canvas: CanvasContents;
+  thread: CommentThread;
+  comment: CommentThread["comments"][number];
+  open: (dialog: string, args: string) => void;
+}
+
+/** One row a module adds to an item's menu — the shell's own row shape (a submenu, a tick, `writes`), or a labelled separator. */
+export type ModuleMenuRow =
+  | { label: string; value?: string; checked?: boolean; writes?: boolean; disabled?: boolean; run: () => void; submenu?: ModuleMenuRow[] }
+  | { separator: string };
 
 /**
  * **A runtime module's manifest** (phase 3): what `isocan module add` prints
@@ -407,6 +1358,21 @@ export interface ModuleManifest {
    * these slots without breaking somebody who never asked for them.
    */
   proposed?: readonly string[];
+  /**
+   * **What else lands on disk** (proposed: `assets`): every file under the
+   * module's `assets/`, with its size, so `module add` can print what arrives
+   * as well as what runs. Paths are relative to the module's directory.
+   */
+  assets?: readonly { path: string; size: number }[];
+  /** The module's contributions to other modules' points — data, read before
+   *  any code runs. A manifest with these and no `web` or `cli` is a
+   *  data-only module. */
+  contributes?: Readonly<Record<string, readonly unknown[]>>;
+}
+
+/** A manifest that runs nothing: no web half, no CLI half. */
+export function isDataOnly(manifest: ModuleManifest): boolean {
+  return !manifest.web && !manifest.cli;
 }
 
 /**
@@ -433,8 +1399,68 @@ export interface ModuleManifest {
  * against 0.1 no longer compiles. Under semver's pre-1.0 rule a minor bump is
  * exactly how you say that, and `^0.1.0` is refused by the check below — which
  * is the first time it has ever refused anything.
+ *
+ * **0.2.0 → 0.2.1 on 11 Sep 2026**, and it is an addition, not a break: the
+ * design competition's six asks (assets, contribution points, dialogs,
+ * templates and `host.enrol`, vote rounds) are all new optional fields or new
+ * members a module is HANDED, never one it must provide. A module built for
+ * `^0.2.0` still loads; one that uses the new parts says `^0.2.1` and names
+ * them in `proposed`.
+ *
+ * **0.2.2 → 0.2.3 on 30 Sep 2026**, an addition: `WebHost.retract`, a member
+ * a module is handed (under the existing `host` proposal), never one it must
+ * provide. A module built for `^0.2.2` still loads.
+ *
+ * **0.2.3 → 0.2.4 on 2 Oct 2026**, an addition: `DialogHost.generate`, the
+ * home's text route (`TEXT_ROUTE`) handed to a dialog (under the existing
+ * `dialogs` proposal), optional so a module can tell an older host by its
+ * absence. A module built for `^0.2.3` still loads.
+ *
+ * **0.2.4 → 0.2.5 on 2 Oct 2026**, an addition: `WebModule.copy`, a writer a
+ * module MAY provide for its screens' copy variants (copy-edit phase 2),
+ * read by *Vary the copy…* — and, the same day under the same member, its
+ * optional `at`/`apply`, read by the stage's in-place text edit. Not a
+ * second bump: both landed before anything was built against 0.2.5, and
+ * both are optional parts a module provides, never one it is handed. A
+ * module built for `^0.2.4` still loads.
+ *
+ * **0.2.5 → 0.2.6 on 5 Oct 2026**, an addition: `WebCopyWriter.flow`, a
+ * flow's voice a module MAY provide (copy-edit phase 5), read by *Choose a
+ * voice…*. Optional and provided, never handed: a module built for `^0.2.5`
+ * still loads.
+ *
+ * **0.2.6 → 0.2.7 on 7 Oct 2026**, an addition: `WebFlowVoice.apply` gained an
+ * optional `choice` `{ stance, against }` so *Choose a voice…* records the
+ * winning stance and losing stances in the same op group (copy-edit phase 6).
+ * A module built for `^0.2.6` still loads.
+ *
+ * **0.2.7 → 0.2.8 on 14 Oct 2026**, an addition: `ModuleRenderer.property`,
+ * so a renderer can claim only the items of a mime that carry a property —
+ * critique's critic cards are markdown, and every other markdown item stays
+ * the built-in chain's. Optional and provided: a module built for `^0.2.7`
+ * still loads.
+ *
+ * **0.2.8 → 0.2.9 on 14 Oct 2026**, an addition: `EnrolRequest.budget` and
+ * `EnrolRequest.reuse` (under the existing `templates` proposal), and the
+ * `reused` flag in `host.enrol`'s answer — critique's critics are enrolled
+ * once per canvas, refreshed from their card each time they are asked, and
+ * bounded per run. Optional fields a module passes and a member it is
+ * handed: a module built for `^0.2.8` still loads.
+ *
+ * **0.2.9 → 0.2.10 on 14 Oct 2026**, an addition (critique phase 4):
+ * `WebModule.comments`, buttons a module MAY put under a comment, which open
+ * its own dialogs; `EnrolAsk.reuse`, so the web can ring for an agent that
+ * already stands; and a template's `prepare` may answer with the agent's
+ * `budget` and `color`, which the rc applies when it enrols from a web ask.
+ * Optional, provided or passed: a module built for `^0.2.9` still loads.
+ *
+ * **0.2.10 → 0.2.11 on 22 Oct 2026**, an addition (motion phase 1):
+ * `CliHost.runPackageScript`, a member a module is handed — one of isocan's
+ * own `scripts/*.mjs`, run the way `canvas shot` runs its — optional so a
+ * module can tell an older host by its absence. A module built for `^0.2.10`
+ * still loads.
  */
-export const MODULE_API_VERSION = "0.2.0";
+export const MODULE_API_VERSION = "0.2.11";
 
 /**
  * **The parts of the API we intend to change**, named so a module can say it
@@ -449,7 +1475,18 @@ export const MODULE_API_VERSION = "0.2.0";
  * one caller. That is not stability, and calling it stable because it shipped
  * is how an API gets frozen by accident.
  */
-export const PROPOSED = ["overlays", "drops", "host"] as const;
+export const PROPOSED = [
+  "overlays",
+  "drops",
+  "host",
+  "assets",
+  "points",
+  "dialogs",
+  "templates",
+  "rounds",
+  "workspaces",
+  "composer",
+] as const;
 
 /** Which of a manifest's proposals this build does not recognise. A module
  *  asking for something that no longer exists is a refusal with a name, not a
@@ -476,6 +1513,7 @@ export function manifestRecord(manifest: ModuleManifest): CoreModule {
     name: manifest.name,
     ...(manifest.kinds ? { kinds: manifest.kinds } : {}),
     ...(manifest.propertyKeys ? { propertyKeys: manifest.propertyKeys } : {}),
+    ...(manifest.contributes ? { contributes: manifest.contributes } : {}),
   };
 }
 

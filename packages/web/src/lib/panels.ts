@@ -1,6 +1,37 @@
+import { isEmbedded, isEmbeddedChatHidden } from "@isocan/core";
 import { useUiStore } from "../stores/uiStore.ts";
 import { RAIL_PAN_MS, panForDockChange } from "./railpan.ts";
 import { dockStateNow } from "./stage.ts";
+
+/**
+ * The query string this window was LOADED with, read on first ask and kept.
+ * Being framed is a fact about how the host opened the window, not about the
+ * route: the app's own navigation (`/i/<item>`, `/w`) drops the query, and
+ * the Chat dock must not come back — nor the host bridge go quiet — the
+ * moment somebody opens an item full screen inside the pane.
+ */
+let loadedSearch: string | undefined;
+function searchAtLoad(): string {
+  loadedSearch ??= typeof window !== "undefined" ? window.location.search : "";
+  return loadedSearch;
+}
+
+/**
+ * Whether a host pane framed this window (`?embed=1`,
+ * `docs/projects/antigravity/design.md`) — the gate on the host bridge.
+ */
+export function embeddedNow(search = searchAtLoad()): boolean {
+  return isEmbedded(search);
+}
+
+/**
+ * Whether this window keeps its own Chat dock off because the host pane that
+ * framed it already owns the conversation column (`?embed=1` without
+ * `chat=on`).
+ */
+export function chatHiddenNow(search = searchAtLoad()): boolean {
+  return isEmbeddedChatHidden(search);
+}
 
 /**
  * The left dock holds one panel at a time — the main thread or the files —
@@ -9,15 +40,28 @@ import { dockStateNow } from "./stage.ts";
  * for a panel that was pushed aside would fight the next reload.
  */
 
-export type Panel = "main" | "files" | "agents" | "context" | "personas";
+type BuiltinPanel = "main" | "files" | "agents" | "context" | "personas";
+type ExtensionPanelKey = `panel:${string}`;
+/** A built-in left-dock panel or a canvas-carried panel (`panel:<itemId>`). */
+export type Panel = BuiltinPanel | ExtensionPanelKey;
 
-const KEY: Record<Panel, (canvasId: string) => string> = {
+/** The dock key for a canvas-carried panel item (`panel:<itemId>`). */
+export function extensionPanelKey(itemId: string): ExtensionPanelKey {
+  return `panel:${itemId}`;
+}
+
+function extensionPanelItemId(panel: Panel | null): string | null {
+  return panel && panel.startsWith("panel:") ? panel.slice("panel:".length) : null;
+}
+
+const KEY: Record<BuiltinPanel, (canvasId: string) => string> = {
   main: (canvasId) => `isocan.mainpanel.${canvasId}`,
   files: (canvasId) => `isocan.filespanel.${canvasId}`,
   agents: (canvasId) => `isocan.agentspanel.${canvasId}`,
   context: (canvasId) => `isocan.contextpanel.${canvasId}`,
   personas: (canvasId) => `isocan.personaspanel.${canvasId}`,
 };
+const EXT_PANEL_KEY = (canvasId: string) => `isocan.extpanel.${canvasId}`;
 
 /**
  * Widen or narrow the rail, and slide the canvas with it.
@@ -44,22 +88,49 @@ export function setRailWidth(width: number): void {
  * canvas sideways on every single load, and twice as far on the second one.
  * It is a parameter rather than a check inside here because "is this the
  * first render" is not a thing this function can honestly know.
+ *
+ * Inside a pane that hides the Chat (`chatHiddenNow`), asking for `"main"`
+ * closes the dock instead, and is NOT remembered: nobody chose "closed", and
+ * a stored one would outlive the pane — into the person's own tabs, in any
+ * browser that does not partition a frame's storage.
  */
-export function openPanel(canvasId: string, panel: Panel | null, pan = true): void {
-  for (const which of ["main", "files", "agents", "context", "personas"] as const) {
+export function openPanel(canvasId: string, panel: Panel | null, pan = true, remember = true): void {
+  const folded = panel === "main" && chatHiddenNow();
+  // The Chat kept as a bar at the bottom (`chatplace.ts`): "open the Chat"
+  // means show its messages there, and the dock — whatever it holds — is left
+  // exactly as it is. The mount restore (the one caller that does not
+  // remember) is not somebody asking: the dock comes back empty and the bar
+  // starts minimized.
+  if (panel === "main" && !folded && useUiStore.getState().chatAt === "bottom") {
+    if (remember) return useUiStore.setState({ chatBarOpen: true });
+    panel = null;
+  }
+  const next = folded ? null : panel;
+  const extId = extensionPanelItemId(next);
+  if (remember && !folded) {
+    for (const which of ["main", "files", "agents", "context", "personas"] as const) {
+      try {
+        localStorage.setItem(KEY[which](canvasId), next === which ? "open" : "closed");
+      } catch {
+        // Private mode — the panels still work, they just forget.
+      }
+    }
     try {
-      localStorage.setItem(KEY[which](canvasId), panel === which ? "open" : "closed");
+      if (extId) localStorage.setItem(EXT_PANEL_KEY(canvasId), extId);
+      else localStorage.removeItem?.(EXT_PANEL_KEY(canvasId));
     } catch {
       // Private mode — the panels still work, they just forget.
     }
   }
   const before = dockStateNow();
   const ui = useUiStore.getState();
-  ui.setMainPanelOpen(panel === "main");
-  ui.setFilesPanelOpen(panel === "files");
-  ui.setAgentsPanelOpen(panel === "agents");
-  ui.setContextPanelOpen(panel === "context");
-  ui.setPersonasPanelOpen(panel === "personas");
+  ui.setMainPanelOpen(next === "main");
+  ui.setFilesPanelOpen(next === "files");
+  ui.setAgentsPanelOpen(next === "agents");
+  ui.setContextPanelOpen(next === "context");
+  ui.setPersonasPanelOpen(next === "personas");
+  ui.setExtensionPanelId(extId);
+  ui.setExtensionPanelOpen(extId !== null);
   if (pan) panForDockChange(before, RAIL_PAN_MS);
 }
 
@@ -71,6 +142,8 @@ export function storedPanel(canvasId: string): Panel | null | undefined {
     if (localStorage.getItem(KEY.agents(canvasId)) === "open") return "agents";
     if (localStorage.getItem(KEY.context(canvasId)) === "open") return "context";
     if (localStorage.getItem(KEY.personas(canvasId)) === "open") return "personas";
+    const ext = localStorage.getItem(EXT_PANEL_KEY(canvasId));
+    if (ext) return extensionPanelKey(ext);
     return localStorage.getItem(KEY.main(canvasId)) === null ? undefined : null;
   } catch {
     return undefined;

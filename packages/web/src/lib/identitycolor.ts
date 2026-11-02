@@ -1,7 +1,7 @@
-import type { Actor } from "@isocan/core";
+import { actorAliases, type Actor } from "@isocan/core";
 import { sendOp } from "./api.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
-import { rememberMark } from "./marks.ts";
+import { refreshActorMarks, rememberMark } from "./marks.ts";
 
 /**
  * Choose the color you wear. `actor.setColor` is home-scoped — it changes the
@@ -14,8 +14,10 @@ import { rememberMark } from "./marks.ts";
 export async function setActorColor(actor: Actor, color: string | null): Promise<void> {
   await sendOp(null, actor, { type: "actor.setColor", actorId: actor.id, color });
   const colors = { ...useCanvasStore.getState().actorColors };
-  if (color === null) delete colors[actor.id];
-  else colors[actor.id] = color;
+  for (const id of actorAliases(useCanvasStore.getState().actorJoins, actor.id)) {
+    if (color === null) delete colors[id];
+    else colors[id] = color;
+  }
   useCanvasStore.setState({ actorColors: colors });
 }
 
@@ -29,7 +31,16 @@ export async function setActorColor(actor: Actor, color: string | null): Promise
  * your screen on your next load rather than instantly. The local echo below
  * is what makes YOUR own face change under your hand.
  */
-export async function setActorMark(actor: Actor, mark: string | null): Promise<void> {
-  await sendOp(null, actor, { type: "actor.setMark", actorId: actor.id, mark });
-  rememberMark(actor.id, mark);
+export async function setActorMark(
+  actor: Actor,
+  mark: string | null,
+  /** Whose mark — yours by default, or an agent of yours (its pointer). The
+   *  home decides whether you may, by the same rule `isocan agent mark` meets. */
+  of: { id: string } = actor,
+): Promise<void> {
+  await sendOp(null, actor, { type: "actor.setMark", actorId: of.id, mark });
+  for (const id of actorAliases(useCanvasStore.getState().actorJoins, of.id)) {
+    rememberMark(id, mark);
+  }
+  void refreshActorMarks();
 }

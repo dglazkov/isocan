@@ -1,6 +1,8 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe as suite, expect, it } from "vitest";
 import type { Actor, PresenceSession } from "@isocan/core";
-import { facesFor, unreadByAuthor } from "../src/lib/facepile.ts";
+import { facesFor, pileOrder, pileSeparatorBefore, unreadByAuthor, type Face } from "../src/lib/facepile.ts";
 import { unreadCount } from "../src/stores/unreadStore.ts";
 
 /**
@@ -210,5 +212,73 @@ suite("standing by is neither here nor away", () => {
     const [face] = facesFor([], unread, kenny, [sian]).filter((f) => f.actor.id === sian.id);
     expect(face?.presence).toBe("available");
     expect(face?.unread, "and it keeps what they left behind").toBe(2);
+  });
+});
+
+suite("the pile's order", () => {
+  // Dion, 2 Oct 2026: your own face on the far right, your pets next to it,
+  // then other agents, then other people on the far left.
+  const face = (id: string, owner: string | null, self = false) =>
+    ({ actor: { id, name: id }, owner: owner === null ? null : { id: owner, name: owner }, self }) as unknown as Face;
+  const me = "usr_acme_me";
+  const order = (faces: Face[]) => pileOrder(faces, (id) => id === me || id === "usr_acme_me_old").map((f) => f.actor.id);
+
+  it("reads other people, other agents, your pets, then you", () => {
+    expect(
+      order([face("me", null, true), face("scout", me), face("mira", null), face("bot", "usr_acme_mira"), face("theo", null)]),
+    ).toEqual(["mira", "theo", "bot", "scout", "me"]);
+  });
+
+  it("counts a pet enrolled by a folded identity of yours as yours", () => {
+    expect(order([face("me", null, true), face("old-pet", "usr_acme_me_old"), face("bot", "usr_acme_mira")])).toEqual([
+      "bot",
+      "old-pet",
+      "me",
+    ]);
+  });
+
+  const isMe = (id: string) => id === me || id === "usr_acme_me_old";
+  const formatPile = (faces: Face[]): string => {
+    const ordered = pileOrder(faces, isMe);
+    const out: string[] = [];
+    for (let i = 0; i < ordered.length; i++) {
+      if (i > 0 && pileSeparatorBefore(ordered[i - 1]!, ordered[i]!, isMe)) out.push("|");
+      out.push(ordered[i]!.actor.id);
+    }
+    return out.join(" ");
+  };
+
+  it("facepiles your pets right next to you without a divider (`(pet(me)`), separated from others", () => {
+    // Other people + your pet + you: one divider before your pet, none between pet and you.
+    expect(formatPile([face("me", null, true), face("pet", me), face("mira", null), face("theo", null)])).toBe(
+      "mira theo | pet me",
+    );
+    // Other people + other agents + your pet + you: other agents stay separated from your `(pet + me)` cluster.
+    expect(
+      formatPile([face("me", null, true), face("pet", me), face("mira", null), face("bot", "usr_acme_mira")]),
+    ).toBe("mira | bot | pet me");
+    // Only your pet and you: one undivided cluster.
+    expect(formatPile([face("me", null, true), face("pet", me)])).toBe("pet me");
+  });
+
+  it("keeps an all-human pile undivided when no agents are in the room", () => {
+    expect(formatPile([face("me", null, true), face("mira", null), face("theo", null)])).toBe("mira theo me");
+  });
+
+  it("lifts your own face to the same stacking layer as badged faces so your pet tucks under you", () => {
+    // Your own face never has unread badges, whereas your pet often does; if `.face.self`
+    // stayed at auto z-index while `.face.badged` lifted to 2, a badged pet on your left
+    // would stack over you instead of tucking under you (`(dog(me)`).
+    const css = readFileSync(fileURLToPath(new URL("../src/styles.css", import.meta.url)), "utf8");
+    expect(css).toMatch(/\.face\.badged,\s*\.face\.self\s*\{\s*z-index:\s*2;\s*\}/);
+  });
+
+  it("hides the connection status while live and only shows it on connection issues", () => {
+    const crumb = readFileSync(fileURLToPath(new URL("../src/components/CanvasCrumb.tsx", import.meta.url)), "utf8");
+    const css = readFileSync(fileURLToPath(new URL("../src/styles.css", import.meta.url)), "utf8");
+    expect(crumb).toContain('const connectionIssue = connection !== "live" && connection !== "connecting";');
+    expect(crumb).toContain("{connectionIssue && <span className={`conn ${connection}`}>{connection}</span>}");
+    expect(css).not.toContain(".conn.live::before");
+    expect(css).toMatch(/\.conn\s*\+\s*\.identity-anchor\s+\.facepile\s*\{[^}]*border-left:\s*1px solid var\(--line\)/);
   });
 });

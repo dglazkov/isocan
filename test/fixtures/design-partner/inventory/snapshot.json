@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "canvasId": "acme-eval-inventory",
+  "title": "Sparse inventory app",
+  "groups": [
+    {
+      "id": "primary",
+      "title": "Acme product"
+    }
+  ],
+  "selectedItemIds": [],
+  "items": [
+    {
+      "id": "inventory-reference",
+      "versionId": "inventory-reference-v1",
+      "path": "reference.md",
+      "mime": "text/markdown",
+      "scope": "primary"
+    },
+    {
+      "id": "inventory-stock",
+      "versionId": "inventory-stock-v1",
+      "path": "stock.csv",
+      "mime": "text/csv",
+      "scope": "primary"
+    }
+  ],
+  "decisions": [],
+  "repository": null
+}

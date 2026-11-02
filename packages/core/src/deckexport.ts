@@ -1,5 +1,7 @@
 import type { CanvasContents, Item } from "./model.ts";
-import { deck, noteFor } from "./slides.ts";
+import { deck } from "./slides.ts";
+import { noteFor } from "./slidewrites.ts";
+import { titleSlug } from "./filenames.ts";
 
 /**
  * **Taking a deck somewhere else** (`docs/research/2026-09-04-deck-export.md`).
@@ -30,8 +32,8 @@ export interface DeckPage {
 
 /** The pages, in order: the marked slides, or — with none marked — every
  *  item in reading order, because a canvas of screens is already a deck. */
-export function deckPages(canvas: CanvasContents): DeckPage[] {
-  return deck(canvas).flatMap((item) => {
+export function deckPages(canvas: CanvasContents, groupId?: string): DeckPage[] {
+  return deck(canvas, groupId).flatMap((item) => {
     const current = currentVersion(item);
     if (!current) return [];
     const note = noteFor(canvas, item.id);
@@ -152,8 +154,8 @@ ${slides}
 `;
 }
 
-/** The file's name, from the canvas title: `Season planning` → `season-planning.html`. */
+/** The file's name, from the canvas title: `Season planning` → `season-planning.html`,
+ *  by core's one filename rule (`titleSlug`, cleanup DU-2). */
 export function deckFilename(title: string, ext: string): string {
-  const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "deck";
-  return `${slug}.${ext}`;
+  return `${titleSlug(title) || "deck"}.${ext}`;
 }

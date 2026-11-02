@@ -1,4 +1,5 @@
 import { useUiStore } from "../stores/uiStore.ts";
+import { shortcut } from "@isocan/core";
 
 /**
  * **Chrome you can turn off** (`docs/research/2026-09-02-chrome-you-can-turn-off.md`).
@@ -39,14 +40,14 @@ export const HIDEABLE: readonly HideableEntry[] = [
     name: "Undo and redo",
     where: "the zoom cluster",
     shortcut: "Undo and redo",
-    stillReachable: "⌘Z still undoes; Settings brings the buttons back",
+    stillReachable: `${shortcut("Z")} still undoes; Settings brings the buttons back`,
   },
   {
     id: "rail.history",
     name: "History",
     where: "the rail",
     command: "open-history",
-    stillReachable: "⌘K “Open History” still opens it; Settings brings the button back",
+    stillReachable: `${shortcut("K")} “Open History” still opens it; Settings brings the button back`,
   },
   /**
    * **The top fade**: a wash of the page's ground under the top controls, so
@@ -61,7 +62,54 @@ export const HIDEABLE: readonly HideableEntry[] = [
     name: "Top fade",
     where: "the top edge",
     command: "top-fade",
-    stillReachable: "⌘K “Top fade” brings it back, and so does Settings",
+    stillReachable: `${shortcut("K")} “Top fade” brings it back, and so does Settings`,
+  },
+];
+
+/**
+ * **What this browser draws, which is not the same as what it hides.**
+ *
+ * The cursor glow lived in the `···` menu while everything else of its kind
+ * lived in Settings, so one category had two homes and neither named the
+ * other. It is in Settings now — but not in `HIDEABLE`, because that list has
+ * a rule and the glow fails it: a control may be hidden only if what it DOES
+ * is reachable another way, and `hideable.test.ts` refuses an entry with
+ * neither a shortcut nor a command. The glow does nothing. Turning it off
+ * strands nobody, which is precisely why it cannot claim a door.
+ *
+ * Same section on screen, same storage, different list — and the difference
+ * is stated rather than smoothed over. A row here answers the question a
+ * person actually has about an effect: whether switching it off changes what
+ * a collaborator sees.
+ */
+interface DisplaySwitch {
+  id: string;
+  name: string;
+  /** What it is, in the words of somebody deciding whether they want it. */
+  what: string;
+}
+
+/** The switches themselves. One today; a second one is a row, not a redesign. */
+export const DISPLAY_SWITCHES: readonly DisplaySwitch[] = [
+  {
+    id: "cursor.glow",
+    name: "Cursor glow",
+    what: "the soft light under live cursors · yours only, nobody else's view changes",
+  },
+  {
+    /**
+     * **The last per-browser switch that was still in the `···` menu** (14 Sep).
+     *
+     * It sat beside Background, which is the same question — what this canvas
+     * looks like — asked about a different owner. A ground is a canvas fact
+     * every collaborator sees; the minimap is this browser's alone, like the
+     * glow above it. Two kinds of switch in one row taught nobody which was
+     * which, and a person looking for "the things I can turn off" had to know
+     * to look in two places.
+     */
+    id: "canvas.minimap",
+    name: "Minimap",
+    what: `the small map of the canvas, bottom right · yours only, and ${shortcut("K")} still toggles it`,
   },
 ];
 

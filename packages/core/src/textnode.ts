@@ -1,4 +1,6 @@
 import type { Item } from "./model.ts";
+import type { TextColourValue } from "./textcolour.ts";
+import { holdsAtZoom } from "./zoomrule.ts";
 
 /**
  * **The text node: words typed straight onto the canvas.**
@@ -23,13 +25,17 @@ import type { Item } from "./model.ts";
  * somebody would have made by hand.
  */
 
+/** A text node's blob is markdown — the file somebody would have made by hand. */
 export const TEXT_MIME = "text/markdown";
+/** The filename every text node's version carries, so `isocan get` hands back a `.md`. */
 export const TEXT_FILENAME = "text.md";
 
 /** `properties.kind` on an item born from the Text tool. */
 export const TEXT_KIND = "text";
+/** The properties a new text node is born with; spread, never mutated, by the caller. */
 export const TEXT_PROPERTIES: Record<string, string> = { kind: TEXT_KIND };
 
+/** Draw it chromeless? True only for an item the Text tool (or `isocan text`) made. */
 export function isTextItem(item: Item): boolean {
   return item.properties.kind === TEXT_KIND;
 }
@@ -64,8 +70,10 @@ export const TEXT_SIZE = 16;
  * it only works if everyone is on it.
  */
 export const TEXT_STYLES = ["body", "heading", "title", "display"] as const;
+/** One rung of the size ladder — the property's value and the CLI's word for it. */
 export type TextStyle = (typeof TEXT_STYLES)[number];
 
+/** World-unit size per rung. Each doubles the last, so each survives twice as far out. */
 export const TEXT_STYLE_SIZE: Record<TextStyle, number> = {
   body: TEXT_SIZE,
   heading: 32,
@@ -105,13 +113,16 @@ export function textStyleFrom(value: string): TextStyle | null {
  *  node made before the ladder existed says, and it stays correct. */
 export const TEXT_STYLE_PROP = "textStyle";
 
+/** The rung this node sits on; anything absent or unrecognised reads as `body`. */
 export function textStyleOf(item: Item): TextStyle {
   const raw = item.properties[TEXT_STYLE_PROP];
-  return isTextStyle(raw) ? raw : "body";
+  return oneOf(TEXT_STYLES, raw) ? raw : "body";
 }
 
-function isTextStyle(value: unknown): value is TextStyle {
-  return typeof value === "string" && (TEXT_STYLES as readonly string[]).includes(value);
+/** Is a value read off `properties` — a string anybody could have written —
+ *  one of a closed set? The one guard the step, the face and the paper share. */
+function oneOf<T extends string>(set: readonly T[], value: unknown): value is T {
+  return (set as readonly unknown[]).includes(value);
 }
 
 /** World-unit size of a node's words. */
@@ -156,6 +167,7 @@ export function textSizeOf(item: Item): number {
  * who is looking.
  */
 export const TEXT_FACES = ["sans", "mono", "serif", "hand"] as const;
+/** One of the closed set of faces a text node may be set in. */
 export type TextFace = (typeof TEXT_FACES)[number];
 
 /**
@@ -167,18 +179,18 @@ export type TextFace = (typeof TEXT_FACES)[number];
  * exists rather than a `capitalize()` at the call site.
  */
 export function textFaceLabel(face: TextFace): string {
-  switch (face) {
-    case "sans":
-      return "Sans";
-    case "mono":
-      return "Mono";
-    case "serif":
-      return "Serif";
-    case "hand":
-      return "Handwriting";
-  }
+  return face === "hand" ? "Handwriting" : capitalised(face);
 }
 
+/** The word with its first letter up — every face but `hand`, and every paper. */
+function capitalised(word: string): string {
+  return word.charAt(0).toUpperCase() + word.slice(1);
+}
+
+/**
+ * The CSS `font-family` each face resolves to — stacks that exist everywhere, or the
+ * one file this app hosts, never a font only one collaborator has.
+ */
 export const TEXT_FACE_STACK: Record<TextFace, string> = {
   sans: 'system-ui, -apple-system, "Segoe UI", sans-serif',
   mono: "ui-monospace, SFMono-Regular, Menlo, monospace",
@@ -210,16 +222,122 @@ export function textDrawSize(item: Item): number {
   return Math.round(textSizeOf(item) * TEXT_FACE_SCALE[textFaceOf(item)]);
 }
 
+/** `properties.textFace` — absent means `sans`, the face every node had before the choice. */
 export const TEXT_FACE_PROP = "textFace";
 
+/** The face this node is set in; anything absent or unrecognised reads as `sans`.
+ *  A named font decides it — see `TEXT_FONTS` — so the fallback, the draw
+ *  size and the fit estimate all agree on what KIND of letter is drawn. */
 export function textFaceOf(item: Item): TextFace {
+  const font = textFontOf(item);
+  if (font) return font.face;
   const raw = item.properties[TEXT_FACE_PROP];
-  return isTextFace(raw) ? raw : "sans";
+  return oneOf(TEXT_FACES, raw) ? raw : "sans";
 }
 
-function isTextFace(value: unknown): value is TextFace {
-  return typeof value === "string" && (TEXT_FACES as readonly string[]).includes(value);
+/**
+ * **A named font: a face, refined** (30 Sep 2026).
+ *
+ * The faces say what kind of letter — sans, serif, mono, hand — and stay the
+ * vocabulary. A font names WHICH one, from a closed list, for the reason the
+ * faces are closed: text is a shared fact whose box was measured on whoever
+ * typed it, so a family somebody happens to have installed renders one
+ * collaborator's canvas differently and overflows its box for the rest.
+ *
+ * Each font carries its face, and the face is its fallback: offline, or in
+ * the moment before the file arrives, Fraunces is Georgia and JetBrains Mono
+ * is Menlo — still a serif, still monospace. `textFaceOf` answers with the
+ * font's face, so the draw size and the fit estimate never disagree with it.
+ *
+ * `width` is the part that keeps the box honest (lessons #94). `textBox`
+ * guesses a line's width from glyph classes per face; a family wider than
+ * that guess clips. Each number is the family's widest measured regular-weight
+ * advance over the face's own estimate, rounded UP, from headless Chrome
+ * against the real files (`packages/core/test/textfont.test.ts` holds the
+ * measurements and fails if a factor is too small). Never below 1, because
+ * the fallback is the face itself.
+ *
+ * Inter is served from this app already (`index.html`). The rest arrive from
+ * Google Fonts, only when a node on the open canvas names one (`web/lib/textfont.ts`).
+ */
+export const TEXT_FONTS = [
+  { name: "Inter", face: "sans", width: 1.05 },
+  { name: "IBM Plex Sans", face: "sans", width: 1 },
+  { name: "DM Sans", face: "sans", width: 1.02 },
+  { name: "Manrope", face: "sans", width: 1.02 },
+  { name: "Space Grotesk", face: "sans", width: 1.08 },
+  { name: "IBM Plex Serif", face: "serif", width: 1 },
+  { name: "Fraunces", face: "serif", width: 1.02 },
+  { name: "Lora", face: "serif", width: 1 },
+  { name: "IBM Plex Mono", face: "mono", width: 1 },
+  { name: "JetBrains Mono", face: "mono", width: 1 },
+] as const satisfies readonly { name: string; face: TextFace; width: number }[];
+/** One of the closed list of named fonts. */
+export type TextFont = (typeof TEXT_FONTS)[number];
+
+/** `properties.textFont` — a family from `TEXT_FONTS`, by its exact name. */
+export const TEXT_FONT_PROP = "textFont";
+
+/** A font from what somebody typed, any case — or null, to refuse with the list. */
+export function textFontFrom(value: string): TextFont | null {
+  const wanted = value.trim().toLowerCase();
+  return TEXT_FONTS.find((f) => f.name.toLowerCase() === wanted) ?? null;
 }
+
+/** The named font this node is set in, or null for its plain face. */
+export function textFontOf(item: Item): TextFont | null {
+  return TEXT_FONTS.find((f) => f.name === item.properties[TEXT_FONT_PROP]) ?? null;
+}
+
+/** The CSS `font-family` a node is drawn in: its font first, then its face's stack. */
+export function textStackOf(item: Item): string {
+  return textFontStack(textFontOf(item), textFaceOf(item));
+}
+
+/** The same stack for a look not yet on an item — the composer's, and its font list's. */
+export function textFontStack(font: TextFont | null, face: TextFace): string {
+  return font ? `"${font.name}", ${TEXT_FACE_STACK[font.face]}` : TEXT_FACE_STACK[face];
+}
+
+/**
+ * **Text colour** — `properties.textColor` (30 Sep 2026).
+ *
+ * Absent is today's ink, which follows the theme. Otherwise a word from the
+ * spoken vocabulary (`colour.ts`), minus black and white — the one pair no
+ * shade can make readable on both a light and a dark ground, and "auto"
+ * already is near-black in light and near-white in dark — or a `#rrggbb`
+ * somebody chose exactly. `textcolour.ts` carries the shades and the argument.
+ */
+export const TEXT_COLOR_PROP = "textColor";
+/** The named text colours: the spoken words a shade can honour on every ground. */
+export const TEXT_COLOURS = ["red", "orange", "yellow", "green", "blue", "purple", "pink", "brown", "grey"] as const;
+
+/**
+ * The CSS colour a node's words take, or undefined for the theme's own ink.
+ * A name is a TOKEN, so the stylesheet picks the shade for the theme — and
+ * on paper, which is pale in both themes, the paper shade. A hex is itself.
+ */
+export function textInkOf(item: Item): string | undefined {
+  return textInk(item.properties[TEXT_COLOR_PROP], paperOf(item) !== null);
+}
+
+/**
+ * The colour a node's properties hold — a name, or a lowercase `#rrggbb` —
+ * or null for the theme's ink. Here rather than beside the shades in
+ * `textcolour.ts` because the canvas asks it on first paint (re-opening a
+ * node), and a first-paint import of that file carries every shade with it.
+ */
+export function textColourOf(properties: Record<string, string>): TextColourValue | null {
+  const raw = properties[TEXT_COLOR_PROP];
+  return textInk(raw, false) ? (raw!.toLowerCase() as TextColourValue) : null;
+}
+
+/** `textInkOf` for a colour not yet on an item — the composer's, while typing. */
+export function textInk(raw: string | null | undefined, onPaper: boolean): string | undefined {
+  if (oneOf(TEXT_COLOURS, raw)) return `var(--${onPaper ? "paper-" : ""}text-${raw})`;
+  return raw && /^#[0-9a-f]{6}$/i.test(raw) ? raw : undefined;
+}
+
 
 /**
  * **Paper: the same words, on something you could pick up.**
@@ -245,15 +363,17 @@ function isTextFace(value: unknown): value is TextFace {
  * another's.
  */
 export const PAPERS = ["yellow", "pink", "blue", "green", "grey"] as const;
+/** One of the closed set of post-it colours. A colour, never a category. */
 export type Paper = (typeof PAPERS)[number];
 
 /** What a paper is called where somebody picks one. Every id is already the
  *  word, and this exists so a second surface offering these cannot spell them
  *  differently — the fold `themeLabel` and `cursorLabel` already are. */
 export function paperLabel(paper: Paper): string {
-  return paper.charAt(0).toUpperCase() + paper.slice(1);
+  return capitalised(paper);
 }
 
+/** `properties.paper` — the one property that turns a caption into a post-it. */
 export const PAPER_PROP = "paper";
 
 /** The paper this node is written on, or null for none — a plain text node. */
@@ -262,8 +382,9 @@ export function paperOf(item: Item): Paper | null {
   return isPaper(raw) ? raw : null;
 }
 
+/** Guard for a value read off `properties`, which are strings anybody could have written. */
 export function isPaper(value: unknown): value is Paper {
-  return typeof value === "string" && (PAPERS as readonly string[]).includes(value);
+  return oneOf(PAPERS, value);
 }
 
 /**
@@ -306,9 +427,11 @@ export const PAPER_SIZE = 220;
  */
 const TEXT_LEGIBLE_PX = 5;
 
-/** Should this node draw its words, or the mark that stands for them? */
-export function textIsLegible(worldSize: number, scale: number): boolean {
-  return worldSize * scale >= TEXT_LEGIBLE_PX;
+/** Should this node draw its words, or the mark that stands for them? `was`
+ *  is the answer last time, for the hysteresis in `holdsAtZoom`: words resting
+ *  at 5px do not blink between letters and a mark. */
+export function textIsLegible(worldSize: number, scale: number, was?: boolean): boolean {
+  return holdsAtZoom(worldSize * scale, TEXT_LEGIBLE_PX, was);
 }
 
 /**
@@ -322,6 +445,10 @@ export function textIsLegible(worldSize: number, scale: number): boolean {
  */
 export const TEXT_MARK_MAX = 14;
 
+/**
+ * Screen-pixel size of the glyph drawn in place of illegible words: most of the node's
+ * smaller side, never below 1px, never above `TEXT_MARK_MAX`.
+ */
 export function textMarkSize(
   boxWidth: number,
   boxHeight: number,
@@ -365,14 +492,6 @@ export function textTitle(body: string): string {
 }
 
 /**
- * A box for this text before anything has measured it.
- *
- * An estimate, and only ever a starting point: the app measures what it
- * actually rendered and corrects the item, and `⇧F` re-fits at any time. It
- * exists so that a node made from the CLI — where there is nothing to measure
- * with — lands at a size somebody can read rather than at a default square.
- */
-/**
  * **How wide a column each step wraps in, and why it is not proportional.**
  *
  * The first cut scaled the column with the size, so a title got four times
@@ -412,12 +531,9 @@ export const TEXT_COLUMN: Record<TextStyle, number> = {
  * A multiple rather than four more hand-set numbers: the ladder above already
  * decided how these steps relate, and a second table would drift from it.
  */
-export const TEXT_COLUMN_MAX: Record<TextStyle, number> = {
-  body: TEXT_COLUMN.body * 2,
-  heading: TEXT_COLUMN.heading * 2,
-  title: TEXT_COLUMN.title * 2,
-  display: TEXT_COLUMN.display * 2,
-};
+export const TEXT_COLUMN_MAX = Object.fromEntries(
+  TEXT_STYLES.map((style) => [style, TEXT_COLUMN[style] * 2]),
+) as Record<TextStyle, number>;
 
 /**
  * **The box must err large, never small.** A text node is chromeless, so a
@@ -448,22 +564,56 @@ const PARAGRAPH_GAP = 0.35;
 const SLACK = 1.1;
 /** The browser's own `ul` padding: 40px, a fixed number in world units. */
 const LIST_INDENT = 40;
-/** `.md-view h1`'s fixed size — the largest a heading is drawn at. */
-const HEADING_PX = 18;
+/**
+ * **The largest a heading is drawn, as a multiple of the node's own words.**
+ *
+ * The stylesheet sets a text node's headings in `em` (`.item.textnode
+ * .md-view h1` at 1.5em, h2 and h3 smaller, never below 1em), so a `#` line
+ * is bigger than the words under it at EVERY step. It used to borrow the card
+ * renderer's fixed 18px, which is larger than body text at 16 and a seventh
+ * the size of it at display's 128 — a heading smaller than its own paragraph.
+ *
+ * The estimate sizes EVERY heading level at this, h1's, because the box must
+ * err large and one number is lighter in the first paint than six: an `##`
+ * gets a little more room than it draws, invisibly, since a caption has no
+ * card. What it must never do is think a heading is smaller than it draws —
+ * that is a box that crops it (lesson #94's shape) — and
+ * `packages/web/test/textheading.test.ts` holds this equal to the
+ * stylesheet's h1 and every other level at or under it.
+ */
+export const TEXT_HEADING_EM = 1.5;
+/**
+ * A markdown heading line — multiline, so the one pattern answers for a line
+ * and for a whole body. `#Roadmap` is an item reference, not a heading.
+ *
+ * The app's composer asks it of a whole body: its mirror measures the RAW
+ * words, where `# Plan` is one line at the node's size, and the canvas then
+ * draws it half again as large — so a composer holding a heading asks
+ * `textRefit` too, and keeps whichever box is bigger.
+ */
+export const TEXT_HEADING_LINE = /^\s{0,3}#{1,6}\s+/m;
 
 /** Advance width of one character, in em, for a UI sans — the classes that
  *  matter, not a font table. `mono` is one width; the app scales `hand`. */
 function glyphEm(ch: string, face: TextFace): number {
   if (face === "mono") return 0.6;
   // Georgia sets wider than a UI sans, by about a twentieth.
-  const wide = face === "serif" ? 1.06 : 1;
-  if (ch === " ") return 0.28 * wide;
-  if (/[iljtfI!.,;:'|]/.test(ch)) return 0.3 * wide;
-  if (/[mwMW@%]/.test(ch)) return 0.9 * wide;
-  if (/[A-Z]/.test(ch)) return 0.7 * wide;
-  if (/[0-9]/.test(ch)) return 0.56 * wide;
-  if (/[a-z]/.test(ch)) return 0.55 * wide;
-  return 0.6 * wide;
+  return (
+    (face === "serif" ? 1.06 : 1) *
+    (ch === " "
+      ? 0.28
+      : /[iljtfI!.,;:'|]/.test(ch)
+        ? 0.3
+        : /[mwMW@%]/.test(ch)
+          ? 0.9
+          : /[A-Z]/.test(ch)
+            ? 0.7
+            : /[0-9]/.test(ch)
+              ? 0.56
+              : /[a-z]/.test(ch)
+                ? 0.55
+                : 0.6)
+  );
 }
 
 /** Markdown's furniture takes no width on the canvas: the marker of a
@@ -475,23 +625,54 @@ function bareLine(line: string): string {
     .trim();
 }
 
+/**
+ * A box for this text before anything has measured it.
+ *
+ * An estimate, and only ever a starting point: the app's composer commits
+ * what it measured instead, `textNodeRefit` grows the box when the words or
+ * the look change later, and `⇧F` / `isocan fit` re-fit it at any time. It
+ * exists so that a node made from the CLI — where there is nothing to measure
+ * with — lands at a size somebody can read rather than at a default square.
+ * How it errs, and why large, is the comment above the constants.
+ */
 export function textBox(
   body: string,
   style: TextStyle = "body",
   face: TextFace = "sans",
+  /** A named font: its face decides the glyphs, and its width scales them. */
+  font?: TextFont | null,
 ): { width: number; height: number } {
+  return measureText(body, style, face, font);
+}
+
+/**
+ * `textBox`, or with `boxWidth` the same estimate wrapped inside a box that
+ * wide — the width a node already HAS. Wrapping happens at the box's inner
+ * width shrunk by `SLACK`, so the guess still errs large: the free path puts
+ * its slack in the width it chooses, and a fixed width has nowhere else to
+ * put it.
+ */
+function measureText(
+  body: string,
+  style: TextStyle,
+  face: TextFace,
+  font: TextFont | null | undefined,
+  boxWidth?: number,
+): { width: number; height: number } {
+  if (font) face = font.face;
+  const wide = font?.width ?? 1;
   const size = TEXT_STYLE_SIZE[style] * TEXT_FACE_SCALE[face];
-  const column = TEXT_COLUMN[style];
-  const hardMax = TEXT_COLUMN_MAX[style];
+  const inner = boxWidth === undefined ? null : Math.max(1, (boxWidth - PAD_X) / SLACK);
+  const column = inner === null ? TEXT_COLUMN[style] : inner + PAD_X;
+  const hardMax = inner === null ? TEXT_COLUMN_MAX[style] : inner + PAD_X;
 
   let rows = 0;
   let widest = 0;
   let gaps = 0;
   let wrapped = false;
   let lastBlank = true;
-  // Rows a heading adds beyond a line: the stylesheet sets headings at a
-  // fixed 18px with margins, which at body size is more than a line and at
-  // the big steps is less — counted as a line and a half either way.
+  // Height beyond the rows, in body lines: a list's margins, and a
+  // heading's own margins and taller lines.
   let extra = 0;
   let listed = false;
   for (const raw of body.replace(/\r/g, "").split("\n")) {
@@ -513,20 +694,23 @@ export function textBox(
       listed = true;
       extra += (PARAGRAPH_GAP * 2) / LINE_HEIGHT;
     }
-    // A heading is drawn at the stylesheet's fixed 18px, which at the body
-    // step is LARGER than the words around it — so its width is measured at
-    // that size, or it wraps a word early and the box is a row short.
-    const heading = /^\s{0,3}#{1,6}\s+/.test(raw);
-    if (heading) extra += 0.6;
-    const lineSize = heading ? Math.max(size, HEADING_PX) : size;
-    const em = (text: string) => [...text].reduce((w, ch) => w + glyphEm(ch, face), 0) * lineSize;
+    // A heading is drawn at a multiple of the node's size (`TEXT_HEADING_EM`),
+    // so its width is measured at THAT size, or it wraps a word early and
+    // the box is a row short — and its rows are taller than a body line.
+    const heading = TEXT_HEADING_LINE.test(raw);
+    const lineSize = heading ? size * TEXT_HEADING_EM : size;
+    const em = (text: string) => [...text].reduce((w, ch) => w + glyphEm(ch, face), 0) * lineSize * wide;
     // Wrap by word at the column, the way the browser will; a word longer
     // than the column widens the box, up to the hard limit, past which the
-    // stylesheet breaks it (`overflow-wrap: anywhere`).
+    // stylesheet breaks it (`overflow-wrap: anywhere`) — onto rows of its
+    // own, which count: in a box narrower than one word, that is every row.
     let lineRows = 1;
     let run = indent;
     for (const word of line.split(/\s+/)) {
-      const w = Math.min(em(word), hardMax - PAD_X - indent);
+      const limit = Math.max(1, hardMax - PAD_X - indent);
+      const full = em(word);
+      if (full > limit) lineRows += Math.ceil(full / limit) - 1;
+      const w = Math.min(full, limit);
       const spaced = run === indent ? run + w : run + em(" ") + w;
       if (run > indent && spaced > column - PAD_X) {
         lineRows += 1;
@@ -537,18 +721,119 @@ export function textBox(
       }
       widest = Math.max(widest, run, indent + w);
     }
-    rows += lineRows;
+    // A heading row is `line-height: 1.25` of ITS em and its margins
+    // (0.4em + 0.3em) 0.7 of it, both counted in body lines (1.5 of the
+    // node's em) so the sum below holds.
+    rows += heading ? (lineRows * 1.25 * TEXT_HEADING_EM) / LINE_HEIGHT : lineRows;
+    if (heading) extra += (0.7 * TEXT_HEADING_EM) / LINE_HEIGHT;
   }
   // One row of margin for a gap that is followed by nothing would be paid
   // to no paragraph; a trailing blank line costs nothing.
   const paragraphs = Math.max(0, gaps - (lastBlank ? 1 : 0));
   // Prose that wrapped settles at the column, the way the composer's mirror
   // does; a label takes the width its words need.
-  const width = wrapped
+  const width = boxWidth !== undefined
+    ? boxWidth
+    : wrapped
     ? Math.max(column, Math.min(hardMax, Math.round(widest * SLACK + PAD_X)))
     : Math.round(Math.min(hardMax, Math.max(size * 2, widest * SLACK + PAD_X)));
   const height = Math.round(
     (Math.max(1, rows) + extra) * size * LINE_HEIGHT * SLACK + paragraphs * size * PARAGRAPH_GAP + PAD_Y,
   );
   return { width, height };
+}
+
+/**
+ * **The box a text node needs AFTER it changed — its words or its look.**
+ *
+ * `textBox` sizes a node at birth. The bug it could not see was the node's
+ * second act: an agent writes a note at body size and then promotes it with
+ * `isocan set --prop textStyle=heading`, or re-words it with `isocan edit`, or
+ * somebody picks L on the bar for a caption that already exists. The words
+ * are then drawn at the NEW size and the box is still the one measured at the
+ * OLD one — a 16px box holding 32px type, so the second line is cut in half.
+ * Reported (23 Sep 2026) as "the wrong height is used so it's always cut off".
+ *
+ * So every surface that changes a node's words or look asks this one
+ * question, with the look the node will have once the change lands. It only
+ * ever GROWS, on both axes: a box somebody dragged wider keeps its width, and
+ * the height it needs is measured at that width (`textHeightAt` — the
+ * column's height was what an edit used to grow a wide box to), and a
+ * note that got smaller does not have the canvas rearranged under it — `⇧F`
+ * and `isocan fit` are the deliberate re-fit. Null when the box already holds
+ * the words, so a caller sends nothing rather than a resize to the same size.
+ *
+ * Paper is not asked: a post-it is a square by decision, and never grows.
+ */
+export function textRefit(
+  current: { width: number; height: number },
+  body: string,
+  style: TextStyle,
+  face: TextFace,
+  font?: TextFont | null,
+): { width: number; height: number } | null {
+  const need = textBox(body, style, face, font);
+  const width = Math.max(current.width, need.width);
+  const height = Math.max(current.height, textHeightAt(width, body, style, face, font));
+  return width === current.width && height === current.height ? null : { width, height };
+}
+
+/**
+ * **The height the words need at the width the box HAS** (14 Oct 2026).
+ *
+ * Both `textRefit` and `textNodeFit` used to ask `textBox`, which measures at
+ * the default column — 320 at body — whatever width the node was. An 840-wide
+ * note was refitted to the height of a 320 column (an edit grew it by
+ * hundreds) and `isocan fit` narrowed it to that column outright. A width is
+ * the one thing the words do not decide once somebody chose it, so the height
+ * is measured inside it.
+ *
+ * Clamped against the free estimate so a rounded width cannot add a row: a
+ * box at least as wide as the words' own never needs more height than they
+ * do, and a narrower one never needs less.
+ */
+function textHeightAt(width: number, body: string, style: TextStyle, face: TextFace, font?: TextFont | null): number {
+  const free = textBox(body, style, face, font);
+  const at = measureText(body, style, face, font, width).height;
+  return width >= free.width ? Math.min(free.height, at) : Math.max(free.height, at);
+}
+
+/**
+ * `textRefit` asked of an ITEM, in the look it will have once `patch` lands —
+ * the form both surfaces call, so neither re-derives which properties decide
+ * the look. Null for anything that is not a caption after the change: another
+ * kind of item, or one on paper.
+ */
+export function textNodeRefit(
+  item: Item,
+  body: string,
+  patch: { properties?: Record<string, string>; removeProperties?: string[] } = {},
+): { width: number; height: number } | null {
+  const properties = { ...item.properties, ...patch.properties };
+  for (const key of patch.removeProperties ?? []) delete properties[key];
+  const next: Item = { ...item, properties };
+  if (!isTextItem(next) || paperOf(next) !== null) return null;
+  return textRefit(item, body, textStyleOf(next), textFaceOf(next), textFontOf(next));
+}
+
+/**
+ * What "fit to content" means for a caption: the height its words need in its
+ * look AT ITS WIDTH — so, unlike `textNodeRefit`, it may shrink. `⇧F` and
+ * `isocan fit` both ask this, which is how a node already stored a line short
+ * (made before `textNodeRefit` existed) is put right in one gesture from
+ * either surface. Null when it is not a caption: paper keeps its square.
+ *
+ * A wider box keeps its width. It was refitted from scratch at the default
+ * column, which turned an 840×400 note into about 350×1600 and pushed it onto
+ * its neighbours (14 Oct 2026): a width somebody set is a layout decision,
+ * and nothing here can tell it from one the estimate made, so fit keeps it. A
+ * box crushed narrower than its words' own width still grows back to it —
+ * "fit" grows to what the content wants, the same width rule `textRefit`
+ * keeps — and either way the height is measured at the width it ends with.
+ */
+export function textNodeFit(item: Item, body: string): { width: number; height: number } | null {
+  if (!isTextItem(item) || paperOf(item) !== null) return null;
+  const style = textStyleOf(item), face = textFaceOf(item), font = textFontOf(item);
+  const width = Math.max(item.width, textBox(body, style, face, font).width);
+  return { width, height: textHeightAt(width, body, style, face, font) };
 }

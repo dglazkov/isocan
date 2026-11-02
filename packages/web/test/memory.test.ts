@@ -7,6 +7,8 @@ const panel = read("../src/components/ContextPanel.tsx");
 const popover = read("../src/components/AddPopover.tsx");
 const upload = read("../src/lib/upload.ts");
 const css = read("../src/styles.css");
+/** The panel's rules left `styles.css` with the lazy panel (BC-2, 27 Sep 2026). */
+const panelCss = read("../src/components/context-panel.css");
 const cli = read("../../cli/src/main.ts");
 
 /**
@@ -18,23 +20,24 @@ const cli = read("../../cli/src/main.ts");
  */
 describe("the Context panel reads in layers", () => {
   it("renders through core's contextLayers with a heading per source and a from chip per borrowed piece", () => {
-    expect(panel).toContain("const layers = contextLayers(canvas, linked);");
+    expect(panel).toContain("readLayeredContext(contextIO");
+    expect(panel).toContain("key={contextLayerKey(layer)}");
     expect(panel).toContain('className="ctx-heading"');
     expect(panel).toContain('{piece.from && <span className="ctx-from">from {piece.from.title}</span>}');
-    expect(css).toContain(".ctx-heading {");
-    expect(css).toContain(".ctx-from {");
+    expect(panelCss).toContain(".ctx-heading {");
+    expect(panelCss).toContain(".ctx-from {");
   });
 
   it("shows an overridden design system struck, saying this canvas's wins, rather than hiding it", () => {
     expect(panel).toContain('${piece.overridden ? " overridden" : ""}');
     expect(panel).toContain("{piece.overridden && <div className=\"ctx-why\">{piece.overridden}</div>}");
-    expect(css).toContain(".ctx-row.overridden .ctx-name");
+    expect(panelCss).toContain(".ctx-row.overridden .ctx-name");
   });
 
   it("pulls linked canvases with the card's refusals in words — not admitted, or lives elsewhere", () => {
-    expect(panel).toContain("const snapshot = await getSnapshot(id);");
-    expect(panel).toContain("You are not admitted to this canvas — open it to ask at its door.");
-    expect(panel).toContain("not read from here");
+    expect(panel).toContain("sourceSnapshot, designText: readBlobText");
+    expect(panel).toContain("controller.abort()");
+    expect(panel).toContain("personal: { actorId: actor.id }");
     // A heading stands even when nothing could be read under it.
     expect(panel).toContain("{layer.refused && <div className=\"ctx-why\">{layer.refused}</div>}");
   });
@@ -57,8 +60,10 @@ describe("the Context sheet, and the memory mark (phase 3)", () => {
   });
 
   it("a canvas card wears the memory mark on its strip, and the mark is the switch", () => {
-    expect(view).toContain('className={`memory-mark${memoryOf(item) === "inherit" ? " active" : ""}`}');
-    expect(view).toContain('patch: memoryPatch(memoryOf(item) === "inherit" ? null : "inherit")');
+    // `memory` is `memoryOf(item)`, asked once per render (groups-by-hand phase 4's bytes).
+    expect(view).toContain("const memory = memoryOf(item);");
+    expect(view).toContain('className={`memory-mark${memory === "inherit" ? " active" : ""}`}');
+    expect(view).toContain('patch: memoryPatch(memory === "inherit" ? null : "inherit")');
     expect(css).toContain(".memory-mark.active");
   });
 });
@@ -78,6 +83,18 @@ describe("the link is one property on the card, set where the card is placed", (
     expect(cli).toContain('inheritVerb("inherit", "inherit"');
     expect(cli).toContain('inheritVerb("uninherit", null');
     expect(cli).toContain("layersReport(layers, (pieces) => contextReport(pieces))");
-    expect(cli).toContain("governingDesign(snapshot.canvas, await linkedCanvasesOf(ctx, p.id, snapshot))");
+    // CLI show/check now use the shared permission-bearing reader. Follow the
+    // scope and inherited links through that boundary instead of demanding a
+    // second resolver in main.ts. Core design-scope.test.ts exercises precedence;
+    // API design-system.test.ts exercises inherited byte reads and source policy.
+    const systems = read("../../api/src/design-system-reader.ts");
+    const governing = read("../../api/src/design-governing.ts");
+    expect(cli).toMatch(/const scope = designScope\(snapshot, opts\.in\);\s*const \{ governing \} = await readDesignSystem\(designSystemPort\(ctx\), \{ canvasId: p\.id, \.\.\.\(scope\.at \? \{ target: \{ kind: "item", itemId: scope\.at\.id \} \} : \{\}\) \}\)/);
+    expect(systems).toContain("const linked = await readInheritedCanvases(io, snapshot.canvas, home, options.signal)");
+    expect(systems).toContain("readGoverningDesign(io, { canvasId: options.canvasId, canvas: snapshot.canvas, project: snapshot.project, home, linked,");
+    expect(systems).toContain('target.kind === "item" ? { atId: target.itemId }');
+    expect(governing).toContain("canvas.items[options.atId]");
+    expect(governing).toContain("selectGoverningDesign(canvas, linked, { ...scope,");
+    expect(governing).toContain("io.sourceBlobText({ canvasId: artifact.canvasId, expectedHome: artifact.home }, version.blobHash, signal)");
   });
 });

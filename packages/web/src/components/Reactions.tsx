@@ -1,9 +1,18 @@
-import { useRef, useState } from "react";
+import { lazy, Suspense, useRef, useState } from "react";
 import type { Actor, Item } from "@isocan/core";
-import { agentActorIds, hasReacted, reactionsOf } from "@isocan/core";
+import { agentActorIds, reactOp, reactionsOf } from "@isocan/core";
 import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
-import { EmojiPicker } from "./EmojiPicker.tsx";
 import { rememberEmoji } from "../lib/recentEmoji.ts";
+
+/**
+ * **The picker arrives when somebody reaches for it, not with the page.** Its
+ * set — ~580 marks and the words that find them (`@isocan/core`'s `emoji.ts`)
+ * — was 25KB of the entry chunk, paid by every first visit for a panel that
+ * opens on a click. Fetched on the `+` instead, and warmed on the pointer
+ * reaching the `+`, so the click usually finds it already here.
+ */
+const loadPicker = () => import("./EmojiPicker.tsx");
+const EmojiPicker = lazy(() => loadPicker().then((m) => ({ default: m.EmojiPicker })));
 import { useActorNames } from "../lib/names.ts";
 import { useSprint, useVotesHiddenOn } from "../lib/sprint.ts";
 import { useCanEdit } from "../lib/capability.ts";
@@ -106,14 +115,8 @@ export function Reactions({
 
   function toggle(emoji: string) {
     if (!canEdit) return; // a mark is an op, and the daemon would refuse it
-    // The op says what should be TRUE rather than "flip it", so a double
-    // click and a race both land on the same answer.
-    const op = {
-      type: "item.react",
-      itemId: item.id,
-      emoji,
-      on: !hasReacted(item, emoji, actor.id),
-    } as const;
+    // Core's, so `isocan docket answer` sends exactly these clicks.
+    const op = reactOp(item, emoji, actor.id);
     void sendEchoed(canvasId, actor, op);
     // Only ADDING a mark is a reach worth remembering. Taking yours back is
     // the opposite gesture, and promoting it would put the thing you just
@@ -165,6 +168,8 @@ export function Reactions({
             title="React"
             aria-label="React to this item"
             aria-expanded={picking}
+            onPointerEnter={() => void loadPicker()}
+            onFocus={() => void loadPicker()}
             onClick={(e) => {
               e.stopPropagation();
               setPicking((open) => !open);
@@ -173,12 +178,14 @@ export function Reactions({
             {SMILE_PLUS}
           </button>
           {picking && (
-            <EmojiPicker
-              anchor={addButton}
-              worn={reactions.map((one) => one.emoji)}
-              onPick={toggle}
-              onClose={() => setPicking(false)}
-            />
+            <Suspense fallback={null}>
+              <EmojiPicker
+                anchor={addButton}
+                worn={reactions.map((one) => one.emoji)}
+                onPick={toggle}
+                onClose={() => setPicking(false)}
+              />
+            </Suspense>
           )}
         </span>
       )}

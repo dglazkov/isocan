@@ -1,0 +1,2088 @@
+{
+ "v": 1,
+ "about": "Synthetic intent-route cases for local-judge phase 1. Acme and every name here are made up. Each case carries two expected outputs: the intent (route) and the disposition the policy layer must give it in that state.",
+ "seed": "local-judge-1",
+ "cases": [
+  {
+   "id": "wire-signup-1",
+   "scenario": "wire-signup",
+   "text": "Create a signup screen for the Acme app",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "wire",
+   "disposition": "suggest"
+  },
+  {
+   "id": "wire-signup-2",
+   "scenario": "wire-signup",
+   "text": "Can you wireframe a sign-up page for Acme?",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "wire",
+   "disposition": "suggest"
+  },
+  {
+   "id": "wire-signup-3",
+   "scenario": "wire-signup",
+   "text": "We need a new registration screen for Acme",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "wire",
+   "disposition": "suggest"
+  },
+  {
+   "id": "wire-signup-4",
+   "scenario": "wire-signup",
+   "text": "Sketch the account creation screen please",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "wire",
+   "disposition": "suggest"
+  },
+  {
+   "id": "wire-dashboard-1",
+   "scenario": "wire-dashboard",
+   "text": "Draw a dashboard for the Acme sales team",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "wire",
+   "disposition": "suggest"
+  },
+  {
+   "id": "wire-dashboard-2",
+   "scenario": "wire-dashboard",
+   "text": "Make a new screen showing weekly sales",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "wire",
+   "disposition": "suggest"
+  },
+  {
+   "id": "wire-dashboard-3",
+   "scenario": "wire-dashboard",
+   "text": "Sketch me an analytics page with a chart and a table",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "wire",
+   "disposition": "suggest"
+  },
+  {
+   "id": "wire-dashboard-4",
+   "scenario": "wire-dashboard",
+   "text": "Design a home screen for the Acme reporting tool",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "wire",
+   "disposition": "suggest"
+  },
+  {
+   "id": "wire-onboarding-1",
+   "scenario": "wire-onboarding",
+   "text": "Build a three step onboarding flow for new Acme users",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "wire",
+   "disposition": "suggest"
+  },
+  {
+   "id": "wire-onboarding-2",
+   "scenario": "wire-onboarding",
+   "text": "Wireframe the first-run experience: welcome, permissions, done",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "wire",
+   "disposition": "suggest"
+  },
+  {
+   "id": "wire-onboarding-3",
+   "scenario": "wire-onboarding",
+   "text": "New screens for onboarding, please",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "wire",
+   "disposition": "suggest"
+  },
+  {
+   "id": "wire-no-module-1",
+   "scenario": "wire-no-module",
+   "text": "Wireframe a checkout flow for Acme",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": []
+   },
+   "intent": "wire",
+   "disposition": "unavailable"
+  },
+  {
+   "id": "wire-no-module-2",
+   "scenario": "wire-no-module",
+   "text": "Create a cart and payment screen for the shop",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": []
+   },
+   "intent": "wire",
+   "disposition": "unavailable"
+  },
+  {
+   "id": "edit-colour-1",
+   "scenario": "edit-colour",
+   "text": "Change this button to green",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "edit-selection",
+   "disposition": "suggest"
+  },
+  {
+   "id": "edit-colour-2",
+   "scenario": "edit-colour",
+   "text": "make the button green please",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "edit-selection",
+   "disposition": "suggest"
+  },
+  {
+   "id": "edit-colour-3",
+   "scenario": "edit-colour",
+   "text": "Swap the button colour to Acme green",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "edit-selection",
+   "disposition": "suggest"
+  },
+  {
+   "id": "edit-colour-4",
+   "scenario": "edit-colour",
+   "text": "Can this button be green instead of grey?",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "edit-selection",
+   "disposition": "suggest"
+  },
+  {
+   "id": "edit-copy-1",
+   "scenario": "edit-copy",
+   "text": "Reword the headline so it is shorter",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "edit-selection",
+   "disposition": "suggest"
+  },
+  {
+   "id": "edit-copy-2",
+   "scenario": "edit-copy",
+   "text": "Tighten up the copy on this card",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "edit-selection",
+   "disposition": "suggest"
+  },
+  {
+   "id": "edit-copy-3",
+   "scenario": "edit-copy",
+   "text": "The title is too long, cut it to five words",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "edit-selection",
+   "disposition": "suggest"
+  },
+  {
+   "id": "edit-copy-4",
+   "scenario": "edit-copy",
+   "text": "Rewrite this paragraph in a friendlier voice",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "edit-selection",
+   "disposition": "suggest"
+  },
+  {
+   "id": "edit-fix-1",
+   "scenario": "edit-fix",
+   "text": "The menu overlaps the logo here, fix it",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "edit-selection",
+   "disposition": "suggest"
+  },
+  {
+   "id": "edit-fix-2",
+   "scenario": "edit-fix",
+   "text": "This layout breaks on narrow screens, can you repair it?",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "edit-selection",
+   "disposition": "suggest"
+  },
+  {
+   "id": "edit-fix-3",
+   "scenario": "edit-fix",
+   "text": "The footer links are misaligned on this screen",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "edit-selection",
+   "disposition": "suggest"
+  },
+  {
+   "id": "edit-tidy-1",
+   "scenario": "edit-tidy",
+   "text": "Tidy up these cards so they line up",
+   "state": {
+    "selected": 4,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "edit-selection",
+   "disposition": "suggest"
+  },
+  {
+   "id": "edit-tidy-2",
+   "scenario": "edit-tidy",
+   "text": "Line these four notes up in a row",
+   "state": {
+    "selected": 4,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "edit-selection",
+   "disposition": "suggest"
+  },
+  {
+   "id": "edit-tidy-3",
+   "scenario": "edit-tidy",
+   "text": "Space these out evenly",
+   "state": {
+    "selected": 4,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "edit-selection",
+   "disposition": "suggest"
+  },
+  {
+   "id": "edit-restyle-1",
+   "scenario": "edit-restyle",
+   "text": "Restyle this screen to match the Acme design system",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "edit-selection",
+   "disposition": "suggest"
+  },
+  {
+   "id": "edit-restyle-2",
+   "scenario": "edit-restyle",
+   "text": "Apply our brand fonts to this page",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "edit-selection",
+   "disposition": "suggest"
+  },
+  {
+   "id": "edit-restyle-3",
+   "scenario": "edit-restyle",
+   "text": "Give this card a dark mode look",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "edit-selection",
+   "disposition": "suggest"
+  },
+  {
+   "id": "sel-bigger-1",
+   "scenario": "sel-bigger",
+   "text": "Make it bigger",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "edit-selection",
+   "disposition": "suggest",
+   "pair": "selection"
+  },
+  {
+   "id": "sel-bigger-2",
+   "scenario": "sel-bigger",
+   "text": "Can you make this larger?",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "edit-selection",
+   "disposition": "suggest",
+   "pair": "selection"
+  },
+  {
+   "id": "sel-bigger-3",
+   "scenario": "sel-bigger",
+   "text": "Make it bigger",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "edit-selection",
+   "disposition": "select-first",
+   "pair": "selection"
+  },
+  {
+   "id": "sel-bigger-4",
+   "scenario": "sel-bigger",
+   "text": "Can you make this larger?",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "edit-selection",
+   "disposition": "select-first",
+   "pair": "selection"
+  },
+  {
+   "id": "sel-delete-1",
+   "scenario": "sel-delete",
+   "text": "Delete this",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "edit-selection",
+   "disposition": "suggest",
+   "pair": "selection"
+  },
+  {
+   "id": "sel-delete-2",
+   "scenario": "sel-delete",
+   "text": "Remove this one please",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "edit-selection",
+   "disposition": "suggest",
+   "pair": "selection"
+  },
+  {
+   "id": "sel-delete-3",
+   "scenario": "sel-delete",
+   "text": "Delete this",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "edit-selection",
+   "disposition": "select-first",
+   "pair": "selection"
+  },
+  {
+   "id": "sel-delete-4",
+   "scenario": "sel-delete",
+   "text": "Remove this one please",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "edit-selection",
+   "disposition": "select-first",
+   "pair": "selection"
+  },
+  {
+   "id": "sel-versions-1",
+   "scenario": "sel-versions",
+   "text": "Try a couple of other versions of this",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "variation",
+   "disposition": "suggest",
+   "pair": "selection"
+  },
+  {
+   "id": "sel-versions-2",
+   "scenario": "sel-versions",
+   "text": "Give me a few alternatives",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "variation",
+   "disposition": "suggest",
+   "pair": "selection"
+  },
+  {
+   "id": "sel-versions-3",
+   "scenario": "sel-versions",
+   "text": "Try a couple of other versions of this",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "variation",
+   "disposition": "select-first",
+   "pair": "selection"
+  },
+  {
+   "id": "sel-versions-4",
+   "scenario": "sel-versions",
+   "text": "Give me a few alternatives",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "variation",
+   "disposition": "select-first",
+   "pair": "selection"
+  },
+  {
+   "id": "var-hero-1",
+   "scenario": "var-hero",
+   "text": "Give me three variations of this hero section",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "variation",
+   "disposition": "suggest"
+  },
+  {
+   "id": "var-hero-2",
+   "scenario": "var-hero",
+   "text": "Show me a few different takes on this",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "variation",
+   "disposition": "suggest"
+  },
+  {
+   "id": "var-hero-3",
+   "scenario": "var-hero",
+   "text": "Can I see some alternatives for this header?",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "variation",
+   "disposition": "suggest"
+  },
+  {
+   "id": "var-hero-4",
+   "scenario": "var-hero",
+   "text": "/variation 3 bolder",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "variation",
+   "disposition": "suggest"
+  },
+  {
+   "id": "var-style-1",
+   "scenario": "var-style",
+   "text": "What would a playful version of this look like? A few options please",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "variation",
+   "disposition": "suggest"
+  },
+  {
+   "id": "var-style-2",
+   "scenario": "var-style",
+   "text": "Explore some different visual directions for this card",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "variation",
+   "disposition": "suggest"
+  },
+  {
+   "id": "var-style-3",
+   "scenario": "var-style",
+   "text": "Diverge on this one: four very different layouts",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "variation",
+   "disposition": "suggest"
+  },
+  {
+   "id": "find-pricing-1",
+   "scenario": "find-pricing",
+   "text": "Where is the pricing screen?",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "find",
+   "disposition": "suggest"
+  },
+  {
+   "id": "find-pricing-2",
+   "scenario": "find-pricing",
+   "text": "Find the pricing page",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "find",
+   "disposition": "suggest"
+  },
+  {
+   "id": "find-pricing-3",
+   "scenario": "find-pricing",
+   "text": "Show me the screen with the price table",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "find",
+   "disposition": "suggest"
+  },
+  {
+   "id": "find-pricing-4",
+   "scenario": "find-pricing",
+   "text": "Which one is the pricing screen again?",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "find",
+   "disposition": "suggest"
+  },
+  {
+   "id": "find-onboarding-1",
+   "scenario": "find-onboarding",
+   "text": "Which card has the onboarding notes?",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "find",
+   "disposition": "suggest"
+  },
+  {
+   "id": "find-onboarding-2",
+   "scenario": "find-onboarding",
+   "text": "Take me to the onboarding flow",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "find",
+   "disposition": "suggest"
+  },
+  {
+   "id": "find-onboarding-3",
+   "scenario": "find-onboarding",
+   "text": "Where did we put the welcome screen?",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "find",
+   "disposition": "suggest"
+  },
+  {
+   "id": "find-onboarding-4",
+   "scenario": "find-onboarding",
+   "text": "Find the note about push notifications",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "find",
+   "disposition": "suggest"
+  },
+  {
+   "id": "find-vs-create-login-1",
+   "scenario": "find-vs-create-login",
+   "text": "Find the Acme login screen",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "find",
+   "disposition": "suggest",
+   "pair": "find-vs-create"
+  },
+  {
+   "id": "find-vs-create-login-2",
+   "scenario": "find-vs-create-login",
+   "text": "Where is the login screen?",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "find",
+   "disposition": "suggest",
+   "pair": "find-vs-create"
+  },
+  {
+   "id": "find-vs-create-login-3",
+   "scenario": "find-vs-create-login",
+   "text": "Create an Acme login screen",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "wire",
+   "disposition": "suggest",
+   "pair": "find-vs-create"
+  },
+  {
+   "id": "find-vs-create-login-4",
+   "scenario": "find-vs-create-login",
+   "text": "Make a login screen",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "wire",
+   "disposition": "suggest",
+   "pair": "find-vs-create"
+  },
+  {
+   "id": "find-vs-create-settings-1",
+   "scenario": "find-vs-create-settings",
+   "text": "Show me the settings page we already have",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "find",
+   "disposition": "suggest",
+   "pair": "find-vs-create"
+  },
+  {
+   "id": "find-vs-create-settings-2",
+   "scenario": "find-vs-create-settings",
+   "text": "Locate the existing settings screen",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "find",
+   "disposition": "suggest",
+   "pair": "find-vs-create"
+  },
+  {
+   "id": "find-vs-create-settings-3",
+   "scenario": "find-vs-create-settings",
+   "text": "Design a settings page",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "wire",
+   "disposition": "suggest",
+   "pair": "find-vs-create"
+  },
+  {
+   "id": "find-vs-create-settings-4",
+   "scenario": "find-vs-create-settings",
+   "text": "We need a settings screen, make one",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "wire",
+   "disposition": "suggest",
+   "pair": "find-vs-create"
+  },
+  {
+   "id": "ask-critique-1",
+   "scenario": "ask-critique",
+   "text": "@Kai what do you think of this layout?",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "ask-agent",
+   "disposition": "suggest"
+  },
+  {
+   "id": "ask-critique-2",
+   "scenario": "ask-critique",
+   "text": "Can you review this flow for accessibility problems?",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "ask-agent",
+   "disposition": "suggest"
+  },
+  {
+   "id": "ask-critique-3",
+   "scenario": "ask-critique",
+   "text": "Audit the contrast on these screens",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "ask-agent",
+   "disposition": "suggest"
+  },
+  {
+   "id": "ask-critique-4",
+   "scenario": "ask-critique",
+   "text": "Which of these two is stronger, and why?",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "ask-agent",
+   "disposition": "suggest"
+  },
+  {
+   "id": "ask-explain-1",
+   "scenario": "ask-explain",
+   "text": "How does the version stack work?",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "ask-agent",
+   "disposition": "suggest"
+  },
+  {
+   "id": "ask-explain-2",
+   "scenario": "ask-explain",
+   "text": "Why did the export fail last night?",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "ask-agent",
+   "disposition": "suggest"
+  },
+  {
+   "id": "ask-explain-3",
+   "scenario": "ask-explain",
+   "text": "What does the share button actually do?",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "ask-agent",
+   "disposition": "suggest"
+  },
+  {
+   "id": "ask-explain-4",
+   "scenario": "ask-explain",
+   "text": "Explain how the checkout total is calculated",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "ask-agent",
+   "disposition": "suggest"
+  },
+  {
+   "id": "ask-doc-1",
+   "scenario": "ask-doc",
+   "text": "Write up a short spec for the checkout flow",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "ask-agent",
+   "disposition": "suggest"
+  },
+  {
+   "id": "ask-doc-2",
+   "scenario": "ask-doc",
+   "text": "Draft a README for the Acme design system",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "ask-agent",
+   "disposition": "suggest"
+  },
+  {
+   "id": "ask-doc-3",
+   "scenario": "ask-doc",
+   "text": "Document the decisions we made on navigation",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "ask-agent",
+   "disposition": "suggest"
+  },
+  {
+   "id": "ask-orchestrate-1",
+   "scenario": "ask-orchestrate",
+   "text": "@Kai this one's for you",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "ask-agent",
+   "disposition": "suggest"
+  },
+  {
+   "id": "ask-orchestrate-2",
+   "scenario": "ask-orchestrate",
+   "text": "@Kai can you pick this up?",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "ask-agent",
+   "disposition": "suggest"
+  },
+  {
+   "id": "ask-orchestrate-3",
+   "scenario": "ask-orchestrate",
+   "text": "@Kai are you there?",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "ask-agent",
+   "disposition": "suggest"
+  },
+  {
+   "id": "ask-orchestrate-4",
+   "scenario": "ask-orchestrate",
+   "text": "@Kai read the brief above and get going",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "ask-agent",
+   "disposition": "suggest"
+  },
+  {
+   "id": "clarify-better-1",
+   "scenario": "clarify-better",
+   "text": "Make it better",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "clarify",
+   "disposition": "clarify"
+  },
+  {
+   "id": "clarify-better-2",
+   "scenario": "clarify-better",
+   "text": "Hmm, something's off",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "clarify",
+   "disposition": "clarify"
+  },
+  {
+   "id": "clarify-better-3",
+   "scenario": "clarify-better",
+   "text": "Can you sort it out?",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "clarify",
+   "disposition": "clarify"
+  },
+  {
+   "id": "clarify-better-4",
+   "scenario": "clarify-better",
+   "text": "It needs work",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "clarify",
+   "disposition": "clarify"
+  },
+  {
+   "id": "clarify-thing-1",
+   "scenario": "clarify-thing",
+   "text": "Do the thing we talked about",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "clarify",
+   "disposition": "clarify"
+  },
+  {
+   "id": "clarify-thing-2",
+   "scenario": "clarify-thing",
+   "text": "You know what I mean, the usual",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "clarify",
+   "disposition": "clarify"
+  },
+  {
+   "id": "clarify-thing-3",
+   "scenario": "clarify-thing",
+   "text": "Same as last time",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "clarify",
+   "disposition": "clarify"
+  },
+  {
+   "id": "comment-thanks-1",
+   "scenario": "comment-thanks",
+   "text": "Thanks, looks great!",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "just-a-comment",
+   "disposition": "nothing"
+  },
+  {
+   "id": "comment-thanks-2",
+   "scenario": "comment-thanks",
+   "text": "Nice work",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "just-a-comment",
+   "disposition": "nothing"
+  },
+  {
+   "id": "comment-thanks-3",
+   "scenario": "comment-thanks",
+   "text": "Love it",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "just-a-comment",
+   "disposition": "nothing"
+  },
+  {
+   "id": "comment-thanks-4",
+   "scenario": "comment-thanks",
+   "text": "Perfect, thank you",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "just-a-comment",
+   "disposition": "nothing"
+  },
+  {
+   "id": "comment-hello-1",
+   "scenario": "comment-hello",
+   "text": "Morning all",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "just-a-comment",
+   "disposition": "nothing"
+  },
+  {
+   "id": "comment-hello-2",
+   "scenario": "comment-hello",
+   "text": "Hi team",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "just-a-comment",
+   "disposition": "nothing"
+  },
+  {
+   "id": "comment-hello-3",
+   "scenario": "comment-hello",
+   "text": "Back from lunch",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "just-a-comment",
+   "disposition": "nothing"
+  },
+  {
+   "id": "neg-header-1",
+   "scenario": "neg-header",
+   "text": "Change the header colour",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "edit-selection",
+   "disposition": "suggest",
+   "pair": "negation"
+  },
+  {
+   "id": "neg-header-2",
+   "scenario": "neg-header",
+   "text": "Update the header colour",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "edit-selection",
+   "disposition": "suggest",
+   "pair": "negation"
+  },
+  {
+   "id": "neg-header-3",
+   "scenario": "neg-header",
+   "text": "Don't change the header colour, it's fine as it is",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "just-a-comment",
+   "disposition": "nothing",
+   "pair": "negation"
+  },
+  {
+   "id": "neg-header-4",
+   "scenario": "neg-header",
+   "text": "Leave the header colour alone, no change needed",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "just-a-comment",
+   "disposition": "nothing",
+   "pair": "negation"
+  },
+  {
+   "id": "neg-delete-1",
+   "scenario": "neg-delete",
+   "text": "Delete the old login screen",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "edit-selection",
+   "disposition": "suggest",
+   "pair": "negation"
+  },
+  {
+   "id": "neg-delete-2",
+   "scenario": "neg-delete",
+   "text": "Remove the old login screen",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "edit-selection",
+   "disposition": "suggest",
+   "pair": "negation"
+  },
+  {
+   "id": "neg-delete-3",
+   "scenario": "neg-delete",
+   "text": "Please don't delete the old login screen",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "just-a-comment",
+   "disposition": "nothing",
+   "pair": "negation"
+  },
+  {
+   "id": "neg-delete-4",
+   "scenario": "neg-delete",
+   "text": "Keep the old login screen, do not remove it",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "just-a-comment",
+   "disposition": "nothing",
+   "pair": "negation"
+  },
+  {
+   "id": "neg-versions-1",
+   "scenario": "neg-versions",
+   "text": "Make more versions of this",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "variation",
+   "disposition": "suggest",
+   "pair": "negation"
+  },
+  {
+   "id": "neg-versions-2",
+   "scenario": "neg-versions",
+   "text": "Another round of variations on this please",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "variation",
+   "disposition": "suggest",
+   "pair": "negation"
+  },
+  {
+   "id": "neg-versions-3",
+   "scenario": "neg-versions",
+   "text": "No more versions of this, we have picked one",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "just-a-comment",
+   "disposition": "nothing",
+   "pair": "negation"
+  },
+  {
+   "id": "neg-versions-4",
+   "scenario": "neg-versions",
+   "text": "We don't need any more variations, this is the one",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "just-a-comment",
+   "disposition": "nothing",
+   "pair": "negation"
+  },
+  {
+   "id": "neg-wire-1",
+   "scenario": "neg-wire",
+   "text": "Add a new screen for notifications",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "wire",
+   "disposition": "suggest",
+   "pair": "negation"
+  },
+  {
+   "id": "neg-wire-2",
+   "scenario": "neg-wire",
+   "text": "Create a notifications screen",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "wire",
+   "disposition": "suggest",
+   "pair": "negation"
+  },
+  {
+   "id": "neg-wire-3",
+   "scenario": "neg-wire",
+   "text": "We decided not to build a notifications screen",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "just-a-comment",
+   "disposition": "nothing",
+   "pair": "negation"
+  },
+  {
+   "id": "neg-wire-4",
+   "scenario": "neg-wire",
+   "text": "No notifications screen for now, drop it",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "just-a-comment",
+   "disposition": "nothing",
+   "pair": "negation"
+  },
+  {
+   "id": "quote-blue-1",
+   "scenario": "quote-blue",
+   "text": "Make the checkout button blue",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "edit-selection",
+   "disposition": "suggest",
+   "pair": "quoted"
+  },
+  {
+   "id": "quote-blue-2",
+   "scenario": "quote-blue",
+   "text": "Turn the checkout button blue",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "edit-selection",
+   "disposition": "suggest",
+   "pair": "quoted"
+  },
+  {
+   "id": "quote-blue-3",
+   "scenario": "quote-blue",
+   "text": "Meeting notes: Priya said \"make the checkout button blue\" - parking that until Friday.",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "just-a-comment",
+   "disposition": "nothing",
+   "pair": "quoted"
+  },
+  {
+   "id": "quote-blue-4",
+   "scenario": "quote-blue",
+   "text": "For the record, the client wrote \"turn the checkout button blue\" in their email. No action yet.",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "just-a-comment",
+   "disposition": "nothing",
+   "pair": "quoted"
+  },
+  {
+   "id": "quote-signup-1",
+   "scenario": "quote-signup",
+   "text": "Create a signup screen and a dashboard",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "wire",
+   "disposition": "suggest",
+   "pair": "quoted"
+  },
+  {
+   "id": "quote-signup-2",
+   "scenario": "quote-signup",
+   "text": "Build the signup screen and the dashboard",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "wire",
+   "disposition": "suggest",
+   "pair": "quoted"
+  },
+  {
+   "id": "quote-signup-3",
+   "scenario": "quote-signup",
+   "text": "From the Acme brief: \"The app needs a signup screen and a dashboard.\" Just pasting it here for reference.",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "just-a-comment",
+   "disposition": "nothing",
+   "pair": "quoted"
+  },
+  {
+   "id": "quote-signup-4",
+   "scenario": "quote-signup",
+   "text": "Quoting the brief so we have it: \"Build the signup screen and the dashboard by March.\"",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "just-a-comment",
+   "disposition": "nothing",
+   "pair": "quoted"
+  },
+  {
+   "id": "quote-variation-1",
+   "scenario": "quote-variation",
+   "text": "Show me five variations of the logo",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "variation",
+   "disposition": "suggest",
+   "pair": "quoted"
+  },
+  {
+   "id": "quote-variation-2",
+   "scenario": "quote-variation",
+   "text": "Give me five takes on the logo",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "variation",
+   "disposition": "suggest",
+   "pair": "quoted"
+  },
+  {
+   "id": "quote-variation-3",
+   "scenario": "quote-variation",
+   "text": "Sam's feedback doc says \"show me five variations of the logo\" - I think he meant next month.",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "just-a-comment",
+   "disposition": "nothing",
+   "pair": "quoted"
+  },
+  {
+   "id": "quote-variation-4",
+   "scenario": "quote-variation",
+   "text": "Copying the ticket text: \"five takes on the logo\". Not for today.",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "just-a-comment",
+   "disposition": "nothing",
+   "pair": "quoted"
+  },
+  {
+   "id": "perm-edit-1",
+   "scenario": "perm-edit",
+   "text": "Make the header on this screen smaller",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "edit-selection",
+   "disposition": "suggest",
+   "pair": "permission"
+  },
+  {
+   "id": "perm-edit-2",
+   "scenario": "perm-edit",
+   "text": "Shrink this screen's header",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "edit-selection",
+   "disposition": "suggest",
+   "pair": "permission"
+  },
+  {
+   "id": "perm-edit-3",
+   "scenario": "perm-edit",
+   "text": "Make the header on this screen smaller",
+   "state": {
+    "selected": 1,
+    "role": "viewer",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "edit-selection",
+   "disposition": "refuse",
+   "pair": "permission"
+  },
+  {
+   "id": "perm-edit-4",
+   "scenario": "perm-edit",
+   "text": "Shrink this screen's header",
+   "state": {
+    "selected": 1,
+    "role": "viewer",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "edit-selection",
+   "disposition": "refuse",
+   "pair": "permission"
+  },
+  {
+   "id": "perm-wire-1",
+   "scenario": "perm-wire",
+   "text": "Add a new settings screen",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "wire",
+   "disposition": "suggest",
+   "pair": "permission"
+  },
+  {
+   "id": "perm-wire-2",
+   "scenario": "perm-wire",
+   "text": "Create a profile screen",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "wire",
+   "disposition": "suggest",
+   "pair": "permission"
+  },
+  {
+   "id": "perm-wire-3",
+   "scenario": "perm-wire",
+   "text": "Add a new settings screen",
+   "state": {
+    "selected": 0,
+    "role": "viewer",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "wire",
+   "disposition": "refuse",
+   "pair": "permission"
+  },
+  {
+   "id": "perm-wire-4",
+   "scenario": "perm-wire",
+   "text": "Create a profile screen",
+   "state": {
+    "selected": 0,
+    "role": "viewer",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "wire",
+   "disposition": "refuse",
+   "pair": "permission"
+  },
+  {
+   "id": "perm-variation-1",
+   "scenario": "perm-variation",
+   "text": "Give me three versions of this card",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "variation",
+   "disposition": "suggest",
+   "pair": "permission"
+  },
+  {
+   "id": "perm-variation-2",
+   "scenario": "perm-variation",
+   "text": "Make variations of this card",
+   "state": {
+    "selected": 1,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "variation",
+   "disposition": "suggest",
+   "pair": "permission"
+  },
+  {
+   "id": "perm-variation-3",
+   "scenario": "perm-variation",
+   "text": "Give me three versions of this card",
+   "state": {
+    "selected": 1,
+    "role": "viewer",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "variation",
+   "disposition": "refuse",
+   "pair": "permission"
+  },
+  {
+   "id": "perm-variation-4",
+   "scenario": "perm-variation",
+   "text": "Make variations of this card",
+   "state": {
+    "selected": 1,
+    "role": "viewer",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "variation",
+   "disposition": "refuse",
+   "pair": "permission"
+  },
+  {
+   "id": "perm-find-1",
+   "scenario": "perm-find",
+   "text": "Where is the checkout screen?",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "find",
+   "disposition": "suggest",
+   "pair": "permission"
+  },
+  {
+   "id": "perm-find-2",
+   "scenario": "perm-find",
+   "text": "Where is the checkout screen?",
+   "state": {
+    "selected": 0,
+    "role": "viewer",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "find",
+   "disposition": "suggest",
+   "pair": "permission"
+  },
+  {
+   "id": "unrelated-office-1",
+   "scenario": "unrelated-office",
+   "text": "The coffee machine on floor 3 is broken again",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "just-a-comment",
+   "disposition": "nothing",
+   "tags": [
+    "unrelated"
+   ]
+  },
+  {
+   "id": "unrelated-office-2",
+   "scenario": "unrelated-office",
+   "text": "Is anyone going to the offsite on Thursday?",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "just-a-comment",
+   "disposition": "nothing",
+   "tags": [
+    "unrelated"
+   ]
+  },
+  {
+   "id": "unrelated-office-3",
+   "scenario": "unrelated-office",
+   "text": "My train is late, starting at 10",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "just-a-comment",
+   "disposition": "nothing",
+   "tags": [
+    "unrelated"
+   ]
+  },
+  {
+   "id": "unrelated-office-4",
+   "scenario": "unrelated-office",
+   "text": "Did anyone see the match last night?",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "just-a-comment",
+   "disposition": "nothing",
+   "tags": [
+    "unrelated"
+   ]
+  },
+  {
+   "id": "unrelated-life-1",
+   "scenario": "unrelated-life",
+   "text": "Happy birthday Lena!",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "just-a-comment",
+   "disposition": "nothing",
+   "tags": [
+    "unrelated"
+   ]
+  },
+  {
+   "id": "unrelated-life-2",
+   "scenario": "unrelated-life",
+   "text": "Reminder: the office is closed on Monday",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "just-a-comment",
+   "disposition": "nothing",
+   "tags": [
+    "unrelated"
+   ]
+  },
+  {
+   "id": "unrelated-life-3",
+   "scenario": "unrelated-life",
+   "text": "Who left their umbrella in the kitchen?",
+   "state": {
+    "selected": 0,
+    "role": "editor",
+    "modules": [
+     "wireframe"
+    ]
+   },
+   "intent": "just-a-comment",
+   "disposition": "nothing",
+   "tags": [
+    "unrelated"
+   ]
+  }
+ ]
+}

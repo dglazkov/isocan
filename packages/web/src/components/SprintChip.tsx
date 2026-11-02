@@ -46,6 +46,8 @@ import { useUiStore } from "../stores/uiStore.ts";
  * *New note* on the phase's paper in the sheet, *Hand in* for what you
  * have selected. Each is the same act the item menu or the terminal does.
  */
+const NO_SELECTED_IDS: string[] = [];
+
 export function SprintChip({ lowered, canvasId, actor }: { lowered: boolean; canvasId: string; actor: Actor }) {
   const { state, nowMs } = useSprint();
   const names = useActorNames();
@@ -55,8 +57,6 @@ export function SprintChip({ lowered, canvasId, actor }: { lowered: boolean; can
   // mounted yet", which is the one state that must never flash or walk.
   const lastPhase = useRef<string | null | undefined>(undefined);
   const rang = useRef<string | null>(null);
-  const selectedIds = useUiStore((s) => s.selectedItemIds);
-  const stamp = useUiStore((s) => s.stamp);
   // A reader (roles phase 1) sees the clock and may go there; every action
   // that writes — a note, a hand-in, a placed mark — is offered only to
   // somebody the daemon would let write.
@@ -65,9 +65,12 @@ export function SprintChip({ lowered, canvasId, actor }: { lowered: boolean; can
   // A desk: no sprint of its own, and a canvas record that names the sprint
   // it belongs to. Its chip reads THAT sprint — pulled, since the store
   // holds one canvas — and offers one thing: Hand in, across canvases.
-  const project = useCanvasStore((s) => s.project);
+  const project = useCanvasStore((s) => s.record);
   const deskOf = state ? null : deskSprintOf(project);
   const remote = useRemoteSprint(deskOf);
+  const sprintActive = state !== null || (deskOf !== null && remote.state !== null);
+  const selectedIds = useUiStore((s) => (sprintActive ? s.selectedItemIds : NO_SELECTED_IDS));
+  const stamp = useUiStore((s) => (sprintActive ? s.stamp : null));
 
   const remaining = state ? remainingSeconds(state, nowMs) : null;
 
@@ -131,7 +134,7 @@ export function SprintChip({ lowered, canvasId, actor }: { lowered: boolean; can
           <button
             className="sprint-action primary"
             title={`Copy ${chosen.length === 1 ? "this" : chosen.length} onto the sprint${away.area ? `'s ${away.area.title} sheet` : ""} and hand ${chosen.length === 1 ? "it" : "them"} in`}
-            onClick={() => void handInFromDesk(canvasId, deskOf, sprintCanvas, actor, chosen, away)}
+            onClick={() => void handInFromDesk(canvasId, deskOf, sprintCanvas, actor, chosen, away, remote.originGroupMode!)}
           >
             Hand in{chosen.length > 1 ? ` ${chosen.length}` : ""}
           </button>

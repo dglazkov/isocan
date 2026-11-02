@@ -1,17 +1,17 @@
-import { useState } from "react";
-import type { Actor, ActivityEntry, PresenceSession, ActorMarks, ActorKinds } from "@isocan/core";
-import { atLeast, capabilityWord, elapsedLabel, recentActivity, sameActor } from "@isocan/core";
+import { Fragment, lazy, Suspense, useState } from "react";
+import type { Actor, ActivityEntry, ActorMarks, ActorKinds } from "@isocan/core";
+import { atLeast, capabilityWord, elapsedLabel, policyWords, recentActivity, sameActor } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { unreadThreads, useUnreadStore } from "../stores/unreadStore.ts";
-import { actorColorIn, useActorColors } from "../lib/colors.ts";
+import { useActorColors } from "../lib/colors.ts";
 import { faceMarkClass, faceMarkStyle } from "../lib/face.ts";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
-import { describe, facesFor, unreadByAuthor, type Face } from "../lib/facepile.ts";
+import { facesFor, pileOrder, pileSeparatorBefore, unreadByAuthor, type Face } from "../lib/facepile.ts";
 import { centerOn, threadWorldPos } from "../lib/viewport.ts";
 import { useActorMarks } from "../lib/marks.ts";
 import { isAgentActor, useActorKinds } from "../lib/actorkinds.ts";
-import { useAnswerable } from "../lib/answerable.ts";
+import { useAnswerable, useRcPolicies } from "../lib/answerable.ts";
 
 /**
  * Who is on this canvas, top right — and, in the same cluster, who has said
@@ -35,6 +35,8 @@ import { useAnswerable } from "../lib/answerable.ts";
  */
 
 const MAX_FACES = 5;
+/** The "Pointer" pill on an agent's card — lazy, ownership read and picker and all. */
+const AgentPointer = lazy(() => import("./AgentPointer.tsx"));
 
 export function Presence({ actor }: { actor: Actor }) {
   const colors = useActorColors();
@@ -48,11 +50,25 @@ export function Presence({ actor }: { actor: Actor }) {
   const joined = useCanvasStore((s) => s.actorJoins);
   const seen = useUnreadStore((s) => s.seen);
   const followSessionId = useUiStore((s) => s.followSessionId);
+  // **The identity menu opens where the peek card already is.** Clicking your
+  // own face toggles the menu, and the pointer is still on the face that
+  // opened it — so both drew, one over the other, about the same person.
+  //
+  // Suppressed while the menu is open, rather than cleared: `peek` survives,
+  // so closing the menu with a second click on the same face puts the card
+  // straight back, and clicking away closes the menu with the pointer already
+  // gone from the pile, so `onPointerLeave` has cleared `peek` and nothing
+  // returns. Both behaviours fall out of hover meaning hover; neither needs a
+  // rule remembering that a click happened.
+  const identityOpen = useUiStore((s) => s.identityOpen);
   const canvasId = useCanvasStore((s) => s.canvasId);
   // Who could be woken right now: enrolled AND held by a live rc — the same
   // connection-bound set the agent tray reads, so the facepile and the tray
   // cannot disagree about who is standing by.
   const answerable = useAnswerable(canvasId);
+  // The live gate the answering rc announces — the same source AgentRow reads,
+  // so the pile and the tray cannot name different owners for one agent.
+  const policies = useRcPolicies(canvasId);
   if (!canvas) return null;
 
   const pending = unreadThreads(canvas, seen, actor.id, joined);
@@ -60,12 +76,49 @@ export function Presence({ actor }: { actor: Actor }) {
   const standing = Object.values(canvas.agents ?? {})
     .filter((row) => answerable.has(row.actor.id))
     .map((row) => row.actor);
+  const enrolled = Object.values(canvas.agents ?? {})
+    .filter((row) => !answerable.has(row.actor.id))
+    .map((row) => row.actor);
+  /**
+   * **Whose agent each face is** — the plumbing the design note listed as its
+   * one open question, and it turned out to be already computed twice.
+   *
+   * The answering rc announces `policy.owner` with its hold, which is the
+   * truth dispatch actually applies. Where nothing is answering there is still
+   * the enrolment's `writtenBy` — the actor whose word the gate was written
+   * under — which is the same person by construction. Neither: null, and the
+   * face draws as a person, because an agent whose owner is unknown is better
+   * drawn plainly than drawn wrong.
+   */
+  const ownerOf = (id: string): { id: string; name: string } | null => {
+    const announced = policies[id]?.owner;
+    if (announced) return { id: announced.id, name: announced.name };
+    const written = canvas.agents?.[id]?.writtenBy;
+    return written ? { id: written.id, name: written.name } : null;
+  };
   // One entry per PERSON, you included — see lib/facepile.ts for why that is
   // a rule and not a preference.
-  const faces = facesFor(sessions, unreadBy, actor, standing);
+  const faces = facesFor(sessions, unreadBy, actor, standing, ownerOf, enrolled);
 
-  const shown = faces.length > MAX_FACES ? faces.slice(0, MAX_FACES - 1) : faces;
-  const overflow = faces.length - shown.length;
+  /**
+   * **Other people, other agents, your pets, you** — left to right (Dion,
+   * 2 Oct 2026: "it's weird not to have your OWN profile on the far right.
+   * pets should be next on the left... then other bots... then other people
+   * far left."). You are the anchor at the edge nearest your own controls;
+   * the agents you own stand beside you; everyone else reads outward.
+   *
+   * A pet is an agent whose owner is you through `actor.join`, so a pet a
+   * folded identity enrolled is still yours. Ranked before the cut, and the
+   * cut takes from the LEFT: you and your pets are never the ones hidden.
+   *
+   * Your pets facepile directly under your own face (`(dog(me)`) rather than
+   * sitting behind a divider of their own; a rule still separates other people,
+   * other agents, and your `(pets + you)` cluster.
+   */
+  const isMe = (id: string) => sameActor(joined, id, actor.id);
+  const ordered = pileOrder(faces, isMe);
+  const hidden = ordered.length > MAX_FACES ? ordered.splice(0, ordered.length - MAX_FACES + 1) : [];
+  const overflow = hidden.length;
 
   function goTo(face: Face) {
     // Your own face has nowhere to fly to — it is the handle for who you are
@@ -101,7 +154,20 @@ export function Presence({ actor }: { actor: Actor }) {
     ui.setFollow(ui.followSessionId === face.sessionId ? null : face.sessionId);
   }
 
-  const peeked = shown.find((face) => face.actor.id === peek) ?? null;
+  const peeked = ordered.find((face) => face.actor.id === peek) ?? null;
+  /**
+   * **What the card says about who may summon this agent — in core's words.**
+   *
+   * `policyWords` is the same sentence the tray shows, the rc announces with
+   * its hold, and a refusal puts in the thread. Saying it here in different
+   * words would be a fourth account of one fact, and the one that disagreed
+   * would be the one a person happened to read.
+   */
+  const nameOf = (id: string) => actorNameIn(names, { id, name: id });
+  const gateOf = (face: Face): string | null => {
+    const policy = policies[face.actor.id];
+    return policy ? policyWords(policy, nameOf, actor.id, joined) : null;
+  };
 
   return (
     <div
@@ -116,33 +182,49 @@ export function Presence({ actor }: { actor: Actor }) {
       }}
       onPointerLeave={() => setPeek(null)}
     >
-      {shown.map((face) => (
-        <button
-          key={face.actor.id}
-          data-face-id={face.actor.id}
-          className={`face ${face.presence}${
-            face.self ? " self" : ""
-          }${face.unread > 0 ? " badged" : ""}${
-            face.sessionId !== null && face.sessionId === followSessionId ? " followed" : ""
-          }`}
-          aria-label={tooltip(face, kinds)}
-          onClick={() => goTo(face)}
-          onDoubleClick={() => toggleFollow(face)}
-        >
-          {/* The disc, not the button, carries the dimming — a badge on an
-              absent author still has to read at full strength. */}
-          <span className={faceMarkClass(marks, face.actor)} style={faceMarkStyle(colors, face.actor)}>
-            {initial(face.label, marks, face.actor)}
-          </span>
-          {face.unread > 0 && <span className="face-badge">{face.unread}</span>}
-        </button>
-      ))}
       {overflow > 0 && (
-        <span className="face" title={faces.slice(shown.length).map((f) => tooltip(f, kinds)).join("\n")}>
+        <span className="face" title={hidden.map((f) => tooltip(f, kinds)).join("\n")}>
           <span className="face-mark face-more">+{overflow}</span>
         </span>
       )}
-      {peeked && <FaceCard face={peeked} names={names} colors={colors} onGo={goTo} />}
+      {ordered.map((face, i) => (
+        <Fragment key={face.actor.id}>
+          {/* Separates other people, other agents, and your `(pets + you)`
+              cluster, and only when somebody stands on each side of it.
+              `aria-hidden` because the rule is a restatement for the eye:
+              every face already SAYS which it is, in the label a reader is
+              handed. */}
+          {i > 0 && pileSeparatorBefore(ordered[i - 1]!, face, isMe) && (
+            <span className="face-sep" aria-hidden="true" />
+          )}
+          <button
+            data-face-id={face.actor.id}
+            className={`face ${face.presence}${
+              face.working ? " working" : ""
+            }${
+              face.self ? " self" : ""
+            }${face.unread > 0 ? " badged" : ""}${
+              face.sessionId !== null && face.sessionId === followSessionId ? " followed" : ""
+            }`}
+            aria-label={tooltip(face, kinds)}
+            onClick={() => goTo(face)}
+            onDoubleClick={() => toggleFollow(face)}
+          >
+            {/* The disc, not the button, carries the dimming — a badge on an
+                absent author still has to read at full strength. */}
+            <span
+              className={faceMarkClass(marks, face.actor, undefined, face.owner !== null)}
+              style={faceMarkStyle(colors, face.actor, face.owner)}
+            >
+              {initial(face.label, marks, face.actor)}
+            </span>
+            {face.unread > 0 && <span className="face-badge">{face.unread}</span>}
+          </button>
+        </Fragment>
+      ))}
+      {peeked && !identityOpen && (
+        <FaceCard face={peeked} names={names} colors={colors} gate={gateOf(peeked)} onGo={goTo} />
+      )}
     </div>
   );
 }
@@ -160,11 +242,15 @@ function FaceCard({
   face,
   names,
   colors,
+  gate,
   onGo,
 }: {
   face: Face;
   names: ReturnType<typeof useActorNames>;
   colors: ReturnType<typeof useActorColors>;
+  /** Who may summon this agent, in `policyWords`' wording — null for a person,
+   * and for an agent nothing is currently answering for. */
+  gate: string | null;
   onGo: (face: Face) => void;
 }) {
   const canvas = useCanvasStore((s) => s.canvas);
@@ -178,7 +264,10 @@ function FaceCard({
   return (
     <div className="hover-card face-card" onPointerDown={(e) => e.stopPropagation()}>
       <div className="face-card-head">
-        <span className={faceMarkClass(marks, face.actor)} style={faceMarkStyle(colors, face.actor)}>
+        <span
+          className={faceMarkClass(marks, face.actor, undefined, face.owner !== null)}
+          style={faceMarkStyle(colors, face.actor, face.owner)}
+        >
           {initial(face.label, marks, face.actor)}
         </span>
         <span className="face-card-who">
@@ -188,14 +277,43 @@ function FaceCard({
               ? "you"
               : face.presence === "available"
                 ? "standing by"
-                : face.presence === "here"
-                  ? rungWord(face) ?? face.harness ?? (isAgentActor(kinds, face.actor.id) ? "agent" : face.kind === "cli" ? "terminal" : "here")
-                  : isAgentActor(kinds, face.actor.id)
-                    ? "agent · away"
-                    : "away"}
+                : face.presence === "enrolled"
+                  ? "enrolled · offline"
+                  : face.presence === "here"
+                    ? rungWord(face) ?? face.harness ?? (isAgentActor(kinds, face.actor.id) ? "agent" : face.kind === "cli" ? "terminal" : "here")
+                    : isAgentActor(kinds, face.actor.id)
+                      ? "agent · away"
+                      : "away"}
           </span>
         </span>
       </div>
+      {/**
+        * **The two things a person wants about an agent and could not get.**
+        *
+        * Whose it is, and who may summon it. Both were already computed — the
+        * enrolment carries the owner and the rc announces the gate with its
+        * hold — and neither was anywhere a pointer goes. Asked for by name
+        * (Dion, 16 Sep 2026: *"if I mouse over 'Scout' it should point to the
+        * owner / who has access to it"*).
+        *
+        * Only for agents. A person is not owned by anybody, and a card that
+        * said so about a colleague would be saying something false.
+        */}
+      {face.owner && (
+        <div className="face-card-owned">
+          <span>
+            owned by <b>{actorNameIn(names, face.owner)}</b>
+          </span>
+          {gate && <span className="face-card-gate">{gate}</span>}
+        </div>
+      )}
+      {/* The pointer an agent wears, chosen by its owner — drawn only for
+          one (AgentPointer asks the home's rule before it draws anything). */}
+      {isAgentActor(kinds, face.actor.id) && (
+        <Suspense>
+          <AgentPointer agent={face.actor} owner={face.owner?.name} />
+        </Suspense>
+      )}
       {/* The live half: what they say they are doing, right now. */}
       <div className={`face-card-status${face.status ? "" : " idle"}`}>
         {face.status ?? (face.self ? "click to rename or switch" : "nothing to report")}

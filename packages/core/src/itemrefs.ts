@@ -77,17 +77,35 @@ export function collectItemRefCandidates(canvas: CanvasContents): ItemRefCandida
   return candidates;
 }
 
-/** Candidate titles, longest first (ties: input order). */
+/**
+ * Candidate titles, longest first (ties: input order).
+ *
+ * Asked for every text run a chip plugin renders and every time a composer
+ * draws its draft, so it is kept per candidate LIST: the web hands the same
+ * list until an id or a title changes (`useItemRefRoster`), and this answers it
+ * once. The duplicate check was `names.some(...)` inside the loop — quadratic,
+ * 125,000 comparisons for a canvas of 250 items, on every operation while a
+ * collaborator dragged (26 Sep 2026: 8% of the main thread). A set of seen
+ * `id`+`name` keeps the first of each, as before, and the stable sort keeps
+ * the ties in input order.
+ */
+const namesMemo = new WeakMap<ItemRefCandidate[], Array<{ id: string; name: string }>>();
 function referableNames(candidates: ItemRefCandidate[]): Array<{ id: string; name: string }> {
+  const known = namesMemo.get(candidates);
+  if (known) return known;
   const names: Array<{ id: string; name: string }> = [];
+  const seen = new Set<string>();
   for (const candidate of candidates) {
     const name = candidate.title.trim();
     if (!name) continue;
-    if (!names.some((n) => n.id === candidate.id && n.name === name)) {
-      names.push({ id: candidate.id, name });
-    }
+    const key = `${candidate.id}\u0000${name}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    names.push({ id: candidate.id, name });
   }
-  return names.sort((a, b) => b.name.length - a.name.length);
+  names.sort((a, b) => b.name.length - a.name.length);
+  namesMemo.set(candidates, names);
+  return names;
 }
 
 /** Does `name` sit at `index`, case-insensitively, ending on a word boundary? */

@@ -67,6 +67,8 @@ thing to do before anything else is built here.
 
 ## Phase 0 — Areas: a titled region things are placed in
 
+**Status: CLOSED.** Built, as this file's *Where we are* says (phases 0–5; 0 and 1 on 2 September 2026).
+
 **The primitive the journey stands on.** An area is an ITEM — `kind=area`,
 a title, a tint from the paper palette, a box — rendered behind everything
 else as a faint sheet with its title at the top-left in the display step, so
@@ -95,6 +97,8 @@ out only those three. A note dragged out stops being listed. Both themes.
 
 ## Phase 1 — The board, and the brief
 
+**Status: CLOSED.** Built, as this file's *Where we are* says (phases 0–5; 0 and 1 on 2 September 2026).
+
 `SPRINT_BOARD` in core: the eleven areas in order, their default sizes and
 tints, and the three-line card each starts with — so the app and the CLI
 lay the same board. `isocan sprint board [--at]` lays it out as one group
@@ -109,6 +113,8 @@ area; `isocan sprint board` on a bare canvas yields the same board;
 undo removes it whole.
 
 ## Phase 2 — The walk: present the area, offer the action
+
+**Status: CLOSED.** Built, as this file's *Where we are* says (phases 0–5; 0 and 1 on 2 September 2026).
 
 `sprintState` gains `area`: the board area whose title matches the phase's
 `board` field (a phase table column, so a renamed area still resolves by the
@@ -128,6 +134,8 @@ line in the Chat; `isocan sprint` says *How Might We · in Experts & HMW ·
 
 ## Phase 3 — The desk, and Hand in
 
+**Status: CLOSED.** Built, as this file's *Where we are* says (phases 0–5; 0 and 1 on 2 September 2026).
+
 `isocan sprint desk <name>` creates a canvas titled *<name>'s desk*, admits
 that one actor, and records the sprint canvas and area on it as properties
 (`sprintOf`, `sprintArea`) — the desk is born knowing its sprint. The
@@ -145,6 +153,8 @@ readable by the other sketcher (admission refused at the door).
 
 ## Phase 4 — The wall is the area
 
+**Status: CLOSED.** Built, as this file's *Where we are* says (phases 0–5; 0 and 1 on 2 September 2026).
+
 `wallFor` becomes *the Vote area's contents* (falling back to hand-ins when
 there is no board), and `hidesVotes` applies to the wall and only to it —
 closing the 1 Sep departure. The heat map renders dots sized by count on
@@ -160,6 +170,8 @@ same dot.
 
 ## Phase 5 — Grids: the storyboard and the test wall
 
+**Status: CLOSED.** Built, as this file's *Where we are* says (phases 0–5; 0 and 1 on 2 September 2026).
+
 An area may carry a grid — `rows`, `cols`, and names for each — drawn as
 guides inside it, and `isocan text --in Test --cell 3,4` places a note in a
 cell. The storyboard is a 1×15 grid; the test wall is people×frames.
@@ -170,6 +182,8 @@ fills cells by address; patterns are reactions; the Wrap thread's answers
 resolve by `#Title` to cells.
 
 ## Phase 6 — Run one for real
+
+**Status: PART-DONE.** Rehearsed, not run: `cli/test/one-hour.test.ts` plays the one-hour cut with one actor in every chair; the run with people is still owed.
 
 The 1 Sep recommendation's first line, still undone. One sprint, the
 one-day cut, three people and two agents, on dev, with the board. What

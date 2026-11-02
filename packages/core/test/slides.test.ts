@@ -6,10 +6,9 @@ import {
   deckStep,
   isSlide,
   readingOrder,
-  slideIntent,
-  slidePatch,
   slides,
 } from "../src/slides.ts";
+import { slideIntent, slidePatch } from "../src/slidewrites.ts";
 
 /**
  * The deck (#87): a property, not an operation — `item.update` carries it —

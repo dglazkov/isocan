@@ -23,14 +23,23 @@
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { unreadOf } from "./lib/reading.mjs";
 
 const repo = fileURLToPath(new URL("..", import.meta.url));
 const cli = path.join(repo, "packages/cli/bin/isocan.js");
 const quiet = process.argv.includes("--quiet");
 
-/** Read through the CLI so there is one parser — the roadmap's lesson. */
+/**
+ * Read through the CLI so there is one parser — the roadmap's lesson.
+ *
+ * `--root repo` because `persona ls` answers with the BOUND directory's
+ * personas by default, which is right for a person standing in a project and
+ * wrong here: a git worktree is a second copy of the source bound to the
+ * first, so without this the ratchet measured the worktree's code against the
+ * main checkout's bounds and invented a miss out of the difference.
+ */
 const personas = JSON.parse(
-  execFileSync("node", [cli, "--json", "persona", "ls"], {
+  execFileSync("node", [cli, "--json", "persona", "--root", repo, "ls"], {
     cwd: repo,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
@@ -42,6 +51,8 @@ const met = (goal, value) =>
 
 const misses = [];
 const broken = [];
+/** Goals whose recorded reading nobody has taken yet (`scripts/lib/reading.mjs`): said, never counted. */
+const unread = [];
 for (const persona of personas) {
   for (const goal of persona.goals) {
     let out;
@@ -53,6 +64,11 @@ for (const persona of personas) {
         stdio: ["ignore", "pipe", "pipe"],
       });
     } catch (err) {
+      const line = unreadOf(err);
+      if (line) {
+        unread.push({ persona: persona.name, goal, line });
+        continue;
+      }
       /**
        * A command that will not run is never read as a zero. "0 failures" and
        * "nothing could be measured" look identical in a report that does not
@@ -85,10 +101,21 @@ for (const b of broken) {
   lines.push(`**${b.persona}** — \`${b.goal.measuredBy}\` could not be run: ${b.why}`);
 }
 
+/**
+ * A goal with no reading yet is neither held nor missed, so it does not decide
+ * the exit; it is printed (except under `--quiet`) so "held" never silently
+ * covers a number nobody has taken.
+ */
+const notYet = unread.map((u) => `${u.persona} — ${u.goal.name}: ${u.line}`);
+
 if (lines.length === 0) {
-  if (!quiet) console.log("every persona's numbers held");
+  if (!quiet) {
+    console.log(`every persona's numbers held${unread.length ? ` (${unread.length} not yet read, below)` : ""}`);
+    for (const l of notYet) console.log(`  ${l}`);
+  }
   process.exit(0);
 }
+if (!quiet && notYet.length) lines.push(`Not yet read, so neither held nor missed:\n${notYet.map((l) => `  ${l}`).join("\n")}`);
 console.log(lines.join("\n\n"));
 /**
  * Exit 1 so a caller can branch on it. `review.yml` uses that to decide whether

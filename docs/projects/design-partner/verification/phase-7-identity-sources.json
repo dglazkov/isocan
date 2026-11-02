@@ -1,0 +1,47 @@
+{
+  "recordedAt": "2026-09-15T14:10:10.912Z",
+  "base": "54eb345a43b2a91b2e0b1139f7e95f7757be3778",
+  "files": [
+    {
+      "path": "packages/api/src/identity.ts",
+      "sha256": "b1c72d7163f78c06137072666f88ca86245c1d42664bdd429d6f38e1f6f6ae79",
+      "size": 21296
+    },
+    {
+      "path": "packages/cli/test/pass.test.ts",
+      "sha256": "cc2cef2a49d5bcebcebb533df5409573ec13d9fbfab1628e97ea8d32c47f481f",
+      "size": 40324
+    },
+    {
+      "path": "packages/server/src/badge-store.ts",
+      "sha256": "616dcb21ebdeed3a01b2e910d90108a85bd72021689857196f736189ce9be4c0",
+      "size": 9831
+    },
+    {
+      "path": "packages/server/src/index.ts",
+      "sha256": "a3adf5303a0aa1da1281db9bf12441807ef48e196c1fbd1322e11aa72000cd79",
+      "size": 2977
+    },
+    {
+      "path": "packages/server/test/identity-store.test.ts",
+      "sha256": "3a3b2b6c0c1543533bae89c1560c065315e0a341696ac967e6432df4aee21013",
+      "size": 12795
+    },
+    {
+      "path": "packages/server/test/identity-write-child.mjs",
+      "sha256": "cbeb8e668911ee548701f6e90850356e4153d445dd3a8228c760ab692fb63901",
+      "size": 720
+    },
+    {
+      "path": "packages/server/test/identity-write-hook.mjs",
+      "sha256": "8781e1bb045eb79ef370ce8414d580ab00c31a02121af5c6df9addc9536165ee",
+      "size": 1751
+    }
+  ],
+  "entry": {
+    "path": "packages/web/dist/assets/index-B5be_4hS.js",
+    "sha256": "4ebf1b44cfd4bb26f7f2d95f670d9e589229691ab449d00aebb478de01a0d3da",
+    "size": 742340
+  },
+  "entryCeiling": 743900
+}

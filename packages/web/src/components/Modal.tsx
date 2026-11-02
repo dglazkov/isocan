@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from "react";
+import { FloatingHandles, useFloatingBox } from "../lib/floatingbox.tsx";
 
 /**
  * **The shell every full-screen overlay wears**, so there is one of them.
@@ -32,6 +33,8 @@ export function Modal({
   wide?: boolean;
   children: ReactNode;
 }) {
+  const float = useFloatingBox<HTMLDivElement>({ minWidth: 320, minHeight: 200 });
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -46,12 +49,15 @@ export function Modal({
        content from reaching the closer behind it. */
     <div className="modal-backdrop" onPointerDown={onClose}>
       <div
+        ref={float.ref}
         className={`modal-card${wide ? " wide" : ""}`}
+        style={float.style}
         role="dialog"
         aria-label={label}
         onPointerDown={(e) => e.stopPropagation()}
       >
-        <header>
+        <FloatingHandles box={float} />
+        <header onPointerDown={float.onDragPointerDown} onDoubleClick={float.reset}>
           <b>{title}</b>
           <span className="spacer" />
           <button className="main-close" title="Close (Esc)" onClick={onClose} aria-label="Close">

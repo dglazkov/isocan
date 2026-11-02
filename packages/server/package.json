@@ -4,7 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./daemon": "./src/daemon.ts"
   },
   "scripts": {
     "dev": "tsx watch src/main.ts",
@@ -13,12 +14,15 @@
   },
   "dependencies": {
     "@isocan/core": "*",
-    "fastify": "^5.2.1",
+    "fastify": "^5.12.5",
     "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/node": "^22.13.1",
     "@types/ws": "^8.5.14",
     "tsx": "^4.19.2"
+  },
+  "optionalDependencies": {
+    "sharp": "^0.35.5"
   }
 }

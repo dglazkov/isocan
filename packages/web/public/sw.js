@@ -85,6 +85,9 @@ const CACHE = "isocan-shell-v2";
  * happens to reload on. */
 const SHELL = "/index.html";
 
+/** The local judge's model caches, which the shell never deletes (`isocan-models-v1` today). */
+const MODEL_CACHE_PREFIX = "isocan-models-";
+
 /**
  * What to do with a request. The whole policy, as one pure function, so the
  * test can ask it directly and a reader can check it against the paragraphs
@@ -113,6 +116,10 @@ function routeFor(request, url) {
   if (parsed.origin !== self.location.origin) return "pass";
   // First, and deliberately before every other test. See the comment above.
   if (parsed.pathname === "/api" || parsed.pathname.startsWith("/api/")) return "pass";
+  // The local judge's model (local-judge phase 0): 165 MB the judge's Worker
+  // keeps in a cache of its own. Through "try" it would be copied into this
+  // shell cache as well, a second 165 MB nobody can sweep.
+  if (parsed.pathname.startsWith("/models/")) return "pass";
   if (request.mode === "navigate") return "shell";
   if (parsed.pathname.startsWith("/assets/")) return "asset";
   return "try";
@@ -201,7 +208,10 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     (async () => {
       const names = await caches.keys();
-      await Promise.all(names.filter((name) => name !== CACHE).map((name) => caches.delete(name)));
+      // Every cache but this one is disowned — except the judge's model cache
+      // (`MODEL_CACHE` in @isocan/core/local-judge), which is not the shell's
+      // to delete: losing it costs a person a 165 MB download.
+      await Promise.all(names.filter((name) => name !== CACHE && !name.startsWith(MODEL_CACHE_PREFIX)).map((name) => caches.delete(name)));
       // And within the cache we keep: everything the current build does not name.
       await sweep();
       await self.clients.claim();

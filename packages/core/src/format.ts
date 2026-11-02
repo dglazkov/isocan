@@ -3,6 +3,7 @@ import { itemKind } from "./kinds.ts";
 import type { Move } from "./layout.ts";
 import { childrenOf, parentOf } from "./lineage.ts";
 import type { CanvasContents, Item } from "./model.ts";
+import { tidyMoves } from "./tidy.ts";
 
 /**
  * One tidy for the whole canvas: the arrangement `/format` means.
@@ -57,16 +58,25 @@ const FORMAT_BAND_GAP_Y = 160;
  * from each hanging beneath it, reference material gathered below. It is more
  * useful and more opinionated, and being asked for by name is the right price
  * for moving things somebody did not ask to have interpreted.
+ *
+ * `in-place` keeps the arrangement and cleans up its alignment: near-aligned
+ * edges snapped to shared lines, nearly-equal gaps evened out, nothing
+ * re-dealt and nothing overlapping (`tidy.ts`). It is what Tidy on a
+ * SELECTION means (14 Oct 2026): `grid` re-deals the picked items into a new
+ * lattice, which is a different request from "neaten these".
  */
-export type FormatMode = "grid" | "smart";
+export type FormatMode = "grid" | "smart" | "in-place";
 
-export const FORMAT_MODES: readonly FormatMode[] = ["grid", "smart"];
+/** Every tidy mode, in the order the CLI names them. */
+export const FORMAT_MODES: readonly FormatMode[] = ["grid", "smart", "in-place"];
 
 export function isFormatMode(value: unknown): value is FormatMode {
   return typeof value === "string" && (FORMAT_MODES as readonly string[]).includes(value);
 }
 
 interface FormatOptions {
+  /** Shared group tidy may request a uniform gutter around complete footprints. */
+  gap?: number;
   /** Which tidy. Defaults to `grid` — see `FormatMode`. */
   mode?: FormatMode;
   /** Where the top-left of the arrangement goes. Defaults to where the
@@ -168,11 +178,11 @@ function gridMoves(canvas: CanvasContents, options: FormatOptions): Move[] {
   for (let i = 0; i < ordered.length; i += perRow) {
     const row = ordered.slice(i, i + perRow);
     row.forEach((item, col) => {
-      const x = Math.round(origin.x + col * (column + FORMAT_GAP_X));
+      const x = Math.round(origin.x + col * (column + (options.gap ?? FORMAT_GAP_X)));
       const y = Math.round(rowTop);
       if (item.x !== x || item.y !== y) moves.push({ itemId: item.id, x, y });
     });
-    rowTop += Math.max(...row.map((item) => item.height)) + FORMAT_GAP_Y;
+    rowTop += Math.max(...row.map((item) => item.height)) + (options.gap ?? FORMAT_GAP_Y);
   }
   return moves;
 }
@@ -185,6 +195,7 @@ export function formatMoves(canvas: CanvasContents, options: FormatOptions = {})
   const items = Object.values(canvas.items);
   if (items.length === 0) return [];
   if ((options.mode ?? "grid") === "grid") return gridMoves(canvas, options);
+  if (options.mode === "in-place") return tidyMoves(canvas, items.map((item) => item.id));
 
   const screens = items.filter((item) => role(canvas, item) === "screen");
   const reference = items.filter((item) => role(canvas, item) === "reference");
@@ -229,7 +240,7 @@ export function formatMoves(canvas: CanvasContents, options: FormatOptions = {})
   let deepest = origin.y;
   for (const root of roots) {
     const column = placeColumn(root, cursorX, origin.y, seen);
-    cursorX += column.width + FORMAT_GAP_X;
+    cursorX += column.width + (options.gap ?? FORMAT_GAP_X);
     deepest = Math.max(deepest, column.bottom);
   }
 
@@ -244,9 +255,9 @@ export function formatMoves(canvas: CanvasContents, options: FormatOptions = {})
       let x = origin.x;
       for (const item of row) {
         placed.set(item.id, { x, y: rowTop });
-        x += item.width + FORMAT_GAP_X;
+        x += item.width + (options.gap ?? FORMAT_GAP_X);
       }
-      rowTop += Math.max(...row.map((item) => item.height)) + FORMAT_GAP_Y;
+      rowTop += Math.max(...row.map((item) => item.height)) + (options.gap ?? FORMAT_GAP_Y);
     }
   }
 

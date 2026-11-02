@@ -1,4 +1,5 @@
 import type { Actor } from "@isocan/core";
+import { proveSegmentIn } from "@isocan/core";
 
 /**
  * **One address, two faces** (phase 13.5).
@@ -22,6 +23,8 @@ import type { Actor } from "@isocan/core";
  * whether the browser is anybody yet.
  */
 export type Face =
+  /** The home catalogue can be browsed without choosing a name. */
+  | "public"
   /** Nobody here yet, and standing at the origin itself: the front page. */
   | "front-page"
   /**
@@ -30,6 +33,18 @@ export type Face =
    * not depend on who is asking; see `faceFor`.
    */
   | "terms"
+  /**
+   * **The operator's prove page** (operator phase 1) — the one page a terminal
+   * opens so a person can prove, in a browser, that they run this home.
+   *
+   * A face rather than a route for the terms page's reason exactly: it must
+   * not depend on whether this browser is anybody yet. A person who has never
+   * typed a name here — the innkeeper on a fresh laptop is the obvious one —
+   * would otherwise meet *pick your name* instead of *a terminal asks to take
+   * down prj_…*, which is both the wrong question and the wrong first thing
+   * for a consent page to say.
+   */
+  | "operator-prove"
   /** Nobody here yet, and standing anywhere else: the identity dialog. This is
    *  what phases 7-9 proved for a share-link arrival, and it is unchanged. */
   | "door"
@@ -48,6 +63,28 @@ export type Face =
  * the origin serves it the same way it serves a canvas.
  */
 export const TERMS_PATH = "/terms";
+/** A separate doorway lets strangers browse declared metadata without
+ * choosing an actor or expanding their ordinary working-canvas discovery. */
+export const PUBLIC_PATH = "/public";
+
+/**
+ * Whether this home sits behind an authenticating reverse proxy (SSO).
+ *
+ * The server stamps `data-sso="true"` on `<html>` at serve time whenever
+ * `ISOCAN_PROXY_EMAIL_HEADER` is configured, keeping the web bundle identical
+ * across homes ("one image, many homes"); `VITE_ISOCAN_SSO=true` is also
+ * accepted for local Vite development.
+ */
+export function isSsoHome(): boolean {
+  if ((import.meta.env as Record<string, unknown> | undefined)?.["VITE_ISOCAN_SSO"] === "true") {
+    return true;
+  }
+  try {
+    return typeof document !== "undefined" && document.documentElement.dataset.sso === "true";
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Which face this browser meets, at this address, being who it is.
@@ -57,8 +94,12 @@ export const TERMS_PATH = "/terms";
  * notice, and a stranger who follows a share link must still meet the door:
  * the canvas behind it may be open to a link grant, but who they are is still
  * stamped on everything they touch there.
+ *
+ * On an SSO home (`sso === true`), the visitor is never an anonymous stranger,
+ * so the origin meets the door (which auto-resumes or auto-claims their
+ * identity) rather than the marketing front page.
  */
-export function faceFor(pathname: string, actor: Actor | null): Face {
+export function faceFor(pathname: string, actor: Actor | null, sso = isSsoHome()): Face {
   // A trailing slash is the same door — `/` and `//` name the origin — and a
   // path with any segment in it does not.
   const at = pathname.replace(/\/+$/, "");
@@ -72,6 +113,13 @@ export function faceFor(pathname: string, actor: Actor | null): Face {
    * phase 13.5.
    */
   if (at === TERMS_PATH) return "terms";
+  /**
+   * Above the `actor` branch, for the terms' reason and one more: the page is
+   * opened by a terminal in whatever browser this person happens to use, which
+   * is very often not the one their canvases are in.
+   */
+  if (proveSegmentIn(pathname) !== null) return "operator-prove";
   if (actor) return "here";
-  return at === "" ? "front-page" : "door";
+  if (at === PUBLIC_PATH) return "public";
+  return at === "" && !sso ? "front-page" : "door";
 }

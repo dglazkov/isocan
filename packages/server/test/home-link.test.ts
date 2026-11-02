@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -20,7 +20,6 @@ import {
   passesRoute,
   canvasesRoute,
   HOMES_ROUTE,
-  WS_NO_CANVAS,
 } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
 import { bearerHeader, readBadge } from "../src/badge-store.ts";
@@ -280,6 +279,67 @@ describe("a canvas born on a replica is born at the home", () => {
     );
   }, 20_000);
 
+  /**
+   * **The claim `item.pruneVersions` exists for, tested.**
+   *
+   * Trimming a version stack could have been maintenance beside `gc`, run at
+   * the home. The op's own note says why it is not: a replica folds the log,
+   * so a stack shortened at the home OUTSIDE the log would leave every replica
+   * carrying versions the home has forgotten — two copies of one item that
+   * disagree about its history, and no way for either to notice.
+   *
+   * That was an argument in a comment and nowhere else. It is the whole reason
+   * the vocabulary grew, so it is the one thing worth pinning: the prune
+   * travels as an ordinary entry with its own seq, and the two copies end up
+   * agreeing about the history — same versions, same current.
+   *
+   * Written at the replica rather than the home because that is the harder
+   * direction and the one this fixture can speak for: A holds Priya's claim,
+   * the op is ordered at H like any other, and both ends fold the same entry.
+   */
+  it("prunes through the log, so the home and the replica agree after it", async () => {
+    await birthAtA();
+    for (const id of ["ver_2", "ver_3", "ver_4"]) {
+      await op(A, priya, { type: "item.addVersion", itemId: "itm_1", version: nv(id) });
+    }
+    const before = await until(
+      () => oplog(A),
+      (entries) => entries.length === 5,
+      "the four versions at A",
+    );
+    expect(before.length).toBe(5);
+
+    await op(A, priya, { type: "item.pruneVersions", itemId: "itm_1", keep: 2 });
+
+    const folded = await until(
+      () => oplog(H),
+      (entries) => entries.some((entry) => entry.envelope.op.type === "item.pruneVersions"),
+      "the prune reaching the home",
+    );
+    // An ordinary entry: it has a seq, in order, exactly like a move. A prune
+    // that reached the replica any other way would be the bug this op exists
+    // to avoid.
+    expect(folded.map((entry) => entry.seq)).toEqual([1, 2, 3, 4, 5, 6]);
+
+    const atHome = await until(
+      () => canvas(H),
+      (snap) => (snap.canvas.items["itm_1"]?.versions.length ?? 0) === 2,
+      "the shortened stack at the home",
+    );
+    const atReplica = await until(
+      () => canvas(A),
+      (snap) => (snap.canvas.items["itm_1"]?.versions.length ?? 0) === 2,
+      "the shortened stack at A",
+    );
+    // The two copies agree about the history, which is the whole point.
+    expect(atReplica.canvas.items["itm_1"]!.versions.map((v) => v.id)).toEqual(
+      atHome.canvas.items["itm_1"]!.versions.map((v) => v.id),
+    );
+    expect(atReplica.canvas.items["itm_1"]!.currentVersionId).toBe(
+      atHome.canvas.items["itm_1"]!.currentVersionId,
+    );
+  }, 30_000);
+
   it("gives a replica that arrived late the state, and history only from its arrival", async () => {
     /**
      * Worth pinning because it is a real and slightly surprising consequence
@@ -453,7 +513,7 @@ describe("what a replica carries", () => {
 
     // The row, on A's disk, naming H — written by the birth itself, before the
     // op was ever forwarded.
-    expect(A.daemon.homes.assignments()).toEqual({ [CANVAS]: H.base });
+    expect(A.daemon.homes!.assignments()).toEqual({ [CANVAS]: H.base });
     expect(JSON.parse(await fs.readFile(p.homesFile(aDir), "utf8"))).toEqual({
       [CANVAS]: H.base,
     });
@@ -473,7 +533,7 @@ describe("what a replica carries", () => {
     await A.daemon.close();
     A = await node(await replica(aDir, H.base), aDir, priya);
     expect((await A.daemon.engine.listCanvases()).map((canvas) => canvas.id)).toEqual([CANVAS]);
-    expect(A.daemon.homes.homeOf(CANVAS)).toBe(H.base);
+    expect(A.daemon.homes!.homeOf(CANVAS)).toBe(H.base);
   }, 30_000);
 
   it("does not forget what it holds when the home is unreachable", async () => {
@@ -594,7 +654,7 @@ describe("the lid close", () => {
     // passes just as well against a replica that threw its canvas away and
     // took a full snapshot every time it reconnected — converging on the right
     // state while the seq cursor did nothing at all.
-    const handshake = A.daemon.homes.link(H.base)!.handshakes(CANVAS);
+    const handshake = A.daemon.homes!.link(H.base)!.handshakes(CANVAS);
     expect(handshake.snapshots).toBe(0);
     expect(handshake.resumed).toBeGreaterThanOrEqual(1);
     expect(handshake.last).toMatchObject({ type: "resumed", since: 2, lastSeq: 5 });
@@ -612,12 +672,56 @@ describe("the lid close", () => {
     await birthAtA();
     await letBIn();
     await until(() => canvas(B), (snap) => snap.lastSeq === 2, "B to adopt the canvas");
-    expect(B.daemon.homes.link(H.base)!.handshakes(CANVAS).snapshots).toBeGreaterThanOrEqual(1);
+    expect(B.daemon.homes!.link(H.base)!.handshakes(CANVAS).snapshots).toBeGreaterThanOrEqual(1);
     // Adopted whole: state, title, and the home's lastSeq.
     const snap = await canvas(B);
     expect(snap.project.title).toBe("Acme Sprint Board");
     expect(snap.canvas.items["itm_1"]!.x).toBe(5);
   }, 20_000);
+});
+
+describe("a fold made at the home", () => {
+  /**
+   * **Found 14 Oct 2026.** A person folded their old dev identity into their
+   * main one from a browser AT the home, and the laptop that replicates the
+   * canvas went on showing two people. The home already sent its `joined`
+   * map on every snapshot, resume and roster; the replica merged the names
+   * and colours beside it and dropped the map. So names caught up while undo,
+   * the inbox and ownership on the laptop still saw two actors.
+   */
+  it("reaches a replica that holds the canvas, and is still there after it restarts", async () => {
+    await birthAtA();
+    await letBIn();
+    await until(() => canvas(B), (snap) => snap.canvas.items["itm_1"] !== undefined, "B to hold the canvas");
+
+    // At the home, one browser that speaks for both of a person's names.
+    const old = { id: "usr_acme_old", name: "Acme Laptop" };
+    const person = { id: "usr_acme", name: "Acme Person" };
+    await H.badge.speakAs(old, "web:old");
+    await H.badge.speakAs(person, "web:person");
+    // The old name wrote here, so this is a room the fold repaints.
+    await op(H, old, {
+      type: "item.add",
+      itemId: "itm_old",
+      version: nv("ver_old"),
+      width: 40,
+      height: 40,
+      placement: { x: 1, y: 1 },
+    });
+    await op(H, person, { type: "actor.join", from: old.id, into: person.id }, null);
+
+    const folded = await until(
+      () => canvas(B),
+      (snap) => snap.joined?.[old.id] === person.id,
+      "the fold to reach B",
+    );
+    expect(folded.names[old.id]).toBe(person.name);
+
+    // Written down, not just held: the file a restart reads has it.
+    await B.daemon.close();
+    const stored = JSON.parse(await fs.readFile(p.actorsFile(bDir), "utf8")) as { joined?: Record<string, string> };
+    expect(stored.joined?.[old.id]).toBe(person.id);
+  }, 30_000);
 });
 
 describe("what a replica will and will not do on its own", () => {
@@ -670,6 +774,51 @@ describe("what a replica will and will not do on its own", () => {
     expect(res.status).toBe(400);
     expect(((await res.json()) as { code: string }).code).toBeTruthy();
   }, 20_000);
+
+  /**
+   * **A badge it cannot keep costs the dial, not the daemon** (cleanup phase
+   * 1, TS-3). `ensureBadge` rejects when the badge the door just minted cannot
+   * be written down — a leftover identity write lock, a corrupt
+   * `identity.json` — and `dial` awaited it outside the try that `gaveUp`
+   * exists for, from a promise nothing awaits. On Node 24 that ended the
+   * daemon, and the next start knocked on the door again.
+   *
+   * Stood in for with the lock's own sentence rather than a real lock: the
+   * real one takes five seconds to give up, and only reaches `dial` when a
+   * dial shares the sweep's in-flight knock — the sweep itself swallows it.
+   * The dial is real: a row for a canvas, and the poll's repair opens it.
+   */
+  it("a badge that cannot be kept fails the dial, says why, and tries again", async () => {
+    const rejections: unknown[] = [];
+    const onRejection = (reason: unknown) => void rejections.push(reason);
+    process.on("unhandledRejection", onRejection);
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const link = A.daemon.homes!.link(H.base)!;
+      let asked = 0;
+      (link as unknown as { ensureBadge(): Promise<unknown> }).ensureBadge = () => {
+        asked += 1;
+        return Promise.reject(
+          new Error(
+            `Identity write is locked at ${path.join(aDir, ".identity-write.lock")}. ` +
+              "Inspect the owner and recover an abandoned lock explicitly; it was not removed.",
+          ),
+        );
+      };
+      await A.daemon.homes!.bind("prj_unkept", H.base);
+      const state = await until(
+        async () => link.canvasStates().find((c) => c.canvasId === "prj_unkept") ?? null,
+        (s) => s !== null && s.failures >= 2,
+        "the dial to fail, and fail again after its backoff",
+      ).catch(() => null);
+      expect(rejections.map(String)).toEqual([]);
+      expect(state?.lastFailure).toContain("Identity write is locked");
+      expect(asked).toBeGreaterThanOrEqual(2);
+    } finally {
+      process.off("unhandledRejection", onRejection);
+      vi.restoreAllMocks();
+    }
+  }, 20_000);
 });
 
 describe("presence, carried both ways and written nowhere", () => {
@@ -717,8 +866,9 @@ describe("presence, carried both ways and written nowhere", () => {
     // — journey rule, and the one thing presence must never do.
     expect((await oplog(H)).map((entry) => entry.envelope.op.type)).toEqual([
       "project.create",
-      "item.add",
+      "group.change",
     ]);
+    expect((await oplog(H))[1]!.envelope.op).toMatchObject({ action: { kind: "apply", change: { intent: "insert" } } });
     expect(await fs.readFile(p.oplogFile(homeDir, CANVAS), "utf8")).not.toContain(
       session.sessionId,
     );
@@ -765,16 +915,61 @@ describe("the rc's liveness and the web's ask, carried across the link", () => {
     get<{ parked: boolean; actorIds: string[] }>(node, `/api/projects/${CANVAS}/rc`);
 
   /** An rc's hold at A, as the CLI makes it: held open, released by abort. */
-  function holdAtA(actorIds: string[], waitMs = 8_000) {
+  function holdAtA(actorIds: string[], waitMs = 8_000, says: Record<string, unknown> = {}) {
     const aborter = new AbortController();
     const done = fetch(`${A.base}/api/rc/hold`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...A.badge.headers },
-      body: JSON.stringify({ canvasId: CANVAS, actorIds, waitMs }),
+      body: JSON.stringify({ canvasId: CANVAS, actorIds, waitMs, ...says }),
       signal: aborter.signal,
     });
     return { done, aborter };
   }
+
+  it("owner-only summons: whose rc it is and whose word it takes reach H, and H routes asks by it", async () => {
+    await birthAtA();
+    const sian = { id: "agt_sian", name: "Sian" };
+    await A.badge.speakAs(sian);
+    await op(A, priya, { type: "agent.enroll", agent: sian });
+
+    // Priya's rc says it is hers, and that Sian takes her word alone — the
+    // policy the rc applies at dispatch, announced so the web can say it.
+    const hold = holdAtA([sian.id], 12_000, {
+      owner: priya,
+      policies: { [sian.id]: { owner: priya, listen: [] } },
+    });
+    type Answering = { parked: boolean; actorIds: string[]; owners?: unknown[]; policies?: Record<string, unknown> };
+    const at = await until(
+      () => get<Answering>(H, `/api/projects/${CANVAS}/rc`),
+      (r) => r.policies?.[sian.id] !== undefined,
+      "Sian's policy to relay up",
+    );
+    expect(at.owners).toEqual([priya]);
+    expect(at.policies).toEqual({ [sian.id]: { owner: priya, listen: [] } });
+
+    // Somebody else's ask to add an agent is refused AT THE DOOR, in words
+    // that name whose rc it is — never sent down to spend nothing silently.
+    const asked = await post(H, `/api/projects/${CANVAS}/agents/ask`, {
+      name: "Percy",
+      from: { id: "usr_home", name: "Home" },
+    });
+    expect(asked.status).toBe(403);
+    const refusal = (await asked.json()) as { code: string; error: string };
+    expect(refusal.code).toBe("not-your-rc");
+    expect(refusal.error).toContain("Priya's");
+    hold.aborter.abort();
+    await hold.done.catch(() => {});
+  }, 20_000);
+
+  it("an owner the holding badge cannot speak as is not believed", async () => {
+    await birthAtA();
+    const hold = holdAtA([], 8_000, { owner: isaac });
+    await until(() => get<{ parked: boolean }>(H, `/api/projects/${CANVAS}/rc`), (r) => r.parked, "the hold to relay up");
+    const at = await get<{ owners?: unknown[] }>(A, `/api/projects/${CANVAS}/rc`);
+    expect(at.owners).toEqual([]);
+    hold.aborter.abort();
+    await hold.done.catch(() => {});
+  }, 20_000);
 
   it("a hold at A is `parked` at H, and stops being when the hold ends", async () => {
     await birthAtA();
@@ -796,6 +991,9 @@ describe("the rc's liveness and the web's ask, carried across the link", () => {
     const sian = { id: "agt_sian", name: "Sian" };
     await A.badge.speakAs(sian);
     await op(A, priya, { type: "agent.enroll", agent: sian });
+    // A hold names only actors its badge holds (room phase 3, the claim
+    // rule): A holds this one, and nobody enrolled it.
+    await A.badge.speakAs({ id: "agt_nobody", name: "Nobody" });
 
     const hold = holdAtA([sian.id, "agt_nobody"], 12_000);
     const at = await until(
@@ -828,6 +1026,111 @@ describe("the rc's liveness and the web's ask, carried across the link", () => {
       asks: { askId: string; name: string; from: { id: string } }[];
     };
     expect(held.asks).toMatchObject([{ askId, name: "Sian", from: { id: "usr_home" } }]);
+  }, 20_000);
+
+  /** An rc holding directly AT the home, on the home's own badge — a hosted rc,
+   * or any rc that is not behind a member daemon. */
+  function holdAtH(actorIds: string[], waitMs = 12_000, says: Record<string, unknown> = {}) {
+    const aborter = new AbortController();
+    const done = fetch(`${H.base}/api/rc/hold`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...H.badge.headers },
+      body: JSON.stringify({ canvasId: CANVAS, actorIds, waitMs, ...says }),
+      signal: aborter.signal,
+    });
+    return { done, aborter };
+  }
+
+  /**
+   * **Issue #306.** A hold placed at the home on another badge never reaches
+   * a replica's registry — nothing relays DOWN — so `isocan who` on a laptop
+   * read a hosted rc's agents as `enrolled` while the home's tray read them
+   * `answerable`. A replica now answers `/rc` with the home's fact.
+   */
+  it("a hold at H reads answerable at A, and stops when it ends (#306)", async () => {
+    await birthAtA();
+    const percy = { id: "agt_percy", name: "Percy" };
+    await H.badge.speakAs(percy);
+    await op(A, priya, { type: "agent.enroll", agent: percy });
+    const home = { id: "usr_home", name: "Home" };
+    await until(() => canvas(H), (c) => c.canvas.agents?.[percy.id] !== undefined, "the enrolment to reach H");
+    expect((await rcOf(A)).parked).toBe(false);
+
+    const hold = holdAtH([percy.id], 12_000, { owner: home, policies: { [percy.id]: { owner: home, listen: [] } } });
+    type Answering = { parked: boolean; actorIds: string[]; owners?: unknown[]; policies?: Record<string, unknown> };
+    const at = await until(() => get<Answering>(A, `/api/projects/${CANVAS}/rc`), (r) => r.parked, "H's hold to read at A");
+    expect(at.actorIds).toEqual([percy.id]);
+    expect(at.owners).toEqual([home]);
+    expect(at.policies).toEqual({ [percy.id]: { owner: home, listen: [] } });
+
+    hold.aborter.abort();
+    await hold.done.catch(() => {});
+    await until(() => rcOf(A), (r) => !r.parked, "the hold's end to read at A");
+  }, 20_000);
+
+  it("a hold at A and a hold at H read as one answering set at A (#306)", async () => {
+    await birthAtA();
+    const sian = { id: "agt_sian", name: "Sian" };
+    const percy = { id: "agt_percy", name: "Percy" };
+    await A.badge.speakAs(sian);
+    await H.badge.speakAs(percy);
+    await op(A, priya, { type: "agent.enroll", agent: sian });
+    await op(A, priya, { type: "agent.enroll", agent: percy });
+    await until(() => canvas(H), (c) => c.canvas.agents?.[percy.id] !== undefined, "the enrolments to reach H");
+    const home = { id: "usr_home", name: "Home" };
+
+    const atA = holdAtA([sian.id], 12_000, { owner: priya, policies: { [sian.id]: { owner: priya, listen: [] } } });
+    const atH = holdAtH([percy.id], 12_000, { owner: home, policies: { [percy.id]: { owner: home, listen: [priya.id] } } });
+    type Answering = { parked: boolean; actorIds: string[]; owners?: { id: string }[]; policies?: Record<string, unknown> };
+    const at = await until(
+      () => get<Answering>(A, `/api/projects/${CANVAS}/rc`),
+      (r) => r.actorIds.includes(sian.id) && r.actorIds.includes(percy.id),
+      "both holds to read at A",
+    );
+    expect(at.parked).toBe(true);
+    expect(at.owners?.map((o) => o.id).sort()).toEqual([home.id, priya.id].sort());
+    expect(at.policies).toEqual({
+      [sian.id]: { owner: priya, listen: [] },
+      [percy.id]: { owner: home, listen: [priya.id] },
+    });
+    atA.aborter.abort();
+    atH.aborter.abort();
+    await Promise.allSettled([atA.done, atH.done]);
+  }, 20_000);
+
+  it("with the home down, A still reads its own hold (#306)", async () => {
+    await birthAtA();
+    const hold = holdAtA([], 12_000);
+    await until(() => rcOf(A), (r) => r.parked, "the hold to register at A");
+    await H.daemon.close();
+    const at = await rcOf(A);
+    expect(at.parked).toBe(true);
+    hold.aborter.abort();
+    await hold.done.catch(() => {});
+  }, 20_000);
+
+  it("an ask posted at A with nobody parked at A comes out of H's open hold (#306)", async () => {
+    await birthAtA();
+    const hold = holdAtH([], 12_000);
+    await until(() => rcOf(A), (r) => r.parked, "H's hold to read at A");
+
+    const asked = await post(A, `/api/projects/${CANVAS}/agents/ask`, { name: "Sian", from: priya });
+    expect(asked.status).toBe(200);
+    const { askId } = (await asked.json()) as { askId: string };
+    const held = (await (await hold.done).json()) as { asks: { askId: string; name: string; from: { id: string } }[] };
+    expect(held.asks).toMatchObject([{ askId, name: "Sian", from: { id: priya.id } }]);
+  }, 20_000);
+
+  it("an ask posted at A meets H's owner-only refusal, verbatim (#306)", async () => {
+    await birthAtA();
+    const home = { id: "usr_home", name: "Home" };
+    const hold = holdAtH([], 12_000, { owner: home });
+    await until(() => rcOf(A), (r) => r.parked, "H's hold to read at A");
+    const asked = await post(A, `/api/projects/${CANVAS}/agents/ask`, { name: "Sian", from: priya });
+    expect(asked.status).toBe(403);
+    expect(await asked.json()).toMatchObject({ code: "not-your-rc" });
+    hold.aborter.abort();
+    await hold.done.catch(() => {});
   }, 20_000);
 
   it("an ask with nobody parked anywhere is refused, with the code the dialog reads", async () => {
@@ -968,19 +1271,19 @@ describe("the link a canvas actually has to its home", () => {
 
   /**
    * A canvas this machine has a row for and the home has never heard of: the
-   * 4404 close. The link is dropped and the next sweep makes a new one, which
-   * is correct and was completely silent — a fresh `CanvasLink` counts from
+   * source classification now refuses before any socket can open. Repeated
+   * failures used to be completely silent — a fresh `CanvasLink` counted from
    * zero, so an endless two-second retry looked like a first attempt forever.
    * The count outlives the link precisely so this can be reported.
    */
   it("reports a canvas whose socket has never connected, and why", async () => {
-    await A.daemon.homes.bind("prj_ghost", H.base);
+    await A.daemon.homes!.bind("prj_ghost", H.base);
     const state = await until(
       () => stateOf(A, "prj_ghost"),
       (found) => (found?.failures ?? 0) >= 2,
       "A to report repeated failures",
     );
     expect(state).toMatchObject({ connected: false, opens: 0, relayedAt: null });
-    expect(state!.lastFailure).toContain(String(WS_NO_CANVAS));
+    expect(state!.lastFailure).toContain("source classification is unavailable");
   }, 20_000);
 });

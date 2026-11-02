@@ -1,9 +1,9 @@
 ---
 status: partial
-since: 2026-09-06
+since: 2026-09-11
 issue: 185
 see: ui-refresh, evals
-note: steps 0, 2-8 done, step 9 decided against (no big-bang split), and step 1 overshot — the entry chunk went 768,993 → 689,543 by loading rare surfaces when they are asked for; step 1 partly (768,993 → 720,659, still over the 640,000 bound — the rest is shell code, not chunk boundaries); an outside architecture review checked against the tree — most of it holds, four items are wrong in ways that change the fix, and the finding it missed is that the nightly caught the bundle breach three nights running and every report is sitting in an unmerged PR
+note: an outside architecture review checked against the tree — most of it holds, four items are wrong in ways that change the fix, and the finding it missed was the nightly catching the bundle breach three nights running into unmerged PRs. Steps 0 and 2–8 done, step 9 decided against (no big-bang split). Step 1 is the one that will not stay done — the entry chunk went 768,993 → 635,728 by 8 Sep, under the 640,000 goal for the first time, and has crept back over it with features since (646,899 in 11 Sep's nightly, 653,406 later that day); the ceiling moved to 653,500 with a reason 11 Sep (#267), and the goal is 13,406 bytes away
 ---
 
 # The architecture review, checked against the tree
@@ -12,6 +12,16 @@ note: steps 0, 2-8 done, step 9 decided against (no big-bang split), and step 1 
 isomorphism, documentation drift and code health, measured at `90fa030`. This
 is that review verified item by item against `main` — what holds, what is
 wrong, and what it did not look at.
+
+**Where this stands, 11 Sep 2026.** Steps 0 and 2–8 are done and step 9 was
+decided against. Step 1's numbers below are history: the entry chunk reached
+**635,728 on 8 Sep**, under the 640,000 goal for the first time, and has
+crept back over it one agreed feature at a time — **646,899 in 11 Sep's
+nightly** (`docs/reviews/2026-09-11-performance.md`) and 653,406 by that
+afternoon. Over the goal: the ceiling in `scripts/bundle-ceiling.mjs` moved
+641,100 → 653,500 with a reason 11 Sep (#267), which itemises the 12,306 bytes
+and names the Help panel's static import as the first place to look. The
+ratchet is doing what step 2 built it to do; the goal is what is missed.
 
 Most of it holds. The parts that do not are worth writing down not because
 the reviewer was careless but because each wrong item points at a **real
@@ -186,6 +196,18 @@ kilobytes was not worth rewriting that guard to stream.
 > measurement, and **a bound nobody can look behind is a bound nobody can act
 > on** — which is why this number stayed red for six days while everybody
 > agreed about what was in it.
+
+> **Corrected again, 26 September 2026 — the correction above was the wrong
+> one.** `bundle-what.mjs` walked `sources` by each sourcemap segment's
+> FOURTH field, the original column, instead of its second, the source index,
+> so every per-file figure it printed was noise with a plausible shape. Read
+> with the right field, the entry (729,760 bytes that day) is **43% `@isocan/web`
+> and 29% `@isocan/core`**, and the canvas is its largest part: `ItemView`
+> 27 KB, `CanvasViewport` 18 KB, `CanvasPage` 17.5 KB, `canvasStore` 12 KB,
+> `api.ts` 9.5 KB. **The inference below — "the canvas itself" — was right.**
+> The namespace-import fix above stands: 699,999 → 635,728 is a total, which
+> the broken attribution could not touch. `test/bundle-what.test.ts` now holds
+> the field to a map built by hand.
 
 **Splitting is spent, and the remaining 80KB is not a chunk-boundary
 problem.** Two measurements say so: removing all three build-time module web

@@ -10,6 +10,34 @@ later. The record of what moved it lives in the phase findings of
 [the multiuser phases](projects/multiuser/phases.md): a finding that redraws
 the map edits this doc in the same change.
 
+The same system is drawn as instruments on the
+[\[isocan\] System design](https://isocan.io/p/prj_6fgykNN1_m) canvas — the hourglass, the
+life of an operation, the door, the two ledgers, home and replica, the
+storage seam, the GCP map — each screen citing the files it was read from.
+Drive that first if the names here do not yet mean anything; this doc is the
+one that has to stay exact.
+
+## One word each
+
+Three nouns, one meaning apiece (#135,
+[the count behind it](research/2026-09-06-project-and-canvas.md)):
+
+- **Canvas** — the surface: items, threads, a viewport, presence, an oplog.
+  What you are on, what you switch between, what an agent is enrolled on;
+  `--canvas <ref>` on every verb. Its record (title, properties, who touched
+  it last) is core's `Canvas` type, which the web store calls `record`.
+- **Project** — the directory (or repository) that holds canvases: one
+  today, several later. `.isocan/project.json` is its marker.
+- **Space** — an access grouping across canvases: who may enter, never where
+  the files are. A canvas is in exactly one project and any number of spaces.
+
+The rule: "canvas" in every sentence a person or agent reads, unless the
+sentence is about the directory. "Project" survives on the wire because the
+wire is durable and names the container — the `project.*` ops,
+`/api/projects`, `/p/`, the snapshot's `project` field, `defaultProjectId` —
+and none of those is renamed. `test/one-word.test.ts` holds the README, the
+agent guide, the CLI's strings and the web app's strings to the rule.
+
 ## Givens
 
 - **Google Cloud**, one region (`us-west1` — compute, Firestore, and
@@ -36,9 +64,77 @@ the map edits this doc in the same change.
 
 ## The stack
 
+The web and CLI use the same daemon/API vocabulary. `@isocan/mcp` adapts that
+API to stdio tools and current canvas/Context resources; it owns no canvas
+state. Explicit per-call session keys select durable `mcp:` agent claims,
+and calls without them retain ambient identity. A known canvas ID goes to
+admission directly; discovery controls lists rather than removing the
+known-address door. Shared context assembly and feedback addressing remain
+in API/core. A feedback call's deadline covers connection setup, admission
+and polling, and its cancellation reaches HTTP as well as held daemon watches.
+
+Personal memory adds private Desk records for stable owner/source bindings,
+concrete link consent and source-specific agent delegation. A first explicit
+use reserves its birth identity before the writer creates it without a link
+grant or inherited space. FileDesk serializes one daemon's callers; CloudDesk
+transactions also coordinate independent instances. Metadata lifecycle checks
+and a narrow reserved-birth recovery distinguish an interrupted birth from a
+deleted dataset. Joined owners keep all existing datasets.
+
+Core defines contributed pieces and provenance; the browser-safe
+`@isocan/api/context` leaf assembles local, inherited and explicitly authorized
+personal layers for both clients. Personal reads validate the current caller,
+destination edge and home-owned consent before opening source data. Automatic
+linked previews and inheritance classify their sources first and remain
+redacted for personal or unknown sources. Browser private text exists only in
+the current Context inspection; shared canvas state and frozen requests do not
+acquire it.
+
+Ordinary inherited Context adds a bounded metadata head from
+`GET /api/projects/:id/context/recap`. The canvas's writer queue
+captures current and archived operations coherently with GC, and core validates
+the required recent range before calculating it. Missing history is unavailable,
+not an empty summary. The backing still materializes its archive; only the
+response is newly bounded. Context-only assembly and a deferred report leaf
+keep design resolution and automatic source classification history-free.
+
+The shared API security hooks classify the route Fastify actually matched,
+including decoded parameters, so encoded static URL segments receive the same
+badge, Origin, admission, lifecycle and source checks as canonical requests.
+Forwarding retains the actual URL. The ordinary recap route forces personal
+exclusion before generic source-loading hooks and repeats it in the queue.
+
+MCP's `read_personal_context` adapts that same authoritative read. A claimed
+session and concrete destination card are required; the resolved destination
+handle carries the actor and cancellation through the request. Pagination and
+current-piece provenance remain the API's contract, and no tool adds a second
+permission decision or changes frozen request content.
+
+MCP excludes personal sources from ambient resolution and carries an immutable
+actor and read/edit/own ceiling on explicit requests. The HTTP boundary checks
+that restriction before admission or source reads and again at queued writes;
+forwarding carries it to the authority rather than reading a retained replica.
+A replica retains only source/home classification to prevent automatic link
+migration, never ownership or delegation authority. Personal canvases refuse
+ordinary teleport because it cannot transfer these private custody records.
+
+Inbox assembly also belongs to the daemon. CLI and web ask the same route;
+each remote canvas is read through its authoritative home connection with
+that home's admission and operator checks. The response includes private
+visit marks and explicit unavailable canvases. A visible browser polls every
+30 seconds without writing marks. Marking a visit routes by that canvas's
+home, independently of the other homes the replica happens to hold.
+
+Modules also remain clients. They can carry bounded assets, declare validated
+data contributions, fill dialogs and ask the person's rc for installed
+templates. The template's directory and rc configuration exist before
+enrolment is published. Arena creation uses core's explicit prepared forest
+and one bounded group operation; removing the module leaves ordinary files,
+properties and reactions in the log.
+
 | layer | choice |
 | --- | --- |
-| language / runtime | TypeScript on Node 22, run with `tsx` as today — the container pins the toolchain, and an always-on instance makes cold-start economics moot |
+| language / runtime | TypeScript on Node 24 (`.nvmrc`), run with `tsx` as today — the container pins the toolchain, and an always-on instance makes cold-start economics moot |
 | the home | the existing daemon (`@isocan/server`), containerized, on **Cloud Run** — one service, **exactly one instance** (min = max = 1, CPU always allocated, concurrency raised for sockets) |
 | op durability | **Firestore** (native mode) — one document per op |
 | blobs, snapshots | **Cloud Storage** — one bucket per environment |
@@ -122,8 +218,8 @@ draws two arrows out of that one box, and the canvases it is itself the
 home of draw none at all — nothing about them leaves the machine.
 
 The process is still one daemon. Everything that makes it correct
-stays in-process exactly as it is today: the engine's single-writer
-promise chain, the presence hub, the WS rooms, undo stacks, GC. Google
+stays in-process exactly as it is today: the engine's writer queues
+(one per canvas — see below), the presence hub, the WS rooms, undo stacks, GC. Google
 Cloud replaces the daemon's *disk*, never its judgment. The shape of a
 deploy is the shape of a crash — which the next two sections make into
 a feature rather than a risk.
@@ -146,6 +242,7 @@ file:
 | `project.delete` — soft, the directory moved aside (which frees the id) | soft too — `deleted: true` on the canvas document, ops untouched. The id therefore stays **taken forever**: its seqs are still claimed, so re-creating it is refused with `duplicate-id` rather than being fenced. The one place the two backings differ in what they *allow*; canvas ids are minted, never chosen, so nothing reaches it |
 | `blobs/<sha256>.<ext>` | GCS objects, same content addressing |
 | `blobs.json` index | `canvases/{id}/blobmeta/{hash}` — one doc per blob, no read-modify-write of a shared index. Costlier than it looks: `Engine.gc` drove that read-modify-write from *above* the seam (read the whole index, age each blob, delete, write back), so this row was not a schema swap behind an unchanged method. Phase 4 moved it: the seam now says `listBlobs` and `deleteBlobs`, the policy stays in the engine where `gc.test.ts` already tests it, and no shared-index concept crosses in either direction |
+| `summaries/<id>/<key>.json` | `canvases/{id}/summaries/{key}.json` in GCS — Semantic Zoom's content-addressed summary cache (`touch` stamped on `customTime` so GC ages unused summaries the same way on both backings, and `purgeCanvas` deletes the prefix alongside `blobs/`) |
 | `actors.jsonl` + `actors.json` | same op-docs-plus-snapshot pattern, for the registry's public face (ids, names, colors); the claims half re-keys onto `badges/` — the two-ledger split, drawn in code |
 
 The durability contract is unchanged: an op is durable **before** it is
@@ -205,19 +302,31 @@ because the loser's copy is overwritten with nothing anywhere saying so.
 A log line and not a throw — the other canvases at that home are
 innocent.
 
-The listing route still answers the WIDE question by default, because a
-browser asks a different question on the same route — "what can I open
-from here", which on a solo home includes the canvas a CLI just made
-under a badge the tab has never carried — and the caller states which,
-never the route sniffing who called. Phase 10.3 added a third question to
-the same route for the same reason: `?reach=here`, the canvases this
-daemon is the home of, which is what the web app's canvas list asks,
-because its links are client-side navigations that never reach the
-per-canvas page guard and the local origin would otherwise render a
-replica of a canvas that lives at dev. Enumerate-and-mirror was the
-easiest thing that worked while a home had one member; it is how a
-stranger's canvas landed on a laptop the moment a link grant was on. An
-arrival that
+Hosted discovery now includes admissions, named canvas/group/space grants
+and creator floors. Link grants answer a known address and never supply an
+ordinary hosted working directory, including explicit `?reach=admissible`
+requests. The same
+boundary governs homes, presence whereabouts, takedown lists and unscoped
+oplog watches. Named watch targets retain the entry door. Link candidates
+are excluded before choosing a discovery grant, so a stronger link cannot
+hide a valid named invitation.
+
+Public is a separate home catalogue (`GET /api/public`), not a discovery
+scope on that working list. A concrete canvas link at read/view carries an
+optional latest listing decision `{listed, at, by}`. FileDesk journals its
+atomic change; CloudDesk transacts the grant row. Revocation clears consent,
+replacement starts unlisted, and indexed grant candidates are rechecked
+against metadata-only `Store.canvasRecord`, home authority and refusals.
+Catalogue reads admit nobody and read no snapshots, blobs or thumbnails.
+The unsigned `/public` page and signed-in home section render the same narrow
+DTO; public responses and canvas entry HTML send noindex instructions.
+
+A loopback-bound daemon retains its local shelf: a local browser sees what
+its own machine holds, including a canvas the CLI created under a different
+badge. `?reach=admitted` remains narrow for replicas. `?reach=here` additionally
+limits the answer to canvases this daemon is the home of; the web list needs
+that limit because its client-side links would otherwise open stale local
+replicas. An arrival that
 holds only an ADDRESS — a cloned `.isocan/project.json`, a pass-less
 `isocan setup` — asks for that one canvas by name (`POST
 /api/home/join`), and the home runs the same door test it would have run
@@ -263,11 +372,34 @@ is the shape with two daemons over one store.
 
 ## Single-writer on a platform that wants to scale
 
-Why one instance is correct and not a compromise: the engine chain,
-presence, and rooms are in-memory state that one process keeps
+Why one instance is correct and not a compromise: the engine's writer
+queues, presence, and rooms are in-memory state that one process keeps
 consistent for free. The moment there are two instances, every one of
 those needs a coordination story — so there is one instance, and the
 ceiling is stated in numbers instead of hidden.
+
+**One writer queue per canvas, not one per daemon (24 Sep 2026).** The
+engine serialized every write on the daemon through one promise chain
+until a forwarded write — which holds its turn across the round trip to
+its home — was measured pausing writes to canvases homed on the same
+machine (lessons #95, #98). `packages/server/src/writers.ts` is the
+mechanism and the `Engine` class comment is the policy:
+
+- a canvas's writes — submit, undo/redo, entries and snapshots arriving
+  from its home, delete, blob index writes, GC, teleport and adoption —
+  queue on that canvas alone, so seq order, op groups and undo are
+  exactly what they were;
+- the home-scoped identity state (the actor registry and the desk's
+  claims) is one more queue, `HOME_KEY`, which canvas writes only read;
+- a personal workflow takes its destination canvas plus a personal key,
+  and a personal birth — which cannot name its canvases up front — takes
+  every queue at once (`exclusive`), the old chain for one task.
+
+A task that needs several queues registers on all of them in one
+synchronous step and only ever waits on tasks registered before it, so
+there is no acquisition order to get wrong and no cycle to deadlock on.
+`settled(canvasId)` drains one queue (a home link's dial asks it before
+reading its cursor); `settled()` drains every queue (shutdown).
 
 **The ceiling.** Cloud Run tops out at 1000 concurrent requests per
 instance, and a WebSocket holds one for its lifetime — so the ceiling is
@@ -439,6 +571,29 @@ two-ledger rule:
   token is KMS-wrapped at write and unwrapped only at fire time.
 - `audit/` — append-only firing and admission ledger. The audit ledger
   is Firestore, not Cloud Logging: logs rotate, the ledger answers.
+- `summaryStats/{canvasId}` — per-day Semantic Zoom call and word counts
+  (private home accounting, never replicated).
+- `parks/{canvasId}:{actorId}` — the durable park cursor's three watermarks
+  (`cursor`, `delivered`, `rehanded`, `parkId`), persisted on `Desk` so a
+  hosted container restart never loses a parked agent's cursor or re-delivers
+  settled turns.
+- `meta/migrations` — one-time home migration markers (`linkGrants: true`),
+  recorded on `Desk` rather than in `/tmp/isocan` so cold starts do not
+  re-scan every canvas.
+
+**The third seam: `Workstation | null` (14 Oct 2026, lesson #120).** `Store`
+and `Desk` separate replicated canvas state from a home's private ledgers,
+and both exist on every daemon. Single-user machine state — `HomeLinks`
+(`homes.json` and `identity.json` replica badges), local directories
+(`dirs.json`), the person's API keys (`keys.json`), Google Drive OAuth
+(`google.json`), and local model weights (`models/`) — belongs behind a third
+seam, `Workstation` (`FileWorkstation` on a personal machine, `null` when
+`ISOCAN_STORE=cloud` or `servesWorld: true`). A hosted home therefore has no
+replica registry at all, writes no durable or tenant state to `ISOCAN_HOME`
+(`/tmp/isocan`), refuses replica-only gestures (`POST /api/home/join`,
+`project.create { home }` to another origin) with `409 not-a-replica`, and
+both hosted and local daemons refuse self-links (`409 self-link`) across
+every door (`join`, `create`, `teleport`).
 
 **The canvas's public address is `/p/<id>`, and it has exactly one
 definition.** This is the one URL in the product that strangers hand each
@@ -573,7 +728,7 @@ comes from the object store rather than from the client.
   late reclaims the same bytes. `infra/91-scheduler-gc.sh` creates
   nothing, permanently, and says so. Like presence, this leans on
   exactly-one-instance: one home is one sweeper, and every sweep it
-  runs is queued on the same single-writer chain as the writes it is
+  runs is queued on the same writer queue as the canvas writes it is
   compacting behind.
 
   **The sweep after boot is there because the instance is the clock.**
@@ -755,3 +910,41 @@ renderer (including React's table-whitespace removal). Receivers resolve local
 DOM ranges; CSS Custom Highlights never replace native selection. Older
 browsers retain the named attention status and explicit Show selection action.
 Version changes clear the highlight instead of guessing at another sentence.
+
+
+### Module workspaces
+
+The web and CLI module lists are the only host imports of a module. Anatomy
+adds no graph daemon: project records, concepts and checkpoints are ordinary
+versioned JSON items; membership and relationships are namespaced properties.
+Its CLI and React views use the same graph adapter and operation builders.
+
+`WebModule.workspaces` composes chrome around the host's native viewport at
+an existing module route. `ModuleWorkspace` owns capability, selection,
+navigation, history shortcuts, lazy/error boundaries and measured stage bounds.
+A fixed viewport clipped to the measured slot keeps screen-coordinate drag
+math unchanged. `WorkspaceHost` promotes authenticated blob reads and native
+selection/focus/navigation; modules still import no web stores. The API and
+proposed declaration live in `core/modules.ts`; the full contract is in
+[the module authoring guide](projects/modules/authoring.md).
+
+A workspace can supply a project-specific menu and right-rail entry from the
+canvas record's properties. Anatomy uses `anatomy.analysis` and
+`anatomy.repository`; requesting a repository read posts an ordinary `/anatomy`
+Chat message for an agent. Workspace-scoped activation routes native card
+double-clicks and underlay links without putting module semantics in ItemView.
+
+
+Anatomy’s fluid exploration adds a workspace-local presentation store in the
+web host. Modules provide target bounds and semantic detail over native IDs;
+React consumers and imperative gestures read the same interpolated frame.
+Canonical geometry remains in the daemon’s replica. The host maps item-anchored
+comments between saved and displayed coordinates, while unscoped presence is
+not projected across different local layouts. Module API 0.2.2 also makes local
+view state addressable through host navigation. See the [workspace contract](projects/modules/authoring.md).
+
+`item.edit` is a conditional body-and-metadata replacement. The reducer checks
+the version originally read and optional title/property preconditions before
+changing either field. Anatomy’s form and guarded CLI drafts use it; undo and
+redo restore body and metadata together. An older daemon rejects the new op
+rather than silently dropping a precondition it does not understand.

@@ -47,7 +47,7 @@ This design directly extends
 
 2. **The daemon-held tree carries the design**:
    - The primary architecture rests on a **daemon-held tree with a native
-     filesystem watcher** (`node:fs/watch` / platform backend).
+     filesystem watcher** (`watch()` from `node:fs` / platform backend).
    - The local daemon is the sole entity with authoritative disk paths, git
      toplevel resolution, and filesystem lifecycle. It serves the CLI, the web
      canvas, and remote agents alike (preserving the Isomorphism Rule).
@@ -56,13 +56,14 @@ This design directly extends
    - Browser-held handles via the File System Access API (`showDirectoryPicker`)
      provide a client-side view for hosted canvases (where no local daemon is
      present).
-   - **`FileSystemObserver` reality**: Verified against current specifications.
-     `FileSystemObserver` is a proposed Web API enabled on Chromium desktop in
-     M133. It emits `FileSystemChangeRecord` entries, but is restricted to
-     desktop Chromium, requires explicit user gestures and permission re-grants
-     across sessions, and **deliberately does not expose disk paths**
-     (`File.prototype.path` does not exist). It cannot write to `dirs.json` and
-     cannot replace the daemon's native binding.
+   - **`FileSystemObserver` is an experimental option, not a baseline**:
+     [Chrome's API guide](https://developer.chrome.com/blog/file-system-observer)
+     describes an origin trial and requires feature detection
+     (`'FileSystemObserver' in self`). Do not infer availability from a browser
+     version. Any implementation must verify support and permissions for the
+     granted handles; unavailable observation stays an explicit limitation.
+     Handles and relative change paths do not grant an authoritative native
+     disk path. This mechanism cannot replace the daemon's native binding.
 
 4. **Cross-system authority & exposure model**:
    - The existing model serves a canvas's files locally from the home daemon to

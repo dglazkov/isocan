@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
-import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import type { Canvas } from "@isocan/core";
-import { startDaemon, stopDaemons, type Daemon } from "@isocan/server";
+import { type Daemon } from "@isocan/server";
+import { startDaemon, stopDaemons } from "@isocan/server/daemon";
 import { mintTestBadge } from "./badge.ts";
+import { runCli, type Run } from "./cli.ts";
 
 /**
  * `isocan setup` is the whole "cd anywhere, run one thing" promise (#42): the
@@ -18,7 +18,6 @@ import { mintTestBadge } from "./badge.ts";
  * These drive the real binary: the thing a stranger's `npx` would run.
  */
 
-const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 const nico = { id: "usr_nico", name: "Nico" };
 
 let home: string;
@@ -44,22 +43,9 @@ afterEach(async () => {
   await fs.rm(work, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
-function isocan(...args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
-  const child = spawn(process.execPath, [cliBin, ...args], {
-    cwd: work,
-    // --no-install: a test may not reach out and globally install anything.
-    env: { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: String(port) },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  let stdout = "";
-  let stderr = "";
-  child.stdout.setEncoding("utf8");
-  child.stdout.on("data", (chunk) => (stdout += chunk));
-  child.stderr.setEncoding("utf8");
-  child.stderr.on("data", (chunk) => (stderr += chunk));
-  return new Promise((resolve) =>
-    child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })),
-  );
+function isocan(...args: string[]): Promise<Run> {
+  // --no-install: a test may not reach out and globally install anything.
+  return runCli(args, { cwd: work, env: { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: String(port) } });
 }
 
 const canvases = (): Promise<Canvas[]> =>
@@ -139,5 +125,23 @@ describe("isocan setup", () => {
     });
     const [canvas] = await canvases();
     expect(canvas!.createdBy.name).toBe("Nico");
+  });
+
+  it("links the Antigravity plugin with --antigravity, without touching ~/.gemini unless asked", async () => {
+    const antigravityTarget = path.join(home, "plugins", "isocan");
+    const done = await runCli(["setup", "--antigravity", "--no-install", "--no-open", "--json"], {
+      cwd: work,
+      env: {
+        ...process.env,
+        ISOCAN_HOME: home,
+        ISOCAN_PORT: String(port),
+        ISOCAN_ANTIGRAVITY_PLUGIN_DIR: antigravityTarget,
+      },
+    });
+    expect(done.code).toBe(0);
+    const report = JSON.parse(done.stdout) as Record<string, string>;
+    expect(report.antigravity).toContain(`installed: ${antigravityTarget}`);
+    expect((await fs.lstat(antigravityTarget)).isSymbolicLink()).toBe(true);
+    expect(await fs.readFile(path.join(antigravityTarget, "plugin.json"), "utf8")).toContain('"isocan"');
   });
 });

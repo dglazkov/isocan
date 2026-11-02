@@ -1,0 +1,30 @@
+{
+  "name": "@isocan/critique",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Critics on the canvas — personas that point and explain and never touch, seeded from the design packs or written by hand",
+  "exports": {
+    "./core": "./src/core.ts",
+    "./web": "./src/web.tsx",
+    "./cli": "./src/cli.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "isocan": {
+    "engines": "^0.2.10",
+    "proposed": [
+      "points",
+      "dialogs",
+      "templates",
+      "host"
+    ]
+  },
+  "dependencies": {
+    "@isocan/core": "*"
+  },
+  "peerDependencies": {
+    "react": "^18.3.1"
+  }
+}

@@ -17,6 +17,8 @@ import { describe, expect, it } from "vitest";
  */
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
 const runner = read("../scripts/journeys.mjs");
+const daemonLib = read("../scripts/lib/daemon.mjs");
+const frames = read("../scripts/frames.mjs");
 const persona = read("../.agents/personas/journeys.md");
 const workflow = read("../.github/workflows/journeys.yml");
 
@@ -54,6 +56,44 @@ describe("the workflow reports unsuccessful runs", () => {
   });
 });
 
+describe("a failing journey fails the run", () => {
+  /**
+   * `text-tool` failed on 9, 10 and 11 Sep 2026 and the workflow finished
+   * green each night, with the failure in a commit comment nobody opened. A
+   * scheduled run gates nothing, so red costs nobody a merge — it only stops
+   * the run list saying "fine" about a walk that said otherwise.
+   */
+  const step = workflow.split("- name: A failing journey fails the run")[1] ?? "";
+
+  it("is the last step, and runs only when the walk said so", () => {
+    expect(step, "the step is missing from journeys.yml").not.toBe("");
+    // Last, so the comment is always written before the run goes red.
+    expect(step).not.toMatch(/- name:/);
+    expect(workflow.indexOf("- name: Say so")).toBeLessThan(workflow.indexOf("- name: A failing journey fails the run"));
+    expect(step).toContain("if: steps.walk.outputs.failing == 'yes'");
+    expect(step).not.toContain("continue-on-error");
+  });
+
+  it("actually exits non-zero", () => {
+    // Run the shipped shell rather than grepping for `exit 1`: a step that
+    // prints the failure and succeeds is the bug this replaces.
+    const shell = step.split("run: |\n")[1]!.split("\n")
+      .map((line) => line.replace(/^ {10}/, "")).join("\n").trim();
+    const dir = mkdtempSync(path.join(tmpdir(), "isocan-journey-red-"));
+    try {
+      writeFileSync(path.join(dir, "journeys.txt"), "FAIL  text-tool\nRunner exit status: 1\n");
+      expect(() =>
+        execFileSync("bash", ["-e", "-o", "pipefail", "-c", shell], {
+          cwd: dir, encoding: "utf8", timeout: 10_000, stdio: "pipe",
+          env: { ...process.env, RUNNER_TEMP: dir },
+        }),
+      ).toThrow();
+    } finally {
+      rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
+  });
+});
+
 describe("the journeys runner", () => {
   it("can prove it is able to report a failure", () => {
     /* A checker that cannot fail proves nothing, and this one drives a
@@ -78,16 +118,59 @@ describe("the journeys runner", () => {
   });
 
   it("boots its own daemon, on its own port, in its own home", () => {
-    /* It must never touch anybody's canvases, and two runs must not collide. */
+    /* It must never touch anybody's canvases, and two runs must not collide.
+       The daemon itself is started by `lib/daemon.mjs` (14 Oct 2026), which
+       picks the port and is handed the home. */
     expect(runner).toContain("ISOCAN_HOME: home");
     expect(runner).toMatch(/mkdtempSync\(path\.join\(tmpdir\(\), "isocan-journeys-"\)\)/);
-    expect(runner).toContain("pickPort");
+    expect(runner).toContain('from "./lib/daemon.mjs"');
+    expect(daemonLib).toContain("pickPort");
+    expect(daemonLib).toContain("ISOCAN_HOME: home");
   });
 
   it("retries only a lost port, never a daemon that will not boot", () => {
     /* Retrying everything turns a real failure into four slow ones and a
        misleading message. */
-    expect(runner).toMatch(/const raced = .*EADDRINUSE/);
+    expect(daemonLib).toMatch(/const RACED = .*EADDRINUSE/);
+    expect(daemonLib).toMatch(/if \(port !== null \|\| !RACED\.test\(String\(err\)\)\) throw err;/);
+  });
+
+  it("starts the daemon itself, never the `serve` launcher it cannot stop", () => {
+    /* `isocan serve` starts a DETACHED `serve --foreground` and exits, so a
+       script holding it holds nothing: `proc.kill()` reached a process that
+       had already gone, and every run left its daemons behind (~290 on one
+       Mac by 14 Oct 2026). `test/owned-daemon.test.ts` proves the helper's
+       ownership by killing its owner; this keeps the scripts on the helper. */
+    const code = (source: string) => source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    for (const [name, source] of [["journeys.mjs", runner], ["frames.mjs", frames]] as const) {
+      expect(code(source), name).not.toMatch(/\[\s*cli\s*,\s*"serve"\s*\]/);
+      expect(source, name).toMatch(/from "\.\/lib\/daemon\.mjs"/);
+    }
+    expect(daemonLib).toMatch(/\[cli, "serve", "--foreground"\]/);
+    expect(daemonLib).toContain("detached: true");
+    expect(daemonLib).toContain("ISOCAN_DAEMON_GUARD_PID: String(process.pid)");
+  });
+
+  it("starts every Chrome stock and owned, never with the machine's policy extensions", () => {
+    /* A managed Mac force-installs its extensions into every new profile, and
+       while they start the page's lazy chunks fail (`net::ERR_FAILED`, a canvas
+       that never opens). With a browser per journey that was 10 fresh rigs in
+       30 (14 Oct 2026); with `--disable-extensions`, 0 in 30. Every browser the
+       runner starts goes through `ownBrowser`, which also reaps it. */
+    const code = runner.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(code).toMatch(/await browser\(\{ args: \["--disable-extensions"\] \}\)/);
+    expect(code.match(/await browser\(/g)).toHaveLength(1);
+    expect(code).toMatch(/reapOnExit\(b\.pid\)/);
+  });
+
+  it("gives every journey a rig of its own", () => {
+    /* One shared rig let a journey change what the next one walked into: a
+       CLI name claimed in the shared home, the door's host-scoped cookie
+       replaced by another daemon's, `identity.json` rewritten. Eighteen
+       journeys failed in a full run and passed alone (14 Oct 2026). A rig per
+       journey makes the full run what `--only` already was. */
+    expect(runner).toMatch(/for \(const journey of list\) \{[\s\S]{0,400}?r = await rig\(\);[\s\S]{0,1200}?await r\.close\(\);/);
+    expect(runner).not.toMatch(/const r = await rig\(\);\s*const results/);
   });
 
   it("presses where a person would, and checks the browser agrees", () => {
@@ -161,6 +244,24 @@ describe("the journeys runner", () => {
        ~400ms. Two findings that day looked like bugs and were this. */
     expect(runner).not.toMatch(/scrollY\s*[!=]==?\s*0|getAnimations\(\)/);
     expect(runner).toMatch(/requestAnimationFrame/); // named, as the warning
+  });
+});
+
+describe("an editor chord means what it means on the runner's platform", () => {
+  // Two journeys were written on a Mac with a raw ⌘A. The nightly runs on
+  // Linux, where CodeMirror's Mod-a is Ctrl, so ⌘A selected nothing and the
+  // replacement text was inserted at the caret — a DESIGN.md spliced into
+  // itself, reported six nights running as a product bug (lesson #89).
+  it("selects all through rig.selectAll, never a hard-coded ⌘A", () => {
+    expect(runner).not.toMatch(/modifiers: 4, key: "a"/);
+    expect(runner).toMatch(/selectAll: async[\s\S]{0,200}process\.platform === "darwin" \? 4 : 2/);
+  });
+
+  // The same mistake one layer up: since #44 (21 Sep) a label prints the
+  // platform's spelling, so on the Linux runner the Undo button is titled
+  // "Undo (Ctrl+Z)" and a selector naming ⌘ finds nothing.
+  it("never selects an element by a ⌘ in its label", () => {
+    expect(runner).not.toMatch(/\[(?:title|aria-label)[~^$*|]?="[^"]*⌘/);
   });
 });
 

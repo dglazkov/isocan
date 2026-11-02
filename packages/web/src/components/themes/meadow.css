@@ -1,0 +1,17 @@
+/* Meadow's rules (living grounds phase 1), beside the components that draw
+   it rather than in `styles.css`: only lazy chunks render either class
+   (`lazycss.test.ts`), so these ship with them. Imported by `LivingGround`
+   and `PaintedGround` (the still frame); `--theme-meadow`, a token, stays in
+   `styles.css` with the other ground colours. */
+
+/* The field's own colour, measured off its still frame, under the WebGL layer
+   before it draws and under the still before the JPEG arrives. */
+.canvas-theme-meadow { background-color: var(--theme-meadow); }
+
+/**
+ * **A living ground's drawing surface.** One WebGL2 canvas filling the theme
+ * slot, under the world, never catching a pointer — the same contract as
+ * every ground. Its pixels are sized by `GroundHost` (device pixels, capped
+ * at 2×); this only lays the box out.
+ */
+.ground-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }

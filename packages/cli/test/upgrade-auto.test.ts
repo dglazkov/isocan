@@ -198,10 +198,14 @@ describe("one upgrade at a time", () => {
 });
 
 describe("applying it", () => {
-  /** The seam: an `npm install` that writes a fixture into the staging prefix. */
+  /** The seam: a fetch runner that writes a fixture into the staging prefix. */
+  const prefixOf = (args: string[]) =>
+    args.includes("--prefix")
+      ? args[args.indexOf("--prefix") + 1]!
+      : path.resolve(args.at(-1)!, "..", "..");
   const installing = (sha: string, options: { broken?: boolean } = {}) =>
     async (_c: string, args: string[]) => {
-      await makeBuild(args[args.indexOf("--prefix") + 1]!, sha, options);
+      await makeBuild(prefixOf(args), sha, options);
       return { status: 0, stdout: "", stderr: "" };
     };
 
@@ -305,8 +309,41 @@ describe("a swap PATH actually follows", () => {
     // The claim under test: the NEXT command resolves to the new build.
     expect(swapped.adoption?.managed).toBe(true);
     expect(await fs.readlink(bin)).toBe(
-      path.join(paths.currentLink(home), "node_modules/isocan/packages/cli/bin/isocan.js"),
+      path.join(paths.currentLink(home), "node_modules/isocan/packages/cli/dist/isocan.mjs"),
     );
+  });
+
+  it("repoints a managed install's legacy bin/isocan.js symlink across the bundle transition", async () => {
+    const binDir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-legacy-bin-"));
+    const bin = path.join(binDir, "isocan");
+    const oldRoot = paths.buildRoot(paths.buildDir(home, "aaaaaaa"));
+    await fs.mkdir(path.join(oldRoot, "packages/cli/bin"), { recursive: true });
+    await fs.writeFile(
+      path.join(oldRoot, "package.json"),
+      JSON.stringify({ name: "isocan", bin: { isocan: "./packages/cli/bin/isocan.js" }, isocan: { commit: "aaaaaaa" } }),
+    );
+    await fs.writeFile(path.join(oldRoot, "packages/cli/bin/isocan.js"), "#!/usr/bin/env node\n", { mode: 0o755 });
+    await flipTo(home, "aaaaaaa");
+    await fs.symlink(path.join(paths.currentLink(home), "node_modules/isocan/packages/cli/bin/isocan.js"), bin);
+    await makeBuild(paths.buildDir(home, "bbbbbbb"), "bbbbbbb");
+
+    const prevPath = process.env.PATH;
+    process.env.PATH = binDir;
+    try {
+      const swapped = await applySwap({
+        home,
+        spec,
+        want: "bbbbbbb",
+        install: { kind: "managed", root: oldRoot },
+      });
+      expect(swapped.ok).toBe(true);
+      expect(swapped.adoption).toMatchObject({ managed: true, moved: true });
+      expect(await fs.readlink(bin)).toBe(
+        path.join(paths.currentLink(home), "node_modules/isocan/packages/cli/dist/isocan.mjs"),
+      );
+    } finally {
+      process.env.PATH = prevPath;
+    }
   });
 
   /** And the outgoing copy gets a name, so `--rollback` has somewhere to go

@@ -1,0 +1,108 @@
+{
+  "schema": 1,
+  "date": "2026-10-22",
+  "shapedBy": "default",
+  "readyBy": null,
+  "willNotTouch": [],
+  "settledToday": [],
+  "leftOpen": [
+    "48 more untriaged Loop findings wait (docs/loop/)"
+  ],
+  "items": [
+    {
+      "id": "measures",
+      "title": "Measure the practice: 39 measures; outside or broken on 2026-10-21: long_files, phases_without_issue, phases_stuck, escapes, changelog_gaps, verify_owed, lint, issues_unnamed, issues_done_open, prs_stale, reviews_unanswered, dependency_age",
+      "kind": "measure",
+      "source": "default",
+      "number": null,
+      "lane": "night",
+      "budget": null,
+      "status": "done",
+      "result": {
+        "note": "10 ok, 12 outside, 17 n/a, 0 broken",
+        "link": "docs/practice/2026-10-22.md"
+      }
+    },
+    {
+      "id": "health-phases-without-issue",
+      "title": "Proposal from 2026-10-21: Open an issue on dglazkov/isocan for critique, design-partner, durable-agents, extensions, hosted-sharing, living-grounds and 11 more and set `issue:` in each project's primary doc front matter (open phases critique/1, critique/4, design-partner/7, durable-agents/0, durabl…",
+      "kind": "review",
+      "source": "health:phases_without_issue",
+      "number": {
+        "measure": "phases_without_issue",
+        "bound": 0,
+        "better": "lower"
+      },
+      "lane": "night",
+      "budget": null,
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "loop-absence-of-agent-proposal-staging-overlays",
+      "title": "Triage the Loop finding: Absence of agent proposal staging overlays",
+      "kind": "triage",
+      "source": "loop:absence-of-agent-proposal-staging-overlays",
+      "number": null,
+      "lane": "loop",
+      "budget": null,
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "loop-absence-of-spatial-agent-activity-feeds-and-status",
+      "title": "Triage the Loop finding: Absence of spatial agent activity feeds and status indicators",
+      "kind": "triage",
+      "source": "loop:absence-of-spatial-agent-activity-feeds-and-status",
+      "number": null,
+      "lane": "loop",
+      "budget": null,
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "loop-absence-of-spatial-api-contract-mock-payload-binding-no",
+      "title": "Triage the Loop finding: Absence of spatial API contract mock payload binding nodes",
+      "kind": "triage",
+      "source": "loop:absence-of-spatial-api-contract-mock-payload-binding-nodes",
+      "number": null,
+      "lane": "loop",
+      "budget": null,
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "loop-absence-of-spatial-component-accessibility-focus-sequen",
+      "title": "Triage the Loop finding: Absence of spatial component accessibility focus sequence nodes",
+      "kind": "triage",
+      "source": "loop:absence-of-spatial-component-accessibility-focus-sequence",
+      "number": null,
+      "lane": "loop",
+      "budget": null,
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "loop-absence-of-spatial-design-review-presentation-mode-path",
+      "title": "Triage the Loop finding: Absence of spatial design review presentation mode pathways",
+      "kind": "triage",
+      "source": "loop:absence-of-spatial-design-review-presentation-mode-pathways",
+      "number": null,
+      "lane": "loop",
+      "budget": null,
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "production-coverage",
+      "title": "Production unknown coverage: isocan-production:access-or-config",
+      "kind": "triage",
+      "source": "health:production_errors",
+      "number": null,
+      "lane": "night",
+      "budget": null,
+      "status": "planned",
+      "result": null
+    }
+  ]
+}

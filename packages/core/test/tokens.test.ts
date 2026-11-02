@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { serializeDesign } from "../src/designmd.ts";
+import { DTCG_EXTENSION, designConversionNotes } from "../src/tokens.ts";
 import {
   CONTRAST_BODY,
   type DtcgNode,
@@ -189,5 +191,55 @@ describe("contrast, computed", () => {
 
   it("does not care which way round the pair is given", () => {
     expect(contrastRatio("#1A1C1E", "#F7F5F2")).toBe(contrastRatio("#F7F5F2", "#1A1C1E"));
+  });
+});
+
+describe("contract conversion boundaries", () => {
+  const isocan = { lint: { version: 7, future: [true, null, { rules: [{ reason: 'Keep "Acme #1"', nested: { enabled: false } }] }] }, other: {} };
+
+  it("carries the complete unknown extension alongside component metadata through DTCG and native files", () => {
+    const tokens = { ...TOKENS, isocan };
+    const dtcg = toDtcg(tokens);
+    expect(dtcg.$extensions).toMatchObject({ [DTCG_EXTENSION]: { components: TOKENS.components, isocan } });
+    const imported = fromDtcg(JSON.parse(JSON.stringify(dtcg)));
+    expect(imported.isocan).toEqual(isocan);
+    expect(imported.isocan).not.toBe(isocan);
+    const native = parseDesign(serializeDesign(imported, "## Overview\nAcme."));
+    expect(native.problems).toEqual([]);
+    expect(native.tokens.isocan).toEqual(isocan);
+  });
+
+  it.each([null, true, false, 3, "future", [], {}])("preserves even unsupported extension root types: %j", value => {
+    const imported = fromDtcg(toDtcg({ isocan: value }));
+    expect(imported).toHaveProperty("isocan");
+    expect(imported.isocan).toEqual(value);
+    expect(parseDesign(serializeDesign(imported, "")).tokens.isocan).toEqual(value);
+  });
+
+  it("discloses CSS loss without embedding or pretending to restore policy", () => {
+    const tokens = { colors: { ink: "#112233" }, isocan };
+    const css = toCss(tokens);
+    expect(designConversionNotes(tokens, "css")).toHaveLength(1);
+    expect(css).toContain("isocan policies, recipes, exceptions and other extension data are not preserved");
+    expect(css).toContain("--color-ink: #112233;");
+    expect(css).not.toContain('"version":7');
+    expect(designConversionNotes(tokens, "dtcg")).toEqual([]);
+    expect(designConversionNotes(tokens, "native")).toEqual([]);
+    expect(designConversionNotes({ colors: tokens.colors }, "css")).toEqual([]);
+  });
+
+  it("refuses conversions of a partially parsed policy and invalid runtime extension data", () => {
+    const bad = parseDesign('---\nisocan: {"lint":{"version":1,"version":2}}\n---\n');
+    expect(() => toDtcg(bad.tokens)).toThrow(/duplicate key/);
+    expect(() => toCss(bad.tokens)).toThrow(/duplicate key/);
+    expect(() => toDtcg({ isocan: { future: undefined } })).toThrow(/JSON-compatible/);
+    expect(() => toCss({ isocan: { future: NaN } })).toThrow(/JSON-compatible/);
+    expect(() => fromDtcg({ $extensions: { [DTCG_EXTENSION]: { isocan: { future: Infinity } } } })).toThrow(/JSON-compatible/);
+  });
+
+  it("restores tokens carried as unexported metadata so a preserved contract retains its reference targets", () => {
+    const tokens = { typography: { title: { fontWeight: 600 } }, colors: { accent: "oklch(0.7 0.1 200)" },
+      isocan: { lint: { version: 1, recipes: { Title: { owns: { "font-weight": "{typography.title.fontWeight}" }, allow: ["font-size"] } } } } };
+    expect(fromDtcg(toDtcg(tokens))).toEqual(tokens);
   });
 });

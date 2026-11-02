@@ -1,7 +1,7 @@
 import type { Actor, Item } from "@isocan/core";
 import { TEXT_FILENAME, TEXT_MIME, newItemId, newVersionId, noteProperties, noteSpot, textTitle } from "@isocan/core";
-import { uploadBlob } from "./api.ts";
-import { sendEchoed } from "../stores/canvasStore.ts";
+import { uploadOrStageTextBlob } from "./upload.ts";
+import { creationDestination, sendCreatedItem } from "./groupplacement.ts";
 
 /**
  * **A speaker note for a slide, made on the canvas** (`core/slides.ts`,
@@ -11,12 +11,13 @@ import { sendEchoed } from "../stores/canvasStore.ts";
  * `isocan slides note` makes the byte-identical item from a terminal.
  */
 export async function addSpeakerNote(canvasId: string, actor: Actor, slide: Item, body: string): Promise<string> {
-  const blob = new Blob([body], { type: TEXT_MIME });
-  const upload = await uploadBlob(canvasId, blob, TEXT_FILENAME);
+  const destination = creationDestination(slide.containerId ?? null);
+  const { upload, stagedBlob } = await uploadOrStageTextBlob(canvasId, body, TEXT_MIME, TEXT_FILENAME);
   const itemId = newItemId();
   const spot = noteSpot(slide);
-  await sendEchoed(canvasId, actor, {
+  await sendCreatedItem(canvasId, actor, {
     type: "item.add",
+    ...destination,
     itemId,
     version: { id: newVersionId(), blobHash: upload.blobHash, mimeType: TEXT_MIME, filename: TEXT_FILENAME, size: upload.size },
     width: spot.width,
@@ -25,7 +26,7 @@ export async function addSpeakerNote(canvasId: string, actor: Actor, slide: Item
     placement: { x: spot.x, y: spot.y, chosen: true },
     title: textTitle(body),
     properties: noteProperties(slide.id),
-  });
+  }, undefined, { allowQueued: true, ...(stagedBlob ? { stagedBlob } : {}) });
   return itemId;
 }
 

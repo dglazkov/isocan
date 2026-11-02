@@ -11,6 +11,14 @@
  *   node scripts/measure.mjs --list
  *   node scripts/measure.mjs --selftest
  *
+ * **`--names` is the second half of the ones that have it.** A count says a
+ * ratchet slipped; it does not say what to do about it, so a metric that can
+ * name its offenders declares a `names()` beside its `take()` and prints them
+ * instead of the number. `--list` marks which. Asking a metric that has none
+ * is an error rather than a silent count, because a guard's failure message
+ * naming a flag that quietly does nothing is exactly the rot this line exists
+ * to stop.
+ *
  * **`--selftest` is not optional politeness.** The build rule in
  * `docs/projects/personas/design.md` is that no persona may declare a goal
  * whose measuring command has not been shown to fail on something broken —
@@ -19,14 +27,99 @@
  * selftest breaks it and checks the number moves.
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { CEILING } from "./bundle-ceiling.mjs";
+import { operationMembers } from "./isomorphism.mjs";
+import { NO_READING, NO_READING_PREFIX } from "./lib/reading.mjs";
 
 const repo = fileURLToPath(new URL("..", import.meta.url));
+/**
+ * **The buffer is large because a full answer is not a broken instrument.**
+ *
+ * `execFileSync` defaults to one megabyte of stdout and KILLS the child past
+ * it, handing back what fitted. `lint-violations` asks eslint for JSON, and
+ * when the walk reached `.claude/worktrees/` that report was 6,056 files —
+ * far past a megabyte. The metric got valid JSON with its end cut off, threw
+ * parsing it, and `take()` in `canvas-board.mjs` read the crash the only way
+ * it can: **"instrument would not run"**, printed on the board beside
+ * qa-tester for months. The instrument ran perfectly; the answer did not fit.
+ *
+ * The eslint walk is fixed in `eslint.config.js`, which is the real cause. The
+ * buffer is raised anyway, because "the output was too big" and "the command
+ * is broken" are different sentences and this one said the wrong sentence for
+ * a long time without anybody being able to tell.
+ */
+/**
+ * The files a feature cannot avoid. Named rather than derived: "big file" is
+ * not the property that matters — "every change has to go through here" is,
+ * and only a person knows which those are. A file leaves this list by being
+ * split, never by being excused.
+ */
+const CROWDED = [
+  "packages/cli/src/main.ts",
+  "packages/web/src/styles.css",
+  "packages/cli/src/agent-guide.md",
+];
+
+/** The living grounds' last reading, written by `frames.mjs --grounds --record`. */
+const GROUND_FRAMES = "scripts/ground-frames.json";
+/** The directories a living ground is drawn from — what a reading goes stale against. */
+const GROUND_SOURCES = ["packages/web/src/components/themes", "packages/web/src/lib/groundfield.ts", "packages/web/src/lib/groundsleep.ts", "packages/web/src/lib/groundmotion.ts"];
+
+/** The canvas pan/zoom frame and flicker reading, written by `frames.mjs --record` (or fresh nightly into `ISOCAN_CANVAS_FRAMES`). */
+const CANVAS_FRAMES_DEFAULT = "scripts/canvas-frames.json";
+const CANVAS_FRAME_SOURCES = [
+  "packages/web/src/components/CanvasViewport.tsx",
+  "packages/web/src/components/ItemView.tsx",
+  "packages/web/src/lib/lookahead.ts",
+  "packages/web/src/lib/htmlsnapshot.ts",
+  "packages/web/src/lib/onscreen.ts",
+];
+const CANVAS_FRAMES_AGAIN = `node scripts/frames.mjs --html 12 --items 36 --scale 0.5 --throttle 1 --gestures pan,zoom --record ${CANVAS_FRAMES_DEFAULT}`;
+
+/** Semantic Zoom's faithfulness eval, written by `bench.mjs eval` (semantic-zoom phase 5). */
+const SUMMARY_EVAL = "docs/projects/semantic-zoom/bench/eval.json";
+/** What an eval reading goes stale against: the bench's prompts and fixture, the judge's words, and the product's prompt. */
+const SUMMARY_EVAL_SOURCES = [
+  "docs/projects/semantic-zoom/bench/prompts.mjs",
+  "docs/projects/semantic-zoom/bench/eval.mjs",
+  "docs/projects/semantic-zoom/bench/fixture/canvas.json",
+  "packages/core/src/semantic-zoom.ts",
+];
+const SUMMARY_EVAL_AGAIN = "with a text key at the home: cd docs/projects/semantic-zoom/bench && node bench.mjs run && node bench.mjs eval";
+
+/** The proactive agent's night, judged by `judge.mjs` (proactive-agent phase 11). */
+const KEEP_JUDGE = "docs/projects/proactive-agent/bench/judge.json";
+/** What a keep reading goes stale against: the bench's fixture and flow, the judge's words, and the rules a night runs under. */
+const KEEP_JUDGE_SOURCES = [
+  "docs/projects/proactive-agent/bench/night.mjs",
+  "docs/projects/proactive-agent/bench/judge.mjs",
+  "packages/core/src/proposal.ts",
+  "packages/core/src/goodnight.ts",
+];
+const KEEP_JUDGE_AGAIN = "on Dion's yes: cd docs/projects/proactive-agent/bench && node night.mjs --yes && node judge.mjs --yes";
+
+/**
+ * **A reading nobody has taken** — thrown by a metric that reads a recorded
+ * file which does not exist yet, and printed as `no reading yet: …` with exit
+ * `NO_READING` (`scripts/lib/reading.mjs` says why that is a third answer and
+ * neither a zero nor a broken instrument).
+ */
+class NoReading extends Error {}
+
+const lines = (file) => readFileSync(path.join(repo, file), "utf8").split("\n").length;
+
 const run = (cmd, args, opts = {}) =>
-  execFileSync(cmd, args, { cwd: repo, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], ...opts });
+  execFileSync(cmd, args, {
+    cwd: repo,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    maxBuffer: 64 * 1024 * 1024,
+    ...opts,
+  });
 
 /**
  * Each metric: what it counts, how, and — for the selftest — a mutation that
@@ -74,15 +167,30 @@ const METRICS = {
       },
     },
   },
+  /**
+   * **The members of `Operation`, not every union in the file.**
+   *
+   * This counted each line shaped like `  | {` in `ops.ts`, and its own
+   * selftest proved it with exactly the wrong mutation: a NEW union appended
+   * beside `Operation`, which moved the number — so the instrument was shown
+   * to count unions, and believed to count operations. On 9 Sep 2026
+   * `c8213d70` reformatted `Placement` into a multi-line union and the
+   * vocabulary read 35 against 33 real operations for two nights.
+   *
+   * The reading lives in `isomorphism.mjs` beside the list the isomorphism
+   * audit uses, so "which operations exist" has one answer; the mutation now
+   * adds a member to `Operation` itself, and `test/measure.test.ts` holds that
+   * the old trap no longer moves it.
+   */
   "op-types": {
     what: "operations in the vocabulary — every one is a fact both surfaces must speak",
     take() {
-      const src = readFileSync(path.join(repo, "packages/core/src/ops.ts"), "utf8");
-      return (src.match(/^ {2}\| \{/gm) ?? []).length;
+      return operationMembers(readFileSync(path.join(repo, "packages/core/src/ops.ts"), "utf8")).length;
     },
     breakIt: {
       file: "packages/core/src/ops.ts",
-      apply: (t) => t + "\n// selftest\ntype Extra =\n  | { type: \"selftest.noop\" };\n",
+      apply: (t) =>
+        t.replace("export type Operation =\n", 'export type Operation =\n  | { type: "selftest.noop" }\n'),
     },
   },
   /**
@@ -177,23 +285,8 @@ const METRICS = {
      * sheet names, and the right answer there is to raise the bound WITH THE
      * REASON — which is what happened at 47.
      */
-    take() {
-      const css = readFileSync(path.join(repo, "packages/web/src/styles.css"), "utf8");
-      const bare = css.replace(/\/\*[\s\S]*?\*\//g, "");
-      const seen = new Map();
-      let copies = 0;
-      for (const [, body] of bare.matchAll(/\{([^{}]*)\}/g)) {
-        const decls = body
-          .split(";")
-          .map((d) => d.trim().replace(/\s+/g, " "))
-          .filter(Boolean);
-        if (decls.length < 3) continue;
-        const key = decls.sort().join(";");
-        if (seen.has(key)) copies += 1;
-        else seen.set(key, true);
-      }
-      return copies;
-    },
+    take: () => copiedRules().copies,
+    names: () => copiedRuleLines(),
     breakIt: {
       file: "packages/web/src/styles.css",
       // Paste the shared panel header back as a private copy — the exact
@@ -259,6 +352,61 @@ const METRICS = {
     },
   },
   /**
+   * **What a living ground costs a frame** (living grounds phase 5, 10 Oct
+   * 2026) — and the one metric here that is a READING rather than a scan.
+   *
+   * A frame can only be timed by a browser drawing it, and `ratchet.mjs` takes
+   * every goal on every push: a five-minute walk across seven grounds there is
+   * the bill `test/journeys.test.ts` refuses by name. So the walk is
+   * `node scripts/frames.mjs --grounds --record scripts/ground-frames.json`,
+   * run by whoever changes a ground, and this reads what it wrote: the main
+   * thread's time per frame on the costliest ground, less the same walk on the
+   * plain ground, CPU throttled 4x. Not the frame gap — on the machine this is
+   * taken on every ground holds 16.7 ms at p95, and a number that cannot move
+   * until frames are already dropping is the M-series hiding everything short
+   * of a catastrophe.
+   *
+   * It moves only when somebody takes a new reading, and `--names` says when
+   * the last one was, on what machine, and whether the grounds' sources have
+   * changed since — a reading older than the code it describes is the way
+   * this number would lie.
+   */
+  "ground-frame-ms": {
+    what: "main-thread ms a frame the costliest living ground adds to a pointer walk, CPU 4x — the last recorded reading",
+    take: () => groundReading().worst,
+    names: () => groundReading().lines,
+    breakIt: {
+      file: GROUND_FRAMES,
+      // A ground whose frame got dearer, written the way a new reading would be.
+      apply: (t) => t.replace(/("night": \{[^}]*"mainMsPerFrame": )[0-9.]+/, (_, head) => `${head}60`),
+    },
+  },
+  /**
+   * **Canvas pan and zoom responsiveness, and zero blank/flickering frames**
+   * (16 Oct 2026). The nightly `persona.yml` runs `frames.mjs` live into
+   * `ISOCAN_CANVAS_FRAMES` before taking numbers, so every morning checks the
+   * real built app; on push, `ratchet.mjs` reads `scripts/canvas-frames.json`
+   * so commits do not pay a browser walk.
+   */
+  "canvas-pan-zoom-p90-ms": {
+    what: "worst p90 frame gap (ms) across pan and zoom on a populated canvas — fresh nightly or last recorded reading",
+    take: () => canvasFrameReading().worstP90,
+    names: () => canvasFrameReading().lines,
+    breakIt: {
+      file: CANVAS_FRAMES_DEFAULT,
+      apply: (t) => t.replace(/("pan": \{[\s\S]*?"p90": )[0-9.]+/, (_, head) => `${head}120`),
+    },
+  },
+  "canvas-flicker-frames": {
+    what: "blank or flickering frames observed while panning and zooming a populated canvas",
+    take: () => canvasFrameReading().blankOrFlicker,
+    names: () => canvasFrameReading().lines,
+    breakIt: {
+      file: CANVAS_FRAMES_DEFAULT,
+      apply: (t) => t.replace(/("pan": \{[\s\S]*?"blankFrames": )[0-9]+/, (_, head) => `${head}4`),
+    },
+  },
+  /**
    * **The words, which nothing else here watches.**
    *
    * `slop.ts` carries the copy rules this project believes — an apology as an
@@ -266,6 +414,75 @@ const METRICS = {
    * "not just X, it's Y". Most need a reader. These few are a string match, and
    * a string match is a number.
    */
+  /**
+   * **Summaries that say something their source does not** (Semantic Zoom
+   * phase 5) — the second READING here after `ground-frame-ms`, and the first
+   * whose instrument is a model.
+   *
+   * `bench.mjs eval` asks a judge (the cheapest tier, through the home's text
+   * key) to split each summary in `results.json` into claims and say whether
+   * the source supports each; this counts the product tier's summaries with
+   * any claim unsupported or contradicted. Both runs cost money and need a
+   * key, so neither happens on a push: whoever changes the prompt or the
+   * fixture takes it again, and `--names` says when, at what commit, and
+   * whether the prompts changed since.
+   *
+   * Until the first eval there is no `eval.json`, and this prints
+   * `no reading yet` and exits `NO_READING` rather than a number — 0 would
+   * say the summaries are faithful, which nobody has checked.
+   */
+  "summary-unfaithful": {
+    what: "bench summaries on the product tier with a claim their source does not support — the last recorded eval",
+    take: () => summaryReading().unfaithful,
+    names: () => summaryReading().lines,
+    breakIt: {
+      file: SUMMARY_EVAL,
+      // Before the first eval there is nothing to edit: the break is a reading
+      // that exists. After it, one more unfaithful summary in the reading.
+      get create() {
+        return !existsSync(path.join(repo, SUMMARY_EVAL));
+      },
+      apply: (t) => {
+        const unfaithful = { sourceId: "selftest", tier: "cheap", vision: false, summary: "Acme ships on Friday.", claims: [{ claim: "Acme ships on Friday", verdict: "unsupported", why: "selftest" }], faithful: false };
+        const r = t ? JSON.parse(t) : { evaluatedAt: "selftest", commit: null, judge: "selftest", rows: [] };
+        r.rows.push(unfaithful);
+        return JSON.stringify(r, null, 2) + "\n";
+      },
+    },
+  },
+  /**
+   * **Proposals a designer would keep** (proactive-agent phase 11) — a
+   * READING like `summary-unfaithful`, and the first that is a rate rather
+   * than a count: the whole percent of one recorded night's proposals that a
+   * judge (the cheapest tier) would keep, given each one's source, cite and
+   * why. `night.mjs --yes` runs a real lead for one night on a scratch daemon
+   * and `judge.mjs --yes` asks; both spend money, so neither happens on a
+   * push. Until the first judged night there is no `judge.json`, and this
+   * prints `no reading yet` and exits `NO_READING` — 0% would say every
+   * proposal is unwelcome, which nobody has checked.
+   */
+  "proposal-keep-rate": {
+    what: "percent of the bench night's proposals a judge would keep — the last recorded judge run",
+    take: () => keepReading().rate,
+    names: () => keepReading().lines,
+    breakIt: {
+      file: KEEP_JUDGE,
+      // Before the first judge run the break is a reading that exists. After
+      // it, rows that pull the rate the other way: deletes when it is at or
+      // above half, keeps when it is below.
+      get create() {
+        return !existsSync(path.join(repo, KEEP_JUDGE));
+      },
+      apply: (t) => {
+        const r = t ? JSON.parse(t) : { judgedAt: "selftest", commit: null, judge: "selftest", night: {}, rows: [] };
+        const judged = r.rows.filter((row) => row.verdict === "keep" || row.verdict === "delete");
+        const kept = judged.filter((row) => row.verdict === "keep").length;
+        const verdict = judged.length && kept * 2 >= judged.length ? "delete" : "keep";
+        for (let i = 0; i < Math.max(1, judged.length * 2); i++) r.rows.push({ id: `selftest-${i}`, title: "selftest", kind: "sure", verdict, line: "selftest" });
+        return JSON.stringify(r, null, 2) + "\n";
+      },
+    },
+  },
   "copy-tells": {
     what: "user-facing strings in the app that trip a greppable copy rule",
     take() {
@@ -317,6 +534,7 @@ const METRICS = {
   "unused-exports": {
     what: "exports that nothing outside their own file uses",
     take: () => scanExports().unused,
+    names: () => scanExports(true).found,
     breakIt: {
       file: "packages/core/src/kinds.ts",
       /**
@@ -341,11 +559,109 @@ const METRICS = {
   "undocumented-exports": {
     what: "exports with no comment above them",
     take: () => scanExports().bare,
+    names: () => scanExports(true).bareFound,
     breakIt: {
       file: "packages/core/src/kinds.ts",
       apply: (t) => `${t}\nexport const SELFTEST_BARE_EXPORT = 2;\n`,
     },
   },
+  /**
+   * **The files every feature has to edit, measured because they are what
+   * stops the work scaling.**
+   *
+   * Counted on 13 September: `packages/cli/src/main.ts` is 14,700 lines and
+   * was touched 120 times in the preceding fortnight; `styles.css` 6,754 lines
+   * and 108 touches; `agent-guide.md` 2,601 and 81. They are the top of the
+   * churn list after the generated docs, and for one reason — a new verb, a
+   * new component, a new anything lands in the same file as everybody else's
+   * new thing, so parallel work conflicts by construction rather than by
+   * accident.
+   *
+   * A count of lines is a crude stand-in for "how much has to go through one
+   * door", and it is the right crudeness: it cannot be argued with, it moves
+   * the moment somebody adds to a crowded file, and it goes DOWN when the
+   * thing that actually fixes it happens — a family of commands moving to its
+   * own module, a component taking its own stylesheet.
+   *
+   * A persona goal rather than a gate, deliberately. `ratchet.mjs` says a
+   * missed bound is news and not a build break, and a hard gate on this would
+   * be turned off within a week by the first person who needed one more line
+   * at midnight.
+   */
+  "registry-lines": {
+    what: "lines in the files every feature must edit — the single doors work queues at",
+    take() {
+      return CROWDED.reduce((total, file) => total + lines(file), 0);
+    },
+    names() {
+      return CROWDED.map((file) => `${file}  ${lines(file)}`).sort(
+        (a, b) => Number(b.split(/\s+/).pop()) - Number(a.split(/\s+/).pop()),
+      );
+    },
+    breakIt: {
+      file: "packages/cli/src/agent-guide.md",
+      apply: (t) => `${t}\n<!-- selftest: one more line through the one door -->\n`,
+    },
+  },
+
+  /**
+   * **Links in the docs that lead nowhere** — `librarian`'s number, and the
+   * first one chosen because a small model can do the work behind it well.
+   *
+   * The docs here are the reasoning, and they are read by agents that follow
+   * the links: a relative link to a file that was moved or deleted is a claim
+   * the repo makes about itself that is no longer true, and nothing noticed —
+   * 1,500-odd links on 24 Sep 2026, four of them dead, one for three weeks.
+   *
+   * The count is mechanical and so is most of the fix: a file that was moved
+   * is usually still in the tree under the same name, and `--names` prints
+   * those candidates beside each dead link, so what is left for a model is
+   * picking one — or saying there is none, which is a judgement about prose
+   * and is where `librarian` hands off to `reviewer`.
+   */
+  "dead-doc-links": {
+    what: "relative links in tracked Markdown that point at nothing",
+    take: () => deadDocLinks().length,
+    names: () =>
+      deadDocLinks().map(
+        (d) => `${d.file} → ${d.target}${d.candidates.length ? `  · maybe: ${d.candidates.join(", ")}` : "  · no file of that name"}`,
+      ),
+    breakIt: {
+      file: "docs/reviews/lessons.md",
+      apply: (t) => `${t}\n[selftest](./selftest-no-such-page.md)\n`,
+    },
+  },
+
+  /**
+   * **What every agent pays before its first act** (#124): the tokens
+   * `isocan --agent-help` prints with no topic — the cold start and the topic
+   * index — as characters over four, the same ruler as `estimateTokens` in
+   * `packages/cli/src/agent-guide.ts`. It runs the CLI rather than reading the
+   * file, so a module's index line counts, which is what an agent actually
+   * receives. A fresh `ISOCAN_HOME`, so nothing a person installed on this
+   * machine moves the number; `--agent-help` is answered before any daemon is
+   * reached.
+   */
+  "agent-help-tokens": {
+    what: "tokens `isocan --agent-help` prints before an agent's first act — the cold start, chars/4",
+    take() {
+      const home = mkdtempSync(path.join(tmpdir(), "measure-agent-help-"));
+      try {
+        const out = run("node", ["packages/cli/bin/isocan.js", "--agent-help"], {
+          env: { ...process.env, ISOCAN_HOME: home },
+        });
+        return Math.ceil([...out].length / 4);
+      } finally {
+        rmSync(home, { recursive: true, force: true });
+      }
+    },
+    breakIt: {
+      // A topic's worth of prose folded back into the cold start.
+      file: "packages/cli/src/agent-guide.md",
+      apply: (t) => t.replace("<!-- topic:", "Folded back in. ".repeat(500) + "\n\n<!-- topic:"),
+    },
+  },
+
   "lint-violations": {
     what: "eslint errors — rules-of-hooks and exhaustive-deps, both at error",
     take() {
@@ -432,6 +748,7 @@ function scanExports(names = false) {
   let unused = 0;
   let bare = 0;
   const found = [];
+  const bareFound = [];
   for (const file of sources) {
     const src = bodies.get(file) ?? readFileSync(path.join(repo, file), "utf8");
     const lines = src.split("\n");
@@ -441,7 +758,10 @@ function scanExports(names = false) {
       const name = m[1];
       // A comment on the line above — a block's `*/`, a `//`, or a continuation.
       const prev = (lines[i - 1] ?? "").trim();
-      if (!(prev.endsWith("*/") || prev.startsWith("//") || prev.startsWith("*"))) bare += 1;
+      if (!(prev.endsWith("*/") || prev.startsWith("//") || prev.startsWith("*"))) {
+        bare += 1;
+        if (names) bareFound.push(`${file}:${i + 1}  ${name}`);
+      }
       const word = new RegExp(`\\b${name}\\b`);
       let usedElsewhere = false;
       for (const [other, body] of bodies) {
@@ -454,21 +774,287 @@ function scanExports(names = false) {
       }
     });
   }
-  return { unused, bare, found };
+  return { unused, bare, found, bareFound };
+}
+
+/**
+ * **Every relative Markdown link whose target is not on disk.**
+ *
+ * One walk behind the count and `--names`, so the two cannot disagree
+ * (`docs/reviews/lessons.md` #5). What it leaves out, and why:
+ *
+ * - URLs and in-page anchors — `https:`, `mailto:`, `#section`. Reachability
+ *   on the network is not a property of this tree.
+ * - Code: fenced blocks and inline backticks. A link written inside code is
+ *   an example of a link, not a link.
+ * - `test/fixtures/` — those are COPIES of files from elsewhere, and their
+ *   links are relative to where the original lives.
+ * - Symlinks — `.claude/agents/*.md` are doorways to `.agents/personas/`, and
+ *   a relative link read through one resolves from the wrong directory.
+ */
+function deadDocLinks() {
+  const tracked = execFileSync("git", ["ls-files", "-s", "--", "*.md"], { cwd: repo, encoding: "utf8" })
+    .split("\n")
+    .filter(Boolean)
+    // Mode 120000 is a symlink.
+    .filter((line) => !line.startsWith("120000"))
+    .map((line) => line.split("\t")[1])
+    .filter((f) => !f.startsWith("test/fixtures/"));
+  const everything = execFileSync("git", ["ls-files"], { cwd: repo, encoding: "utf8" }).split("\n").filter(Boolean);
+  /**
+   * Where a moved file might be now: the tracked paths sharing the LONGEST
+   * tail with the dead target. `grades/README.md` should find
+   * `docs/grades/README.md` and not every README in the tree, so the tail is
+   * tried whole first and shortened a segment at a time.
+   */
+  const candidatesFor = (target) => {
+    const parts = target.split("/").filter((p) => p && p !== "." && p !== "..");
+    for (let i = 0; i < parts.length; i++) {
+      const tail = parts.slice(i).join("/");
+      const hits = everything.filter((f) => f === tail || f.endsWith(`/${tail}`));
+      if (hits.length) return hits.slice(0, 5);
+    }
+    return [];
+  };
+  const dead = [];
+  for (const file of tracked) {
+    const abs = path.join(repo, file);
+    if (!existsSync(abs)) continue;
+    const text = readFileSync(abs, "utf8")
+      .replace(/```[\s\S]*?```/g, "")
+      .replace(/`[^`\n]*`/g, "");
+    for (const m of text.matchAll(/\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)) {
+      const raw = m[1];
+      if (/^[a-z][a-z0-9+.-]*:/i.test(raw) || raw.startsWith("#") || raw.startsWith("<")) continue;
+      let target = raw.split("#")[0].split("?")[0];
+      try {
+        target = decodeURI(target);
+      } catch {
+        // A malformed escape is still a link somebody wrote; check it as typed.
+      }
+      if (!target) continue;
+      const resolved = target.startsWith("/") ? path.join(repo, target) : path.join(path.dirname(abs), target);
+      if (existsSync(resolved)) continue;
+      dead.push({ file, target: raw, candidates: candidatesFor(target) });
+    }
+  }
+  return dead;
+}
+
+/**
+ * **One walk behind both halves of `copied-rules`**, for the same reason the
+ * export metrics share `scanExports`: a `--names` that scanned separately from
+ * the count could print a set whose size is not the number the guard failed on
+ * (`docs/reviews/lessons.md` #5).
+ *
+ * The selector is the text between the previous brace and this body's `{` —
+ * which is what a person needs to go and look, and is why the reading grew a
+ * capture group it does not use for counting. `{` and `}` cannot appear in it,
+ * so a nested block (`@media … { .foo { … } }`) yields `.foo` rather than the
+ * at-rule: the innermost rule is the one that was copied.
+ */
+function copiedRules() {
+  const css = readFileSync(path.join(repo, "packages/web/src/styles.css"), "utf8");
+  const bare = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  const bodies = new Map();
+  let copies = 0;
+  for (const [, selector, body] of bare.matchAll(/([^{}]*)\{([^{}]*)\}/g)) {
+    const decls = body
+      .split(";")
+      .map((d) => d.trim().replace(/\s+/g, " "))
+      .filter(Boolean);
+    if (decls.length < 3) continue;
+    const key = decls.sort().join(";");
+    const who = selector.trim().replace(/\s+/g, " ");
+    const seen = bodies.get(key);
+    if (seen) {
+      seen.repeats.push(who);
+      copies += 1;
+    } else {
+      bodies.set(key, { first: who, repeats: [], decls });
+    }
+  }
+  return { copies, families: [...bodies.values()].filter((f) => f.repeats.length > 0) };
+}
+
+/**
+ * The eval's reading as a number and as lines: summaries on the product tier
+ * (`cheap`) the judge found a claim in that the source does not support. A
+ * missing file is `NoReading`; a file with no judged summary on that tier is
+ * one too, because a count over nothing is not a zero.
+ */
+function summaryReading() {
+  const file = path.join(repo, SUMMARY_EVAL);
+  if (!existsSync(file)) {
+    throw new NoReading(`the bench's summaries have never been judged (no ${SUMMARY_EVAL}); take it ${SUMMARY_EVAL_AGAIN}`);
+  }
+  const r = JSON.parse(readFileSync(file, "utf8"));
+  const product = (r.rows ?? []).filter((row) => row.tier === "cheap");
+  const judged = product.filter((row) => row.faithful === true || row.faithful === false);
+  if (judged.length === 0) throw new NoReading(`${SUMMARY_EVAL} judged no summary on the product tier; take it again ${SUMMARY_EVAL_AGAIN}`);
+  const bad = judged.filter((row) => row.faithful === false);
+  let since;
+  try {
+    const changed = run("git", ["diff", "--name-only", r.commit, "--", ...SUMMARY_EVAL_SOURCES]).trim().split("\n").filter(Boolean);
+    since = changed.length ? `STALE: ${changed.join(", ")} changed since ${r.commit} — take it again` : `no prompt or fixture has changed since ${r.commit}`;
+  } catch {
+    since = `cannot tell whether the prompts changed since ${r.commit} (that commit is not in this clone)`;
+  }
+  const lines = [
+    `judged ${r.evaluatedAt} at ${r.commit} by ${r.judge}; summaries from the run of ${r.results?.ranAt ?? "?"} (prompt ${r.results?.promptVersion ?? "?"}) — ${since}`,
+    `product tier: ${judged.length} of ${product.length} summaries judged, ${bad.length} with a claim the source does not support`,
+    ...bad.flatMap((row) => [
+      `${row.sourceId}${row.vision ? " +vision" : ""}: ${row.summary}`,
+      ...(row.claims ?? []).filter((c) => c.verdict !== "supported").map((c) => `    ${c.verdict}: ${c.claim} — ${c.why}`),
+    ]),
+    `${bad.length} is what \`summary-unfaithful\` prints. Again, ${SUMMARY_EVAL_AGAIN}`,
+  ];
+  return { unfaithful: bad.length, lines };
+}
+
+/**
+ * The judge's reading as a number and as lines: the whole percent of the
+ * night's judged proposals a designer would keep. A missing file is
+ * `NoReading`; so is a file that judged nothing, because a rate over nothing
+ * is not a zero.
+ */
+function keepReading() {
+  const file = path.join(repo, KEEP_JUDGE);
+  if (!existsSync(file)) {
+    throw new NoReading(`the bench's night has never been judged (no ${KEEP_JUDGE}); take it ${KEEP_JUDGE_AGAIN}`);
+  }
+  const r = JSON.parse(readFileSync(file, "utf8"));
+  const judged = (r.rows ?? []).filter((row) => row.verdict === "keep" || row.verdict === "delete");
+  if (judged.length === 0) throw new NoReading(`${KEEP_JUDGE} judged no proposal; take it again ${KEEP_JUDGE_AGAIN}`);
+  const kept = judged.filter((row) => row.verdict === "keep");
+  const rate = Math.round((100 * kept.length) / judged.length);
+  let since;
+  try {
+    const changed = run("git", ["diff", "--name-only", r.commit, "--", ...KEEP_JUDGE_SOURCES]).trim().split("\n").filter(Boolean);
+    since = changed.length ? `STALE: ${changed.join(", ")} changed since ${r.commit} — take it again` : `no bench, judge or night rule has changed since ${r.commit}`;
+  } catch {
+    since = `cannot tell whether the bench changed since ${r.commit} (that commit is not in this clone)`;
+  }
+  const lead = r.night?.lead ? `${r.night.lead.name} on ${r.night.lead.harness} (${r.night.lead.model})` : "?";
+  const lines = [
+    `judged ${r.judgedAt} at ${r.commit} by ${r.judge}; the night of ${r.night?.ranAt ?? "?"}, lead ${lead} — ${since}`,
+    `kept ${kept.length} of ${judged.length} judged proposals${(r.skipped ?? []).length ? `; ${r.skipped.length} skipped (nothing on them to keep)` : ""}`,
+    ...judged.map((row) => `${row.verdict === "keep" ? "keep  " : "delete"} ${row.kind.padEnd(6)} ${row.title}: ${row.line}`),
+    `${rate} is what \`proposal-keep-rate\` prints (a whole percent). Again, ${KEEP_JUDGE_AGAIN}`,
+  ];
+  return { rate, lines };
+}
+
+/**
+ * The reading as a number and as lines. The number is the dearest ground's
+ * main-thread time per frame less the plain ground's, to a tenth of a
+ * millisecond; a missing file throws, which every caller reads as a broken
+ * instrument and never as zero.
+ */
+function groundReading() {
+  const r = JSON.parse(readFileSync(path.join(repo, GROUND_FRAMES), "utf8"));
+  const added = (g) => Math.round(10 * (g.mainMsPerFrame - r.plain.mainMsPerFrame)) / 10;
+  const worst = Math.max(...Object.values(r.grounds).map(added));
+  let since;
+  try {
+    const changed = run("git", ["diff", "--name-only", r.commit, "--", ...GROUND_SOURCES]).trim().split("\n").filter(Boolean);
+    since = changed.length ? `STALE: ${changed.length} ground source file(s) changed since ${r.commit} — take it again` : `no ground source has changed since ${r.commit}`;
+  } catch {
+    since = `cannot tell whether the grounds changed since ${r.commit} (that commit is not in this clone)`;
+  }
+  const lines = [
+    `read ${r.at} at ${r.commit} on ${r.machine}; ${r.chrome}; GL ${r.gl}`,
+    `page ${r.page}, CPU throttled ${r.throttle}x (the GPU is not), ${r.items} notes, ${r.runs} walks — ${since}`,
+    `plain     main ${r.plain.mainMsPerFrame.toFixed(2)} ms/frame  p95 ${r.plain.p95} ms  dropped ${r.plain.dropped}`,
+    ...Object.entries(r.grounds).map(([name, g]) => `${name.padEnd(9)} main ${g.mainMsPerFrame.toFixed(2)} ms/frame (+${added(g).toFixed(1)})  p95 ${g.p95} ms  dropped ${g.dropped}  asleep frames ${g.asleepFrames}`),
+    `${worst} ms is what \`ground-frame-ms\` prints: the largest (+) above. Again: node scripts/frames.mjs --grounds --record ${GROUND_FRAMES}`,
+  ];
+  return { worst, lines };
+}
+
+/**
+ * The canvas pan/zoom reading: worst p90 frame gap (ms) and total blank or
+ * flickering frames across pan and zoom. Nightly CI sets `ISOCAN_CANVAS_FRAMES`
+ * to a live reading just taken on that commit; push-time checks read the
+ * committed baseline file.
+ */
+function canvasFrameReading() {
+  const custom = process.env.ISOCAN_CANVAS_FRAMES;
+  const target = custom ? path.resolve(repo, custom) : path.join(repo, CANVAS_FRAMES_DEFAULT);
+  if (!existsSync(target)) {
+    throw new NoReading(`no canvas frame reading at ${target}; take it with: ${CANVAS_FRAMES_AGAIN}`);
+  }
+  const r = JSON.parse(readFileSync(target, "utf8"));
+  const gestures = Object.entries(r.gestures ?? {});
+  if (gestures.length === 0) throw new Error(`${target} contains no gestures`);
+  const worstP90 = Math.round(10 * Math.max(...gestures.map(([, g]) => Number(g.p90 ?? 0)))) / 10;
+  const blankOrFlicker = gestures.reduce((sum, [, g]) => sum + Number(g.blankFrames ?? 0) + Number(g.flickers ?? 0), 0);
+  let since;
+  if (custom) {
+    since = "live reading taken in this run";
+  } else {
+    try {
+      const changed = run("git", ["diff", "--name-only", r.commit, "--", ...CANVAS_FRAME_SOURCES]).trim().split("\n").filter(Boolean);
+      since = changed.length ? `STALE: ${changed.length} canvas viewport file(s) changed since ${r.commit} — take it again` : `no canvas viewport source has changed since ${r.commit}`;
+    } catch {
+      since = `cannot tell whether canvas viewport sources changed since ${r.commit} (that commit is not in this clone)`;
+    }
+  }
+  const lines = [
+    `read ${r.at} at ${r.commit} on ${r.machine}; ${r.chrome}`,
+    `page ${r.page}, CPU throttled ${r.throttle}x, ${r.html ?? 0} screens + ${r.items ?? 0} notes — ${since}`,
+    ...gestures.map(([name, g]) => `${name.padEnd(6)} frames=${g.frames} p50=${Number(g.p50).toFixed(1)} p90=${Number(g.p90).toFixed(1)} p99=${Number(g.p99).toFixed(1)} worst=${Number(g.worst).toFixed(1)} blank=${g.blankFrames ?? 0} flicker=${g.flickers ?? 0}`),
+    `worst p90 is ${worstP90} ms (\`canvas-pan-zoom-p90-ms\`); blank+flicker is ${blankOrFlicker} (\`canvas-flicker-frames\`). Again: ${CANVAS_FRAMES_AGAIN}`,
+  ];
+  return { worstP90, blankOrFlicker, lines };
+}
+
+/**
+ * **What to go and look at**, biggest family first, because a body five
+ * selectors repeat is a different conversation from a body two do: the first
+ * is a vocabulary asking to be named, the second is usually one rule written
+ * twice.
+ *
+ * It prints the body too, not only the selectors. The question this number
+ * asks — "is this one thing written twice, or two things that agree?" — cannot
+ * be answered from selector names alone.
+ */
+function copiedRuleLines() {
+  const { copies, families } = copiedRules();
+  const lines = [];
+  for (const f of [...families].sort((a, b) => b.repeats.length - a.repeats.length || a.first.localeCompare(b.first))) {
+    // Copies, not occurrences — so the numbers printed here add up to the
+    // number the metric prints, and nobody has to work out whether the rule
+    // that declared the body first was counted as a copy of itself.
+    lines.push(`${f.first}  ${f.repeats.length} ${f.repeats.length === 1 ? "copy" : "copies"}`);
+    lines.push(`    ${f.decls.join("; ")}`);
+    for (const who of f.repeats) lines.push(`    repeated by  ${who}`);
+    lines.push("");
+  }
+  lines.push(`${copies} copies over ${families.length} bodies — the first number is what \`copied-rules\` prints.`);
+  return lines;
 }
 
 const argv = process.argv.slice(2);
 
-// `unused-exports --names` prints the offenders rather than the count, so a
-// tripped ratchet is actionable without a second scan somewhere else.
-if (argv[0] === "unused-exports" && argv.includes("--names")) {
-  for (const line of scanExports(true).found) console.log(line);
+if (argv.includes("--list")) {
+  // The `--names` marker is part of the listing: a flag nobody can discover is
+  // a flag that goes stale unnoticed, which is how `copied-rules --names` came
+  // to be printed in a failure message without existing.
+  for (const [name, m] of Object.entries(METRICS)) {
+    console.log(`${name.padEnd(24)} ${m.what}${m.names ? "  [--names]" : ""}`);
+  }
   process.exit(0);
 }
 
-if (argv.includes("--list")) {
-  for (const [name, m] of Object.entries(METRICS)) console.log(`${name.padEnd(24)} ${m.what}`);
-  process.exit(0);
+/** For the selftest: a metric with no reading yet answers "no reading", which a break must turn into a number. */
+function takeOrUnread(m) {
+  try {
+    return m.take();
+  } catch (err) {
+    if (err instanceof NoReading) return NO_READING_PREFIX;
+    throw err;
+  }
 }
 
 if (argv.includes("--selftest")) {
@@ -484,15 +1070,28 @@ if (argv.includes("--selftest")) {
    * refuses outright if anything it is about to break is already modified. A
    * selftest that clobbers uncommitted work is worse than one that does not
    * run.
+   *
+   * `--selftest <metric>…` breaks only the ones named, so a person adding a
+   * metric can prove it fires without mutating every other target in a tree
+   * somebody else is working in. CI runs it bare: all of them.
    */
+  const only = argv.filter((a) => !a.startsWith("--"));
+  for (const n of only) {
+    if (!METRICS[n]) {
+      console.error(`unknown metric "${n}" — try --list`);
+      process.exit(2);
+    }
+  }
+  const chosen = Object.fromEntries(Object.entries(METRICS).filter(([n]) => only.length === 0 || only.includes(n)));
   const targets = [
     ...new Set(
-      Object.values(METRICS)
+      Object.values(chosen)
         .filter((m) => m.breakIt && !m.breakIt.create)
         .map((m) => m.breakIt.file),
     ),
   ];
-  const dirty = run("git", ["status", "--porcelain", "--", ...targets]).trim();
+  // No paths would ask git about the whole tree: a selftest that only creates files has nothing to clobber.
+  const dirty = targets.length ? run("git", ["status", "--porcelain", "--", ...targets]).trim() : "";
   if (dirty) {
     console.error(
       "refusing: these files have uncommitted changes and the selftest would overwrite them:\n" +
@@ -502,7 +1101,7 @@ if (argv.includes("--selftest")) {
     process.exit(1);
   }
   let bad = 0;
-  for (const [name, m] of Object.entries(METRICS)) {
+  for (const [name, m] of Object.entries(chosen)) {
     if (!m.breakIt) {
       console.log(`REFUSED ${name} — no way to break it is declared, so it cannot be trusted`);
       bad++;
@@ -522,7 +1121,7 @@ if (argv.includes("--selftest")) {
       continue;
     }
     const before = creating ? null : readFileSync(file, "utf8");
-    const clean = m.take();
+    const clean = takeOrUnread(m);
     let broken;
     try {
       const mutated = m.breakIt.apply(before ?? "");
@@ -532,7 +1131,7 @@ if (argv.includes("--selftest")) {
         continue;
       }
       writeFileSync(file, mutated);
-      broken = m.take();
+      broken = takeOrUnread(m);
     } finally {
       // Put it back exactly, or take away exactly what was added.
       if (creating) rmSync(file, { force: true });
@@ -549,7 +1148,7 @@ if (argv.includes("--selftest")) {
     console.error(`\n${bad} metric(s) cannot be trusted. A goal measured by one of these is a goal that passes forever.`);
     process.exit(1);
   }
-  console.log(`\nall ${Object.keys(METRICS).length} metrics move when the thing they measure breaks`);
+  console.log(`\nall ${Object.keys(chosen).length} metrics move when the thing they measure breaks`);
   process.exit(0);
 }
 
@@ -559,4 +1158,45 @@ if (!metric) {
   console.error(`unknown metric "${name ?? ""}" — try --list`);
   process.exit(2);
 }
-console.log(metric.take());
+
+/**
+ * **`--names` belongs to the metric, not to an `if` naming one of them.**
+ *
+ * This dispatch used to read `argv[0] === "unused-exports" && …`, so
+ * `copied-rules --names` — the exact command `test/copied-rules.test.ts` hands
+ * somebody at the moment its guard reddens their commit — fell through to the
+ * count and exited 0. A number they already had, from the failure message that
+ * had just printed it. `undocumented-exports --names` said the same nothing.
+ *
+ * A metric that can say WHICH declares a `names()` beside its `take()`, both
+ * reading the same scan; one that cannot says so and exits non-zero, because a
+ * flag that silently means nothing is how this went stale in the first place.
+ */
+if (argv.includes("--names")) {
+  if (!metric.names) {
+    const answering = Object.entries(METRICS)
+      .filter(([, m]) => m.names)
+      .map(([n]) => n);
+    console.error(
+      `"${name}" is a count and nothing more — it has no --names.\n` +
+        `Metrics that can say which: ${answering.join(", ")}`,
+    );
+    process.exit(2);
+  }
+  try {
+    for (const line of metric.names()) console.log(line);
+  } catch (err) {
+    if (!(err instanceof NoReading)) throw err;
+    console.log(`${NO_READING_PREFIX}: ${err.message}`);
+  }
+  process.exit(0);
+}
+
+try {
+  console.log(metric.take());
+} catch (err) {
+  if (!(err instanceof NoReading)) throw err;
+  // Not a number and not a crash: see scripts/lib/reading.mjs.
+  console.log(`${NO_READING_PREFIX}: ${err.message}`);
+  process.exit(NO_READING);
+}

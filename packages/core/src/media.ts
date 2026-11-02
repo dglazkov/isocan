@@ -41,7 +41,60 @@ const BY_EXT: Record<string, string> = {
   mp4: "video/mp4",
   webm: "video/webm",
   mov: "video/quicktime",
+  // Cleanup DU-4, 27 Sep 2026: without these the CLI filed a PDF or a CSV as
+  // octet-stream, "other", while a browser's own mime made it a "document".
+  pdf: "application/pdf",
+  csv: "text/csv",
+  json: "application/json",
 };
+
+/**
+ * The extension a stored blob is filed under, dot NOT included — "md", "png",
+ * "bin". Prefer the real filename's extension; fall back to the table above,
+ * read backwards.
+ *
+ * TWO backings compute a storage filename from a mime type: `<sha256>.<ext>`
+ * on a disk and `canvases/{id}/blobs/<sha256>.<ext>` in a bucket, deliberately
+ * the same addressing so a home can be copied from one to the other by hand.
+ * This used to keep its own mime → extension map in `filenames.ts` for that
+ * reason — and so became the second copy of the table it existed to stop
+ * copying (cleanup DU-4, 27 Sep 2026). One table now, both directions: a PDF
+ * with no extension files as `.pdf` because `mimeFromName` knows a `.pdf`.
+ * A backing records the name it wrote, so blobs already stored keep theirs.
+ *
+ * `text/uri-list` is the one row the table cannot hold: it is a site item's
+ * mime (`BROWSER_MIME`), and a `.uri` file added by name must not become one.
+ */
+export function extensionFor(filename: string, mimeType: string): string {
+  const fromName = extensionOf(filename).slice(1).toLowerCase();
+  if (/^[a-z0-9]{1,8}$/.test(fromName)) return fromName;
+  if (mimeType === "text/uri-list") return "uri";
+  return Object.keys(BY_EXT).find((ext) => BY_EXT[ext] === mimeType) ?? "bin";
+}
+
+/**
+ * **Whether bytes already stored should take the type they just arrived
+ * with** — the type a backing records once per content hash, healed.
+ *
+ * A blob is keyed by its hash, so the first upload of some bytes used to name
+ * their type for good. On 14 Oct 2026 thirteen slides were uploaded from
+ * extensionless files, filed as `application/octet-stream`, and re-saved as
+ * `01-title.html`: the new versions said `text/html`, the blobs kept octet-
+ * stream, and the content route's `nosniff` made full screen blank
+ * (`docs/reviews/lessons.md` #122).
+ *
+ * The answer is the new type ONLY when the recorded one says nothing —
+ * missing, empty or octet-stream — and the new one says something. Two
+ * specific types that disagree keep the first: one hash legitimately serves
+ * two names (a `.txt` and a `.md` of the same words), and letting the latest
+ * upload re-type bytes that other versions are already served as would let
+ * any writer turn somebody's `text/plain` into a rendered `text/html`. Null
+ * means "leave the record alone".
+ */
+export function healedBlobType(recorded: string | undefined, offered: string): string | null {
+  const vague = (type: string | undefined) => !type || type === "application/octet-stream";
+  return vague(recorded) && !vague(offered) ? offered : null;
+}
 
 /**
  * **The mime a name implies, or nothing** — a loaded module's extensions
@@ -58,10 +111,22 @@ const BY_EXT: Record<string, string> = {
  * still has whatever `file.type` said.
  */
 export function mimeFromName(filename: string): string | undefined {
+  const lower = filename.toLowerCase();
+  for (const kind of moduleKinds()) {
+    const exts = kind.extensions ?? [];
+    for (let i = 0; i < exts.length; i++) {
+      const ext = exts[i]!;
+      if (ext.includes(".") && lower.endsWith(`.${ext}`) && lower.length > ext.length + 1) {
+        return kind.mimes[i] ?? kind.mimes[0]!;
+      }
+    }
+  }
   const ext = extensionOf(filename).slice(1).toLowerCase();
   if (!ext) return undefined;
-  const added = moduleKinds().find((k) => k.extensions?.includes(ext));
-  if (added) return added.mimes[0]!;
+  for (const kind of moduleKinds()) {
+    const idx = kind.extensions?.indexOf(ext) ?? -1;
+    if (idx >= 0) return kind.mimes[idx] ?? kind.mimes[0]!;
+  }
   return BY_EXT[ext];
 }
 

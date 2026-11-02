@@ -71,6 +71,15 @@ have "${IMAGE}"
 #                               Set only when config.sh's PROXY_HOPS is set,
 #                               so an unset variable means the code's own
 #                               default rather than this script asserting one.
+# ISOCAN_OPERATORS              the addresses that run this home, as a comma
+#                               list in the shape grant subjects use
+#                               (email:someone@example.com). Who can set this
+#                               is who decides who the operator is — which is
+#                               the whole of what makes a list in configuration
+#                               trustworthy, and why IAM on this service is the
+#                               real boundary. Set only when config.sh's
+#                               OPERATORS is set; unset means this home has no
+#                               operator and says so on every operator route.
 # ISOCAN_CONTENT_HOST           the second registrable domain item content is
 #                               served from (isocan.store). THE variable that
 #                               turns the hosted content origin on: frames move
@@ -81,17 +90,17 @@ have "${IMAGE}"
 #                               home without one is byte for byte the home
 #                               before the split — which is also the rollback.
 ENV_VARS="ISOCAN_STORE=cloud"
-ENV_VARS="${ENV_VARS},ISOCAN_GCP_PROJECT=${PROJECT_ID}"
-ENV_VARS="${ENV_VARS},ISOCAN_BUCKET=${BUCKET}"
-ENV_VARS="${ENV_VARS},ISOCAN_BIND=0.0.0.0"
-ENV_VARS="${ENV_VARS},ISOCAN_HOME=/tmp/isocan"
-ENV_VARS="${ENV_VARS},ISOCAN_ALLOWED_ORIGINS=https://${DOMAIN}"
+ENV_VARS="${ENV_VARS};ISOCAN_GCP_PROJECT=${PROJECT_ID}"
+ENV_VARS="${ENV_VARS};ISOCAN_BUCKET=${BUCKET}"
+ENV_VARS="${ENV_VARS};ISOCAN_BIND=0.0.0.0"
+ENV_VARS="${ENV_VARS};ISOCAN_HOME=/tmp/isocan"
+ENV_VARS="${ENV_VARS};ISOCAN_ALLOWED_ORIGINS=https://${DOMAIN}"
 # Only when it is set. An empty value would reach the container as an empty
 # string, which `configuredHops` reads as "not an integer" and answers with its
 # default anyway — but it would put a variable in the service description
 # claiming a decision nobody made.
 if [ -n "${PROXY_HOPS}" ]; then
-  ENV_VARS="${ENV_VARS},ISOCAN_PROXY_HOPS=${PROXY_HOPS}"
+  ENV_VARS="${ENV_VARS};ISOCAN_PROXY_HOPS=${PROXY_HOPS}"
 fi
 
 # **The content origin, if this home has one** — and only if, for the reason
@@ -105,7 +114,29 @@ fi
 # this variable moves there will not load. Both scripts are idempotent, so the
 # fix is to run them in order rather than to repair anything.
 if [ -n "${CONTENT_DOMAIN}" ]; then
-  ENV_VARS="${ENV_VARS},ISOCAN_CONTENT_HOST=${CONTENT_DOMAIN}"
+  ENV_VARS="${ENV_VARS};ISOCAN_CONTENT_HOST=${CONTENT_DOMAIN}"
+fi
+
+# **Who runs this home** (docs/projects/operator/design.md). Only when it is
+# set, for the reason every other optional variable here is: an empty value
+# would put a variable in the service description claiming a decision nobody
+# made, and the daemon reads an empty string as "no operator" anyway.
+#
+# ORDERING: this does nothing without an attester. A home with no Identity
+# Platform project has no way to verify that anybody is the address on this
+# list, and every operator route says exactly that — so run
+# 100-identity-platform.sh first, or this is a list nobody can ever satisfy.
+#
+# **This is the variable that made the whole list semicolon-joined**, which is
+# why every line above says `;` where it used to say `,`. `ISOCAN_OPERATORS` is
+# itself a comma list, and gcloud's default separator for `--set-env-vars` is a
+# comma — so `email:a@x.com,email:b@y.com` would arrive as two variables, the
+# second of which has no name, and the deploy would either fail obscurely or
+# set an operator list with one address in it. gcloud's escaped-list syntax
+# (`^;^` on the flag below) picks a different separator, and `;` is one that
+# cannot occur in an email address the way `@` and `,` both can.
+if [ -n "${OPERATORS}" ]; then
+  ENV_VARS="${ENV_VARS};ISOCAN_OPERATORS=${OPERATORS}"
 fi
 
 # **The borrowed attester, as CONFIGURATION.** This is what makes one image run
@@ -130,11 +161,28 @@ if gcloud services list --project="${PROJECT_ID}" --enabled \
   AUTH_KEY_RES="$(gcloud services api-keys list --project="${PROJECT_ID}" --format='value(name)' 2>/dev/null | head -1 || true)"
   AUTH_KEY="$(gcloud services api-keys get-key-string "${AUTH_KEY_RES}" --project="${PROJECT_ID}" --format='value(keyString)' 2>/dev/null || true)"
   if [ -n "${AUTH_KEY}" ]; then
-    ENV_VARS="${ENV_VARS},ISOCAN_AUTH_PROJECT=${PROJECT_ID}"
-    ENV_VARS="${ENV_VARS},ISOCAN_AUTH_API_KEY=${AUTH_KEY}"
+    ENV_VARS="${ENV_VARS};ISOCAN_AUTH_PROJECT=${PROJECT_ID}"
+    ENV_VARS="${ENV_VARS};ISOCAN_AUTH_API_KEY=${AUTH_KEY}"
   else
     note "identitytoolkit is on but no API key came back — deploying with no attester"
   fi
+fi
+
+# The home's text model (`POST /api/text`, `packages/server/src/text.ts`):
+# the browser's /wire copy and the CLI's `wire copy --ai` / `wire voice` write
+# words through it, so the key stays on the home. The secret `text-api-key`
+# was created in isocan-io-prod on 6 Oct 2026 (copy-edit phase 0.5) and
+# attached by hand; stating it here is what makes a re-provision keep it, and
+# ISOCAN_TEXT_PROVIDER has to ride in ENV_VARS because --set-env-vars below
+# replaces the whole environment. Conditional on the secret, so a project
+# without one (dev, today) deploys as before and the route says
+# `text-unavailable` rather than the deploy failing on a missing secret.
+TEXT_SECRETS=""
+if gcloud secrets describe text-api-key --project="${PROJECT_ID}" >/dev/null 2>&1; then
+  TEXT_SECRETS=",ISOCAN_TEXT_API_KEY=text-api-key:latest"
+  ENV_VARS="${ENV_VARS};ISOCAN_TEXT_PROVIDER=${ISOCAN_TEXT_PROVIDER:-anthropic}"
+else
+  note "no text-api-key secret in ${PROJECT_ID} — deploying with no text model (/api/text answers text-unavailable)"
 fi
 
 step "deploying ${SERVICE}"
@@ -196,6 +244,20 @@ fi
 # does not produce. Restricting it makes the LB the only way in — and makes
 # the run.app URL stop answering, which is why the check at the end of this
 # script asks the domain instead when it is set.
+#
+# --update-secrets carries the home's judge key (`POST /api/judgment`,
+# `packages/server/src/judgment.ts`): the web composes wireframes through it,
+# so the key stays on the home and never reaches a browser. The secret
+# `typesafe-api-key` exists in both projects since 23 Sep 2026 and was first
+# attached by hand; stating it here is what makes a full re-provision keep it.
+# `--update-` rather than `--set-`, so a secret attached out of band for an
+# experiment is not silently dropped by the next deploy.
+#
+# The text-model key rides beside it when the project has one (TEXT_SECRETS,
+# decided above): `ISOCAN_TEXT_API_KEY` with `ISOCAN_TEXT_PROVIDER` in
+# ENV_VARS (`anthropic` or `openai`), and optionally `ISOCAN_TEXT_MODEL`.
+# Without the secret the route refuses with `text-unavailable` and the
+# browser's /wire copy fills placeholder words, said as such.
 gcloud run deploy "${SERVICE}" \
   --project="${PROJECT_ID}" \
   --region="${REGION}" \
@@ -211,7 +273,8 @@ gcloud run deploy "${SERVICE}" \
   --port="${CONTAINER_PORT}" \
   --execution-environment=gen2 \
   --ingress="${INGRESS}" \
-  --set-env-vars="${ENV_VARS}" \
+  --set-env-vars="^;^${ENV_VARS}" \
+  --update-secrets="TYPESAFE_API_KEY=typesafe-api-key:latest${TEXT_SECRETS}" \
   --quiet
 
 made "revision deployed from ${IMAGE}"

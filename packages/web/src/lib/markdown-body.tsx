@@ -1,11 +1,16 @@
-import { useId, useMemo } from "react";
+import { markdownResource, markdownTargetOffCanvas, itemPath } from "@isocan/core";
+import { useCanvasStore } from "../stores/canvasStore.ts";
+import { blobUrl } from "./api.ts";
+import { Link, useLocation } from "react-router-dom";
+import { createContext, useContext, useEffect, useId, useMemo, useRef, useState, type ComponentProps } from "react";
 import type { Root, RootContent } from "hast";
 import { TextAttentionView } from "./TextAttentionView.tsx";
 import type { AttentionDocument } from "./TextAttentionView.tsx";
-import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
+import ReactMarkdown, { defaultUrlTransform, type Components, type ExtraProps } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
 import type { PluggableList } from "unified";
+import { cachedParse } from "./markdown-parse.ts";
 
 /**
  * URL transform that permits image data URIs (data:image/...) in src attributes,
@@ -17,6 +22,73 @@ function safeUrlTransform(url: string, key: string): string {
   }
   return defaultUrlTransform(url);
 }
+
+// After remark-parse, which every processor react-markdown builds starts with.
+const PLUGINS: PluggableList = [remarkGfm, cachedParse];
+const BREAKS_PLUGINS: PluggableList = [remarkGfm, remarkBreaks, cachedParse];
+
+/** Route-aware scrolling is only mounted for saved documents. Plain Markdown
+ * (including static rendering of comments) does not require a router. */
+function FragmentScroll({ active, prefix, source }: { active: boolean; prefix: string; source: string }) {
+  const location = useLocation();
+  useEffect(() => {
+    if (!active || !location.hash) return;
+    let fragment: string;
+    try { fragment = decodeURIComponent(location.hash.slice(1)); } catch { return; }
+    const target = document.getElementById(`${prefix}-${fragment}`);
+    const scroller = target?.closest<HTMLElement>(".md-view");
+    if (target && scroller) scroller.scrollTop += (target.getBoundingClientRect().top - scroller.getBoundingClientRect().top) / (scroller.getBoundingClientRect().height / scroller.offsetHeight) - (parseFloat(getComputedStyle(scroller).scrollPaddingTop) || 0);
+  }, [location.hash, active, source, prefix]);
+  return null;
+}
+
+/**
+ * **One link renderer and one image renderer, for every note** (cleanup RP-4,
+ * 27 Sep 2026).
+ *
+ * They were arrow functions in `components={{ … }}`, made inside the render —
+ * so each render handed react-markdown two new component TYPES, and React
+ * unmounted every link and image in the note and mounted fresh ones. A note
+ * that follows the canvas renders on every op, so a link lost its focus and a
+ * selection inside it as often as anybody moved anything. Now they are made
+ * once, here, and read what they resolve against from the note they are in;
+ * a re-render updates them in place.
+ */
+interface Resolver {
+  resolve: (url: string) => ReturnType<typeof markdownResource> | null;
+  canvasId: string | null;
+  prefix: string;
+}
+const ResolveIn = createContext<Resolver>({ resolve: () => null, canvasId: null, prefix: "" });
+
+function MarkdownImage({ node: _node, ...props }: ComponentProps<"img"> & ExtraProps) {
+  const { resolve, canvasId } = useContext(ResolveIn);
+  if (!props.src || props.src.startsWith("data:")) return <img {...props} />;
+  const resource = resolve(props.src);
+  if (!resource || resource.kind === "external") return <img {...props} />;
+  if (resource.kind === "item" && resource.mimeType.startsWith("image/") && canvasId) return <img {...props} src={blobUrl(canvasId, resource.blobHash)} />;
+  return <img alt={props.alt} title={`Image unavailable on this canvas: ${props.src}`} className="markdown-resource-missing" />;
+}
+
+function MarkdownLink({ node: _node, ...props }: ComponentProps<"a"> & ExtraProps) {
+  const { resolve, canvasId, prefix } = useContext(ResolveIn);
+  const resource = props.href ? resolve(props.href) : null;
+  if (resource?.kind === "item" && canvasId) return <Link {...props} to={`${itemPath(canvasId, resource.itemId)}${resource.fragment ? `#${resource.fragment}` : ""}`} />;
+  if (resource && ["missing", "ambiguous", "unsafe"].includes(resource.kind)) return <span className="markdown-resource-missing" title={`${resource.kind === "ambiguous" ? "More than one saved file matches" : "File unavailable on this canvas"}: ${props.href}`}>{props.children}</span>;
+  return <a {...props} onClick={event => {
+    if (!props.href?.startsWith("#")) return;
+    let fragment: string;
+    try { fragment = decodeURIComponent(props.href.slice(1)); } catch { return; }
+    const target = document.getElementById(`${prefix}-${fragment}`);
+    const scroller = event.currentTarget.closest(".md-view");
+    if (!target || !scroller) return;
+    event.preventDefault();
+    const scale = scroller.getBoundingClientRect().height / (scroller as HTMLElement).offsetHeight;
+    scroller.scrollTop += (target.getBoundingClientRect().top - scroller.getBoundingClientRect().top) / scale - (parseFloat(getComputedStyle(scroller).scrollPaddingTop) || 0);
+  }} />;
+}
+
+const COMPONENTS: Components = { img: MarkdownImage, a: MarkdownLink };
 
 /**
  * **The markdown renderer, and everything it drags with it.**
@@ -49,6 +121,40 @@ export default function MarkdownBody({
   breaks?: boolean | undefined;
   rehypePlugins?: PluggableList | undefined;
 }) {
+  /**
+   * **Subscribed to the canvas only once a link here needs it** (26 Sep 2026).
+   *
+   * This subscribed every note to the whole canvas, and react-markdown parses
+   * on every render — so any operation by anybody re-parsed every note on the
+   * screen. Measured on 250 notes at 4x CPU: one collaborator dragging one
+   * item, 15,000 markdown renders for 60 moves and half-second frames.
+   *
+   * A link or image resolves against the canvas only when it is a path to one
+   * of its files; a fragment, an external address or a refused scheme is
+   * settled without it (`markdownTargetOffCanvas`, the same rule
+   * `markdownResource` starts with). So the first render reads the canvas
+   * without subscribing, and a note that met a path subscribes from then on,
+   * so a file it points at being renamed or replaced still reaches it. A note
+   * whose every link is external never subscribes at all.
+   */
+  const [followsCanvas, setFollowsCanvas] = useState(false);
+  const metPath = useRef(false);
+  const subscribed = useCanvasStore(s => attention && followsCanvas ? s.canvas : null);
+  const canvasId = useCanvasStore(s => attention ? s.canvasId : null);
+  const resolve = (url: string) => {
+    if (!attention) return null;
+    const offCanvas = markdownTargetOffCanvas(url);
+    if (offCanvas) return offCanvas;
+    metPath.current = true;
+    const canvas = subscribed ?? useCanvasStore.getState().canvas;
+    const source = canvas?.items[attention.itemId];
+    return source && canvas ? markdownResource(canvas, source, attention.versionId, url) : null;
+  };
+  // After a render whose links met a path: the first one, or one whose text
+  // changed to include a path. Once following, it stays following.
+  useEffect(() => {
+    if (metPath.current && !followsCanvas) setFollowsCanvas(true);
+  }, [followsCanvas, children]);
   const prefix = useId().replace(/[^a-zA-Z0-9]/g, "");
   const headings = useMemo(() => () => (tree: Root) => {
     const seen = new Map<string, number>();
@@ -64,24 +170,16 @@ export default function MarkdownBody({
     walk(tree);
   }, [prefix]);
   const content = plain ? <span style={{ whiteSpace: "pre-wrap" }}>{children}</span> : (
-    <ReactMarkdown
-      remarkPlugins={breaks ? [remarkGfm, remarkBreaks] : [remarkGfm]}
-      urlTransform={safeUrlTransform}
-      rehypePlugins={[headings, ...(rehypePlugins ?? [])]}
-      components={{ a: ({ node: _node, ...props }) => <a {...props} onClick={event => {
-        if (!props.href?.startsWith("#")) return;
-        let fragment: string;
-        try { fragment = decodeURIComponent(props.href.slice(1)); } catch { return; }
-        const target = document.getElementById(`${prefix}-${fragment}`);
-        const scroller = event.currentTarget.closest(".md-view");
-        if (!target || !scroller) return;
-        event.preventDefault();
-        const scale = scroller.getBoundingClientRect().height / (scroller as HTMLElement).offsetHeight;
-        scroller.scrollTop += (target.getBoundingClientRect().top - scroller.getBoundingClientRect().top) / scale;
-      }} /> }}
-    >
-      {children}
-    </ReactMarkdown>
+    <ResolveIn.Provider value={{ resolve, canvasId, prefix }}>
+      <ReactMarkdown
+        remarkPlugins={breaks ? BREAKS_PLUGINS : PLUGINS}
+        urlTransform={safeUrlTransform}
+        rehypePlugins={[headings, ...(rehypePlugins ?? [])]}
+        components={COMPONENTS}
+      >
+        {children}
+      </ReactMarkdown>
+    </ResolveIn.Provider>
   );
-  return attention ? <TextAttentionView document={attention}>{content}</TextAttentionView> : content;
+  return attention ? <><FragmentScroll active={attention.active} prefix={prefix} source={children} /><TextAttentionView document={attention}>{content}</TextAttentionView></> : content;
 }

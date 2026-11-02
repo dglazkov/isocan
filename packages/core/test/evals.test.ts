@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   buildCorpus,
   categoriseAsk,
+  COPY_PREFERENCE_PROP,
   harvestConverge,
   withLanding,
   harvestPreferences,
+  serializeCopyPreference,
   type CanvasContents,
   type LogEntry,
   type Operation,
@@ -565,5 +567,76 @@ describe("preference pairs, harvested from version stacks", () => {
       entry({ type: "item.addVersion", itemId: "itm_a", version: version("v3", "2026-08-01T09:03:00.000Z") }, "2026-08-01T09:03:00.000Z"),
     ];
     expect(harvestPreferences(state, log)[0]!.against).toEqual(["v2"]);
+  });
+});
+
+describe("copy preference pairs, harvested from copy picks (copy-edit phase 6)", () => {
+  it("harvests choose, mix, and voice picks with their winning and losing stances, and drops an undone pick", () => {
+    const state = canvas({
+      items: {
+        itm_a: item("itm_a", "Acme checkout", "2026-10-02T09:00:00.000Z"),
+        itm_b: item("itm_b", "Acme parcels", "2026-10-02T09:00:00.000Z"),
+      },
+    });
+    const chooseEntry = entry(
+      {
+        type: "item.update",
+        itemId: "itm_a",
+        patch: { properties: { [COPY_PREFERENCE_PROP]: serializeCopyPreference({ how: "choose", stance: "Warm", against: ["Plain", "Benefit-first"] }) } },
+      },
+      "2026-10-02T09:01:00.000Z",
+      DI,
+    );
+    const undoneMixEntry = entry(
+      {
+        type: "item.update",
+        itemId: "itm_a",
+        patch: { properties: { [COPY_PREFERENCE_PROP]: serializeCopyPreference({ how: "mix", stance: "Plain + Warm", against: ["Benefit-first"] }) } },
+      },
+      "2026-10-02T09:02:00.000Z",
+      DI,
+    );
+    const undoEntry = entry(
+      { type: "item.update", itemId: "itm_a", patch: { removeProperties: [COPY_PREFERENCE_PROP] } },
+      "2026-10-02T09:02:30.000Z",
+      DI,
+      { cause: { kind: "undo", targetSeq: undoneMixEntry.seq } },
+    );
+    const voiceEntry = entry(
+      {
+        type: "item.update",
+        itemId: "itm_b",
+        patch: { properties: { [COPY_PREFERENCE_PROP]: serializeCopyPreference({ how: "voice", stance: "Direct", against: ["Warm"] }) } },
+      },
+      "2026-10-02T09:03:00.000Z",
+      DI,
+    );
+    const pairs = harvestPreferences(state, [chooseEntry, undoneMixEntry, undoEntry, voiceEntry]);
+    expect(pairs).toEqual([
+      {
+        kind: "copy",
+        how: "choose",
+        stance: "Warm",
+        itemId: "itm_a",
+        title: "Acme checkout",
+        chosen: "Warm",
+        chosenAt: "2026-10-02T09:01:00.000Z",
+        chosenBy: "Di",
+        chosenById: "usr_di",
+        against: ["Plain", "Benefit-first"],
+      },
+      {
+        kind: "copy",
+        how: "voice",
+        stance: "Direct",
+        itemId: "itm_b",
+        title: "Acme parcels",
+        chosen: "Direct",
+        chosenAt: "2026-10-02T09:03:00.000Z",
+        chosenBy: "Di",
+        chosenById: "usr_di",
+        against: ["Warm"],
+      },
+    ]);
   });
 });

@@ -1,13 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
-import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import type { PresenceSession, Canvas } from "@isocan/core";
-import { startDaemon, stopDaemons, type Daemon } from "@isocan/server";
-import { harnessVars } from "@isocan/api";
+import { PASS_REDEEM_ROUTE, formatBadgeToken, normalizeHomeUrl, type PresenceSession, type Canvas } from "@isocan/core";
+import { type Daemon } from "@isocan/server";
+import { startDaemon, stopDaemons } from "@isocan/server/daemon";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
+import { cliEnv, runCli, type Run } from "./cli.ts";
 
 /**
  * Two parties share a machine: the person who owns it, and the agents working
@@ -16,7 +15,6 @@ import { mintTestBadge, type TestBadge } from "./badge.ts";
  * the other, and a rename reaches the live face either way.
  */
 
-const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 const nico = { id: "usr_nico", name: "Nico" };
 /** Whoever set the fixture canvas up — not anybody the CLI speaks as. */
 const seeder = { id: "usr_seed", name: "Seed" };
@@ -74,24 +72,8 @@ afterEach(async () => {
  * cleared before the caller's are set — a bare `isocan({})` is a process no
  * harness launched, which is how the human's scripts run.
  */
-function isocan(session: Record<string, string>, ...args: string[]) {
-  const env: NodeJS.ProcessEnv = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: String(port) };
-  for (const v of harnessVars) delete env[v];
-  Object.assign(env, session);
-  const child = spawn(process.execPath, [cliBin, ...args], {
-    cwd: work,
-    env,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  let stdout = "";
-  let stderr = "";
-  child.stdout.setEncoding("utf8");
-  child.stdout.on("data", (chunk) => (stdout += chunk));
-  child.stderr.setEncoding("utf8");
-  child.stderr.on("data", (chunk) => (stderr += chunk));
-  return new Promise<{ code: number; stdout: string; stderr: string }>((resolve) =>
-    child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })),
-  );
+function isocan(session: Record<string, string>, ...args: string[]): Promise<Run> {
+  return runCli(args, { cwd: work, env: cliEnv({ ISOCAN_HOME: home, ISOCAN_PORT: String(port), ...session }) });
 }
 
 const claude = (id: string) => ({ CLAUDE_CODE_SESSION_ID: id });
@@ -279,6 +261,65 @@ describe("a machine that lost its badge", () => {
       await fetch(`${base}/api/projects/prj_1/canvas`, { headers: badge.headers })
     ).json()) as { canvas: { threads: Record<string, { createdBy: { id: string } }> } };
     expect(Object.values(snapshot.canvas.threads).map((t) => t.createdBy.id)).toEqual([isaac]);
+  });
+
+  it("`--join` never folds the person into an agent; `--home --join` folds the agent into the person, even from the agent's terminal", async () => {
+    // Nico speaks once from his own terminal, so the home has him as a person
+    // (`home:`); Kit is an agent session on the same machine badge.
+    expect((await isocan({}, "comment", "add", "as Nico", "--at", "0,0", "--canvas", "prj_1")).code).toBe(0);
+    const named = await isocan(claude("s-kit"), "identity", "--name", "Kit", "--session");
+    const kit = /\((usr_[^)]+)\)/.exec(named.stdout)![1]!;
+    // An agent asked to "merge my identities" runs `--join` from its own
+    // session, which folds INTO the agent — 14 Oct 2026's shape. Refused, with
+    // the way round in the words.
+    const wrong = await isocan(claude("s-kit"), "identity", "--join", nico.id);
+    expect(wrong.code).not.toBe(0);
+    expect(wrong.stderr).toContain("Nico is a person and Kit is an agent");
+    expect(wrong.stderr).toContain(`isocan identity --home --join ${kit}`);
+    // That command, run where the agent runs, folds the agent into Nico.
+    const right = await isocan(claude("s-kit"), "identity", "--home", "--join", kit);
+    expect(right.code, right.stderr).toBe(0);
+    expect(right.stdout).toContain(`${kit} is now Nico (${nico.id})`);
+  });
+
+  it("`--home --as` switches the machine's person to an actor a pass handed this badge, and back (daemon mode)", async () => {
+    // The CLI's badge is minted on its first request; Nico speaks once so it
+    // holds his home claim, the shape a machine has before a pass arrives.
+    expect((await isocan({}, "comment", "add", "as Nico", "--at", "0,0", "--canvas", "prj_1")).code).toBe(0);
+    const stored = JSON.parse(await fs.readFile(path.join(home, "identity.json"), "utf8")) as {
+      auth: Record<string, { badgeId: string; secret: string }>;
+    };
+    const cli = stored.auth[normalizeHomeUrl(base)]!;
+    const owner = { id: "usr_acme_owner", name: "Acme Owner" };
+    await badge.speakAs(owner);
+    const { token } = (await fetch(`${base}/api/projects/prj_1/passes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...badge.headers },
+      body: JSON.stringify({ actorId: owner.id }),
+    }).then((r) => r.json())) as { token: string };
+    // What `setup <pass>` does on a machine that already has a person: the
+    // badge is handed the owner, and the default stays Nico.
+    const redeemed = await fetch(`${base}${PASS_REDEEM_ROUTE}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${formatBadgeToken(cli.badgeId, cli.secret)}`,
+      },
+      body: JSON.stringify({ token }),
+    });
+    expect(redeemed.ok, await redeemed.clone().text()).toBe(true);
+    expect((await isocan({}, "whoami")).stdout).toContain(`Nico (${nico.id})`);
+
+    const switched = await isocan({}, "identity", "--home", "--as", owner.id);
+    expect(switched.code, switched.stderr).toBe(0);
+    expect(switched.stdout).toContain(`isocan identity --home --as ${nico.id}`);
+    expect(await homeIdentity()).toMatchObject(owner);
+    expect((await isocan({}, "whoami")).stdout).toContain(`Acme Owner (${owner.id})`);
+
+    expect((await isocan({}, "identity", "--home", "--as", nico.id)).code).toBe(0);
+    expect((await isocan({}, "whoami")).stdout).toContain(`Nico (${nico.id})`);
+    expect((await isocan({}, "identity", "--home", "--as", owner.id)).code).toBe(0);
+    expect((await isocan({}, "whoami")).stdout).toContain(`Acme Owner (${owner.id})`);
   });
 
   it("still says 'no identity configured' when the home really is blank", async () => {

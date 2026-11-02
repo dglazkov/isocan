@@ -36,10 +36,16 @@ export function workedFor(comment: { createdAt: string; editedAt?: string }): st
  * Empty string for a time in the future or an unparseable one: a card saying
  * "in 3h" about something that already happened is worse than a card saying
  * only who did it.
+ *
+ * `seconds` is the agent roster's (cleanup DU-5, 27 Sep 2026): it
+ * re-renders every second while an agent works, so "5s" is a number that
+ * moves, where a card drawn once would show a stale one. The roster kept its
+ * own copy for that, which had already drifted to "72h" where this says "3d".
  */
-export function ago(iso: string, nowMs: number): string {
+export function ago(iso: string, nowMs: number, seconds?: boolean): string {
   const ms = nowMs - Date.parse(iso);
   if (!Number.isFinite(ms) || ms < 0) return "";
+  if (seconds && ms < 60_000) return `${Math.max(1, Math.round(ms / 1000))}s`;
   const h = ms / 3_600_000;
   if (h < 1) return `${Math.max(1, Math.round(ms / 60_000))}m`;
   if (h < 48) return `${Math.round(h)}h`;

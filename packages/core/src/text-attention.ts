@@ -27,7 +27,7 @@ export function textAttention(value: unknown, now = Date.now(), canvas?: CanvasC
   if (!Number.isFinite(v.expiresAt) || v.expiresAt <= now) return null;
   if (canvas) {
     const version = canvas.items[v.itemId]?.versions.find(one => one.id === v.versionId);
-    if (!version || version.blobHash !== v.blobHash || !["text/markdown", "text/plain"].includes(version.mimeType)) return null;
+    if (!version || ![version, version.visual].some(face => face?.blobHash === v.blobHash && ["text/markdown", "text/plain"].includes(face.mimeType))) return null;
   }
   return { itemId: v.itemId, versionId: v.versionId, blobHash: v.blobHash, textSpace: v.textSpace,
     flavor: v.flavor, start: v.start, end: v.end, expiresAt: Math.min(v.expiresAt, now + TEXT_ATTENTION_MS) };
@@ -46,3 +46,38 @@ export function quoteRange(text: string, quote: string, occurrence?: number): { 
   const start = Array.from(text.slice(0, matches[chosen - 1]!)).length;
   return { start, end: start + Array.from(quote).length };
 }
+
+/** A temporary short message shown on a cursor chip in place of the actor's name. */
+export interface CursorSignal {
+  text: string;
+  expiresAt: number;
+}
+
+/** Cursor signals revert back to the actor's name after 20 seconds. */
+export const CURSOR_SIGNAL_MS = 20_000;
+/** How much of a signal a cursor chip carries. It rides presence and is read
+ *  at a glance beside a moving pointer, so the bound is about what stays
+ *  legible there rather than about what a field can hold — `cursorSignal`
+ *  trims to it rather than refusing, because a message cut short still says
+ *  something and a refused one says nothing. */
+export const CURSOR_SIGNAL_MAX_LENGTH = 80;
+
+/** Normalize a cursor signal and bound its lifetime to 20 seconds; return null if blank or expired. */
+export function cursorSignal(value: unknown, now = Date.now()): CursorSignal | null {
+  if (typeof value === "string") {
+    const text = value.trim().slice(0, CURSOR_SIGNAL_MAX_LENGTH);
+    return text ? { text, expiresAt: now + CURSOR_SIGNAL_MS } : null;
+  }
+  if (!value || typeof value !== "object") return null;
+  const v = value as Partial<CursorSignal>;
+  if (typeof v.text !== "string") return null;
+  const text = v.text.trim().slice(0, CURSOR_SIGNAL_MAX_LENGTH);
+  if (!text || typeof v.expiresAt !== "number" || !Number.isFinite(v.expiresAt) || v.expiresAt <= now) return null;
+  return { text, expiresAt: Math.min(v.expiresAt, now + CURSOR_SIGNAL_MS) };
+}
+
+/** What a cursor chip shows: an active 20-second signal if one is live, else the actor's name. */
+export function cursorChipLabel(signal: unknown, fallbackName: string, now = Date.now()): string {
+  return cursorSignal(signal, now)?.text ?? fallbackName;
+}
+

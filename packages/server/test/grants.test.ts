@@ -9,22 +9,33 @@ import type {
   GrantResponse,
   GrantsResponse,
   LogEntry,
+  PanelActorResponse,
+  PresenceSession,
   Canvas,
   PresenceWhereResponse,
 } from "@isocan/core";
-import { PRESENCE_WHERE_ROUTE } from "@isocan/core";
+import {
+  actorColor,
+  EXTENSION_COLORS,
+  IDENTITY_COLORS,
+  panelActorId,
+  panelActorRoute,
+  panelProperties,
+  panelSubject,
+  PRESENCE_WHERE_ROUTE,
+  recentActivity,
+} from "@isocan/core";
 import {
   FREE_NAME_ROUTE,
   grantRoute,
   grantsRoute,
-  ISOCAN_NAMES,
   canvasesRoute,
   WS_NOT_ADMITTED,
 } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
 import * as p from "../src/paths.ts";
 import type { AuthConfig } from "../src/attest.ts";
-import { mintTestBadge, type TestBadge } from "./badge.ts";
+import { currentSocketUrl, mintTestBadge, type TestBadge } from "./badge.ts";
 
 /**
  * **The grant, and the door that finally refuses** (identity desk, mechanisms
@@ -99,7 +110,7 @@ async function revokeLink(badge: TestBadge): Promise<Response> {
 /** What a socket was told, so a refusal can be asserted as a close code. */
 function socketClose(badge: TestBadge, canvasId = CANVAS): Promise<number> {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(`${base.replace("http:", "ws:")}/ws?canvasId=${canvasId}`, {
+    const ws = new WebSocket(currentSocketUrl(`${base.replace("http:", "ws:")}/ws?canvasId=${canvasId}`), {
       headers: badge.headers,
     });
     ws.on("error", reject);
@@ -394,19 +405,52 @@ describe("the grant API", () => {
 });
 
 describe("what a badge may see", () => {
-  it("stops listing a canvas whose link is off, and goes on listing it to those inside", async () => {
+  /**
+   * **These are the HOSTED shape**, and saying so is the whole point of the
+   * rule under test (13 Sep). A daemon bound to loopback is somebody's laptop,
+   * and it goes on showing that machine everything it holds — so a suite that
+   * only ever booted one would assert the laptop's answer and call it the
+   * home's. `boot()` says nothing, so it is a laptop; this restarts saying it
+   * serves the world. The badges minted against the old port stay valid,
+   * because the desk they are written on is the home directory and that does
+   * not move.
+   *
+   * Said rather than bound, for the reason `servesWorld` carries: binding
+   * `0.0.0.0` from a test opens a port to the network and can collide with
+   * another suite's loopback daemon.
+   */
+  beforeEach(async () => {
+    await daemon.close();
+    daemon = await startDaemon({ port: 0, home, auth, servesWorld: true });
+    const address = daemon.app.server.address();
+    base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
+  });
+
+  it("does not list a canvas to a badge nobody let in, however open its link", async () => {
     await makeCanvas();
     const jordan = await stranger();
-    const before = (await (await get(jordan, "/api/projects")).json()) as Canvas[];
-    expect(before.map((canvas) => canvas.id)).toEqual([CANVAS]);
-    // Listing is not entering, and it does not admit: what a badge "could get
-    // into" is a different question from where it has been, and answering the
-    // first by writing the second would hand every browsing badge an
-    // admission to everything — which is the very scope mechanism 10 narrows
-    // the name check to, and which phase 9's sweep would then have to expel.
-    expect((await daemon.desk.badge(jordan.badgeId))!.admissions).toEqual([]);
-    // So Jordan ENTERS, the way Scene 3 has her enter: by opening the canvas.
+    /**
+     * **The link is on, and she still sees nothing** (13 Sep). A link row says
+     * "whoever holds the address may enter" — it names nobody, so it answers a
+     * knock and is not a reason to put the address in a list. Measured on
+     * isocan.io under the old rule: a window admitted to ONE canvas listed 35,
+     * belonging to 22 different people.
+     */
+    expect(await (await get(jordan, "/api/projects")).json()).toEqual([]);
+    // The door itself is unchanged — this is a listing rule, not a refusal.
     expect((await get(jordan, `/api/projects/${CANVAS}/canvas`)).status).toBe(200);
+    // Entering wrote the admission, so now it is hers to see, which is the
+    // whole shape: you are shown what you were let into, not what would let
+    // you in.
+    const after = (await (await get(jordan, "/api/projects")).json()) as Canvas[];
+    expect(after.map((canvas) => canvas.id)).toEqual([CANVAS]);
+    // And a badge that only ever LOOKED holds no admission: listing is not
+    // entering, and answering "what could I get into" by writing "where I have
+    // been" would hand every browsing badge an admission to everything —
+    // which phase 9's sweep would then have to expel.
+    const looker = await stranger();
+    expect(await (await get(looker, "/api/projects")).json()).toEqual([]);
+    expect((await daemon.desk.badge(looker.badgeId))!.admissions).toEqual([]);
 
     await revokeLink(owner);
     const outsider = await stranger();
@@ -426,58 +470,151 @@ describe("what a badge may see", () => {
     ).toEqual([CANVAS]);
   });
 
-  /**
-   * **Two callers, two questions, one route** — phase 8 stage 4. See
-   * `CanvasesReach`.
-   *
-   * The listing has always answered one question: "what could this badge walk
-   * into?" A replica polls it to decide what to MIRROR, and those are not the
-   * same question — a canvas whose link is merely on is one a person may open
-   * and one a laptop has no business carrying. The caller states which, and
-   * the wide answer stays the default, because narrowing it wholesale is the
-   * worse bug: on a solo home a canvas created from the CLI is admitted to the
-   * CLI's bearer badge while the person's tab carries a cookie badge that has
-   * never been in it, so a narrowed listing would hide a person's own canvas
-   * from their own front page.
-   */
-  it("narrows to admissions when the caller asks that question, and only then", async () => {
+  it("never lists a hosted link-only canvas, including an explicit admissible reach", async () => {
     await makeCanvas();
     const laptop = await stranger();
+    for (const route of ["/api/projects", ...["admitted", "admissible", "here"].map((reach) => `/api/projects?reach=${reach}`)]) {
+      expect(await (await get(laptop, route)).json(), route).toEqual([]);
+    }
 
-    // The default: the link would admit this badge, so the canvas is listed.
-    // A person's front page, and what every client that says nothing gets —
-    // including a replica built before this parameter existed.
-    expect(
-      (((await (await get(laptop, "/api/projects")).json()) as Canvas[])).map((pr) => pr.id),
-    ).toEqual([CANVAS]);
-
-    // The replica's question. Same badge, same instant, same canvas, same live
-    // link grant — and nothing, because nobody has let this machine in.
-    expect(await (await get(laptop, canvasesRoute("admitted"))).json()).toEqual([]);
-
-    // Asking did not admit it either: a listing is not an entering, and the
-    // narrow answer must not quietly become true by having been asked for.
+    // Asking did not admit it either: a listing is not an entering, and no
+    // answer here may quietly become true by having been asked for.
     expect((await daemon.desk.badge(laptop.badgeId))!.admissions).toEqual([]);
 
     // Now let it in — the pass is the mechanism, and an admission is an
-    // admission however it was written. The narrow answer changes; the wide
-    // one does not, because it already said yes.
+    // admission however it was written.
     await daemon.desk.admit(laptop.badgeId, CANVAS, { root: "created" });
     expect(
       (((await (await get(laptop, canvasesRoute("admitted"))).json()) as Canvas[])).map((pr) => pr.id),
     ).toEqual([CANVAS]);
 
-    // A word that is not the narrowing word is the DEFAULT, not a silent
-    // narrowing and not an error. There is exactly one spelling of the
+    // A word that is not one of the three is the DEFAULT, not an error — and
+    // the default is now the narrow side. There is exactly one spelling of the
     // parameter (`canvasesRoute`), so a near-miss can only come from somebody
-    // hand-building the URL — and the safe way to be wrong about a listing is
-    // to show a person too much of their own home rather than too little.
+    // hand-building the URL, and the safe way to be wrong about a listing on a
+    // home with strangers in it is to show too little.
     const nobody = await stranger();
+    expect(await (await get(nobody, "/api/projects?reach=admissable")).json()).toEqual([]);
+  });
+
+  /**
+   * **The report this rule came from** (13 Sep): "I don't want to use it with
+   * one person as they see too many canvases when they join." Measured on
+   * isocan.io before the change — a window admitted to one canvas listed 35,
+   * belonging to 22 people — and nothing pinned the combination, which is why
+   * it survived: `here` was tested for its homing half and the door was tested
+   * for its own, never the two together with a stranger's badge.
+   */
+  it("finds a named invitation even when an older, stronger link would win entry", async () => {
+    await makeCanvas();
+    const invited = await stranger();
+    await daemon.desk.attest(invited.badgeId, { attribute: "email:jordan@acme.test", verifiedVia: "magic-link", at: new Date().toISOString() });
+    await daemon.desk.putGrant({ id: "gnt_named_read", canvasId: CANVAS, subject: "email:jordan@acme.test", capability: "read", grantedBy: owner.badgeId, at: new Date().toISOString() });
+    for (const reach of [undefined, "admissible", "here"] as const) {
+      expect(((await (await get(invited, canvasesRoute(reach))).json()) as Canvas[]).map((c) => c.id)).toEqual([CANVAS]);
+    }
+    expect((await daemon.desk.badge(invited.badgeId))!.admissions).toEqual([]);
+    const teammate = await stranger();
+    await daemon.desk.attest(teammate.badgeId, { attribute: "email:sam@acme.test", verifiedVia: "magic-link", at: new Date().toISOString() });
+    await daemon.desk.putGroup({ id: "ppl_design", name: "Acme design", createdBy: priya.id, members: ["email:sam@acme.test"], at: new Date().toISOString() });
+    await daemon.desk.putGrant({ id: "gnt_team_read", canvasId: CANVAS, subject: "group:ppl_design", capability: "read", grantedBy: owner.badgeId, at: new Date().toISOString() });
+    expect(((await (await get(teammate, "/api/projects")).json()) as Canvas[]).map((c) => c.id)).toEqual([CANVAS]);
+    // The creator's fresh badge sees the floor even when the link would win.
+    const creator = await stranger();
+    await creator.speakAs(priya);
+    expect(((await (await get(creator, "/api/projects")).json()) as Canvas[]).map((c) => c.id)).toEqual([CANVAS]);
+    // A bar still wins over the invitation and link, before any entry.
+    await daemon.desk.putGrant({ id: "gnt_named_bar", canvasId: CANVAS, subject: "email:jordan@acme.test", bars: true, grantedBy: owner.badgeId, at: new Date().toISOString() });
+    expect(await (await get(invited, "/api/projects")).json()).toEqual([]);
+  });
+
+  it("does not disclose link-only addresses through homes, presence or unscoped watch", async () => {
+    await makeCanvas();
+    const parked = await fetch(`${base}/api/projects/${CANVAS}/sessions`, {
+      method: "POST", headers: { "Content-Type": "application/json", ...owner.headers }, body: JSON.stringify({ actor: priya, kind: "cli" }),
+    });
+    expect(parked.status).toBe(200);
+    const watcher = await stranger();
+    const watch = (body: unknown) => fetch(`${base}/api/oplog/watch`, {
+      method: "POST", headers: { "Content-Type": "application/json", ...watcher.headers }, body: JSON.stringify(body),
+    });
+    expect(await (await get(watcher, "/api/homes")).json()).toMatchObject({ canvases: {} });
+    expect(await (await get(watcher, PRESENCE_WHERE_ROUTE)).json()).toEqual({ where: [] });
+    expect(await (await watch({})).json()).toEqual({ entries: [], cursors: {} });
+    expect(await (await watch({ cursors: {} })).json()).toEqual({ entries: [], cursors: {} });
+    expect(await (await watch({ cursors: { [CANVAS]: 0 } })).json()).toEqual({ entries: [], cursors: {} });
+    // Presenting the known address still reads its log. A watch is not entry.
+    expect(await (await watch({ cursors: {}, only: [CANVAS] })).json()).toMatchObject({ cursors: { [CANVAS]: 1 } });
+    expect((await daemon.desk.badge(watcher.badgeId))!.admissions).toEqual([]);
+    expect((await get(watcher, `/api/projects/${CANVAS}/canvas`)).status).toBe(200);
+    expect(await (await get(watcher, "/api/homes")).json()).toMatchObject({ canvases: { [CANVAS]: null } });
+    expect(((await (await get(watcher, PRESENCE_WHERE_ROUTE)).json()) as PresenceWhereResponse).where.map((w) => w.canvasId)).toEqual([CANVAS]);
+    expect(await (await watch({})).json()).toMatchObject({ cursors: { [CANVAS]: 1 } });
+  });
+
+  it("shows a joiner admitted to one canvas exactly that one, at a home holding others", async () => {
+    await makeCanvas();
+    for (const id of ["prj_two", "prj_three"]) {
+      await op(owner, { canvasId: null, actor: priya, op: { type: "project.create", canvasId: id, title: id } });
+    }
+    const joiner = await stranger();
+    await daemon.desk.admit(joiner.badgeId, CANVAS, { root: "pass", badgeId: owner.badgeId });
+
+    // Every one of the three carries a live link row, born with it.
+    for (const id of [CANVAS, "prj_two", "prj_three"]) {
+      const { grants } = await grantsOf(owner, id);
+      expect(grants.filter((g) => g.subject === "link" && g.revokedAt === undefined)).toHaveLength(1);
+    }
+
+    // What the web's canvas list asks, and what the bare route answers.
     expect(
-      (((await (await get(nobody, "/api/projects?reach=admited")).json()) as Canvas[])).map(
-        (pr) => pr.id,
-      ),
+      ((await (await get(joiner, canvasesRoute("here"))).json()) as Canvas[]).map((pr) => pr.id),
     ).toEqual([CANVAS]);
+    expect(
+      ((await (await get(joiner, "/api/projects")).json()) as Canvas[]).map((pr) => pr.id),
+    ).toEqual([CANVAS]);
+  });
+});
+
+/**
+ * **The shelf** — the other half of the same rule, and the half that keeps a
+ * laptop's list exactly as it was.
+ *
+ * An admission is written when a badge ENTERS, so a canvas an agent made on
+ * your own machine, or one your CLI made under its own bearer badge, is a
+ * canvas your browser has never been in. Narrowing without this would have
+ * hidden your own work from your own front page. The test that matters is the
+ * pair: the same badge, the same canvases, one daemon answering only its own
+ * machine and one serving the world.
+ */
+describe("a daemon that answers only its own machine", () => {
+  it("shows a local badge everything it holds — and the same badge nothing, once it is serving the world", async () => {
+    const sonia = { id: "usr_sonia", name: "Sonia" };
+    const agent = await stranger();
+    await agent.speakAs(sonia);
+    // What an agent made on this machine: Priya never created it, has never
+    // been in it, and its only row is the link it was born with.
+    const made = await op(agent, {
+      canvasId: null,
+      actor: sonia,
+      op: { type: "project.create", canvasId: "prj_agent", title: "What the agent made" },
+    });
+    expect(made.ok).toBe(true);
+
+    // `boot()` bound loopback, which is what a laptop is.
+    const laptop = await stranger();
+    expect(
+      ((await (await get(laptop, "/api/projects")).json()) as Canvas[]).map((pr) => pr.id),
+    ).toEqual(["prj_agent"]);
+
+    // The same home, the same desk, the same badges — now a daemon that serves
+    // the world, which is what the hosted image is. Nobody let this badge in
+    // anywhere, and now it is told so.
+    await daemon.close();
+    daemon = await startDaemon({ port: 0, home, auth, servesWorld: true });
+    const address = daemon.app.server.address();
+    base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
+    expect(await (await get(laptop, "/api/projects")).json()).toEqual([]);
   });
 });
 
@@ -984,5 +1121,320 @@ describe("the bar", () => {
     expect(withRevoke.status).toBe(403);
     expect((await body(withRevoke)).code).toBe("not-owner");
     expect(await liveRowsFor(sam)).toEqual([expect.objectContaining({ id: invited.grant.id })]);
+  });
+});
+
+/**
+ * **The extension actor** (`docs/projects/extensions/phases.md`, phase 5).
+ *
+ * A panel gets its own actor and a grant, exactly as a person gets one — the
+ * identity desk pointed at software instead of people. Proves the four claims:
+ * 1. Attribution: a panel's write is attributed to the panel's actor (`ext_…`)
+ *    and not to the person watching it (`usr_…`).
+ * 2. Undo: per-actor undo stacks keep the person's and the panel's ops separate.
+ * 3. Revocation: revoking the panel's grant tombstones the grant and sweeps the
+ *    canvas through the existing door test (`admittingGrant`), expelling the
+ *    panel's badge so its next ask is refused at the door (`403 not-admitted`)
+ *    even while the canvas's `link` grant stays live for people.
+ * 4. Presence: presence carries the panel while it works, wearing its
+ *    `EXTENSION_COLORS` mineral tone and never a person's `IDENTITY_COLORS`.
+ */
+describe("the extension actor (extensions phase 5)", () => {
+  const PAGE_ID = "itm_review_page";
+  const PANEL_ID = "itm_review_panel";
+
+  async function seedPanel(): Promise<PanelActorResponse> {
+    await makeCanvas();
+    const pageUpload = await daemon.store.putBlob(
+      CANVAS,
+      Buffer.from("<!doctype html><title>Acme Review</title>"),
+      { mimeType: "text/html", filename: "review.html" },
+    );
+    expect(
+      (
+        await op(owner, {
+          canvasId: CANVAS,
+          actor: priya,
+          op: {
+            type: "item.add",
+            itemId: PAGE_ID,
+            version: {
+              id: "ver_page_1",
+              blobHash: pageUpload.blobHash,
+              mimeType: "text/html",
+              filename: "review.html",
+              size: pageUpload.size,
+            },
+            width: 320,
+            height: 200,
+            placement: { x: 0, y: 0 },
+            title: "review.html",
+          },
+        })
+      ).status,
+    ).toBe(200);
+
+    const manifestText = JSON.stringify({
+      kind: "panel",
+      title: "Acme Review",
+      side: "left",
+      src: "review.html",
+    });
+    const manifestUpload = await daemon.store.putBlob(
+      CANVAS,
+      Buffer.from(manifestText),
+      { mimeType: "application/json", filename: "panel.json" },
+    );
+    expect(
+      (
+        await op(owner, {
+          canvasId: CANVAS,
+          actor: priya,
+          op: {
+            type: "item.add",
+            itemId: PANEL_ID,
+            version: {
+              id: "ver_panel_1",
+              blobHash: manifestUpload.blobHash,
+              mimeType: "application/json",
+              filename: "panel.json",
+              size: manifestUpload.size,
+            },
+            width: 240,
+            height: 120,
+            placement: { x: 400, y: 0 },
+            title: "Acme Review",
+            properties: panelProperties(),
+          },
+        })
+      ).status,
+    ).toBe(200);
+
+    const enrolled = await fetch(`${base}${panelActorRoute(CANVAS, PANEL_ID)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...owner.headers },
+      body: JSON.stringify({}),
+    });
+    expect(enrolled.status).toBe(200);
+    return (await enrolled.json()) as PanelActorResponse;
+  }
+
+  function panelHeaders(panel: PanelActorResponse): Record<string, string> {
+    return {
+      ...owner.headers,
+      Authorization: `Bearer ${panel.token}`,
+    };
+  }
+
+  it("attributes a panel's write to the panel's actor and not to the person watching it", async () => {
+    const panel = await seedPanel();
+    expect(panel.actor).toEqual({ id: panelActorId(PANEL_ID), name: "Acme Review" });
+    expect(panel.grant).toMatchObject({
+      canvasId: CANVAS,
+      subject: panelSubject(PANEL_ID),
+    });
+
+    // The panel's badge speaks ONLY for the panel's actor: attempting to write
+    // as Priya using the panel's credential is refused by mechanism 5 (`not-your-actor`).
+    const impersonated = await fetch(`${base}/api/ops`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...panelHeaders(panel) },
+      body: JSON.stringify({
+        canvasId: CANVAS,
+        actor: priya,
+        op: { type: "item.update", itemId: PAGE_ID, patch: { description: "impersonated" } },
+      }),
+    });
+    expect(impersonated.status).toBe(400);
+    expect(((await impersonated.json()) as { code: string }).code).toBe("not-your-actor");
+
+    // Writing as the panel's own actor lands and is attributed solely to the panel.
+    const wrote = await fetch(`${base}/api/ops`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...panelHeaders(panel) },
+      body: JSON.stringify({
+        canvasId: CANVAS,
+        actor: panel.actor,
+        op: {
+          type: "thread.create",
+          threadId: "thr_panel_1",
+          x: 10,
+          y: 20,
+          anchorItemId: PAGE_ID,
+          comment: { id: "cmt_panel_1", body: "contrast ratio passes" },
+        },
+      }),
+    });
+    expect(wrote.status).toBe(200);
+
+    const snapshot = (await (await get(owner, `/api/projects/${CANVAS}/canvas`)).json()) as CanvasSnapshotResponse;
+    expect(recentActivity(snapshot.canvas, panel.actor.id)).toEqual([
+      expect.objectContaining({
+        kind: "said",
+        itemId: PAGE_ID,
+        subject: "review.html",
+        body: "contrast ratio passes",
+      }),
+    ]);
+    expect(
+      recentActivity(snapshot.canvas, priya.id).some((entry) => entry.body === "contrast ratio passes"),
+    ).toBe(false);
+  });
+
+  it("keeps undo per actor: undoing by the person does not revert the panel's ops, and vice versa", async () => {
+    const panel = await seedPanel();
+
+    // Priya moves the page to (100, 100); then the panel moves it to (250, 250)
+    // and renames its description.
+    expect(
+      (
+        await op(owner, {
+          canvasId: CANVAS,
+          actor: priya,
+          op: { type: "item.move", itemId: PAGE_ID, x: 100, y: 100 },
+        })
+      ).status,
+    ).toBe(200);
+
+    expect(
+      (
+        await fetch(`${base}/api/ops`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...panelHeaders(panel) },
+          body: JSON.stringify({
+            canvasId: CANVAS,
+            actor: panel.actor,
+            op: { type: "item.update", itemId: PAGE_ID, patch: { description: "panel note" } },
+          }),
+        })
+      ).status,
+    ).toBe(200);
+
+    // Priya undoes: her move (100, 100) -> (0, 0) reverts, while the panel's
+    // description edit ("panel note") is untouched.
+    const priyaUndo = await fetch(`${base}/api/projects/${CANVAS}/undo`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...owner.headers },
+      body: JSON.stringify({ actor: priya }),
+    });
+    expect(priyaUndo.status).toBe(200);
+    let snap = (await (await get(owner, `/api/projects/${CANVAS}/canvas`)).json()) as CanvasSnapshotResponse;
+    expect(snap.canvas.items[PAGE_ID]!.x).toBe(0);
+    expect(snap.canvas.items[PAGE_ID]!.description).toBe("panel note");
+
+    // Priya moves the page again to (300, 300); then the panel undoes: the
+    // panel's description edit reverts to "", while Priya's move (300, 300)
+    // is untouched.
+    expect(
+      (
+        await op(owner, {
+          canvasId: CANVAS,
+          actor: priya,
+          op: { type: "item.move", itemId: PAGE_ID, x: 300, y: 300 },
+        })
+      ).status,
+    ).toBe(200);
+
+    const panelUndo = await fetch(`${base}/api/projects/${CANVAS}/undo`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...panelHeaders(panel) },
+      body: JSON.stringify({ actor: panel.actor }),
+    });
+    expect(panelUndo.status).toBe(200);
+    snap = (await (await get(owner, `/api/projects/${CANVAS}/canvas`)).json()) as CanvasSnapshotResponse;
+    expect(snap.canvas.items[PAGE_ID]!.description).toBe("");
+    expect(snap.canvas.items[PAGE_ID]!.x).toBe(300);
+  });
+
+  it("revoking the panel's grant expels it through the existing door test, refusing its next ask at the door", async () => {
+    const panel = await seedPanel();
+
+    // Revoke the panel's grant via the standard grants DELETE route while the
+    // canvas's `link` grant stays live for people.
+    const revoked = await fetch(`${base}${grantRoute(CANVAS, panel.grant.id)}`, {
+      method: "DELETE",
+      headers: owner.headers,
+    });
+    expect(revoked.status).toBe(200);
+    const body = (await revoked.json()) as GrantResponse;
+    expect(body.grant.id).toBe(panel.grant.id);
+    expect(body.grant.revokedAt).toBeDefined();
+    expect(body.swept).toEqual({ expelled: 1, rerooted: 0 });
+    expect(body.stillAdmittedBy).toBeUndefined();
+
+    // The panel's next ask is refused at the door with 403 `not-admitted`, not
+    // merely unsent, while a stranger person still enters on the link.
+    const refusedWrite = await fetch(`${base}/api/ops`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...panelHeaders(panel) },
+      body: JSON.stringify({
+        canvasId: CANVAS,
+        actor: panel.actor,
+        op: { type: "item.update", itemId: PAGE_ID, patch: { description: "after revoke" } },
+      }),
+    });
+    expect(refusedWrite.status).toBe(403);
+    expect(((await refusedWrite.json()) as { code: string }).code).toBe("not-admitted");
+
+    const refusedRead = await fetch(`${base}/api/projects/${CANVAS}/canvas`, {
+      headers: panelHeaders(panel),
+    });
+    expect(refusedRead.status).toBe(403);
+    expect(((await refusedRead.json()) as { code: string }).code).toBe("not-admitted");
+
+    // Re-asking `panelActorRoute` does not resurrect a tombstoned panel grant.
+    const reEnroll = await fetch(`${base}${panelActorRoute(CANVAS, PANEL_ID)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...owner.headers },
+      body: JSON.stringify({}),
+    });
+    expect(reEnroll.status).toBe(403);
+    expect(((await reEnroll.json()) as { code: string }).code).toBe("not-admitted");
+
+    // And the ambient link is still on for people.
+    expect((await get(await stranger(), `/api/projects/${CANVAS}/canvas`)).status).toBe(200);
+  });
+
+  it("carries the panel in presence while it works, wearing an extension colour", async () => {
+    const panel = await seedPanel();
+
+    const sessionRes = await fetch(`${base}/api/projects/${CANVAS}/sessions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...panelHeaders(panel) },
+      body: JSON.stringify({ actor: panel.actor, label: panel.actor.name }),
+    });
+    expect(sessionRes.status).toBe(200);
+    const { sessionId } = (await sessionRes.json()) as { sessionId: string };
+
+    // An op applied with `clientId: sessionId` moves the panel's presence
+    // cursor to the item's locus while the panel works.
+    expect(
+      (
+        await fetch(`${base}/api/ops`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...panelHeaders(panel) },
+          body: JSON.stringify({
+            canvasId: CANVAS,
+            actor: panel.actor,
+            clientId: sessionId,
+            op: { type: "item.move", itemId: PAGE_ID, x: 200, y: 100 },
+          }),
+        })
+      ).status,
+    ).toBe(200);
+    await new Promise((r) => setTimeout(r, 60));
+
+    const roster = (await (
+      await get(owner, `/api/projects/${CANVAS}/sessions`)
+    ).json()) as PresenceSession[];
+    const entry = roster.find((s) => s.actor.id === panel.actor.id);
+    expect(entry).toBeDefined();
+    expect(entry!.actor).toEqual(panel.actor);
+    expect(entry!.cursor).toEqual({ x: 360, y: 200 });
+
+    const color = actorColor(panel.actor.id);
+    expect(color).toBe(panel.color);
+    expect(EXTENSION_COLORS.some((c) => c.value === color)).toBe(true);
+    expect(IDENTITY_COLORS.some((c) => c.value === color)).toBe(false);
   });
 });

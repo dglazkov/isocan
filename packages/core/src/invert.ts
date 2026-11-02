@@ -1,6 +1,8 @@
 import type { CanvasState } from "./model.ts";
-import type { MetaPatch, NewVersion, Operation } from "./ops.ts";
+import type { MetaPatch, Operation } from "./ops.ts";
 import { OpValidationError, unknownOperation } from "./errors.ts";
+import { invertGroupChange } from "./canvas-groups.ts";
+import { currentDesignScope } from "./design-decision-state.ts";
 
 /**
  * Compute the inverse of an operation against the state it is ABOUT to be
@@ -31,6 +33,33 @@ export function invertOperation(
   };
 
   switch (op.type) {
+    case "design.repair":
+      if (!op.effect) throw new OpValidationError("bad-op", "resolve repair before inversion");
+      return invertOperation(stateBefore, op.effect);
+    case "design.compare":
+    case "design.respond": return { type: "comment.remove", threadId: op.threadId, commentId: op.commentId };
+    case "design.decide": {
+      if (!op.effect) throw new OpValidationError("bad-op", "resolve adoption before inversion");
+      const inverse = invertOperation(stateBefore, op.effect.edit);
+      if (inverse?.type !== "item.removeVersion") throw new OpValidationError("bad-op", "invalid adoption inverse");
+      const record = op.effect.comment.designDecision?.record;
+      if (record?.kind !== "adoption-decision") throw new OpValidationError("bad-op", "missing canonical adoption");
+      return { type: "design.restore", effect: { target: { ...op.decision.basis.target, artifact: record.adopted }, item: inverse, threadId: op.threadId, commentId: op.commentId, expectedComment: op.effect.comment, comment: null } };
+    }
+    case "design.restore": {
+      const e = op.effect, item = getItem(e.item.itemId), inverse = invertOperation(stateBefore, e.item);
+      if (inverse?.type !== "item.removeVersion" && inverse?.type !== "item.restoreVersion") throw new OpValidationError("bad-op", "invalid paired inverse");
+      const change = e.item;
+      const version = change.type === "item.removeVersion" ? item.versions.find((v) => v.id === change.prevCurrentVersionId)! : change.version;
+      return { type: "design.restore", effect: { target: { artifact: { ...e.target.artifact, versionId: version.id, blobHash: version.blobHash }, title: item.title, description: item.description, properties: structuredClone(item.properties), scope: currentDesignScope(canvas, item) }, item: inverse, threadId: e.threadId, commentId: e.commentId, expectedComment: e.comment, comment: e.expectedComment } };
+    }
+    case "design.request":
+    case "design.receipt":
+      if (!op.effect) throw new OpValidationError("bad-op", "resolve design intent before inversion");
+      return invertOperation(stateBefore, op.effect);
+    case "group.change":
+      if (op.action.kind !== "apply") throw new OpValidationError("bad-op", "resolve group intent before inversion");
+      return { type: "group.change", action: { kind: "apply", change: invertGroupChange(stateBefore, op.action.change) } };
     case "actor.claim":
     case "actor.setColor":
     case "actor.setMark":
@@ -38,7 +67,9 @@ export function invertOperation(
       return null; // home-scoped and never undoable; never reaches a canvas
 
     case "agent.enroll":
+    case "agent.invite":
     case "agent.withdraw":
+    case "agent.ceiling":
       // Standing is granted and withdrawn deliberately, never by a casual ⌘Z
       // — an undo that silently re-armed (or silently silenced) an agent
       // would be exactly the invisible standing change journey 8 refuses.
@@ -74,22 +105,39 @@ export function invertOperation(
 
     case "item.update": {
       const item = getItem(op.itemId);
+      // A morning review seen (`goodnight.ts`'s `HANDOFF_REVIEWED_PROP`,
+      // spelled here for `converge.ts`'s reason): the person's client closes
+      // the night's note on arrival, which is not an act of theirs — so it is
+      // never on their ⌘Z, where an accident would reopen the note.
+      if (op.filename === undefined && op.faces === undefined && Object.keys(op.patch).join() === "properties" && Object.keys(op.patch.properties ?? {}).join() === "handoffReviewed") return null;
       const current = item.versions.find((version) => version.id === item.currentVersionId);
+      const inverseFaces =
+        op.faces !== undefined && current
+          ? (Object.fromEntries(
+              Object.keys(op.faces).map((key) => [
+                key,
+                current.faces?.[key as keyof NonNullable<typeof current.faces>] ?? null,
+              ]),
+            ) as NonNullable<typeof op.faces>)
+          : undefined;
       return {
         type: "item.update",
         itemId: op.itemId,
         patch: invertMetaPatch(item, op.patch),
         // Undoing a rename puts the file back under its old name.
         ...(op.filename !== undefined && current ? { filename: current.filename } : {}),
+        ...(inverseFaces !== undefined ? { faces: inverseFaces } : {}),
       };
     }
 
+    case "item.edit":
     case "item.addVersion":
       return {
         type: "item.removeVersion",
         itemId: op.itemId,
         versionId: op.version.id,
         prevCurrentVersionId: getItem(op.itemId).currentVersionId,
+        ...(op.type === "item.edit" ? { patch: invertMetaPatch(getItem(op.itemId), op.patch) } : {}),
       };
 
     case "item.setCurrentVersion":
@@ -105,7 +153,9 @@ export function invertOperation(
       if (!version) {
         throw new OpValidationError("unknown-version", `unknown version: ${op.versionId}`);
       }
-      return { type: "item.restoreVersion", itemId: op.itemId, version };
+      return { type: "item.restoreVersion", itemId: op.itemId, version,
+        ...(op.patch ? { patch: invertMetaPatch(item, op.patch) } : {}),
+      };
     }
 
     case "item.restoreVersion":
@@ -114,6 +164,7 @@ export function invertOperation(
         itemId: op.itemId,
         versionId: op.version.id,
         prevCurrentVersionId: getItem(op.itemId).currentVersionId,
+        ...(op.patch ? { patch: invertMetaPatch(getItem(op.itemId), op.patch) } : {}),
       };
 
     case "item.delete":
@@ -138,6 +189,10 @@ export function invertOperation(
       return { type: "items.delete", itemIds: op.itemIds };
 
     case "trash.empty":
+    case "item.pruneVersions":
+      // Both forget for good. Undoing a prune would restore versions whose
+      // bytes the collector may already have swept — an undo that half works
+      // is worse than one that is refused at the door.
       return null;
 
     case "thread.create":
@@ -145,6 +200,9 @@ export function invertOperation(
 
     case "thread.reply":
       return { type: "comment.remove", threadId: op.threadId, commentId: op.comment.id };
+    case "questionnaire.ask":
+    case "questionnaire.answer":
+      return { type: "comment.remove", threadId: op.threadId, commentId: op.commentId };
 
     case "thread.setMain": {
       if (op.threadId !== null && !canvas.threads[op.threadId]) {
@@ -161,6 +219,7 @@ export function invertOperation(
         type: "thread.setAnchor",
         threadId: op.threadId,
         anchorItemId: thread.anchorItemId,
+        ...(thread.textAnchor ? { textAnchor: thread.textAnchor } : {}),
         x: thread.x,
         y: thread.y,
       };
@@ -181,17 +240,20 @@ export function invertOperation(
         body: existing.body,
         ...(existing.mentions ? { mentions: existing.mentions } : {}),
         ...(existing.items ? { items: existing.items } : {}),
+        ...(op.context !== undefined ? { context: existing.context ?? null } : {}),
       };
     }
 
     case "comment.remove": {
       const thread = canvas.threads[op.threadId];
       if (!thread) throw new OpValidationError("unknown-thread", `unknown thread: ${op.threadId}`);
-      const comment = thread.comments.find((c) => c.id === op.commentId);
-      if (!comment) {
+      const index = thread.comments.findIndex((c) => c.id === op.commentId);
+      if (index < 0) {
         throw new OpValidationError("unknown-comment", `unknown comment: ${op.commentId}`);
       }
-      return { type: "comment.restore", threadId: op.threadId, comment };
+      // Where it stood: a clean-up takes messages from the middle, and undo
+      // puts each back in its place rather than at the end.
+      return { type: "comment.restore", threadId: op.threadId, comment: thread.comments[index]!, index };
     }
 
     case "comment.restore":
@@ -233,15 +295,4 @@ function invertMetaPatch(
   if (Object.keys(restore).length > 0) inverse.properties = restore;
   if (removeAdded.length > 0) inverse.removeProperties = removeAdded;
   return inverse;
-}
-
-/** Strip server-assigned fields from a stored ItemVersion back to the wire shape. */
-function toNewVersion(v: {
-  id: string;
-  blobHash: string;
-  mimeType: string;
-  filename: string;
-  size: number;
-}): NewVersion {
-  return { id: v.id, blobHash: v.blobHash, mimeType: v.mimeType, filename: v.filename, size: v.size };
 }

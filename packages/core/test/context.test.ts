@@ -31,7 +31,7 @@ const canvasOf = (items: Item[], threads: Record<string, unknown> = {}): CanvasC
 
 const NOW = Date.parse("2026-02-01T00:00:00.000Z");
 const find = (canvas: CanvasContents, name: string, extras = {}) =>
-  contextPieces(canvas, extras, NOW).find((p) => p.name === name)!;
+  contextPieces(canvas, extras).find((p) => p.name === name)!;
 
 describe("a design system is stale against the WORK, not the clock", () => {
   it("is current when nothing has been designed since", () => {
@@ -113,9 +113,9 @@ describe("the rest of what is in context", () => {
     // The web has no bound directory and no oplog count. A view that listed
     // them as "not here" would be reporting the absence of something that
     // cannot exist on that surface.
-    const names = contextPieces(canvasOf([]), {}, NOW).map((p) => p.name);
+    const names = contextPieces(canvasOf([]), {}).map((p) => p.name);
     expect(names).not.toContain("Bound directory");
-    expect(contextPieces(canvasOf([]), { directory: null }, NOW).map((p) => p.name)).toContain(
+    expect(contextPieces(canvasOf([]), { directory: null }).map((p) => p.name)).toContain(
       "Bound directory",
     );
   });
@@ -129,14 +129,14 @@ describe("the report a terminal prints", () => {
       updatedAt: at("2026-01-01T00:00:00.000Z"),
     });
     const later = [1, 2, 3].map((n) => item({ id: `itm_${n}`, updatedAt: at("2026-01-15T00:00:00.000Z") }));
-    const text = contextReport(contextPieces(canvasOf([design, ...later]), {}, NOW), NOW);
+    const text = contextReport(contextPieces(canvasOf([design, ...later]), {}), NOW);
     expect(text).toMatch(/^! Design system/m);
     expect(text).toContain("3 items have changed since it was last written");
     expect(text).toContain("→ ");
   });
 
   it("does not print a fix for something that is fine", () => {
-    const text = contextReport(contextPieces(canvasOf([item({ id: "a" })]), {}, NOW), NOW);
+    const text = contextReport(contextPieces(canvasOf([item({ id: "a" })]), {}), NOW);
     const canvasLine = text.split("\n").find((l) => l.includes("The canvas"))!;
     expect(canvasLine).not.toContain("→");
   });

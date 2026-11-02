@@ -1,6 +1,32 @@
+import type { Actor, CanvasContents, WebHost } from "@isocan/core";
+import { itemPath } from "@isocan/core";
+import { usePresentation } from "../lib/canvasPresentation.ts";
+import { presentedCanvas, previewedCanvas } from "../lib/presentation.ts";
+import { EDGE_ZOOM_MIN, edgesShownAtZoom } from "../lib/chrome.ts";
 import { modules } from "../modules.ts";
+import { Suspense, lazy, useCallback, useContext, useMemo, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import { CanvasActivation } from "../lib/canvasActivation.ts";
+import { useCanEdit } from "../lib/capability.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
+import { currentCommands } from "../lib/commands.ts";
+import { fetchBlobText } from "../lib/blobtext.ts";
+
+export { EDGE_ZOOM_MIN, edgesShownAtZoom };
+
+const LazyNodeEdgesUnderlay = lazy(() => import("./NodeEdgesUnderlay.tsx"));
+
+function hasAnyDeclaredEdge(canvas: CanvasContents): boolean {
+  for (const item of Object.values(canvas.items)) {
+    const props = item.properties;
+    if (props.edges) return true;
+    for (const k in props) {
+      if (k.startsWith("edge:")) return true;
+    }
+  }
+  return false;
+}
 
 /**
  * **The first module slot: under the items, in world units.**
@@ -8,22 +34,77 @@ import { useUiStore } from "../stores/uiStore.ts";
  * Mounted inside `.world` before the items, so whatever a module draws here
  * passes UNDER the nodes it joins — a map node is chromeless text, and a line
  * over it strikes through the words. The shell reads the stores once, here,
- * and hands every module the same facts as props: the canvas, and the live
- * drag so a line can ride the gesture before the replica moves. A module
+ * and hands every module the same facts as props: the canvas, with the live
+ * gesture already folded in, so a line rides the hand before the replica moves
+ * without knowing what kind of gesture it is. A module
  * never sees a store, which is what keeps the dependency pointing one way.
+ *
+ * Since wireframes phase 8 an underlay can also WRITE — the same `WebHost`
+ * overlays get, with `canEdit` beside it — and open an item full screen at an
+ * anchor: an arrow between kept screens is something you click, retarget and
+ * play from (`core/modules.ts`, `WebHost`, "Who gets it").
+ *
+ * Directional edges and module underlays stay shown down to `EDGE_ZOOM_MIN`
+ * (`edgesShownAtZoom`) and hide when zoomed past that floor (`scale < 0.08`).
+ * Node content itself is governed per item by screen size (`hasRoomForChrome`,
+ * `textIsLegible`), never by a raw scale cutoff.
  */
-export function ModuleUnderlays() {
-  const canvas = useCanvasStore((s) => s.canvas);
-  const drag = useUiStore((s) => s.drag);
+export function ModuleUnderlays({ canvasId, actor }: { canvasId: string; actor: Actor }) {
+  const presentation = usePresentation();
+  const activateItem = useContext(CanvasActivation);
+  const canvas = useCanvasStore((s) => s.past?.canvas ?? s.canvas);
+  const past = useCanvasStore((s) => s.past !== null && s.past !== undefined);
+  // Both kinds of live gesture, folded into the canvas the underlays are
+  // handed (`previewedCanvas`): a groups canvas never sets `drag`.
+  const gesture = useUiStore((s) => s.drag ?? s.groupPreview);
+  const selection = useUiStore((s) => s.selectedItemIds);
+  const canEdit = useCanEdit();
+  const host = useMemo(() => lazyHost(canvasId, actor, canEdit), [canvasId, actor, canEdit]);
+  const navigate = useNavigate();
+  const openItem = useCallback((itemId: string, anchor?: string) => navigate(`${itemPath(canvasId, itemId)}${anchor ? `?at=${encodeURIComponent(anchor.replace(/^#/, ""))}` : ""}`), [canvasId, navigate]);
   // A runtime module that arrived after first paint is a new underlay.
   useUiStore((s) => s.modulesGeneration);
-  if (!canvas) return null;
-  const facts = { canvas, drag: drag ? { itemIds: drag.itemIds, dx: drag.dx, dy: drag.dy } : null };
+  const held = useRef<{ e?: boolean }>({}).current;
+  const edgesVisible = useUiStore((s) => (held.e = edgesShownAtZoom(s.viewport.scale, held.e)));
+  if (!canvas || !edgesVisible) return null;
+  const previewed = previewedCanvas(presentedCanvas(canvas, presentation), gesture);
+  const facts = {
+    canvas: previewed,
+    presentation: presentation?.items,
+    activateItem,
+    selection,
+    readText: (hash: string) => fetchBlobText(canvasId, hash),
+    host,
+    canEdit: canEdit && !past,
+    past,
+    openItem,
+  };
   return (
     <>
+      {hasAnyDeclaredEdge(previewed) && (
+        <Suspense fallback={null}>
+          <LazyNodeEdgesUnderlay canvas={previewed} />
+        </Suspense>
+      )}
       {modules().flatMap((m) =>
         (m.underlays ?? []).map((Underlay, i) => <Underlay key={`${m.core.name}:${i}`} {...facts} />),
       )}
     </>
   );
+}
+
+/**
+ * **The underlays' host, fetched on first use.** `modulehost.ts` stays out of
+ * the entry chunk (every other slot imports it lazily too — the canvas's own
+ * drop handler does), so an underlay is handed an object whose methods load
+ * it when one is called: nothing is paid until somebody retargets an arrow.
+ * The door test is the real host's — `send` refuses a reader there.
+ */
+function lazyHost(canvasId: string, actor: Actor, canEdit: boolean): WebHost {
+  type Call = (...args: unknown[]) => unknown;
+  const later = (name: "send" | "putBlob" | "enrol" | "reveal" | "select" | "runCommand" | "retract") => (...args: unknown[]) =>
+    import("../lib/modulehost.ts").then((m) => (m.webHostFor(canvasId, actor, undefined, canEdit)[name] as Call)(...args));
+  // `commands` answers synchronously, so it cannot wait on the chunk; it reads
+  // the same store the real host does, through the same function.
+  return { send: later("send"), putBlob: later("putBlob"), enrol: later("enrol"), reveal: later("reveal"), select: later("select"), runCommand: later("runCommand"), retract: later("retract"), commands: currentCommands, viewer: { id: actor.id, name: actor.name } } as unknown as WebHost;
 }

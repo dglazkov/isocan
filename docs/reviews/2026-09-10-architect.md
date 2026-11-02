@@ -12,7 +12,7 @@ Run by `scripts/persona-run.mjs` at `86cc4cb`. **Nothing was changed.**
 
 | Finding | Outcome |
 | --- | --- |
-| operations in the vocabulary is 35, past 33 | unanswered |
+| operations in the vocabulary is 35, past 33 | rejected — a counting bug, not vocabulary. `Operation` has 33 members, read with TypeScript's own parser. `op-types` counted every line in `ops.ts` shaped like a union member opening a brace, and `c8213d70` reformatted `Placement` — a type an operation carries — into a multi-line union that added two such lines while adding no operation. The metric now reads the members of `export type Operation` and nothing beside it (`operationMembers` in `scripts/isomorphism.mjs`, shared with the isomorphism audit), `test/measure.test.ts` holds it against this exact shape, and the selftest's mutation adds an operation instead of a union next to one — the old mutation is why the selftest passed while the number was wrong. |
 
 `unanswered` until somebody writes `accepted` or `rejected`. **After 3 days
 an unanswered row fails `npm test`** — the queue can fail, so a correct report

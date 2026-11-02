@@ -1,0 +1,112 @@
+/* The Chat as a bar at the bottom (ChatBar.tsx), and the slots a drag of the
+   Chat shows (lib/chatmove.ts). Loaded with them, never on a first visit. */
+
+.chat-bar {
+  position: absolute; left: 0; right: 0; bottom: var(--edge); margin: 0 auto;
+  width: min(720px, calc(100vw - 32px));
+  /* Over the canvas and its floating chrome, under menus and dialogs — and its
+     own popovers (the mention menu is portalled) ride above it. */
+  z-index: var(--z-bar);
+  /* The Chat across the whole bar; the bar's own controls pinned to its
+     bottom-right corner, beside the composer whether or not the messages are
+     showing. (A two-column grid ran the controls' column the full height, so
+     the messages stopped a hand's width short of the right edge — Dion,
+     8 Oct 2026: "a lot of blank space on the right".) */
+  display: grid; grid-template-columns: minmax(0, 1fr); font-size: 12px; overflow: hidden;
+}
+/* No transform for the centring: the drag writes one, and a bar that also
+   needed one to stand in the middle would jump by half its width. */
+
+/* The Chat itself, unframed: the bar is the frame. */
+.chat-bar > .main-panel {
+  /* z-index back to auto: a grid item honours the dock's z-index even when
+     static, and would lift the whole Chat over the controls in its corner. */
+  grid-column: 1; position: static; z-index: auto; width: auto; min-height: 0;
+  background: none; border: 0; border-radius: 0; box-shadow: none; backdrop-filter: none;
+}
+.chat-bar .main-scroll { flex: 0 1 auto; max-height: 55vh; }
+/* Minimized: the composer and nothing else. The bar is its own header, and
+   the list, the design asks and the questionnaire wait for it to open. */
+.chat-bar > .main-panel > .panel-head,
+.chat-bar:not(.open) > .main-panel > :not(form) { display: none; }
+.chat-bar .main-panel form { border-top: 0; align-items: center; }
+/* Only the composer row makes room for the controls, by width rather than
+   padding: the messages above run the bar's full width. The selection pills sit
+   above the controls, so they take the bar's full width too and fit three on
+   one horizontal row without wrapping early. */
+.chat-bar .main-panel form { width: calc(100% - 76px); box-sizing: border-box; }
+.chat-bar .attached { flex: 0 0 calc(100% + 76px); max-width: calc(100% + 76px); }
+.chat-bar .attached-chip { max-width: calc((100% - 14px) / 3); min-width: 0; }
+.chat-bar .main-panel form .mention-field { flex: 1 1 200px; }
+/* The bar itself is the pill, so the composer inside wears no inner box. */
+.chat-bar .mention-field .mention-input { border-color: transparent; }
+.chat-bar-controls {
+  /* Above the full-width Chat it shares the corner with, or the Chat's own
+     box takes the presses meant for ▴ ▾. */
+  position: absolute; right: 0; bottom: 0; z-index: 1;
+  display: flex; align-items: center; gap: 4px; padding: 10px;
+}
+
+.chat-bar-btn {
+  display: inline-grid; place-items: center; width: 28px; height: 28px; padding: 0; flex: none;
+  background: none; border: 1px solid transparent; border-radius: 6px;
+  color: var(--ink-soft); font-size: 15px; line-height: 1;
+}
+.chat-bar-btn:hover { color: var(--ink); background: var(--glass-chip-hover); }
+
+.chat-bar-grip {
+  display: inline-grid; place-items: center; width: 24px; height: 28px; padding: 0; flex: none;
+  background: none; border: 1px solid transparent; border-radius: 6px;
+  color: var(--ink-muted); cursor: grab; user-select: none; font-size: 14px; line-height: 1;
+}
+.chat-bar-grip:hover { color: var(--ink); background: var(--glass-chip-hover); }
+
+/* What came in while it was down: a count and one line of the newest. */
+.chat-bar-news {
+  grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; min-width: 0;
+  padding: 7px 12px 0; border: 0; background: none;
+  color: var(--ink-soft); text-align: left; font-size: 12px;
+}
+.chat-bar-unread {
+  flex: none; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px;
+  display: grid; place-items: center;
+  font-size: 10px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums;
+  color: var(--accent-ink); background: var(--accent);
+}
+.chat-bar-preview { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-bar-news:hover .chat-bar-preview { color: var(--ink); }
+
+/* The wet-ink bar shares the bottom centre: it steps up over the Chat. */
+.canvas-page:has(> .chat-bar) .sketch-bar { bottom: calc(var(--edge) + 64px); }
+
+/* ---------- moving it ---------- */
+body.chat-dragging, body.chat-dragging * { cursor: grabbing !important; user-select: none; }
+
+.chat-zones { position: fixed; inset: 0; z-index: var(--z-toast); pointer-events: none; }
+.chat-zone {
+  position: absolute; display: grid; place-items: center;
+  border: 2px dashed var(--line); border-radius: var(--r-float);
+  color: var(--ink-muted); font-size: 12px; background: var(--panel);
+  transition: background-color 0.12s, border-color 0.12s;
+}
+.chat-zone-left { top: calc(var(--topbar) + var(--edge)); left: var(--edge); bottom: var(--edge); }
+.chat-zone-bottom {
+  left: 0; right: 0; bottom: var(--edge); margin: 0 auto; height: 64px;
+  width: min(720px, calc(100vw - 32px));
+}
+/* Nearer is tinted; in reach is solid. A tint, not opacity: the slot's
+   words stay at their own contrast. */
+.chat-zone.near { border-color: var(--accent); background: var(--accent-wash); }
+.chat-zone.hot { border-style: solid; color: var(--accent-text); }
+@media (prefers-reduced-motion: reduce) { .chat-zone { transition: none; } }
+
+/* The docked Chat's handle (ChatHandle.tsx): its header picks it up, and Move
+   to bottom sits between the clean-up ⋯ and the ✕. */
+.main-panel > .panel-head { cursor: grab; }
+.main-panel > .panel-head button { cursor: pointer; }
+.main-panel > .panel-head .chat-move { order: 2; display: inline-grid; place-items: center; }
+.main-panel > .panel-head > .main-close:not(.chat-move):not(.chat-tidy-open) { order: 3; }
+
+/* At the bottom the bar carries its own unread count, so the shut rail does
+   not repeat it. */
+.canvas-page:has(> .chat-bar) .strip-chat:not(.strip-agents) { display: none; }

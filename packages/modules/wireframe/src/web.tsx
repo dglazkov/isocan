@@ -1,0 +1,86 @@
+import "../assets/styles.css";
+import type { ComponentType } from "react";
+import type { DialogFacts, FocusFacts, UnderlayFacts, WebModule } from "@isocan/core";
+import { WireArrows } from "./arrows.tsx";
+import { WireBehind } from "./behind-marks.tsx";
+import { offersFlowVoice } from "./flow-voice-offers.ts";
+import { wireframeFocusFacet } from "./focus.tsx";
+import { cachedSpec } from "./spec-cache.ts";
+import { PrototypeLight } from "./prototype-light.tsx";
+import { wireframeCore } from "./command.ts";
+import { WireDialog } from "./dialog.tsx";
+import { WireLayersBar } from "./layers-bar.tsx";
+import { WireMaybes } from "./maybe-marks.tsx";
+import { PROTOTYPE_PROP } from "./prototype.ts";
+import { styleMenu } from "./style-menu.ts";
+import { wireWebCopy } from "./web-copy.ts";
+
+/**
+ * **The web half** (phase 5) — fetched, never bundled into first paint: the
+ * shell registers `activation.ts` and imports this only when a person types
+ * `/wire` or a canvas has two kept screens to join. It carries the Wireframes
+ * dialog (the composer, the prototype, the restyle — the CLI's own code over
+ * the dialog's host) and the arrows between kept screens.
+ */
+/** One underlay slot (its predicate is `activation.ts`'s): the maybe marks, the "behind" marks, the arrows between kept screens, the selected screen's Layers bar, and a selected prototype's screens lit. */
+function WireUnderlay(facts: UnderlayFacts) {
+  return (
+    <>
+      <WireMaybes canvas={facts.canvas} />
+      <WireBehind {...facts} />
+      <WireArrows {...facts} />
+      <WireLayersBar {...facts} />
+      <PrototypeLight canvas={facts.canvas} selection={facts.selection} specOf={cachedSpec} />
+    </>
+  );
+}
+
+export const wireframeWeb: WebModule<ComponentType<UnderlayFacts>, never, never, never, never, ComponentType<DialogFacts>, never, never, ComponentType<FocusFacts>> = {
+  core: wireframeCore,
+  underlays: [WireUnderlay],
+  dialogs: [{ id: "wire", title: "Wireframes", component: WireDialog }],
+  focus: [wireframeFocusFacet],
+  // ⌘K: find the prototypes on a busy canvas (phase 8) — a door, not a write: it opens `/wire prototypes`.
+  actions: [{
+    id: "wire-prototypes",
+    name: "Find prototypes",
+    hint: "select the clickable prototypes on this canvas",
+    available: ({ canvas }) => Object.values(canvas.items).some((i) => i.properties?.[PROTOTYPE_PROP] !== undefined),
+    opens: "wire",
+    args: "prototypes",
+  }],
+  // Right-click a wire → Style ▸ (style-menu.ts): each pick opens the dialog with `style <name>`.
+  menu: styleMenu,
+  // A wire screen's words are its spec's: *Vary the copy…* renders each voice here (copy-edit phase 2), and the
+  // stage's in-place text edit names the word a node draws and writes it to the spec (web-copy.ts).
+  copy: {
+    kind: "wire",
+    variant: async (...args) => (await import("./copy-variant.ts")).wireCopyVariant(...args),
+    at: wireWebCopy.at,
+    apply: wireWebCopy.apply,
+    // *Choose a voice…* (copy-edit phase 5): a whole flow's words, one voice landed on every screen as one group.
+    flow: {
+      offers: (canvas, item) => offersFlowVoice(canvas, item, cachedSpec),
+      read: async (...args) => (await import("./web-flow-voice.ts")).read(...args),
+      apply: async (...args) => (await import("./web-flow-voice.ts")).apply(...args),
+    },
+  },
+};
+
+export {
+  WireframeFocusEdit,
+  WireframeFocusView,
+  applyWireStudioLayoutChange,
+  applyWireStudioSlotCopy,
+  applyWireStudioSlotIntent,
+  applyWireStudioSlotPolish,
+  applyWireStudioSlotRemove,
+  applyWireStudioSlotSwap,
+  isWireframeFocusMatch,
+  saveWireStudioSpec,
+  slotSubtargetFor,
+  wireVariationsFor,
+  wireframeFocusFacet,
+} from "./focus.tsx";
+
+export default wireframeWeb;

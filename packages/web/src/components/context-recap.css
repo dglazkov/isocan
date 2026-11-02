@@ -1,0 +1,4 @@
+.ctx-recap { margin: 8px 0 0; font-size: 12px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-soft); }
+/* A bounded source name still needs its own line on the narrow Context rail. */
+.ctx-row.ctx-recent-work .ctx-line { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; }
+.ctx-row.ctx-recent-work .ctx-from { grid-column: 1 / -1; grid-row: 2; white-space: normal; overflow-wrap: anywhere; }

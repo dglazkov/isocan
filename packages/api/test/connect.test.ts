@@ -4,7 +4,8 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { newCanvasId } from "@isocan/core";
-import { startDaemon, stopDaemons, type Daemon } from "@isocan/server";
+import { type Daemon } from "@isocan/server";
+import { startDaemon, stopDaemons } from "@isocan/server/daemon";
 import { ApiError, DaemonClient, connect, harnessVars } from "@isocan/api";
 
 /**
@@ -147,6 +148,16 @@ describe("connect()", () => {
     expect(edited.currentVersionId).toBe(edited.versions[1]!.id);
     expect(edited.versions[1]!.blobHash).toBe(sha256("<h1>red</h1>"));
     expect(edited.versions[1]!.filename).toBe("build.html");
+
+    // A generator bounds the stack it grows. Within the bound nothing is
+    // sent; past it the newest survive and the current one always does.
+    const same = await canvas.pruneVersions(made.id, 2);
+    expect(same.versions.map((v) => v.id)).toEqual(edited.versions.map((v) => v.id));
+    await canvas.edit(made.id, { content: "<h1>blue</h1>" });
+    const pruned = await canvas.pruneVersions(made.id, 1);
+    expect(pruned.versions).toHaveLength(1);
+    expect(pruned.versions[0]!.blobHash).toBe(sha256("<h1>blue</h1>"));
+    expect(pruned.currentVersionId).toBe(pruned.versions[0]!.id);
 
     // The slice of `set` and `move` a publisher reaches for, read back from
     // the store rather than trusted.

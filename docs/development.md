@@ -23,7 +23,8 @@ This guide is about working *on* isocan. To start a project *on a canvas*, see
 
 Install:
 
-* Node.js 24
+* Node.js 24 — the exact version is in `.nvmrc`, which CI reads too;
+  `fnm use` or `nvm use` in the checkout picks it up
 * Git
 
 In this guide, `isocan` refers to the CLI in your checkout:
@@ -84,6 +85,18 @@ isocan identity --home --name "Paul"
 ```
 
 The `--home` flag identifies you as the owner of the machine.
+
+If this machine already has a person and `isocan setup <pass>` admitted you
+as someone else ("admitted but not made default"), make that actor the
+machine's person instead of naming a new one:
+
+```sh
+isocan identity --home --as <actorId>
+```
+
+It folds nothing and is reversible — the confirmation names the previous
+person, and `--home --as <their id>` switches back. The home refuses an actor
+this machine's badge was never handed.
 
 **Note:** Without `--home`, the command tries to identify the *agent* running
 it and fails if no agent is configured. Inside a Claude Code or Codex session,
@@ -311,9 +324,10 @@ scrolled into view, ⌘Enter that appeared to add nothing, a panel header
 collapsed to `display: block`, and a reducer that stopped stamping the canvas —
 **that last mutation passed all 2,300 tests.**
 
-`node scripts/journeys.mjs` is the answer: it boots its own daemon on its own
-port in its own temp home, drives the built app through a headless browser, and
-walks the journeys a person actually takes. `.agents/personas/journeys.md` owns
+`node scripts/journeys.mjs` is the answer: for each journey it boots a daemon
+on its own port in its own temp home, with a browser of its own, drives the
+built app through that headless browser, and walks the journeys a person
+actually takes. `.agents/personas/journeys.md` owns
 it, and `journeys.yml` walks it weekly rather than per push — ninety seconds
 against a suite that answers in one, for a class of bug that does not need
 catching within the minute.
@@ -431,13 +445,50 @@ The repository uses three branches:
 Edit `main` only. CI generates `green` and `release`.
 
 On every push to `main`,
-[`release.yml`](../.github/workflows/release.yml) runs `npm test` with
-`ISOCAN_REQUIRE_EMULATOR=1`, then `npm run typecheck`. If both pass, it
-fast-forwards `green` to that commit. Cloud Build deploys `dev.isocan.io` from
-`green`.
+[`release.yml`](../.github/workflows/release.yml) runs four complete-suite shards
+and the typecheck/other checks in parallel. If all pass, it fast-forwards
+`green` to that commit before installing the CLI publication toolchain.
+Cloud Build deploys `dev.isocan.io` from `green`.
 
-`ISOCAN_REQUIRE_EMULATOR=1` turns a skipped Firestore suite into a failure. The
-same suites skip locally and report what they didn't check.
+Verification also runs concurrently **across commits**. Only the `publish`
+job holds the `release` concurrency group, after its own full gate passes.
+Ready publishers queue without canceling a running writer (GitHub's
+[`queue: max`](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency),
+up to 100 waiting jobs). The runner pool can still impose a
+capacity queue; this removes the workflow's own wait behind another commit's
+tests. It uses more runners concurrently rather than skipping older suites.
+
+Completion order is not commit order. Under the publication lock,
+[`release-order.sh`](../scripts/release-order.sh) fetches current `main`,
+`green` and `release` refs and compares source ancestry. An older passing run
+cannot replace a newer tested or released CLI. An already-green commit can
+retry failed CLI publication; an already-released commit can still advance
+`green` without rebuilding. A newer untested commit on `main` does not prevent
+the current passing commit from shipping. Divergent histories or unreadable
+remote refs fail the job. A missing optional ref bootstraps the first release.
+
+This needs more than the final plain pushes: each generated release has the
+previous release as its first parent and its source as its last parent, so a
+fast-forward can still ship an older source tree. Source ancestry is the
+guard against that rollback; the lock prevents two publishers racing it.
+
+`npm run test:ci` is `vitest run` with every anti-skip switch set — the list
+lives in [`scripts/switches.mjs`](../scripts/switches.mjs) and nowhere else, so
+`release.yml` and `pr.yml` cannot come to disagree about what CI tests. Three
+suites here can decide at runtime that they cannot run: the cloud suites
+without a Firestore emulator, the bundle budget without a built
+`packages/web/dist`, and the deep lane, which `npm test` leaves out on a
+laptop. Locally each one skips and says what it didn't check. On this run each
+one is a failure, because it is the run that decides what gets released.
+
+Run `npm run test:deep` before a push — the whole file set, about four
+minutes. The alternative is finding out from CI on a commit that has already
+moved `green`, which happened three times in the week the lane was built, every
+time in a file the change did not name.
+
+`npm run test:ci` is stricter still and worth running when your machine can: it
+needs a 21+ JRE and a built `dist`, and without them it fails rather than
+skips. On a machine with neither, those two thirds of the gate are CI's.
 
 The fast-forward uses `git push` without `--force`. If `green` already points
 at a commit that yours doesn't descend from, the push fails, CI logs a warning,
@@ -446,6 +497,52 @@ and the deployed home stays where it is.
 **Note:** Since 2026-08-24, pushing to `main` doesn't deploy on its own. Expect
 a delay of roughly one CI run, and no deployment at all if CI fails. Check
 `gh run list --workflow=release.yml` before the build history.
+
+### Test timings and shard balance
+
+Ordinary CLI integration tests run a fresh bundle made by the release builder
+once per Vitest run, shared by that run's workers. It lives in a unique
+`.isocan/test-cli-*` directory and is removed after the run, so another run
+and `test/cli-bundle.test.ts` cannot overwrite it. A build failure fails the
+run; an earlier bundle is never reused. Watch mode uses the source launcher
+so edits are visible on every rerun.
+
+Use `runCli` or `spawnCli` from `packages/cli/test/cli.ts`. Tests about the
+source loader or hooks that patch source-module instances must request
+`source: true`; `pass.test.ts` selects `sourceCliBin` for its IPC hooks. The
+agent-help checks still exercise the source launcher, and a parity check
+compares its version, full guide and module registration with the bundle.
+Both launch real processes against real daemons; the manifest still chooses
+the executable for daemon children, and the isolated-install bundle tests
+still exercise the release layout separately.
+
+`npm run timings` summarizes local runs; `npm run timings -- --ci 10` reports
+the last ten releases, separating initial queue time, elapsed execution and
+the completed `green` step. Per-step durations overlap and are not added to
+claim a wall-clock total. A completed `green` step can decline a stale ref;
+it does not prove the downstream deployment has completed.
+
+CI partitions the files Vitest discovers by their measured durations, then
+runs longer files first. Every runner reads the same committed
+`test/shard-weights.json`; a missing measurement gets a default cost, never
+an exclusion. Local unsharded runs retain Vitest's ordinary failed-first
+ordering and existing worker limits.
+
+Every test run writes `.isocan/test-profile.json` with file durations, shard,
+worker count, Node/platform, revision and whether the checkout was dirty.
+CI uploads it as `test-profile-N`, including on failures. To refresh the
+weights, download all four artifacts from one successful full CI run:
+
+```sh
+gh run download RUN_ID --pattern 'test-profile-*' --dir /tmp/isocan-profiles-RUN_ID
+node scripts/update-shard-weights.mjs /tmp/isocan-profiles-RUN_ID/test-profile-*/test-profile.json
+```
+
+Review and commit the snapshot. The refresh refuses missing shards, mixed
+runs, filtered runs, dirty trees and failures. Do not restore mutable timing
+caches independently on the runners: different estimates could give them
+different partitions. The initial snapshot came from release run
+`36963426667`, where shard 4 took 553 seconds while the others took 289–305.
 
 ### Repoint the deploy trigger
 

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createHash } from "node:crypto";
 import type {
   Actor,
   LogEntry,
@@ -7,7 +8,7 @@ import type {
   CanvasState,
   ServerMessage,
 } from "@isocan/core";
-import { applyOperation } from "@isocan/core";
+import { applyOperation, CURRENT_CLIENT_FEATURES, CANVAS_GROUPS_REQUIRED, captureGroupExpectations, CLIENT_FEATURES_PARAM, ENDED, REFUSED, TAKEN_DOWN, WS_NOT_ADMITTED, WS_STALE_CLIENT, resolveCanvasGroupRequest } from "@isocan/core";
 import type { ReplicaStore, StoredReplica } from "../src/lib/replica.ts";
 
 /**
@@ -53,7 +54,7 @@ class FakeSocket {
   static live: FakeSocket[] = [];
 
   onmessage: ((event: { data: string }) => void) | null = null;
-  onclose: ((event: { code: number }) => void) | null = null;
+  onclose: ((event: { code: number; reason?: string }) => void) | null = null;
   readyState = FakeSocket.OPEN;
 
   constructor(readonly url: string) {
@@ -62,10 +63,10 @@ class FakeSocket {
     events.push(`dial:${url.replace(/^.*\/ws\?/, "")}`);
   }
   send(): void {}
-  close(): void {
+  close(code = 1006, reason = ""): void {
     if (this.readyState === FakeSocket.CLOSED) return;
     this.readyState = FakeSocket.CLOSED;
-    this.onclose?.({ code: 1006 });
+    this.onclose?.({ code, reason });
   }
   deliver(message: ServerMessage): void {
     this.onmessage?.({ data: JSON.stringify(message) });
@@ -152,8 +153,19 @@ function stubGlobals(): void {
   (globalThis as Record<string, unknown>).fetch = fakeFetch;
 }
 
-async function fakeFetch(url: string, init?: { body?: string }): Promise<any> {
+async function fakeFetch(url: string, init?: { body?: any }): Promise<any> {
   if (!online) throw new TypeError("Failed to fetch"); // what a browser with no route throws
+  if (String(url).endsWith("/blobs")) {
+    const text = typeof init?.body === "string" ? init.body : await (init?.body as Blob).text();
+    const bytes = Buffer.from(text, "utf8");
+    const blobHash = createHash("sha256").update(bytes).digest("hex");
+    events.push(`blob:${blobHash}`);
+    return {
+      ok: true,
+      status: 201,
+      json: async () => ({ blobHash, size: bytes.byteLength }),
+    };
+  }
   const body = init?.body ? JSON.parse(init.body) : null;
   if (String(url).endsWith("/api/ops")) {
     posted.push(body);
@@ -231,7 +243,7 @@ beforeEach(async () => {
   vi.resetModules();
   const { onOfflineWrite } = await api();
   const { queueOfflineWrite } = await store();
-  onOfflineWrite(queueOfflineWrite);
+  onOfflineWrite(queueOfflineWrite, (await store()).queuedWriteOrigin);
 });
 
 afterEach(async () => {
@@ -284,7 +296,7 @@ describe("a tab with no network keeps working", () => {
     const { setReplicaStore } = await import("../src/lib/replica.ts");
     setReplicaStore(diskStore());
     const { onOfflineWrite } = await api();
-    onOfflineWrite(fresh.queueOfflineWrite);
+    onOfflineWrite(fresh.queueOfflineWrite, fresh.queuedWriteOrigin);
 
     online = false;
     fresh.connectToCanvas("prj_1", priya);
@@ -368,9 +380,9 @@ describe("the crux", () => {
     // swapped — right up until somebody else's op is in the tail, which is the
     // next assertion.
     expect(events).toEqual([
-      "dial:canvasId=prj_1&since=0",
+      `dial:canvasId=prj_1&since=0&${CLIENT_FEATURES_PARAM}=${CURRENT_CLIENT_FEATURES}`,
       "post:" + posted[0].opId,
-      "dial:canvasId=prj_1&since=2",
+      `dial:canvasId=prj_1&since=2&${CLIENT_FEATURES_PARAM}=${CURRENT_CLIENT_FEATURES}`,
     ]);
 
     FakeSocket.last.deliver({ type: "resumed", from: 2, lastSeq: 4, colors: {}, names: {} });
@@ -439,6 +451,45 @@ describe("the crux", () => {
 });
 
 describe("a queued op the home refuses", () => {
+  it.each(["accepted", "refused", "offline"] as const)("navigation during an old %s flush drains the new canvas before its socket and keeps its replica clean", async (outcome) => {
+    const { sendOp } = await api();
+    const { useCanvasStore, connectToCanvas } = await store();
+    await connected(2);
+    await goOffline();
+    await sendOp("prj_1", priya, { type: "item.move", itemId: "itm_1", x: 40, y: 50 });
+    const oldWrite = useCanvasStore.getState().queue[0]!;
+    const other = seed();
+    other.project = { ...other.project, id: "prj_2", title: "Acme second canvas" };
+    disk.set("prj_2", { canvasId: "prj_2", project: other.project, canvas: other.canvas, lastSeq: 2, queue: [{ opId: "op_other_pending", actor: priya, op: { type: "item.move", itemId: "itm_1", x: 80, y: 90 }, at: 1 }], savedAt: "2026-09-12T00:00:00Z" });
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    vi.stubGlobal("fetch", async (url: string, init?: { body?: string }) => {
+      const body = init?.body ? JSON.parse(init.body) : null;
+      if (body?.opId === oldWrite.opId) {
+        await held;
+        if (outcome === "offline") throw new TypeError("Failed to fetch");
+        if (outcome === "refused") refusals.set(oldWrite.opId, { status: 409, error: "Acme old canvas changed", code: "group-conflict" });
+      }
+      return fakeFetch(url, init);
+    });
+    await comeBack();
+    connectToCanvas("prj_2", priya);
+    await settle();
+    expect(FakeSocket.opened.some((url) => url.includes("prj_2"))).toBe(false);
+    release(); await settle(); await settle();
+    const current = useCanvasStore.getState();
+    expect(current.canvasId).toBe("prj_2");
+    expect(current.refused).toEqual([]);
+    expect(current.connection).not.toBe("offline");
+    expect(current.canvas!.items.itm_1).toMatchObject({ x: 80, y: 90 });
+    expect(current.queue.map((write) => write.opId)).toEqual(["op_other_pending"]);
+    const post = events.indexOf("post:op_other_pending");
+    const dial = events.findIndex((event) => event.startsWith("dial:") && event.includes("prj_2"));
+    expect(post).toBeGreaterThanOrEqual(0); expect(dial).toBeGreaterThan(post);
+    expect(disk.get("prj_2")!.queue.map((write) => write.opId)).toEqual(["op_other_pending"]);
+    expect(disk.get("prj_1")!.queue.map((write) => write.opId)).toEqual([oldWrite.opId]);
+  });
+
   it("rolls back, says so, and does not strand what came after it", async () => {
     const { sendOp } = await api();
     const { useCanvasStore } = await store();
@@ -908,4 +959,489 @@ describe("a heartbeat that says the canvas has moved on", () => {
     expect(FakeSocket.opened.length).toBe(dialled);
     expect(useCanvasStore.getState().connection).toBe("live");
   });
+});
+
+// The socket event precedes a held HTTP response: drive actual confirm/retire,
+// rather than replacing the store or clearing its queue in a fixture helper.
+it.each(["echoed", "direct"] as const)("preserves a %s write's legacy origin through cutover, disk and reconnect refusal", async (path) => {
+  const { useCanvasStore, sendEchoedResult, connectToCanvas, disconnect, dismissRefusals } = await store();
+  const { sendOp } = await api();
+  const initial = await connected(2);
+  let fail!: () => void;
+  const held = new Promise<void>((resolve) => { fail = resolve; });
+  let request!: { opId: string; originGroupMode?: string; op: Operation };
+  globalThis.fetch = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+    request = JSON.parse(String(init?.body));
+    await held;
+    throw new TypeError("Failed to fetch");
+  }) as typeof fetch;
+  const op: Operation = { type: "item.move", itemId: "itm_1", x: 70, y: 80 };
+  const pending = path === "echoed" ? sendEchoedResult("prj_1", priya, op) : sendOp("prj_1", priya, op);
+  await settle();
+  expect(request.originGroupMode).toBe("legacy");
+  const converted = { ...initial, project: { ...initial.project, groupMode: "groups" as const } };
+  FakeSocket.last.deliver({ type: "snapshot", project: converted.project, canvas: converted.canvas, lastSeq: 3, colors: {}, names: {} });
+  await settle();
+  fail(); await pending;
+  expect(useCanvasStore.getState().queue[0]?.originGroupMode).toBe("legacy");
+  expect(useCanvasStore.getState().canvas?.items.itm_1).toMatchObject({ x: 5, y: 6 });
+  await settle();
+  expect([...disk.values()][0]?.queue[0]?.originGroupMode).toBe("legacy");
+  globalThis.fetch = fakeFetch as typeof fetch;
+  refusals.set(request.opId, { status: 409, error: "Canvas mode changed. Review the original legacy change before trying again.", code: "migration-boundary" });
+  connectToCanvas("prj_1", priya); await settle();
+  expect(posted.find((body) => body.opId === request.opId)?.originGroupMode).toBe("legacy");
+  expect(useCanvasStore.getState().queue).toEqual([]);
+  expect(useCanvasStore.getState().refused).toMatchObject([{ opId: request.opId, originGroupMode: "legacy", op, code: "migration-boundary" }]);
+  await settle();
+  expect([...disk.values()][0]?.migrationRefusals).toMatchObject([{ opId: request.opId, originGroupMode: "legacy", op, code: "migration-boundary" }]);
+  const postCount = posted.length;
+  disconnect(); connectToCanvas("prj_other", priya); await settle();
+  expect(useCanvasStore.getState().refused).toEqual([]);
+  connectToCanvas("prj_1", priya); await settle();
+  expect(useCanvasStore.getState().refused).toMatchObject([{ opId: request.opId, originGroupMode: "legacy", op, code: "migration-boundary" }]);
+  expect(posted).toHaveLength(postCount);
+  dismissRefusals(); await settle();
+  disconnect(); connectToCanvas("prj_1", priya); await settle();
+  expect(useCanvasStore.getState().refused).toEqual([]);
+  expect([...disk.values()].find((record) => record.canvasId === "prj_1")?.migrationRefusals).toEqual([]);
+});
+
+it("refuses an unproven old queued origin beside a migration boundary instead of guessing the current mode", async () => {
+  const { useCanvasStore, connectToCanvas, disconnect } = await store();
+  const initial = await connected(2);
+  disconnect();
+  const op: Operation = { type: "item.move", itemId: "itm_1", x: 99, y: 99 };
+  disk.set("prj_1", { canvasId: "prj_1", project: { ...initial.project, groupMode: "groups", groupMigration: { version: 1, seq: 3, opId: "op_migration" } }, canvas: initial.canvas, lastSeq: 3, queue: [{ opId: "op_unknown_origin", actor: priya, op, at: 1 }], savedAt: "2026-09-13T00:00:00Z" });
+  connectToCanvas("prj_1", priya); await settle();
+  expect(posted).toEqual([]);
+  expect(useCanvasStore.getState().canvas?.items.itm_1).toMatchObject({ x: 5, y: 6 });
+  expect(useCanvasStore.getState().refused).toMatchObject([{ opId: "op_unknown_origin", op, code: "migration-boundary" }]);
+  expect(useCanvasStore.getState().queue).toEqual([]);
+});
+
+it.each([false, true])("stops on upgrade refusal with existing connection=%s while preserving queued work", async (existing) => {
+  const { useCanvasStore, connectToCanvas, sendEchoedResult } = await store();
+  if (existing) {
+    await connected(2);
+    online = false;
+    await sendEchoedResult("prj_1", priya, { type: "item.move", itemId: "itm_1", x: 30, y: 40 });
+  } else { connectToCanvas("prj_1", priya); await settle(); }
+  const before = useCanvasStore.getState();
+  const dials = FakeSocket.opened.length;
+  FakeSocket.last.close(WS_STALE_CLIENT, "Canvas groups require an updated isocan client");
+  await settle(); vi.advanceTimersByTime(120_000); await settle();
+  expect(useCanvasStore.getState().connection).toBe("upgrade-required");
+  expect(FakeSocket.opened).toHaveLength(dials);
+  expect(useCanvasStore.getState().queue).toEqual(before.queue);
+  expect(useCanvasStore.getState().confirmed).toEqual(before.confirmed);
+});
+
+it.each(["echoed", "direct"] as const)("keeps the %s request durable when a late HTTP upgrade refusal follows socket refusal", async (path) => {
+  const { useCanvasStore, sendEchoedResult } = await store();
+  const { sendOp } = await api();
+  await connected(2);
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  let request!: { opId: string; originGroupMode: string; op: Operation };
+  globalThis.fetch = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+    request = JSON.parse(String(init?.body)); await held;
+    return Response.json({ error: "Update isocan before continuing", code: CANVAS_GROUPS_REQUIRED }, { status: 426 });
+  }) as typeof fetch;
+  const op: Operation = { type: "item.move", itemId: "itm_1", x: 30, y: 40 };
+  const pending = path === "echoed" ? sendEchoedResult("prj_1", priya, op) : sendOp("prj_1", priya, op);
+  await settle();
+  FakeSocket.last.close(WS_STALE_CLIENT, "Update required");
+  release(); await pending; await settle();
+  expect(useCanvasStore.getState().connection).toBe("upgrade-required");
+  expect(useCanvasStore.getState().refused).toEqual([]);
+  expect(useCanvasStore.getState().queue).toMatchObject([{ opId: request.opId, originGroupMode: "legacy", op }]);
+  expect([...disk.values()][0]?.queue).toMatchObject([{ opId: request.opId, originGroupMode: "legacy", op }]);
+});
+
+it("keeps a persisted queued request when flush requires an upgrade, without declaring it refused or offline", async () => {
+  const { useCanvasStore, sendEchoedResult } = await store();
+  await connected(2); await goOffline();
+  const result = await sendEchoedResult("prj_1", priya, { type: "item.move", itemId: "itm_1", x: 30, y: 40 });
+  const write = useCanvasStore.getState().queue[0]!;
+  const complete = vi.fn(); void result.completion?.then(complete);
+  refusals.set(write.opId, { status: 426, error: "Update isocan", code: CANVAS_GROUPS_REQUIRED });
+  const dials = FakeSocket.opened.length;
+  await comeBack();
+  expect(useCanvasStore.getState().connection).toBe("upgrade-required");
+  expect(useCanvasStore.getState().refused).toEqual([]);
+  expect(useCanvasStore.getState().queue).toEqual([write]);
+  expect(complete).not.toHaveBeenCalled();
+  expect(FakeSocket.opened).toHaveLength(dials);
+  expect(posted).toMatchObject([{ opId: write.opId, originGroupMode: "legacy" }]);
+});
+
+it.each(["accepted", "refused"] as const)("settles the exact queued form receipt on reconnect %s", async (status) => {
+  const { useCanvasStore, sendEchoedResult } = await store();
+  await connected(2);
+  await goOffline();
+  const receipt = await sendEchoedResult("prj_1", priya, { type: "item.move", itemId: "itm_1", x: 40, y: 50 });
+  expect(receipt.status).toBe("queued");
+  expect(receipt.completion).toBeInstanceOf(Promise);
+  const opId = useCanvasStore.getState().queue[0]!.opId;
+  const finished = vi.fn(); void receipt.completion!.then(finished);
+  await settle(); expect(finished).not.toHaveBeenCalled();
+  if (status === "refused") refusals.set(opId, { status: 409, error: "Acme stale", code: "group-conflict" });
+  seqs = [3];
+  await comeBack();
+  const outcome = await receipt.completion;
+  expect(outcome?.status).toBe(status);
+  expect(finished).toHaveBeenCalledTimes(1);
+  expect(posted.filter((request) => request.opId === opId)).toHaveLength(1);
+  if (status === "accepted") {
+    expect(outcome?.envelope?.id).toBe(opId);
+    FakeSocket.last.deliver({ type: "op-applied", entry: { seq: 3, envelope: outcome!.envelope!, inverse: null } });
+    await settle();
+    expect(useCanvasStore.getState().confirmed?.canvas.items.itm_1).toMatchObject({ x: 40, y: 50 });
+  } else expect(useCanvasStore.getState().refused).toMatchObject([{ opId, message: "Acme stale" }]);
+  expect(useCanvasStore.getState().queue).toEqual([]);
+});
+
+it.each(["insert", "brief"] as const)("retires an echo-first canonical group %s when its delayed receipt supplies the seq", async (kind) => {
+  const { useCanvasStore, sendEchoedResult } = await store();
+  await connected(2);
+  const source = seed();
+  source.project.groupMode = "groups";
+  const initial = applyOperation(source, envelope({ type: "group.change", action: { kind: "create", group: { id: "itm_group", title: "Acme group", version: { id: "ver_group", blobHash: "hash_group", filename: "group.md", mimeType: "text/markdown", size: 1 } }, itemIds: ["itm_1"] } }))!;
+  FakeSocket.last.deliver({ type: "snapshot", project: initial.project, canvas: initial.canvas, lastSeq: 3, colors: {}, names: {} });
+  await settle();
+  let accepted!: LogEntry;
+  let writer!: CanvasState;
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  globalThis.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+    if (!String(url).endsWith("/api/ops")) return fakeFetch(String(url));
+    const request = JSON.parse(String(init?.body));
+    const env = envelope(request.op, priya, request.opId);
+    env.op = resolveCanvasGroupRequest(initial, env.op, { actor: env.actor, ts: env.ts, opId: env.id });
+    writer = applyOperation(initial, env)!;
+    accepted = { seq: 4, envelope: env, inverse: null };
+    await held;
+    return new Response(JSON.stringify({ seq: 4, envelope: env }), { status: 200 });
+  }) as typeof fetch;
+  const version = { id: "ver_new", blobHash: "hash_new", filename: "new.md", mimeType: "text/markdown", size: 10 };
+  const op: Operation = kind === "insert"
+    ? { type: "item.add", itemId: "itm_inserted", containerId: "itm_group", groupPlacement: "auto", version, width: 120, height: 100, placement: { x: 0, y: 0 } }
+    : { type: "item.addVersion", itemId: "itm_group", briefHeight: 180, version };
+  const promise = sendEchoedResult("prj_1", priya, op);
+  await settle();
+  expect(useCanvasStore.getState().queue).toHaveLength(1);
+  FakeSocket.last.deliver({ type: "op-applied", entry: accepted });
+  await settle();
+  expect(useCanvasStore.getState().lastSeq).toBe(4);
+  expect(useCanvasStore.getState().confirmed).toEqual(writer);
+  expect(useCanvasStore.getState().queue).toEqual([]);
+  release();
+  expect(await promise).toEqual({ status: "accepted", envelope: accepted.envelope });
+  expect(useCanvasStore.getState().queue).toEqual([]);
+  expect(useCanvasStore.getState().canvas).toEqual(writer.canvas);
+});
+
+// A socket refusal is a final home decision, even when an older POST has not
+// reported its transport failure yet. Exercise both production queue doors.
+it.each([
+  ["echoed", REFUSED, "refused-here"], ["direct", REFUSED, "refused-here"],
+  ["echoed", ENDED, "ended"], ["direct", ENDED, "ended"],
+  ["echoed", TAKEN_DOWN, "taken-down"], ["direct", TAKEN_DOWN, "taken-down"],
+] as const)("keeps %s queued group work while preserving the socket's %s terminal decision", async (path, reason, expectedConnection) => {
+  const { useCanvasStore, sendEchoedResult } = await store();
+  const { sendOp } = await api();
+  await connected(2);
+  const source = seed();
+  source.project.groupMode = "groups";
+  const initial = applyOperation(source, envelope({ type: "group.change", action: { kind: "create", group: { id: "itm_group", title: "Acme group", version: { id: "ver_group", blobHash: "hash_group", filename: "group.md", mimeType: "text/markdown", size: 1 } }, itemIds: ["itm_1"] } }))!;
+  FakeSocket.last.deliver({ type: "snapshot", project: initial.project, canvas: initial.canvas, lastSeq: 3, colors: {}, names: {} });
+  await settle();
+  const op: Operation = { type: "group.change", action: { kind: "transform", itemIds: ["itm_group"], by: { x: 20, y: 10 }, expected: captureGroupExpectations(initial, ["itm_group"]) } };
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  const attempts: Array<{ opId: string; op: Operation }> = [];
+  globalThis.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+    if (String(url).endsWith("/api/ops")) {
+      attempts.push(JSON.parse(String(init?.body)));
+      await held;
+      throw new TypeError("Failed to fetch");
+    }
+    return new Response(JSON.stringify({ takedowns: [] }), { status: 200 });
+  }) as typeof fetch;
+  const pending = path === "echoed" ? sendEchoedResult("prj_1", priya, op) : sendOp("prj_1", priya, op);
+  await settle();
+  expect(attempts).toHaveLength(1);
+  FakeSocket.last.close(WS_NOT_ADMITTED, reason);
+  await settle();
+  expect(useCanvasStore.getState().connection).toBe(expectedConnection);
+  const sockets = FakeSocket.opened.length;
+  release();
+  expect(await pending).toEqual(path === "echoed" ? { status: "queued", completion: expect.any(Promise) } : null);
+  expect(useCanvasStore.getState().connection).toBe(expectedConnection);
+  expect(useCanvasStore.getState().confirmed).toEqual(initial);
+  expect(useCanvasStore.getState().queue.map((write) => write.opId)).toEqual([attempts[0]!.opId]);
+  expect(disk.get("prj_1")!.queue.map((write) => write.opId)).toEqual([attempts[0]!.opId]);
+  vi.advanceTimersByTime(60_000); await settle();
+  expect(FakeSocket.opened).toHaveLength(sockets);
+  expect(attempts).toHaveLength(1);
+});
+
+it("places a drawing offline with its content-addressed SVG staged locally, survives a reload, and uploads the blob before the op on reconnect", async () => {
+  const { useCanvasStore, disconnect } = await store();
+  const { blobUrl, readBlobText } = await api();
+  const { addDrawing } = await import("../src/lib/upload.ts");
+  await connected(2);
+  await goOffline();
+
+  const itemId = await addDrawing("prj_1", priya, [
+    { color: "#e02424", width: 6, points: [{ x: 10, y: 20 }, { x: 110, y: 120 }] },
+  ]);
+  const item = useCanvasStore.getState().canvas?.items[itemId];
+  expect(item).toMatchObject({
+    id: itemId,
+    title: "Sketch",
+    properties: { kind: "drawing", ink: "red" },
+  });
+  const blobHash = item!.versions[0]!.blobHash;
+  expect(blobUrl("prj_1", blobHash)).toMatch(/^data:image\/svg\+xml;utf8,/);
+  expect(await readBlobText("prj_1", blobHash)).toContain("<svg");
+  expect(disk.get("prj_1")!.queue[0]!.stagedBlob).toMatchObject({
+    blobHash,
+    mimeType: "image/svg+xml",
+    filename: "sketch.svg",
+  });
+
+  // Reload while still offline: the restored replica re-stages the SVG so it still renders.
+  disconnect();
+  vi.resetModules();
+  const reloadedStore = await store();
+  const reloadedApi = await api();
+  reloadedApi.onOfflineWrite(reloadedStore.queueOfflineWrite, reloadedStore.queuedWriteOrigin);
+  const { setReplicaStore } = await import("../src/lib/replica.ts");
+  setReplicaStore(diskStore());
+  reloadedStore.connectToCanvas("prj_1", priya);
+  await settle();
+  expect(reloadedStore.useCanvasStore.getState().canvas?.items[itemId]).toBeDefined();
+  expect(reloadedApi.blobUrl("prj_1", blobHash)).toMatch(/^data:image\/svg\+xml;utf8,/);
+
+  // Reconnect: the staged SVG blob goes up BEFORE the item.add op that names its hash.
+  events = [];
+  seqs = [3];
+  await comeBack();
+  await settle();
+  const opId = posted[0]!.opId;
+  expect(events.slice(0, 3)).toEqual([
+    `blob:${blobHash}`,
+    `post:${opId}`,
+    expect.stringMatching(/^dial:/),
+  ]);
+  FakeSocket.last.deliver({
+    type: "op-applied",
+    entry: { seq: 3, envelope: { ...posted[0], id: opId, ts: "2026-08-24T00:00:00Z" }, inverse: null },
+  });
+  await settle();
+  expect(reloadedStore.useCanvasStore.getState().queue).toEqual([]);
+  expect(reloadedApi.blobUrl("prj_1", blobHash)).toBe(`/api/projects/prj_1/blobs/${blobHash}`);
+});
+
+it("creates and revises a text note offline with its Markdown blob staged locally, and uploads the blobs before the ops on reconnect", async () => {
+  const { useCanvasStore } = await store();
+  const { readBlobText } = await api();
+  const { addTextNode, reviseTextNode } = await import("../src/lib/text.ts");
+  await connected(2);
+  await goOffline();
+
+  const itemId = await addTextNode("prj_1", priya, "Acme offline note", { x: 40, y: 60, chosen: true });
+  const created = useCanvasStore.getState().canvas?.items[itemId];
+  expect(created).toMatchObject({
+    id: itemId,
+    title: "Acme offline note",
+    properties: { kind: "text" },
+  });
+  const firstHash = created!.versions[0]!.blobHash;
+  expect(await readBlobText("prj_1", firstHash)).toBe("Acme offline note");
+
+  await reviseTextNode("prj_1", priya, itemId, "Acme revised offline note", { width: 200, height: 80 }, true, "heading", "serif", "yellow");
+  const revised = useCanvasStore.getState().canvas?.items[itemId];
+  expect(revised).toMatchObject({
+    id: itemId,
+    title: "Acme revised offline note",
+    width: 200,
+    height: 80,
+    properties: { kind: "text", textStyle: "heading", textFace: "serif", paper: "yellow" },
+  });
+  const secondHash = revised!.versions[1]!.blobHash;
+  expect(await readBlobText("prj_1", secondHash)).toBe("Acme revised offline note");
+  expect(useCanvasStore.getState().queue).toHaveLength(4);
+
+  events = [];
+  seqs = [3, 4, 5, 6];
+  await comeBack();
+  await settle();
+  expect(events.slice(0, 6)).toEqual([
+    `blob:${firstHash}`,
+    `post:${posted[0]!.opId}`,
+    `blob:${secondHash}`,
+    `post:${posted[1]!.opId}`,
+    `post:${posted[2]!.opId}`,
+    `post:${posted[3]!.opId}`,
+  ]);
+});
+
+
+
+it("creates speaker notes offline, restores their bytes after reload, and flushes once before the op", async () => {
+  const { useCanvasStore, disconnect } = await store();
+  const { addSpeakerNote } = await import("../src/lib/notes.ts");
+  await connected(2);
+  await goOffline();
+  const slide = useCanvasStore.getState().canvas!.items["itm_1"]!;
+  const itemId = await addSpeakerNote("prj_1", priya, slide, "Acme speaker notes");
+  const item = useCanvasStore.getState().canvas!.items[itemId]!;
+  expect(item.properties).toMatchObject({ noteFor: slide.id });
+  const hash = item.versions[0]!.blobHash;
+  expect(await (await api()).readBlobText("prj_1", hash)).toBe("Acme speaker notes");
+  expect(disk.get("prj_1")!.queue).toHaveLength(1);
+  expect(disk.get("prj_1")!.queue[0]!.stagedBlob?.text).toBe("Acme speaker notes");
+
+  disconnect();
+  vi.resetModules();
+  const reloaded = await store();
+  const reloadedApi = await api();
+  reloadedApi.onOfflineWrite(reloaded.queueOfflineWrite, reloaded.queuedWriteOrigin);
+  (await import("../src/lib/replica.ts")).setReplicaStore(diskStore());
+  reloaded.connectToCanvas("prj_1", priya);
+  await settle();
+  expect(await reloadedApi.readBlobText("prj_1", hash)).toBe("Acme speaker notes");
+  events = [];
+  seqs = [3];
+  await comeBack();
+  await vi.waitFor(() => expect(posted).toHaveLength(1));
+  expect(events.slice(0, 2)).toEqual([`blob:${hash}`, `post:${posted[0]!.opId}`]);
+  FakeSocket.last.deliver({ type: "op-applied", entry: { seq: 3, envelope: { ...posted[0], id: posted[0]!.opId, ts: "2026-08-24T00:00:00Z" }, inverse: null } });
+  await settle();
+  expect(reloaded.useCanvasStore.getState().queue).toEqual([]);
+  expect(reloaded.useCanvasStore.getState().canvas!.items[itemId]!.versions).toHaveLength(1);
+  await comeBack();
+  expect(posted).toHaveLength(1);
+});
+
+it("places duplicate stickers and replaces one offline through the module host, then flushes each operation once", async () => {
+  const { useCanvasStore } = await store();
+  await connected(2);
+  useCanvasStore.setState({ capability: "edit" });
+  await goOffline();
+  const { webHostFor } = await import("../src/lib/modulehost.ts");
+  const { stickersWeb } = await import("../../modules/stickers/src/web.tsx");
+  const { STICKERS, stickerFile } = await import("../../modules/stickers/src/core.ts");
+  const host = webHostFor("prj_1", priya);
+  const drop = stickersWeb.drops![0]!;
+  const ids: string[] = [];
+  for (const x of [100, 300]) {
+    const ops = await drop.run({ canvasId: "prj_1", data: "star", mimeType: drop.mimes[0]!, at: { x, y: 100 }, host });
+    expect(ops?.[0]?.type).toBe("item.add");
+    if (!ops || ops[0]?.type !== "item.add") throw new Error("sticker drop did not create an item");
+    ids.push(ops[0].itemId);
+    await host.send(ops, "grp_stickers");
+  }
+  const file = stickerFile(STICKERS[1]!);
+  // Invoke the real inspector action as well as the real drop handler above.
+  // Both callers must explicitly opt in; a host-only test could miss either.
+  const inspector = stickersWeb.inspectors![0]!.component({ canvasId: "prj_1", item: useCanvasStore.getState().canvas!.items[ids[0]!]!, readText: async () => "⭐", host });
+  const heart = inspector.props.children.find((button: { props: { title: string } }) => button.props.title === STICKERS[1]!.name);
+  heart.props.onClick();
+  await vi.waitFor(() => expect(useCanvasStore.getState().queue).toHaveLength(3));
+  const queue = useCanvasStore.getState().queue;
+  const put = queue[2]!.stagedBlob!;
+  expect(queue).toHaveLength(3);
+  expect(queue[0]!.stagedBlob!.blobHash).toBe(queue[1]!.stagedBlob!.blobHash);
+  expect(queue[2]!.stagedBlob!.text).toBe(file.body);
+  expect(disk.get("prj_1")!.queue).toHaveLength(3);
+  expect(useCanvasStore.getState().canvas!.items[ids[0]!]!.versions).toHaveLength(2);
+  expect(await (await api()).readBlobText("prj_1", put.blobHash)).toBe(file.body);
+
+  events = [];
+  seqs = [3, 4, 5];
+  await comeBack();
+  await vi.waitFor(() => expect(posted).toHaveLength(3));
+  expect(events.slice(0, 6)).toEqual(queue.flatMap((write) => [`blob:${write.stagedBlob!.blobHash}`, `post:${write.opId}`]));
+  for (const [i, op] of posted.entries()) {
+    FakeSocket.last.deliver({ type: "op-applied", entry: { seq: 3 + i, envelope: { ...op, id: op.opId, ts: "2026-08-24T00:00:00Z" }, inverse: null } });
+  }
+  await settle();
+  expect(useCanvasStore.getState().queue).toEqual([]);
+  expect(useCanvasStore.getState().canvas!.items[ids[0]!]!.versions).toHaveLength(2);
+  expect(useCanvasStore.getState().canvas!.items[ids[1]!]!.versions).toHaveLength(1);
+  await comeBack();
+  expect(posted).toHaveLength(3);
+});
+
+it("keeps module binary uploads and permission refusals out of the offline text path", async () => {
+  const { useCanvasStore } = await store();
+  await connected(2);
+  useCanvasStore.setState({ capability: "edit" });
+  await goOffline();
+  const { webHostFor } = await import("../src/lib/modulehost.ts");
+  const host = webHostFor("prj_1", priya);
+  await expect(host.putBlob(new Blob([new Uint8Array([255, 0])], { type: "image/png" }), "image.png")).rejects.toMatchObject({ offline: true });
+  const put = await host.putBlob(new Blob(["Acme"], { type: "text/plain" }), "note.txt", { stageOffline: true });
+  useCanvasStore.setState({ capability: "read" });
+  await expect(host.send([{ type: "item.addVersion", itemId: "itm_1", version: { id: "ver_denied", ...put, mimeType: "text/plain", filename: "note.txt" } }])).rejects.toThrow("reading this canvas");
+  expect(useCanvasStore.getState().queue).toEqual([]);
+});
+
+it.each(["accepted", "refused"] as const)("keeps shared sticker bytes locally when one queued reference is %s and another is still offline", async (outcome) => {
+  const { useCanvasStore } = await store();
+  await connected(2);
+  useCanvasStore.setState({ capability: "edit" });
+  if (outcome === "refused") await goOffline();
+  else online = false; // POSTs fail, but the socket can still deliver a confirmed echo.
+  const { webHostFor } = await import("../src/lib/modulehost.ts");
+  const host = webHostFor("prj_1", priya);
+  const put = await host.putBlob(new Blob(["⭐"], { type: "text/vnd.isocan.sticker" }), "star.sticker", { stageOffline: true });
+  // A single put may feed more than one operation, even in separate sends.
+  for (const id of ["itm_star1", "itm_star2"]) {
+    await host.send([{ type: "item.add", itemId: id, width: 120, height: 120, placement: { x: 0, y: 0 }, version: { id: `ver_${id}`, ...put, filename: "star.sticker", mimeType: "text/vnd.isocan.sticker" } }]);
+  }
+  const first = useCanvasStore.getState().queue[0]!;
+  if (outcome === "refused") refusals.set(first.opId, { status: 403, error: "Synthetic refusal", code: "view-only" });
+  seqs = [3];
+  globalThis.fetch = (async (url: string, init?: { body?: any }) => {
+    const response = await fakeFetch(url, init);
+    if (String(url).endsWith("/api/ops")) online = false;
+    return response;
+  }) as typeof fetch;
+  if (outcome === "accepted") {
+    FakeSocket.last.deliver({ type: "op-applied", entry: { seq: 3, envelope: { id: first.opId, canvasId: "prj_1", actor: first.actor, op: first.op, ts: "2026-08-24T00:00:00Z" }, inverse: null } });
+  } else {
+    await comeBack();
+    await vi.waitFor(() => expect(posted).toHaveLength(1));
+  }
+  await vi.waitFor(() => expect(useCanvasStore.getState().queue).toHaveLength(1));
+  expect(useCanvasStore.getState().refused).toHaveLength(outcome === "refused" ? 1 : 0);
+  expect((await api()).blobUrl("prj_1", put.blobHash)).toMatch(/^data:/);
+  expect(await (await api()).readBlobText("prj_1", put.blobHash)).toBe("⭐");
+  expect(disk.get("prj_1")!.queue[0]!.stagedBlob?.text).toBe("⭐");
+});
+
+
+it("leaves ordinary module text uploads unchanged unless staging is explicitly requested", async () => {
+  const { useCanvasStore } = await store();
+  await connected(2);
+  useCanvasStore.setState({ capability: "edit" });
+  const { webHostFor } = await import("../src/lib/modulehost.ts");
+  const host = webHostFor("prj_1", priya);
+  const original = new Blob([new Uint8Array([0xef, 0xbb, 0xbf, 65])], { type: "text/plain" });
+  let uploaded: unknown;
+  globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+    uploaded = init?.body;
+    return new Response(JSON.stringify({ blobHash: "hash_acme", size: 4 }), { status: 201 });
+  }) as typeof fetch;
+  await host.putBlob(original, "acme.txt");
+  expect(uploaded).toBe(original); // no UTF-8/BOM decoding on the default path
+  globalThis.fetch = fakeFetch as typeof fetch;
+  await goOffline();
+  await expect(host.putBlob(new Blob(["Acme"], { type: "text/html" }), "visual.html")).rejects.toMatchObject({ offline: true });
+  expect(useCanvasStore.getState().queue).toEqual([]);
 });

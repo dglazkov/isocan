@@ -1,0 +1,22 @@
+{
+  "name": "@isocan/lottie",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Lottie and dotLottie motion animations: canvas playback, View/Edit focus studios, DESIGN.md token binding, DevTools linter/profiler, and CLI verbs",
+  "exports": {
+    "./core": "./src/core.ts",
+    "./activation": "./src/activation.ts",
+    "./web": "./src/web.tsx",
+    "./cli": "./src/cli.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@isocan/core": "*"
+  },
+  "peerDependencies": {
+    "react": "^18.3.1"
+  }
+}

@@ -2,6 +2,16 @@ import { mindmapCli } from "@isocan/mindmap/cli";
 import { mermaidCli } from "@isocan/mermaid/cli";
 import { documentsCli } from "@isocan/documents/cli";
 import { stickersCli } from "@isocan/stickers/cli";
+import { sandboxCli } from "@isocan/sandbox/cli";
+import { competitionCli } from "@isocan/design-competition/cli";
+import { anatomyCli } from "@isocan/anatomy/cli";
+import { talkCli } from "@isocan/talk/cli";
+import { wireframeCli } from "@isocan/wireframe/cli";
+import { judgeCli } from "@isocan/judge/cli";
+import { critiqueCli } from "@isocan/critique/cli";
+import { lottieCli } from "@isocan/lottie/cli";
+import { moodCli } from "@isocan/mood/cli";
+import { motionCli } from "@isocan/motion/cli";
 import type { CliModule } from "./modulehost.ts";
 
 /**
@@ -10,4 +20,4 @@ import type { CliModule } from "./modulehost.ts";
  * in one list and not the other is the web-only (or terminal-only) feature
  * AGENTS.md forbids, and `test/modules.test.ts` says so.
  */
-export const CLI_MODULES: readonly CliModule[] = [mindmapCli, mermaidCli, documentsCli, stickersCli];
+export const CLI_MODULES: readonly CliModule[] = [mindmapCli, mermaidCli, documentsCli, stickersCli, sandboxCli, competitionCli, anatomyCli, talkCli, wireframeCli, judgeCli, critiqueCli, lottieCli, moodCli, motionCli];

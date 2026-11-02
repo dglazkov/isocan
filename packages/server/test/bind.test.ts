@@ -12,6 +12,9 @@ let root: string;
 let daemon: Daemon;
 let base: string;
 let badge: TestBadge;
+/** Where the PROCESS thinks the isocan home is, for the length of a test. */
+let decoy: string;
+let priorHome: string | undefined;
 
 /** The app's gesture: a path typed into the files pane. */
 async function bind(dir: string): Promise<{ status: number; body: any }> {
@@ -23,9 +26,23 @@ async function bind(dir: string): Promise<{ status: number; body: any }> {
   return { status: res.status, body: await res.json().catch(() => null) };
 }
 
+/** The roster a home holds, or null when it has none. */
+async function rosterIn(dir: string): Promise<Record<string, string> | null> {
+  return fs
+    .readFile(path.join(dir, "dirs.json"), "utf8")
+    .then((text) => JSON.parse(text) as Record<string, string>, () => null);
+}
+
 beforeEach(async () => {
   home = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-bindhome-"));
   root = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-bind-"));
+  // The daemon is told its home; the process is told a different one. A
+  // route that asks the process instead of the daemon writes here, where the
+  // tests below can see it — and not into the person's own ~/.isocan, which
+  // is where this suite's binds went until lessons.md #104.
+  decoy = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-binddecoy-"));
+  priorHome = process.env.ISOCAN_HOME;
+  process.env.ISOCAN_HOME = decoy;
   daemon = await startDaemon({ port: 0, home });
   const address = daemon.app.server.address();
   base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
@@ -45,8 +62,11 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await daemon.close();
+  if (priorHome === undefined) delete process.env.ISOCAN_HOME;
+  else process.env.ISOCAN_HOME = priorHome;
   await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   await fs.rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  await fs.rm(decoy, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 /**
@@ -105,7 +125,12 @@ describe("binding a directory over HTTP", () => {
       await fs.readFile(path.join(target, ".isocan", "project.json"), "utf8"),
     ) as { projectId: string };
     expect(marker.projectId).toBe("prj_1");
-    // And the tree route, which was refusing a moment ago, now answers.
+    // The roster row is the daemon's, in the home it was started on. The
+    // process's home — the person's own, anywhere but here — is untouched.
+    expect(await rosterIn(home)).toEqual({ [await fs.realpath(target)]: "prj_1" });
+    expect(await fs.readdir(decoy)).toEqual([]);
+    // And the tree route, which was refusing a moment ago, now answers —
+    // reading the same roster the bind just wrote.
     const tree = await fetch(`${base}/api/projects/prj_1/tree`, { headers: badge.headers });
     expect(tree.status).toBe(200);
   });
@@ -122,5 +147,8 @@ describe("binding a directory over HTTP", () => {
     const res = await bind(clone);
     expect(res.status).toBe(200);
     expect(res.body.adopted).toBe(true);
+    // The row it was missing lands in the daemon's roster, and only there.
+    expect(await rosterIn(home)).toEqual({ [await fs.realpath(clone)]: "prj_1" });
+    expect(await fs.readdir(decoy)).toEqual([]);
   });
 });

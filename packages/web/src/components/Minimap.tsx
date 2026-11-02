@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { itemKind, kindFamily } from "@isocan/core";
+import { itemKind, kindFamily, spotlit } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { ItemPeek } from "./ItemThumb.tsx";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -8,6 +8,7 @@ import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { quietFor, sessionLocus } from "../lib/presence.ts";
 import { RAIL_INSET, railIsOpen, railSpan } from "../lib/stage.ts";
 import { MinimapGlyph } from "./Glyphs.tsx";
+import { NARROW_MINIMAP_QUERY } from "../lib/minimapfold.ts";
 
 
 const MAP_W = 168;
@@ -20,7 +21,9 @@ const PAD = 8;
  *
  * It folds away into its corner for anyone who would rather have the canvas:
  * the map slides down and out, leaving a small handle anchored where it was,
- * and the handle slides it back. The choice is remembered per browser.
+ * and the handle slides it back. The choice is remembered per browser — on a
+ * window wide enough for the map. Below 460px it starts folded, and a tap on
+ * the handle there opens it for the visit without writing anything.
  */
 export function Minimap() {
   const colors = useActorColors();
@@ -62,6 +65,24 @@ export function Minimap() {
   useEffect(() => {
     const timer = setTimeout(() => setPlaced(true), 0);
     return () => clearTimeout(timer);
+  }, []);
+  /**
+   * **Below 460px the width folds the map, and tells the store so — not
+   * storage** (#182). A phone's 375px has no room for the map beside the zoom
+   * row, and the mobile note asked for a fold rather than a stack. The fold is
+   * `minimapFold.narrow`, a measurement: `setMinimapNarrow` never writes
+   * `isocan.minimap`, so a narrow window cannot decide what a wide one shows.
+   * A media query rather than a resize listener because the query IS the
+   * breakpoint, fires only when it is crossed, and is the same text the
+   * sheet's own rule reads (`NARROW_MINIMAP_QUERY`).
+   */
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const narrow = window.matchMedia(NARROW_MINIMAP_QUERY);
+    const sync = () => useUiStore.getState().setMinimapNarrow(narrow.matches);
+    sync();
+    narrow.addEventListener("change", sync);
+    return () => narrow.removeEventListener("change", sync);
   }, []);
   const canvas = useCanvasStore((s) => s.canvas);
   const sessions = useCanvasStore((s) => s.sessions);
@@ -184,7 +205,7 @@ export function Minimap() {
           {Object.values(canvas.items).map((item) => (
         <rect
           key={item.id}
-          className={`minimap-item${peek?.itemId === item.id ? " peeked" : ""}`}
+          className={`minimap-item${peek?.itemId === item.id ? " peeked" : ""}${lit && spotlit(item) ? " spot" : ""}`}
           /* The family, not the kind: core owns the split (`kindFamily`), so
              the stylesheet never holds a second copy of the kind list and a
              module's kind is placed without the sheet having met it. */

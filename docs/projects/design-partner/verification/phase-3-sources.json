@@ -1,0 +1,317 @@
+{
+  "recordedAt": "2026-09-15T07:04:58.287Z",
+  "base": "c109e6a1712ae91eb18ee01783654a1ec6251438",
+  "files": [
+    {
+      "path": "index.mjs",
+      "sha256": "8079acf63098f282dc34404aebcc9067b9a323f1a7f115a743ade778c4c46e88",
+      "size": 3940
+    },
+    {
+      "path": "packages/api/package.json",
+      "sha256": "5716e13414f0e7bf8a5db587bc5c729e107a896a2327bc19f5e0933c6cc425cb",
+      "size": 700
+    },
+    {
+      "path": "packages/api/src/design-governing.ts",
+      "sha256": "146ddb0d04c3f7be5284ee81b4fa1d81cc145173cdd9a2aaabf2f1c5bde2983a",
+      "size": 5105
+    },
+    {
+      "path": "packages/api/src/design-recipes.ts",
+      "sha256": "101ae3993a30e57e810640d0d890132253a1eb789b5e53e21a2ca34bf81798a1",
+      "size": 2794
+    },
+    {
+      "path": "packages/api/src/design-recipes/campaign.ts",
+      "sha256": "e6dcbf87233462a22e78fe85238f3507d0f016d53d96142a3941ee891e789ce9",
+      "size": 25649
+    },
+    {
+      "path": "packages/api/src/design-recipes/field-guide.ts",
+      "sha256": "bbf58a91ba1044f65d8ad7b8a69b015c627fd13c1ade5ae83f25ad0b8a72dfd8",
+      "size": 25309
+    },
+    {
+      "path": "packages/api/src/design-recipes/receiving.ts",
+      "sha256": "7d30f265e01486f3f4b1875998f0bbec274f9614b93ca593758b437a3b696321",
+      "size": 25008
+    },
+    {
+      "path": "packages/api/src/design-request-reader.ts",
+      "sha256": "4068e53eadd04cd77782eaa60002bd4dfd1e4796b6402cc76291605fd08a0e9f",
+      "size": 24812
+    },
+    {
+      "path": "packages/api/src/design-system-reader.ts",
+      "sha256": "c5297feb6357dffbcc161b5f15f0fb4b686fc689f766df3d9b69591423b7b8d8",
+      "size": 16656
+    },
+    {
+      "path": "packages/api/src/design-system.ts",
+      "sha256": "d68e58bb2bb1b6ca463fd44b83de51c5861c50061b534c876144cd37b2ae6b02",
+      "size": 1611
+    },
+    {
+      "path": "packages/api/src/design-workflow.ts",
+      "sha256": "bd408d379b0691ac33634c1d5161a2c463305922a8d72583f961171fb9c5dd30",
+      "size": 6425
+    },
+    {
+      "path": "packages/api/src/index.ts",
+      "sha256": "d49c143c4617a2f010ed19f6a7c027a560887333cffeb00d16f3e8b3e4e6e24a",
+      "size": 2174
+    },
+    {
+      "path": "packages/api/src/routes.ts",
+      "sha256": "791066db8a418efe76087ab0189b5c5be4543f04d1abaef5f09b66b9811e6e4c",
+      "size": 62079
+    },
+    {
+      "path": "packages/api/test/design-system.test.ts",
+      "sha256": "5f270bd1234335fa837ffdae7f0d38bf81fa62b426cf7a78821414559b7d89fe",
+      "size": 10183
+    },
+    {
+      "path": "packages/cli/bin/workspace-loader.mjs",
+      "sha256": "a9fe5f1b52c64fd3fcb3de2be7bae5eabee46dc03ca057d37021a114f4946ec2",
+      "size": 3886
+    },
+    {
+      "path": "packages/cli/src/agent-guide.md",
+      "sha256": "37c34d86cf7669a99e220ff1a02fe4879a968d2ab12aa78547a77434a86c8b70",
+      "size": 174722
+    },
+    {
+      "path": "packages/cli/src/design-request.ts",
+      "sha256": "2d4617873e96a8f155e28a0ee72c6cb643354bf172174b95b84a315531f08d8e",
+      "size": 15461
+    },
+    {
+      "path": "packages/cli/src/design-system.ts",
+      "sha256": "db69173561f2a76f0112e2ac7683e0d66c942fbc5aa4ac33bb2371f5598e3606",
+      "size": 9240
+    },
+    {
+      "path": "packages/cli/src/main.ts",
+      "sha256": "2003214f1e415e46e22043cf709bf83e61bc000b308a1017bdb7d664b69bbd1a",
+      "size": 702170
+    },
+    {
+      "path": "packages/cli/test/design-system.test.ts",
+      "sha256": "06d1ce0c5a290def9b7b25fe3bbb166ca639e054a6536675ab177ff4596741bf",
+      "size": 9699
+    },
+    {
+      "path": "packages/cli/test/surface.test.ts",
+      "sha256": "8ec413e4d46cffaa216731fb0815183ae7faf92d3b7d74e23ce9be65027c451f",
+      "size": 9763
+    },
+    {
+      "path": "packages/core/package.json",
+      "sha256": "d0100019dd26633a7664de07a97b5c47ca97dc231493f1d2c7b769fa85e314c8",
+      "size": 1040
+    },
+    {
+      "path": "packages/core/src/design-direction.ts",
+      "sha256": "840f0ed3d97c5d63d8b6eb6556c3f48f4d1ac935e7ddf4e7bcc335c4d208cdf7",
+      "size": 4715
+    },
+    {
+      "path": "packages/core/src/design-request-parse.ts",
+      "sha256": "611918fe4b009861d882086ea22a6ba63762cec6b28649cbf0e95b7a53ca1435",
+      "size": 10276
+    },
+    {
+      "path": "packages/core/src/design-request.ts",
+      "sha256": "c07c367f23f05301208fe2da243c27b65110713270914ba0e763f276c276eb58",
+      "size": 4978
+    },
+    {
+      "path": "packages/core/src/design-scope.ts",
+      "sha256": "16393d77ca3b9df4c06f4c6caea10ed1c678b20f61f76036f9134e2dbe851ab9",
+      "size": 1670
+    },
+    {
+      "path": "packages/core/src/designsystem.ts",
+      "sha256": "208881ca7d7d6e95ee7e79d9b6aad84d4ce92b040ce2a0a7a010f1d08446d4f4",
+      "size": 13455
+    },
+    {
+      "path": "packages/core/src/index.ts",
+      "sha256": "10a055368ed23bd96ad3bb614bc1039c5d1c40e00a328d94f9a2244064573a59",
+      "size": 4628
+    },
+    {
+      "path": "packages/core/src/memory.ts",
+      "sha256": "4415e9760f8148850a43565664a21dd66d266aed42c1c55ee21c7c7cae283130",
+      "size": 14514
+    },
+    {
+      "path": "packages/core/src/protocol.ts",
+      "sha256": "4a5fc90008bb0738e11ef7852e9da87c173c97852d4751e758525e76ce3e8b85",
+      "size": 79793
+    },
+    {
+      "path": "packages/core/test/design-direction.test.ts",
+      "sha256": "0f5efab6590c10ef188779fadf71a6b8311d45ad157c528678be033afe1906e0",
+      "size": 3556
+    },
+    {
+      "path": "packages/core/test/design-scope.test.ts",
+      "sha256": "225fd6a43ece1d2b5f4247740fa784518d0eaba62dac5f9b9b778c8367eb4ceb",
+      "size": 5882
+    },
+    {
+      "path": "packages/core/test/moduleextensions.test.ts",
+      "sha256": "cee32f5f0e07b3faa50a8119010c869d7a18a46af081d7c44b633fe929f8ffee",
+      "size": 10214
+    },
+    {
+      "path": "packages/modules/design-competition/test/bout.test.ts",
+      "sha256": "bfbbe354373ee6edfd4a7e3f25ea3e7ef640b0fcf700b8404f50ecf4f7ca5951",
+      "size": 12672
+    },
+    {
+      "path": "packages/server/src/design-request.ts",
+      "sha256": "bc822740c9f04eb3a2fb5d90dff912d27702cbafa4e38a8a9287612a2bdb484f",
+      "size": 35335
+    },
+    {
+      "path": "packages/server/test/design-request.test.ts",
+      "sha256": "655f7a1e230d7de079c33cc997078561a33b02c4884e5a53074788de80e5ce16",
+      "size": 31545
+    },
+    {
+      "path": "packages/web/src/components/CanvasTools.tsx",
+      "sha256": "5f77e2fbbea86399fe76a6cbde5b389bc655049b69e9df33d4e7a58ceb34a1e5",
+      "size": 16873
+    },
+    {
+      "path": "packages/web/src/components/DesignRecipeLibrary.tsx",
+      "sha256": "96b6446c8e8b9854699cac5bc176a17ee9917efecf09106f530990db4c688ebd",
+      "size": 8888
+    },
+    {
+      "path": "packages/web/src/components/DesignSystemNudge.tsx",
+      "sha256": "b791b13bb41e0abd236d0a50e1d1d19b4640ed8c1122546929b9c53f18ec88b7",
+      "size": 2347
+    },
+    {
+      "path": "packages/web/src/components/DesignSystemView.tsx",
+      "sha256": "6718b4154583ae853346a8392446ec748c7a0392b43c5120532de86289cad603",
+      "size": 14045
+    },
+    {
+      "path": "packages/web/src/components/DesignSystemsButton.tsx",
+      "sha256": "902361abbc77254fb5baed70b7556b0b2634fb1c581f3c2356c180bd91f8989d",
+      "size": 1679
+    },
+    {
+      "path": "packages/web/src/components/DesignSystemsDialog.tsx",
+      "sha256": "1058c4858dfd1b9ceb2d249eb081594f3cc24a9e79ac18a5a76f924dd56ab922",
+      "size": 21794
+    },
+    {
+      "path": "packages/web/src/components/DesignTaskCard.tsx",
+      "sha256": "88966eb4ec88c936c5a76d39a5ccd3b67256c1fb74a4b011d6ca621b15be8551",
+      "size": 13837
+    },
+    {
+      "path": "packages/web/src/components/FilesPanel.tsx",
+      "sha256": "173abc7c6a083c0ec4db688b0d1a9d156e7ffa5e64562278e6a3177b09562309",
+      "size": 8032
+    },
+    {
+      "path": "packages/web/src/components/ItemView.tsx",
+      "sha256": "add96e2d51f189237a45d40095a08e915ea8bdf334d749a46bbe82883baaccdd",
+      "size": 94341
+    },
+    {
+      "path": "packages/web/src/components/Workbench.tsx",
+      "sha256": "b7090cd478a9161225a19e959bcbce74c1ba7d1c664e935300e1ad5d57d60ee7",
+      "size": 13009
+    },
+    {
+      "path": "packages/web/src/components/design-systems.css",
+      "sha256": "90854ef3ff5c9c4e8fa3b7bd7edca5a9e547c39fc0f717307dc2ad7eb44e327c",
+      "size": 4444
+    },
+    {
+      "path": "packages/web/src/lib/api.ts",
+      "sha256": "3b937c81479c07d0f33a474fdb6245766ecc297a2e6091f91bbb12b6fd693839",
+      "size": 58502
+    },
+    {
+      "path": "packages/web/src/lib/design-reference-draft.ts",
+      "sha256": "b5fce4be07926c9590a22582e9feb231c726c63d8273b72b2cf4e36ce202ac30",
+      "size": 2761
+    },
+    {
+      "path": "packages/web/src/lib/design-reference-submit.ts",
+      "sha256": "9c9276baaa0dc122225bb2c38c7655bce8990bee2b7b679e804e9cc1883f899f",
+      "size": 8990
+    },
+    {
+      "path": "packages/web/src/lib/design-system-draft.ts",
+      "sha256": "f3c9972471afc55868792883ae6ee17505884e4495625114fd1606b25f2783b4",
+      "size": 5527
+    },
+    {
+      "path": "packages/web/src/lib/design-system.ts",
+      "sha256": "b091a883922f1f67fc24ed07b132118a6b0cd84cffa7c61dd0f54f551c9f7c80",
+      "size": 1537
+    },
+    {
+      "path": "packages/web/test/designreferencesubmit.test.ts",
+      "sha256": "937031da814c61c3d7117d47ecfcdc77ac5e58157371979876484a7cba5b7ea2",
+      "size": 10338
+    },
+    {
+      "path": "packages/web/test/designsystemdraft.test.ts",
+      "sha256": "fc936404b31feff43349b06ce57c7719549c1a366c97f41c36a2a5df79ebe4fa",
+      "size": 5395
+    },
+    {
+      "path": "packages/web/test/memory.test.ts",
+      "sha256": "ace32b3cb5c24e51afc659ff9d48a5a1b369c536b5d77cc681bbd93c596d17ff",
+      "size": 5790
+    },
+    {
+      "path": "scripts/journey-design-systems.mjs",
+      "sha256": "392ccdd970596a1dbe64023307f688db09731ed7715be40546ea0998ee33df7e",
+      "size": 14490
+    },
+    {
+      "path": "scripts/lib/design-systems-browser.mjs",
+      "sha256": "f9bd9cfe333a79ccacc6e2fb379512a3c0fbfa2f6e41e96c81f91ff81097fdbd",
+      "size": 14758
+    },
+    {
+      "path": "scripts/lib/design-systems-cli.mjs",
+      "sha256": "d6454d8ad922ca08bffc6668730e641d658b3680300068ab80102cb4c59a2e38",
+      "size": 1332
+    },
+    {
+      "path": "scripts/lib/design-systems-incumbent.mjs",
+      "sha256": "241498e82ea40c4dac82a983af3e0f6e5e674b5ba62bef32d39e492b3c6fb259",
+      "size": 4925
+    },
+    {
+      "path": "scripts/lib/design-systems-scopes.mjs",
+      "sha256": "4beaabec52799ffae1b2e47324c3f4185c65c424768b7308157889d448c020bb",
+      "size": 5420
+    },
+    {
+      "path": "test/deep.ts",
+      "sha256": "3dc54657948fb5117b7de97a59cfede123d1a6be13ccdee19cb5c33c823e4b03",
+      "size": 16758
+    }
+  ],
+  "entry": {
+    "path": "packages/web/dist/assets/index-Fng6AsTc.js",
+    "sha256": "2db6bb8b631624a453fde9963370f296fef71bf3ae5f6b8b50c5c48432654108",
+    "size": 722646
+  },
+  "entryCeiling": 743900
+}

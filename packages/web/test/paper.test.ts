@@ -18,7 +18,8 @@ describe("a post-it is a text node wearing paper", () => {
   it("is offered by the CLI too, not only by the Text tool", () => {
     const cli = read("../../cli/src/main.ts");
     expect(cli).toContain('.option("--paper <colour>"');
-    expect(cli).toContain("PAPER_PROP");
+    // Through core's one spelling of a look, which carries the paper (30 Sep 2026).
+    expect(cli).toContain("textLookProperties({ style, face, paper, colour, font })");
   });
 
   it("asks core which papers exist, on both surfaces", () => {
@@ -122,8 +123,9 @@ describe("a post-it is a text node wearing paper", () => {
       // the app and the CLI cannot spell the property two ways.
       const text = read("../src/lib/text.ts");
       const revise = text.slice(text.indexOf("export async function reviseTextNode"));
-      expect(text).toContain("paperPatch(paper)");
-      expect(revise).toContain("lookPatch(style, face, paper)");
+      expect(read("../../core/src/textcolour.ts")).toContain("paperPatch(look.paper)");
+      expect(text).toContain("textLookPatch({ style, face, paper, colour: ink.colour, font: fontOf(ink) })");
+      expect(revise).toContain("lookPatch(style, face, paper, ink)");
       expect(composer).toContain("at.paper ?? null,");
     });
 
@@ -133,7 +135,8 @@ describe("a post-it is a text node wearing paper", () => {
       // mode, the exact failure the rule's own comment describes — while
       // the composer over it used `--paper-ink`. The words changed colour
       // the moment they landed. `MarkdownView` renders `.md-view`.
-      expect(css).toContain(".item.textnode.paper .md-view { color: var(--paper-ink); }");
+      // A colour the node names wins; otherwise the paper's own ink.
+      expect(css).toContain(".item.textnode.paper .md-view { color: var(--text-ink, var(--paper-ink)); }");
       expect(css).not.toContain(".item.textnode.paper .text-view");
     });
 

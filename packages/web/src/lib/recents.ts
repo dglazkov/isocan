@@ -1,3 +1,5 @@
+import type { Canvas } from "@isocan/core";
+
 /**
  * **The canvases this browser was on lately**, most recent first.
  *
@@ -51,6 +53,27 @@ export function readRecents(): RecentCanvas[] {
   } catch {
     return [];
   }
+}
+
+/**
+ * Recent visits shaped as minimal `Canvas` records, for the switcher and the
+ * home screen when `listCanvases()` has not answered yet or fails offline.
+ */
+export function recentCanvases(list: readonly RecentCanvas[] = readRecents()): Canvas[] {
+  // No stamps: the browser does not know when these were last touched, and
+  // `ago` of an unparseable date is "", which is the honest column.
+  return list.map(
+    (recent): Canvas => ({
+      id: recent.id,
+      title: recent.title,
+      description: "",
+      properties: {},
+      createdAt: "",
+      createdBy: { id: "", name: "" },
+      updatedAt: "",
+      updatedBy: { id: "", name: "" },
+    }),
+  );
 }
 
 /** Note a visit. Called when a canvas has loaded far enough to have a title,

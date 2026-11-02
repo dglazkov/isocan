@@ -3,7 +3,8 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { DOOR_ROUTE, formatBadgeToken } from "@isocan/core";
-import { startDaemon, type Daemon } from "@isocan/server";
+import { type Daemon } from "@isocan/server";
+import { startDaemon } from "@isocan/server/daemon";
 import { mintTestBadge } from "./badge.ts";
 import {
   adoptIdentity,

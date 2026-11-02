@@ -1,19 +1,36 @@
 import { describe, expect, it } from "vitest";
 import type { Actor, PresenceSession } from "../src/index.ts";
 import {
+  answerPolicy,
   collectCanvasNames,
   dispatchReason,
+  gateSetAside,
+  policyWords,
+  refusedMentions,
+  speakersFor,
+  turnedAway,
+  turnedAwayLine,
   extractMentions,
   invertOperation,
   LISTEN_ANYONE,
+  lapsedFor,
   listensTo,
+  listenUntil,
   listenWords,
+  mayWake,
+  parseListen,
+  readsAsTurnedAway,
+  spellListen,
+  untilWords,
+  ago,
+  withListener,
   OpValidationError,
   roster,
   rulesOf,
   SYSTEM_ACTOR,
+  ceilingRefusal,
 } from "../src/index.ts";
-import { apply, seedState } from "./helpers.ts";
+import { alice, apply, bob, seedState } from "./helpers.ts";
 
 /**
  * **The enrolment record's home half** (agents-on-demand phase 2): standing
@@ -35,8 +52,21 @@ describe("agent.enroll / agent.withdraw", () => {
       rules: { items: ["itm_1"], ops: ["item.addVersion"] },
     })!;
     expect(s.canvas.agents).toEqual({
-      usr_sian: { actor: sian, rules: { items: ["itm_1"], ops: ["item.addVersion"] } },
+      usr_sian: {
+        actor: sian,
+        rules: { items: ["itm_1"], ops: ["item.addVersion"] },
+        // Stamped from the envelope (owner-only summons): who wrote the
+        // enrolment as it stands, so the rc can tell its owner's gate from
+        // anybody else's.
+        writtenBy: alice,
+      },
     });
+  });
+
+  it("re-enrolment by somebody else re-stamps who wrote it", () => {
+    let s = apply(seedState(), { type: "agent.enroll", agent: sian, rules: { listen: [] } })!;
+    s = apply(s, { type: "agent.enroll", agent: sian, rules: { listen: ["*"] } }, bob)!;
+    expect(s.canvas.agents!["usr_sian"]!.writtenBy).toEqual(bob);
   });
 
   it("re-enrolment updates in place — the standing was already there", () => {
@@ -46,12 +76,42 @@ describe("agent.enroll / agent.withdraw", () => {
     expect(s.canvas.agents!["usr_sian"]!.rules).toEqual({ a: 2 });
   });
 
+  it("re-enrolment with no rules leaves existing listen grants and routing rules untouched", () => {
+    let s = apply(seedState(), {
+      type: "agent.enroll",
+      agent: sian,
+      rules: { listen: ["*"], items: ["itm_1"] },
+    })!;
+    s = apply(s, { type: "agent.enroll", agent: sian })!;
+    expect(s.canvas.agents!["usr_sian"]!.rules).toEqual({
+      listen: ["*"],
+      items: ["itm_1"],
+    });
+  });
+
   it("withdrawal removes the standing, not the rest of the canvas", () => {
     const before = apply(seedState(), { type: "agent.enroll", agent: sian })!;
     const after = apply(before, { type: "agent.withdraw", actorId: sian.id })!;
     expect(after.canvas.agents).toEqual({});
     expect(after.canvas.threads).toEqual(before.canvas.threads);
     expect(after.canvas.items).toEqual(before.canvas.items);
+  });
+
+  it("withdrawal keeps the room's word, and who said it (pets phase 2)", () => {
+    const enrolled = apply(seedState(), { type: "agent.enroll", agent: sian })!;
+    expect(enrolled.canvas).not.toHaveProperty("withdrawn");
+    const withdrawn = apply(enrolled, { type: "agent.withdraw", actorId: sian.id }, bob)!;
+    // What a following pet reads so it does not walk back onto a canvas it
+    // was removed from.
+    expect(withdrawn.canvas.withdrawn).toEqual({ usr_sian: bob });
+    // A person bringing it back by hand is not refused by it — the record
+    // decides nothing at the door — and a later withdrawal writes a newer word
+    // beside any other agent's.
+    const percy: Actor = { id: "usr_percy", name: "Percy" };
+    const again = apply(apply(withdrawn, { type: "agent.invite", agent: sian, from: "prj_bench" })!, { type: "agent.enroll", agent: percy })!;
+    expect(Object.keys(again.canvas.agents ?? {}).sort()).toEqual(["usr_percy", "usr_sian"]);
+    const both = apply(apply(again, { type: "agent.withdraw", actorId: sian.id })!, { type: "agent.withdraw", actorId: percy.id })!;
+    expect(both.canvas.withdrawn).toEqual({ usr_sian: alice, usr_percy: alice });
   });
 
   it("withdrawing a stranger is refused", () => {
@@ -72,6 +132,112 @@ describe("agent.enroll / agent.withdraw", () => {
     delete (s.canvas as { agents?: unknown }).agents;
     const enrolled = apply(s, { type: "agent.enroll", agent: sian })!;
     expect(Object.keys(enrolled.canvas.agents ?? {})).toEqual(["usr_sian"]);
+  });
+});
+
+/**
+ * **`agent.invite`: standing here, and not one thing more** (the bench, phase
+ * 1 — journey 2).
+ *
+ * The project's third rule is the one this block exists for: *a bench row
+ * confers nothing.* Joining is the act of naming an agent you already own on
+ * a canvas it has never worked on, so the only thing it may add is the row —
+ * and every way it could quietly add more is a case below, because "confers
+ * nothing" is the rule most likely to erode and the erosion is invisible
+ * until somebody's agent answers a stranger.
+ */
+describe("agent.invite", () => {
+  const percy: Actor = { id: "usr_percy", name: "Percy" };
+
+  it("enrols, and records which bench vouched", () => {
+    const s = apply(seedState(), { type: "agent.invite", agent: percy, from: "prj_bench" })!;
+    expect(s.canvas.agents).toEqual({
+      usr_percy: { actor: percy, writtenBy: alice, invitedFrom: "prj_bench" },
+    });
+  });
+
+  it("no rules are written, so nobody new may summon", () => {
+    // A fresh row carries no `rules` at all, which the rc reads as
+    // owner-only. An invite has no gesture that could say otherwise.
+    const s = apply(seedState(), { type: "agent.invite", agent: percy, from: "prj_bench" })!;
+    expect(s.canvas.agents!["usr_percy"]).not.toHaveProperty("rules");
+  });
+
+  it("joining an agent that already stands here leaves its listen grant alone", () => {
+    // The erosion this forbids: Percy answers everyone here because somebody
+    // deliberately opened him, and a second Join — a stray click, another
+    // person's — quietly narrows him back. Or the reverse, which is worse.
+    let s = apply(seedState(), {
+      type: "agent.enroll",
+      agent: percy,
+      rules: { listen: [LISTEN_ANYONE] },
+    }, bob)!;
+    s = apply(s, { type: "agent.invite", agent: percy, from: "prj_bench" })!;
+    expect(s.canvas.agents!["usr_percy"]!.rules).toEqual({ listen: [LISTEN_ANYONE] });
+    // And whose word the rc honours does not move either: re-stamping
+    // `writtenBy` would hand the inviter authorship of a gate Bob wrote,
+    // which is the widening above by another door.
+    expect(s.canvas.agents!["usr_percy"]!.writtenBy).toEqual(bob);
+    expect(s.canvas.agents!["usr_percy"]!.invitedFrom).toBe("prj_bench");
+  });
+
+  it("cannot rename an agent the canvas already knows", () => {
+    let s = apply(seedState(), { type: "agent.enroll", agent: percy })!;
+    s = apply(s, {
+      type: "agent.invite",
+      agent: { id: percy.id, name: "Percy the Second" },
+      from: "prj_bench",
+    })!;
+    expect(s.canvas.agents!["usr_percy"]!.actor).toEqual(percy);
+  });
+
+  it("starts no turn and moves nothing else on the canvas", () => {
+    const before = seedState();
+    const after = apply(before, { type: "agent.invite", agent: percy, from: "prj_bench" })!;
+    expect(after.canvas.items).toEqual(before.canvas.items);
+    // A turn is a comment somebody can read; an enrolment that wrote one
+    // would be a summons nobody made.
+    expect(after.canvas.threads).toEqual(before.canvas.threads);
+    expect(after.canvas.trash).toEqual(before.canvas.trash);
+  });
+
+  it("touches no other canvas's rules", () => {
+    // Two canvases, one agent, opened wide on the first. The reducer is pure
+    // and per-canvas, so the only way this could fail is somebody reaching
+    // for shared state — which is exactly the day it would need catching.
+    const elsewhere = apply(seedState(), {
+      type: "agent.enroll",
+      agent: percy,
+      rules: { listen: [LISTEN_ANYONE] },
+    })!;
+    const here = apply(seedState(), { type: "agent.invite", agent: percy, from: "prj_bench" })!;
+    expect(elsewhere.canvas.agents!["usr_percy"]!.rules).toEqual({
+      listen: [LISTEN_ANYONE],
+    });
+    expect(here.canvas.agents!["usr_percy"]).not.toHaveProperty("rules");
+  });
+
+  it("is not undoable — a join is not taken back by a casual ⌘Z", () => {
+    expect(
+      invertOperation(seedState(), { type: "agent.invite", agent: percy, from: "prj_bench" }),
+    ).toBeNull();
+  });
+
+  it("makes the agent mentionable and puts it in the roster, with no parked anything", () => {
+    // The phase's whole point: no rc, no session, no handshake — and `@Percy`
+    // resolves, which is what makes a summons possible at all.
+    const s = apply(seedState(), { type: "agent.invite", agent: percy, from: "prj_bench" })!;
+    expect(extractMentions("@Percy could you look?", collectCanvasNames(s.canvas))).toEqual([
+      percy.id,
+    ]);
+    const row = roster([], s.canvas, Date.now()).find((one) => one.actorId === percy.id);
+    expect(row?.name).toBe("Percy");
+  });
+
+  it("withdrawal takes an invited agent back out, provenance and all", () => {
+    let s = apply(seedState(), { type: "agent.invite", agent: percy, from: "prj_bench" })!;
+    s = apply(s, { type: "agent.withdraw", actorId: percy.id })!;
+    expect(s.canvas.agents).toEqual({});
   });
 });
 
@@ -195,6 +361,29 @@ describe("dispatchReason — THE routing composition (phase 4)", () => {
     ).toBe("change");
   });
 
+  /**
+   * **The bug this whole field exists for.** A voice session posts its
+   * transcript to the Chat when it stops, the Chat wakes every parked agent,
+   * and each one read a person's spoken half of a conversation with a
+   * DIFFERENT agent as a request addressed to it.
+   */
+  it("a record in the main thread wakes nobody, mention or not", () => {
+    const enrolled = apply(seedState(), { type: "agent.enroll", agent: sian })!;
+    const s = apply(enrolled, {
+      type: "thread.create", threadId: "th_main", x: 0, y: 0, anchorItemId: null,
+      main: true, comment: { id: "cmt_0", body: "hello" },
+    })!;
+    const reply = (body: string, record?: true) =>
+      ({ type: "thread.reply", threadId: "th_main", comment: { id: "cmt_x", body, ...(record ? { record } : {}) } }) as never;
+    // First the control: the same comment, unmarked, is exactly what wakes it.
+    expect(dispatchReason(reply("\u{1f399} Voice session\n\nDion: move the screens"), "usr_alice", sianCtx(), s.canvas)).toBe("main-thread");
+    expect(dispatchReason(reply("\u{1f399} Voice session\n\nDion: move the screens", true), "usr_alice", sianCtx(), s.canvas)).toBeNull();
+    // And it does not wake on a name either — speech is transcribed, and
+    // transcription is full of names.
+    expect(dispatchReason(reply("@Sian should look at this"), "usr_alice", sianCtx(), s.canvas)).toBe("mentioned");
+    expect(dispatchReason(reply("@Sian should look at this", true), "usr_alice", sianCtx(), s.canvas)).toBeNull();
+  });
+
   it("rulesOf reads the opaque field tolerantly", () => {
     expect(rulesOf(null)).toEqual({});
     expect(rulesOf("nonsense")).toEqual({});
@@ -205,10 +394,10 @@ describe("dispatchReason — THE routing composition (phase 4)", () => {
 
 /**
  * **The speaker gate** (`docs/research/2026-09-04-sheepdog.md`, "whom it
- * listens to"). What these pin is the ORDER — the gate is outside the
- * composition, so it beats the one thing nothing else beats, a mention —
- * and the compatibility rule, that an enrolment with no gate answers
- * everybody exactly as it did before the field existed.
+ * listens to"), read with NO owner in sight — a `wait` park, which answers
+ * for itself. What these pin is the ORDER — the gate is outside the
+ * composition, so it beats the one thing nothing else beats, a mention. The
+ * rc's reading, where absent means the owner alone, is the next block.
  */
 describe("dispatchReason — the speaker gate", () => {
   const gated = (listen?: string[]) => ({
@@ -227,7 +416,7 @@ describe("dispatchReason — the speaker gate", () => {
     }) as const;
   const move = { type: "item.move", itemId: "itm_1", x: 1, y: 2 } as const;
 
-  it("no gate answers everybody — every enrolment written before this field", () => {
+  it("with no owner in sight, no gate answers everybody — a park answers for itself", () => {
     const s = apply(seedState(), { type: "agent.enroll", agent: sian })!;
     expect(dispatchReason(comment("@Sian look"), "usr_alice", gated(), s.canvas)).toBe("mentioned");
   });
@@ -289,6 +478,308 @@ describe("dispatchReason — the speaker gate", () => {
   });
 });
 
+/**
+ * **Owner-only summons** (decided 11 Sep 2026 — issue #238, the rc research
+ * note's recommendation 6). The rc reads an enrolment through its owner:
+ * absent means the owner alone, a list adds people, "*" is everyone — and
+ * only the owner's word (or the owner's machine's) may widen it.
+ */
+describe("owner-only summons — the rc's reading of the gate", () => {
+  const nico: Actor = { id: "usr_nico", name: "Nico" };
+  const percy = "usr_percy"; // an agent on Nico's machine
+  const keeping = { owner: nico, hands: [nico.id, percy] };
+  const comment = (body: string) =>
+    ({
+      type: "thread.create",
+      threadId: "th_x",
+      x: 0,
+      y: 0,
+      anchorItemId: null,
+      comment: { id: "cmt_x", body },
+    }) as const;
+  const at = (rules: unknown, writtenBy?: string) => ({
+    actorId: sian.id,
+    names: [{ id: sian.id, name: sian.name }],
+    rules: rulesOf(rules),
+    policy: answerPolicy(rulesOf(rules), keeping, writtenBy),
+    hands: keeping.hands,
+  });
+
+  it("the default is the owner alone — a stranger's mention wakes nothing", () => {
+    const s = apply(seedState(), { type: "agent.enroll", agent: sian }, nico)!;
+    // The migration in one line: an enrolment with no gate, which answered
+    // everyone until today, now answers its owner.
+    expect(answerPolicy({}, keeping, nico.id)).toEqual({ owner: nico, listen: [] });
+    expect(dispatchReason(comment("@Sian look"), "usr_alice", at({}, nico.id), s.canvas)).toBeNull();
+    expect(dispatchReason(comment("@Sian look"), nico.id, at({}, nico.id), s.canvas)).toBe("mentioned");
+  });
+
+  it("the owner's machine is the owner's hands — two agents on one laptop still talk", () => {
+    const s = apply(seedState(), { type: "agent.enroll", agent: sian }, nico)!;
+    expect(dispatchReason(comment("@Sian over to you"), percy, at({}, nico.id), s.canvas)).toBe("mentioned");
+  });
+
+  it("a joined identity of the owner is the owner", () => {
+    const s = apply(seedState(), { type: "agent.enroll", agent: sian }, nico)!;
+    const joined = { usr_nico_web: nico.id };
+    const ctx = { ...at({}, nico.id), joined };
+    expect(dispatchReason(comment("@Sian look"), "usr_nico_web", ctx, s.canvas)).toBe("mentioned");
+  });
+
+  it("widening: a list admits the owner AND those people; '*' admits everyone", () => {
+    const s = apply(seedState(), { type: "agent.enroll", agent: sian }, nico)!;
+    const named = at({ listen: ["usr_alice"] }, nico.id);
+    expect(dispatchReason(comment("@Sian look"), "usr_alice", named, s.canvas)).toBe("mentioned");
+    expect(dispatchReason(comment("@Sian look"), nico.id, named, s.canvas)).toBe("mentioned");
+    expect(dispatchReason(comment("@Sian look"), "usr_bob", named, s.canvas)).toBeNull();
+    const open = at({ listen: [LISTEN_ANYONE] }, nico.id);
+    expect(dispatchReason(comment("@Sian look"), "usr_bob", open, s.canvas)).toBe("mentioned");
+    // `--to me` names the owner, which adds nothing and must not say so twice.
+    expect(answerPolicy({ listen: [nico.id] }, keeping, nico.id)).toEqual({ owner: nico, listen: [] });
+  });
+
+  it("only the owner's word widens — anybody else's enrolment reads as owner-only", () => {
+    const s = apply(seedState(), { type: "agent.enroll", agent: sian }, nico)!;
+    // Bob re-enrolled Sian open to everyone. The canvas may narrow; it may
+    // never spend somebody else's tokens.
+    const forged = at({ listen: [LISTEN_ANYONE] }, "usr_bob");
+    expect(forged.policy).toEqual({ owner: nico, listen: [] });
+    expect(dispatchReason(comment("@Sian look"), "usr_bob", forged, s.canvas)).toBeNull();
+    expect(gateSetAside({ listen: [LISTEN_ANYONE] }, keeping, "usr_bob")).toBe(true);
+    // The owner's machine writing it is the owner writing it…
+    expect(answerPolicy({ listen: [LISTEN_ANYONE] }, keeping, percy).listen).toEqual([LISTEN_ANYONE]);
+    // …and a row older than the stamp is taken as it stands.
+    expect(answerPolicy({ listen: [LISTEN_ANYONE] }, keeping, undefined).listen).toEqual([LISTEN_ANYONE]);
+    expect(gateSetAside({}, keeping, "usr_bob")).toBe(false);
+  });
+
+  it("the gate turns away before anything is counted — a change from outside is not a change", () => {
+    const s = apply(seedState(), { type: "agent.enroll", agent: sian }, nico)!;
+    const move = { type: "item.move", itemId: "itm_1", x: 1, y: 2 } as const;
+    expect(dispatchReason(move, "usr_alice", at({ ops: ["*"] }, nico.id), s.canvas)).toBeNull();
+    expect(dispatchReason(move, nico.id, at({ ops: ["*"] }, nico.id), s.canvas)).toBe("change");
+  });
+
+  it("a turned-away MENTION gets words; the Chat being loud does not", () => {
+    let s = apply(seedState(), { type: "agent.enroll", agent: sian }, nico)!;
+    s = apply(s, {
+      type: "thread.create",
+      threadId: "th_main",
+      x: 0,
+      y: 0,
+      anchorItemId: null,
+      main: true,
+      comment: { id: "cmt_1", body: "morning" },
+    })!;
+    const ctx = at({}, nico.id);
+    expect(turnedAway(comment("@Sian look"), "usr_alice", ctx)).toBe(true);
+    const chat = { type: "thread.reply", threadId: "th_main", comment: { id: "c2", body: "anyone?" } } as const;
+    expect(turnedAway(chat, "usr_alice", ctx)).toBe(false);
+    expect(turnedAway(comment("@Sian look"), nico.id, ctx)).toBe(false);
+    expect(turnedAway(comment("@Sian look"), SYSTEM_ACTOR.id, ctx)).toBe(false);
+  });
+
+  it("the words name the owner and the exact gesture, and read 'you' to the owner", () => {
+    const nameOf = (id: string) => ({ usr_nico: "Nico", usr_usama: "Usama", usr_alice: "Alice" })[id];
+    const alone = { owner: nico, listen: [] };
+    expect(policyWords(alone, nameOf)).toBe("listens only to Nico");
+    // "you" names who you are: a second machine arrives as its OWN person, and
+    // a bare "you" is read as whoever the reader assumed they were (15 Sep
+    // 2026 — three wrong readings of one sentence, none of which survives the
+    // name being there).
+    expect(policyWords(alone, nameOf, nico.id)).toBe("listens only to you (Nico)");
+    expect(policyWords({ owner: nico, listen: ["usr_usama"] }, nameOf)).toBe("listens to Nico and Usama");
+    expect(policyWords({ owner: nico, listen: ["usr_usama", "usr_alice"] }, nameOf)).toBe(
+      "listens to Nico and 2 others",
+    );
+    expect(policyWords({ owner: nico, listen: [LISTEN_ANYONE] }, nameOf)).toBeNull();
+    expect(turnedAwayLine("Sian", alone, nameOf, "Alice")).toBe(
+      "Sian listens only to Nico — this did not wake Sian, and spent nothing. " +
+        "Nico can widen it: isocan rc listen Sian --to Alice",
+    );
+    // `--to` replaces the list, so the suggestion keeps who is already in.
+    expect(turnedAwayLine("Sian", { owner: nico, listen: ["usr_usama"] }, nameOf, "Alice")).toContain(
+      "--to Usama,Alice",
+    );
+    expect(turnedAwayLine("Sian", alone, nameOf, "Alice Smith")).toContain('--to "Alice Smith"');
+  });
+
+  it("a stranger cannot reach it one hop later, through a sibling that listens to everyone", () => {
+    /* Found by walking it in a browser on 11 Sep: Alice's Chat line was
+       turned away by Sian, woke Percy (open to everyone), and Percy's reply
+       — Nico's machine talking — woke Sian anyway. The gate reads the word
+       an agent is carrying, not the agent. */
+    const s = apply(seedState(), { type: "agent.enroll", agent: sian }, nico)!;
+    const carried = new Map<string, ReadonlySet<string>>([[percy, new Set(["usr_alice"])]]);
+    const onBehalfOf = [...speakersFor([percy], (id) => carried.get(id))];
+    expect(onBehalfOf).toEqual(["usr_alice"]);
+    const ctx = { ...at({}, nico.id), onBehalfOf };
+    expect(dispatchReason(comment("@Sian over to you"), percy, ctx, s.canvas)).toBeNull();
+    expect(turnedAway(comment("@Sian over to you"), percy, ctx)).toBe(true);
+    // Percy carrying Nico's word is Nico asking…
+    expect(dispatchReason(comment("@Sian over to you"), percy, { ...at({}, nico.id), onBehalfOf: [nico.id] }, s.canvas)).toBe(
+      "mentioned",
+    );
+    // …a turn carrying both is let in by the one the gate admits…
+    expect(
+      dispatchReason(comment("@Sian"), percy, { ...at({}, nico.id), onBehalfOf: ["usr_alice", nico.id] }, s.canvas),
+    ).toBe("mentioned");
+    // …and an agent with nothing recorded speaks for itself: its owner's hand.
+    expect([...speakersFor([percy], () => undefined)]).toEqual([percy]);
+    // Followed through a chain: Alice → Percy → a third agent.
+    carried.set("usr_third", speakersFor([percy], (id) => carried.get(id)));
+    expect([...carried.get("usr_third")!]).toEqual(["usr_alice"]);
+  });
+
+  it("a client reads the same refusal from an announced policy", () => {
+    const policies = { [sian.id]: { owner: nico, listen: [] }, usr_open: { owner: nico, listen: ["*"] } };
+    expect(refusedMentions([sian.id, "usr_open"], "usr_alice", policies)).toEqual([
+      { actorId: sian.id, policy: { owner: nico, listen: [] } },
+    ]);
+    expect(refusedMentions([sian.id], nico.id, policies)).toEqual([]);
+    expect(refusedMentions([sian.id], "usr_alice", undefined)).toEqual([]);
+  });
+
+  /**
+   * **Granting from the UI** (issue #272). The web writes the same `listen`
+   * list `isocan rc listen --to` writes, through the one function both call —
+   * so "the CLI and the button write the same op" is a property of the code
+   * rather than a promise in a commit message.
+   */
+  describe("a grant, with or without a clock on it", () => {
+    const nameOf = (id: string) => ({ usr_nico: "Nico", usr_usama: "Usama", usr_alice: "Alice" })[id];
+    const now = Date.parse("2026-09-11T18:00:00.000Z");
+    const later = new Date(now + 86_400_000).toISOString();
+    const before = new Date(now - 3_600_000).toISOString();
+
+    it("appends to the gate that already stands rather than replacing it", () => {
+      const one = { owner: nico, listen: ["usr_usama"] };
+      expect(withListener(one, "usr_alice", true)).toEqual(["usr_usama", "usr_alice"]);
+      // Taking a name out leaves the rest — the click says one thing.
+      expect(withListener({ owner: nico, listen: ["usr_usama", "usr_alice"] }, "usr_alice", false)).toEqual([
+        "usr_usama",
+      ]);
+      // "Anyone" is the answer INSTEAD of the list, and undoing it leaves the
+      // names the owner last chose by hand.
+      expect(withListener(one, LISTEN_ANYONE, true)).toEqual([LISTEN_ANYONE]);
+      expect(withListener({ owner: nico, listen: [LISTEN_ANYONE] }, LISTEN_ANYONE, false)).toEqual([]);
+      // Naming somebody while it stands open is not a narrowing.
+      expect(withListener({ owner: nico, listen: [LISTEN_ANYONE] }, "usr_alice", true)).toEqual([LISTEN_ANYONE]);
+    });
+
+    it("writes how long as an entry beside the name, and a grant with no expiry stays a bare id", () => {
+      const listen = withListener({ owner: nico, listen: [] }, "usr_alice", true, { until: later });
+      expect(listen).toEqual([{ id: "usr_alice", until: later }]);
+      expect(parseListen(listen[0]!)).toEqual({ id: "usr_alice", until: later });
+      // A gate that gains no expiry is byte-identical to what it always was,
+      // so nothing already stored changes shape and every reader goes on
+      // reading it.
+      expect(spellListen("usr_alice", null)).toBe("usr_alice");
+      expect(withListener({ owner: nico, listen: [] }, "usr_alice", true)).toEqual(["usr_alice"]);
+      // An `until` that is not a time is ignored rather than trusted: a gate
+      // must never widen — or narrow — because a value was malformed.
+      expect(parseListen({ id: "usr_alice", until: "soonish" })).toEqual({ id: "usr_alice" });
+    });
+
+    it("is dropped whole by a reader that has never heard of expiry — the fail-closed direction", () => {
+      /**
+       * The property the shape was chosen FOR (#272 phase 3, #273). An older
+       * build's `rulesOf` kept only strings in this list, so it does not see
+       * a listener id that is not an id — it sees no entry at all.
+       */
+      const asOlderBuildReads = (listen: readonly unknown[]) =>
+        listen.filter((v): v is string => typeof v === "string");
+      const stored = [`usr_usama`, { id: "usr_alice", until: later }];
+      expect(asOlderBuildReads(stored)).toEqual(["usr_usama"]);
+      // Alice's grant is simply absent there: she cannot wake it, and — the
+      // half that matters — nothing renders half a date as her name.
+      const old = answerPolicy({ listen: asOlderBuildReads(stored) }, keeping, nico.id);
+      expect(mayWake(old, "usr_alice", undefined, undefined, now)).toBe(false);
+      expect(policyWords(old, nameOf, undefined, undefined, now)).toBe("listens to Nico and Usama");
+      // `rulesOf` here keeps both shapes and nothing else: a malformed entry
+      // is dropped exactly as a string list drops a number.
+      expect(rulesOf({ listen: stored }).listen).toEqual(stored);
+      expect(rulesOf({ listen: [7, null, { until: later }, "usr_bob"] }).listen).toEqual(["usr_bob"]);
+    });
+
+    it("a lapsed grant wakes nothing, and is not named as though it did", () => {
+      const lapsedGate = { owner: nico, listen: [{ id: "usr_alice", until: before }] };
+      expect(mayWake(lapsedGate, "usr_alice", undefined, undefined, now)).toBe(false);
+      expect(mayWake(lapsedGate, nico.id, undefined, undefined, now)).toBe(true);
+      // The words say what dispatch does — never "listens to Alice" of a gate
+      // that will turn Alice away.
+      expect(policyWords(lapsedGate, nameOf, undefined, undefined, now)).toBe("listens only to Nico");
+      const live = { owner: nico, listen: [{ id: "usr_alice", until: later }] };
+      expect(mayWake(live, "usr_alice", undefined, undefined, now)).toBe(true);
+      expect(policyWords(live, nameOf, undefined, undefined, now)).toBe("listens to Nico and Alice");
+      // `wait`'s reading of a stored gate keeps the same clock.
+      expect(listensTo({ listen: [{ id: "usr_alice", until: before }] }, "usr_alice", undefined, now)).toBe(false);
+      expect(listensTo({ listen: [{ id: "usr_alice", until: later }] }, "usr_alice", undefined, now)).toBe(true);
+    });
+
+    it("refuses a lapsed grant in the same words, plus the one that says it lapsed", () => {
+      const gate = { owner: nico, listen: [{ id: "usr_alice", until: before }] };
+      const line = turnedAwayLine("Sian", gate, nameOf, "Alice", {
+        lapsed: lapsedFor(gate, "usr_alice", undefined, now),
+        now,
+      });
+      expect(line).toContain("Sian listens only to Nico — this did not wake Sian, and spent nothing.");
+      expect(line).toContain("Alice's access lapsed 1h ago.");
+      // The suggestion is a command to retype: names, no expiries, and the
+      // lapsed one is not smuggled back in as though it still stood.
+      expect(line).toContain("--to Alice");
+      expect(line).not.toContain("until 2026");
+      // A client reading the announced policy reaches the same two facts.
+      expect(refusedMentions([sian.id], "usr_alice", { [sian.id]: gate }, undefined, now)).toEqual([
+        { actorId: sian.id, policy: gate, lapsed: before },
+      ]);
+    });
+
+    it("lets a surface recognise a refusal it did not write", () => {
+      /* The refusal is a system comment and it stays in the thread forever.
+         Once the owner widens the gate the words above the reader are no
+         longer true, and saying so beside them means knowing which comment
+         they are (#272 phase 1). */
+      const body = turnedAwayLine("Sian", { owner: nico, listen: [] }, nameOf, "Alice");
+      expect(readsAsTurnedAway(body, "Sian")).toBe(true);
+      expect(readsAsTurnedAway(body, "Percy")).toBe(false);
+      expect(readsAsTurnedAway("Sian said hello", "Sian")).toBe(false);
+    });
+
+    it("says how long in one vocabulary, and resolves a span to an instant", () => {
+      expect(listenUntil("never")).toBeNull();
+      expect(listenUntil("7d", now)).toBe(new Date(now + 7 * 86_400_000).toISOString());
+      expect(listenUntil("24h", now)).toBe(new Date(now + 86_400_000).toISOString());
+      expect(() => listenUntil("soonish")).toThrow(/not a length of time/);
+      expect(untilWords(new Date(now + 7 * 86_400_000).toISOString(), now)).toBe("for 7d");
+      expect(untilWords(before, now)).toBe("lapsed 1h ago");
+      // The past in the one `ago` every card uses (cleanup DU-5): its own
+      // copy rounded 30 hours to "1d" where a card says "30h".
+      const lapsed = new Date(now - 30 * 3_600_000).toISOString();
+      expect(untilWords(lapsed, now)).toBe(`lapsed ${ago(lapsed, now)} ago`);
+    });
+
+    it("one name granted twice is one grant, and the longer one wins", () => {
+      /* Two clicks, two spans: the owner widening a grant they already gave
+         is widening it, and the gate must not end up naming Alice twice. */
+      const policy = answerPolicy(
+        { listen: [{ id: "usr_alice", until: before }, { id: "usr_alice", until: later }] },
+        keeping,
+        nico.id,
+      );
+      expect(policy.listen).toEqual([{ id: "usr_alice", until: later }]);
+      expect(mayWake(policy, "usr_alice", undefined, undefined, now)).toBe(true);
+      // A grant with no expiry is the longer one, whatever order it arrived in.
+      expect(
+        answerPolicy({ listen: [{ id: "usr_alice", until: later }, "usr_alice"] }, keeping, nico.id).listen,
+      ).toEqual(["usr_alice"]);
+      // And a gate somebody else wrote is still set aside, timed or not.
+      expect(answerPolicy({ listen: [{ id: "usr_alice", until: later }] }, keeping, "usr_bob").listen).toEqual([]);
+      expect(gateSetAside({ listen: [{ id: "usr_alice", until: later }] }, keeping, "usr_bob")).toBe(true);
+    });
+  });
+});
+
 describe("the system voice (phase 5)", () => {
   it("is a voice, not a participant: unmentionable, no roster row", () => {
     let s = seedState();
@@ -325,5 +816,45 @@ describe("the system voice (phase 5)", () => {
     expect(
       dispatchReason(systemReply, SYSTEM_ACTOR.id, { actorId: sian.id, names: [sian] }, s.canvas),
     ).toBeNull();
+  });
+});
+
+/**
+ * **A critic's ceiling** (critique phase 2): `agent.ceiling` on the
+ * enrolment row, and the pure question the home asks of every op
+ * (`ceilingRefusal`). The engine's half — the refusal at the door, the
+ * forward from a replica — is `packages/api/test/ceiling.test.ts`.
+ */
+describe("agent.ceiling, and what a capped agent may send", () => {
+  const capped = () => apply(apply(seedState(), { type: "agent.enroll", agent: sian })!, { type: "agent.ceiling", actorId: sian.id, ceiling: "note" })!;
+
+  it("sets the ceiling with who set it; withdraw takes it with the row; a re-enrolment keeps it", () => {
+    const s = capped();
+    expect(s.canvas.agents?.usr_sian).toMatchObject({ ceiling: "note", ceilingBy: alice });
+    expect(apply(s, { type: "agent.enroll", agent: sian }, bob)!.canvas.agents?.usr_sian).toMatchObject({ ceiling: "note", ceilingBy: alice });
+    const gone = apply(apply(s, { type: "agent.withdraw", actorId: sian.id })!, { type: "agent.enroll", agent: sian })!;
+    expect(gone.canvas.agents?.usr_sian?.ceiling).toBeUndefined();
+    expect(invertOperation(s, { type: "agent.ceiling", actorId: sian.id, ceiling: "note" })).toBeNull();
+  });
+
+  it("is never the agent's own to set or lift, and only its setter lifts it", () => {
+    const s = capped();
+    expect(() => apply(s, { type: "agent.ceiling", actorId: sian.id, ceiling: null }, sian)).toThrow(/cannot set or lift its own ceiling/);
+    expect(() => apply(s, { type: "agent.ceiling", actorId: sian.id, ceiling: null }, bob)).toThrow(/was set by Alice, who lifts it/);
+    expect(() => apply(seedState(), { type: "agent.ceiling", actorId: sian.id, ceiling: "note" })).toThrow(OpValidationError);
+    expect(apply(s, { type: "agent.ceiling", actorId: sian.id, ceiling: null })!.canvas.agents?.usr_sian).toEqual({ actor: sian, writtenBy: alice });
+  });
+
+  it("lets a note on an item, a reply and a reaction through, and nothing else", () => {
+    const { canvas } = capped();
+    const thread = { type: "thread.create", threadId: "thr_1", x: 0, y: 0, anchorItemId: "itm_1", comment: { id: "cmt_1", body: "a note" } } as const;
+    expect(ceilingRefusal(canvas, sian.id, thread)).toBeNull();
+    expect(ceilingRefusal(canvas, sian.id, { type: "thread.reply", threadId: "thr_1", comment: { id: "cmt_2", body: "done" } })).toBeNull();
+    expect(ceilingRefusal(canvas, sian.id, { type: "item.react", itemId: "itm_1", emoji: "👀", on: true, at: { x: 0.5, y: 0.5 } })).toBeNull();
+    expect(ceilingRefusal(canvas, sian.id, { ...thread, anchorItemId: null })).toMatch(/a thread pinned to no item was refused/);
+    expect(ceilingRefusal(canvas, sian.id, { type: "item.move", itemId: "itm_1", x: 1, y: 1 })).toMatch(/^Sian is a critic on this canvas: .* item\.move was refused and nothing was written\. Alice can lift that/);
+    expect(ceilingRefusal(canvas, sian.id, null)).toMatch(/an undo was refused/);
+    // Nobody else on the canvas is touched by it.
+    expect(ceilingRefusal(canvas, alice.id, { type: "item.move", itemId: "itm_1", x: 1, y: 1 })).toBeNull();
   });
 });

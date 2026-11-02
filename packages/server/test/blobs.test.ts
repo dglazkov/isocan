@@ -97,6 +97,39 @@ describe("concurrent blob uploads", () => {
   });
 });
 
+/**
+ * **A name is not a type, and the type a hash was first filed under must not
+ * outlive the name that set it** (lessons.md #122, 14 Oct 2026). Thirteen slides
+ * uploaded from extensionless files were filed `application/octet-stream`;
+ * re-saving the same bytes as `.html` made versions that said `text/html`,
+ * but this route kept answering octet-stream under `nosniff`, and full screen
+ * rendered blank. The store-level rule (and the two-specific-types half) is
+ * `test/conformance/store-conformance.ts`; this is the route a frame loads.
+ */
+describe("a blob first filed as octet-stream", () => {
+  const send = async (contentType: string, filename: string, body: string) => {
+    const res = await fetch(`${base}/api/projects/prj_1/blobs`, {
+      method: "POST",
+      headers: { "Content-Type": contentType, "X-Isocan-Filename": filename, ...badge.headers },
+      body,
+    });
+    expect(res.status).toBe(200);
+    return (await res.json()) as { blobHash: string; mimeType: string };
+  };
+  const servedType = async (hash: string) =>
+    (await fetch(`${base}/api/projects/prj_1/blobs/${hash}`, { headers: badge.headers })).headers.get("content-type");
+
+  it("is served as the specific type the same bytes arrive with next", async () => {
+    const page = "<!doctype html><h1>Acme</h1>";
+    const first = await send("application/octet-stream", "itm_slide", page);
+    expect(await servedType(first.blobHash)).toBe("application/octet-stream");
+    const again = await send("text/html", "01-title.html", page);
+    expect(again.blobHash).toBe(first.blobHash);
+    expect(again.mimeType).toBe("text/html");
+    expect(await servedType(first.blobHash)).toMatch(/^text\/html/);
+  });
+});
+
 describe("the blob route honors Range", () => {
   /**
    * The map has said "Downloads stream through the daemon (Range honored)"
@@ -488,6 +521,14 @@ describe("bytes that look like something else", () => {
     return { status: res.status, body: (await res.json()) as Record<string, unknown> };
   }
 
+  it("keeps plain text source bytes intact instead of applying Fastify's text parser", async () => {
+    const text = "export const states = ['intake', 'delivery'];\n";
+    const { status, body } = await put(text, "text/plain");
+    expect(status).toBe(200);
+    expect(body.mimeType).toBe("text/plain");
+    expect(body.size).toBe(Buffer.byteLength(text));
+  });
+
   it("takes a JSON file as a file, not as a request body", async () => {
     const text = JSON.stringify({ kind: "tool", label: "Tidy" });
     const { status, body } = await put(text, "application/json");
@@ -505,6 +546,31 @@ describe("bytes that look like something else", () => {
     const { status, body } = await put(text, "application/json");
     expect(status).toBe(200);
     expect(body.size).toBe(Buffer.byteLength(text));
+    const read = await fetch(`${base}/api/projects/prj_1/blobs/${body.blobHash as string}`, {
+      headers: badge.headers,
+    });
+    expect(await read.text()).toBe(text);
+  });
+
+  it("takes a plain-text file as a file too — the second instance", async () => {
+    // Fastify parses `text/plain` as well as JSON, and the note above said the
+    // shape would recur. It did, on 12 Sep: the sandbox module posts a run's
+    // transcript as text/plain and every upload was refused `empty blob body`.
+    // Found by the first code to post one deliberately, exactly as before.
+    const text = "$ node fib.mjs\n\nhello\n\nexit 0 · 12 ms · fenced by Seatbelt\n";
+    const { status, body } = await put(text, "text/plain");
+    expect(status, JSON.stringify(body)).toBe(200);
+    expect(body.size).toBe(Buffer.byteLength(text));
+    expect(body.mimeType).toBe("text/plain");
+  });
+
+  it("keeps plain-text bytes exactly, trailing blank lines and all", async () => {
+    // A transcript's shape is load-bearing — its first line is the command and
+    // its last is how the run ended — so a parser that trimmed would be a
+    // silent edit of somebody's record.
+    const text = "a\n\n\nb\n";
+    const { status, body } = await put(text, "text/plain");
+    expect(status).toBe(200);
     const read = await fetch(`${base}/api/projects/prj_1/blobs/${body.blobHash as string}`, {
       headers: badge.headers,
     });

@@ -1,5 +1,5 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { connect } from "@isocan/api";
+import { claimSession, connect } from "@isocan/api";
 import { createServer } from "./server.ts";
 
 /**
@@ -32,7 +32,8 @@ import { createServer } from "./server.ts";
  */
 export async function serveStdio(options: { version?: string } = {}): Promise<void> {
   const server = createServer({
-    home: () => connect(),
+    home: (identity, signal) => connect({ ...(identity ? { identity } : {}), ...(signal ? { signal } : {}) }),
+    claim: (identity, name) => claimSession({ identity, name }),
     ...(options.version !== undefined ? { version: options.version } : {}),
   });
   await server.connect(new StdioServerTransport());

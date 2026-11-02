@@ -1,0 +1,129 @@
+{
+  "schemaVersion": 1,
+  "id": "brand-extension",
+  "title": "Constrained brand extension",
+  "family": "system-reuse",
+  "instruction": "Add stock lookup to the existing Acme warehouse app. Keep its brand and components and deliver it in this repository.",
+  "deliveryType": "connected-app",
+  "viewports": [
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 1280,
+      "height": 900
+    }
+  ],
+  "knownFacts": {
+    "brand": "Supplied scoped DESIGN.md",
+    "runtime": "Native web components with a Node HTTP API",
+    "audience": "Warehouse staff"
+  },
+  "answerBank": [
+    {
+      "id": "audience",
+      "questionMeaning": "audience",
+      "answer": "Warehouse staff using the current Acme tools.",
+      "availability": "on-question",
+      "appliesTo": [
+        "A",
+        "B",
+        "C"
+      ]
+    },
+    {
+      "id": "primary-task",
+      "questionMeaning": "primary-task",
+      "answer": "Find stock and shelf location.",
+      "availability": "on-question",
+      "appliesTo": [
+        "A",
+        "B",
+        "C"
+      ]
+    },
+    {
+      "id": "constraints",
+      "questionMeaning": "constraints",
+      "answer": "Keep the repository components and tokens; use the existing API.",
+      "availability": "on-question",
+      "appliesTo": [
+        "A",
+        "B",
+        "C"
+      ]
+    },
+    {
+      "id": "tradeoff",
+      "questionMeaning": "tradeoff",
+      "answer": "Do not introduce a framework or replace the visual identity.",
+      "availability": "on-question",
+      "appliesTo": [
+        "A",
+        "B",
+        "C"
+      ]
+    }
+  ],
+  "references": [
+    {
+      "id": "reference",
+      "itemId": "brand-extension-reference",
+      "versionId": "brand-extension-reference-v1",
+      "kind": "local",
+      "state": "available",
+      "path": "reference.md"
+    },
+    {
+      "id": "stock-data",
+      "itemId": "brand-extension-stock",
+      "versionId": "brand-extension-stock-v1",
+      "kind": "local",
+      "state": "available",
+      "path": "stock.csv"
+    }
+  ],
+  "initialSnapshot": "snapshot.json",
+  "files": [
+    "reference.md",
+    "stock.csv",
+    "DESIGN.md",
+    "repo/package.json",
+    "repo/server.mjs",
+    "repo/public/index.html",
+    "repo/public/components.mjs",
+    "repo/public/tokens.css",
+    "snapshot.json"
+  ],
+  "primaryTask": {
+    "id": "brand-extension-primary",
+    "goal": "Search for BTL-20, inspect available stock and shelf location from the running local API, then return to the overview.",
+    "steps": [
+      "Start the repository with npm start",
+      "Keep the existing overview usable",
+      "Search SKU BTL-20",
+      "Show 24 available units on shelf B-4 from GET /api/stock",
+      "Handle a no-result search"
+    ]
+  },
+  "forbiddenRegressions": [
+    "No new framework dependency",
+    "No mock-only replacement for the API",
+    "No borrowing another group's palette"
+  ],
+  "entryPoints": {
+    "canvas-chat": {
+      "requestingActor": "acme-human",
+      "targetGroupId": "primary",
+      "threadId": "brand-extension-main",
+      "selectedItemIds": []
+    },
+    "external-agent": {
+      "requestingActor": "acme-human",
+      "targetGroupId": "primary",
+      "projectBinding": "same-canvas",
+      "selectedItemIds": []
+    }
+  }
+}

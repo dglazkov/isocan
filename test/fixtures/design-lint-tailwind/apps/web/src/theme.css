@@ -1,0 +1,6 @@
+@import "tailwindcss";
+@theme {
+  --color-acme: #112233;
+  --color-acme-muted: #ddeeff;
+  --radius-acme: 0.5rem;
+}

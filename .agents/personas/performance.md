@@ -19,8 +19,17 @@ goal:
   # (~6%), and tighter than the old one, because a max-over-chunks bound could
   # be satisfied by splitting an eager chunk in two and downloading exactly the
   # same bytes. This one cannot.
+  # 640000 → 747000 on 2026-09-20, accepted by Dion after the finding stood
+  # twice (15 and 16 Sep) at 740427 and 746413. This matches the goal to the
+  # agreed ceiling in `scripts/bundle-ceiling.mjs`, and the cost is named
+  # rather than discovered: the entry chunk now leaves the nightly queue
+  # entirely until it passes 747000, so the signal that took 757,948 → 600,420
+  # off a first visit in early September is quiet for the next ~100 KB. The
+  # soft half still moves — every raise of CEILING is its own decision with its
+  # own reason, which is the thing that keeps creep legible now that this
+  # number no longer asks.
   - name: the entry chunk a first visit downloads
-    at most: 640000
+    at most: 747000
     measured by: node scripts/measure.mjs bundle-bytes
     baseline: 600420, 2026-09-02, 6bb8994
   # **The soft half of the size gate** (7 Sep 2026).
@@ -39,10 +48,65 @@ goal:
   #
   # `at most: 0` because the metric reports the DEBT, not the size: it is zero
   # whenever the chunk is at or under the ceiling.
+  #
+  # **`against` is what makes that bound of 0 mean anything from one night to
+  # the next** (13 Sep 2026). A bound cannot move here — it is 0 by
+  # construction — so raising the ceiling, which is the entire content of
+  # answering one of these findings, changed nothing a report could see, and
+  # `scripts/reviews.mjs` let an answer given at 641,100 go on covering creep
+  # against 721,200. The finding now says which ceiling it is 0-past, and an
+  # answer stops covering the nights measured against a different one.
   - name: bytes past the last size somebody agreed to
     at most: 0
     measured by: node scripts/measure.mjs bundle-over-ceiling
+    against: node scripts/bundle-ceiling.mjs
     baseline: 0, 2026-09-07, ea12371
+  # **What a living ground costs a frame** (living grounds phase 5, 10 Oct
+  # 2026) — the first frame number this persona owns, and the one goal here
+  # that is a READING rather than a scan.
+  #
+  # `node scripts/frames.mjs --grounds` walks a pointer across each of the seven
+  # living grounds on a scratch daemon, CPU throttled 4x, and
+  # `--record scripts/ground-frames.json` keeps what it saw. The number is the
+  # main thread's time per frame on the costliest ground, less the same walk on
+  # the plain ground. NOT the frame gap: on the M4 Pro this was taken on, every
+  # ground holds 16.7 ms at p95 with no frame dropped, so the gap cannot move
+  # until a ground is already stuttering.
+  #
+  # `at most 2ms` is design.md's own line ("the JS side of a frame … under
+  # 0.5 ms") times the throttle. The first reading is 1.5: Night, whose glow on
+  # nearby cards is a style write and not only a uniform; Aurora adds 1.0, the
+  # other five 0.2-0.3.
+  #
+  # **It moves only when somebody takes a new reading** — a browser walk on
+  # every push is the bill `test/journeys.test.ts` refuses. So whoever changes
+  # a ground takes it again, and `--names` says when the last one was, on what
+  # machine, and whether the grounds' sources have changed since. It is an M4
+  # Pro's number; the budget names an M1, and nobody has run this on one.
+  - name: main-thread time the costliest living ground adds to a frame, CPU throttled 4x
+    at most: 2ms
+    measured by: node scripts/measure.mjs ground-frame-ms
+    baseline: 1.5, 2026-10-10, 50d8a8152
+  # **Canvas pan and zoom responsiveness, and zero blank or flickering content**
+  # (16 Oct 2026). Every nightly run (`persona.yml` at 08:43 UTC) boots a fresh
+  # daemon, seeds 12 HTML screens and 36 Markdown notes, drives headless Chrome
+  # through a full pan and zoom walk, and writes that live reading into
+  # `ISOCAN_CANVAS_FRAMES` right before taking these numbers. On push,
+  # `ratchet.mjs` reads `scripts/canvas-frames.json` so commits do not pay a
+  # browser walk (`test/journeys.test.ts`).
+  #
+  # `canvas-pan-zoom-p90-ms` checks that panning and zooming stay responsive
+  # (`p90 <= 25ms`); `canvas-flicker-frames` checks that no visible card ever
+  # renders blank (`.item-standby` or an undecoded HTML shell) or flickers
+  # between rendered and blank states during motion or zoom (`at most: 0`).
+  - name: p90 frame time while panning and zooming a populated canvas
+    at most: 25ms
+    measured by: node scripts/measure.mjs canvas-pan-zoom-p90-ms
+    baseline: 16.8, 2026-10-16, 8792c5321
+  - name: blank or flickering frames while panning and zooming a canvas
+    at most: 0
+    measured by: node scripts/measure.mjs canvas-flicker-frames
+    baseline: 0, 2026-10-16, 8792c5321
 runs: docs/reviews/
 trigger:
   cron: 43 8 * * *
@@ -56,6 +120,24 @@ isolation — for the frames a person actually waits on.
 `docs/research/2026-08-29-performance.md` first. It is the method as much as
 the findings, and it records two hypotheses that were WRONG and how they were
 settled. Then the last performance run.
+
+Then `docs/research/2026-09-26-frame-budget.md`, which measured it again: the
+frame census from August is kept now as `scripts/frames.mjs` (a daemon, 250
+notes, 4x CPU, pan / zoom / a remote collaborator's drag, and it refuses a
+gesture that moved nothing). Run it when you have a built `dist/` — the frame
+budget is the real subject, and it has an instrument. Check an instrument
+against a known answer before believing its first reading: `bundle-what.mjs`
+read the wrong sourcemap field for 18 days (lesson 100).
+
+`node scripts/frames.mjs --grounds` is the same harness pointed at the living
+grounds (10 Oct 2026): the plain ground first, then each of the seven, a
+pointer walked across each three times. Read its first line before its
+numbers — the machine, the GL renderer, the page size — and its last, which
+says whether any ground drew a frame while nothing moved. It does not report
+GPU time; the bench in `docs/projects/living-grounds/prototype/` does. When a
+ground's shader or the host changes, run it with
+`--record scripts/ground-frames.json` and say in the page what moved:
+`node scripts/measure.mjs ground-frame-ms --names` prints the reading whole.
 
 ## Measure the tail, never the average
 
@@ -89,10 +171,20 @@ three times in one afternoon on the run that wrote the research above.
 
 ## What the goal does not cover
 
-The bundle number is the one thing measurable without a running canvas, which
-is why it is the goal. **The frame budget is the real subject** and needs a
-daemon and a real canvas, so it belongs in the run's prose with its numbers
-stated, not in a nightly bound.
+The bundle number is measurable without a running canvas. The canvas pan/zoom
+frame time (`canvas-pan-zoom-p90-ms`) and zero-flicker bound
+(`canvas-flicker-frames`) run live every night in `persona.yml` (which records a
+fresh `ISOCAN_CANVAS_FRAMES` walk before taking numbers) and read
+`scripts/canvas-frames.json` on push. When you change viewport, lookahead, or
+snapshot code locally, refresh that baseline with
+`node scripts/frames.mjs --html 12 --items 36 --scale 0.5 --throttle 1 --gestures pan,zoom --record scripts/canvas-frames.json`
+and inspect it with `node scripts/measure.mjs canvas-pan-zoom-p90-ms --names`.
+
+The living grounds' number is the one exception, and only half of one: the
+goal reads the last reading somebody recorded, so the nightly page can say
+what it was and cannot say whether it is still true. A night that reports it
+`held` has checked a file. If `--names` says the grounds changed since, the
+reading is the finding.
 
 ## Deliver
 

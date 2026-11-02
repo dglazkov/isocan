@@ -1,8 +1,9 @@
 ---
-status: partial
+status: superseded
 since: 2026-09-10
 see: sheep-harness, on-demand, standing-agents, agent-custody, harnesses
-note: phases 0–2 closed 10–11 Sep 2026 — sheep is a harness found by scan, its home carried on the rc row, a forgotten sheep resumed from its pasture's herd, tool beats on the face from the transcript; withdrawal ends the sheep and the badge its cell redeemed, named exactly through the pass the rc minted, and keeps the pasture. Journeys 1, 2 and 4 walked on the deployed station and a local sheep home against dev.isocan.io, journey 3's credential rule holds, journey 5's refusals are in the suite. Phase 3, the week with the bill, needs the shepherd; sheep#2 and sheep#3 are still open.
+supersededBy: nothing yet — removed 18 Sep 2026; running an agent off the laptop is expected back in another form
+note: removed from isocan 18 Sep 2026: the hosted-rc experiment was shut down and the sheep harness was taken out of the CLI and the rc with it. Was built and walked (phases 0–2.7, 10–12 Sep 2026); this directory is the record of that, and nothing it describes exists on main.
 ---
 # The sheep harness — the journeys
 
@@ -34,18 +35,18 @@ laptop stops running it.*
    just watched, tool calls and all.
 5. Activity Monitor shows one process for the rc. While Percy's turn
    runs there is one more, `sheep attach`, a thin client waiting on the
-   cell, and every few seconds a `sheep log` that reads the transcript
-   for the face's tool beats and exits; when the reply lands they are
-   gone. No model and no agent runtime ever appear. The transcript read
-   goes when `sheep attach` streams entries
-   ([sheep#7](https://github.com/dglazkov/sheep/issues/7)).
+   cell, and the face's tool beats come from what it streams; when the
+   reply lands it is gone. No model and no agent runtime ever appear.
+   (Until 12 September a `sheep log` ran beside it every few seconds to
+   read the transcript, until
+   [sheep#7](https://github.com/dglazkov/sheep/issues/7) put the entries
+   on `attach`'s stream.)
 
 **Acceptance:** No new gesture beyond the harness's name. The summons
 Percy receives is the same text a local adapter would receive. The reply
-is by the enrolled actor, not by you and not by the rc. The only things
-of Percy's that run on the laptop are the client that carries a turn and
-the transcript reads beside it, for the length of that turn, and nothing
-after it.
+is by the enrolled actor, not by you and not by the rc. The only thing
+of Percy's that runs on the laptop is the client that carries a turn,
+for the length of that turn, and nothing after it.
 
 ## Journey 2 — The same Percy, a day later, in a fresh container
 
@@ -55,10 +56,12 @@ has been torn down.*
 1. The next afternoon, well past the home's idle period, comment again:
    `@Percy and the heading above it`.
 2. The rc narrates *session <id> resumed*. The turn is slower than
-   yesterday's, and the rc says while it waits that the cell has been
-   quiet long enough for its container to be fresh, so setup is
-   probably running. It is a guess from the clock, and the rc says so,
-   until the home can tell it.
+   yesterday's, and while it waits the rc narrates *setup running (40s)*
+   from the home, every half minute, then *setup ok (1m 52s)*. It is the
+   home's word: until 12 September the rc guessed from the clock and said
+   so, and a home from before
+   [sheep#4](https://github.com/dglazkov/sheep/issues/4) still says
+   nothing.
 3. Percy's reply refers to yesterday's comment without being told about
    it. `isocan history Percy` shows both replies by one actor.
 4. `isocan badges` on your machine lists the badge Percy's cell holds,
@@ -76,9 +79,11 @@ found there is resumed even when the row had forgotten it.
 if you tried.*
 
 1. `sheep log <id>` from birth to now. The pass address appears nowhere:
-   not in the opening prompt, not in a tool call, not in a result.
-2. `sheep pasture secret ls isocan-percy` prints the name `ISOCAN_PASS`
-   and no value.
+   not in a prompt, not in a tool call, not in a result.
+2. `sheep ls --json` lists Percy's sheep with `ISOCAN_PASS` in its
+   `secrets`: the name, and no value. `sheep pasture secret ls
+   isocan-percy` prints nothing, because the pass is the sheep's and not
+   the pasture's.
 3. In a turn, ask Percy to print its environment. The pass is not in it.
    Ask Percy to show its isocan home. It can: the badge the pass redeemed
    is Percy's own, kept in the workspace so it survives the container,
@@ -118,7 +123,8 @@ badge at the isocan home. The pasture is never removed by the rc; sheep
 has no verb for it and the pasture is the shepherd's. This step waits on
 a sheep verb that ends a session for good, filed there as a journey;
 until it lands, the rc aborts and narrates what it could not end. The
-pasture's secret is a spent pass and needs no dropping.
+pass is the sheep's own secret and ends with the sheep, so the kept
+pasture holds none.
 
 ## Journey 5 — A machine with no sheep says so
 

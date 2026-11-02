@@ -1,0 +1,191 @@
+/* ---------- the workbench ----------
+   Loaded with Workbench, and with it WbFiles and SectionResizer, which only
+   it imports: moved out of `styles.css` on 27 Sep 2026 (the lazy-only
+   queue, cleanup phase 6). What stays behind is shared: `.workbench` itself
+   (its name is said by eager code), the agent rows (`AgentRow`, which the
+   canvas's agent tray also renders) and `.wb-quiet`. */
+
+/* **The workbench's bar, in the same language as the canvas's.**
+
+   It shared `.fullscreen-bar` with full screen, and when that view's chrome
+   went floating this one could not follow: full screen has a single stage to
+   float over, and the workbench has COLUMNS. Chrome floating over a column of
+   agent rows covers the rows.
+
+   So it takes its space — the columns start below it — and what changes is
+   that the slab is gone. The bar paints nothing; the clusters on it do, in
+   the `.floats` language every other surface uses. The room and the canvas
+   now look like the same product with two rooms in it. */
+.wb-bar {
+  flex: none; display: flex; align-items: center; gap: 10px;
+  padding: var(--edge) var(--edge) 0;
+  background: none; border: none;
+}
+/* The columns keep the gap the bar started, so the room breathes on the same
+   rhythm as the canvas rather than running its panels into the window. */
+.workbench .wb-body { padding: var(--edge); gap: var(--edge); }
+/* Floating panels, not walls: the divider each column drew against its
+   neighbour was the last of the flush-and-bordered language in here. */
+.workbench .wb-agents {
+  border: 1px solid var(--line); border-radius: var(--r-float);
+  background: var(--panel); box-shadow: var(--shadow-pop); overflow: hidden;
+}
+.workbench .wb-stage {
+  border: 1px solid var(--line); border-radius: var(--r-float);
+  background: var(--panel); overflow: hidden;
+}
+.wb-body {
+  flex: 1; min-height: 0;
+  display: flex;
+}
+/* The agent column: roster above, the one main thread below. A fixed V1
+   grid on purpose — resizers and collapse arrive with the second person who
+   asks, on the panels.ts patterns (design doc, "the frame"). */
+.wb-agents {
+  flex: none; position: relative;
+  min-height: 0; display: flex; flex-direction: column;
+  border-right: 1px solid var(--line); background: var(--card);
+}
+/* Folded: the reopen affordance and nothing else. Never fully removed — the
+   agent view is the reason the room exists. */
+.wb-agents.rail { width: 40px; align-items: center; padding-top: 6px; }
+.wb-fold {
+  flex: none;
+  font: inherit; font-size: 12px; line-height: 1; cursor: pointer;
+  width: 22px; height: 21px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink-muted);
+}
+.wb-fold:hover { color: var(--ink); border-color: var(--accent); }
+.wb-agents.rail .wb-fold { align-self: center; margin: 0; }
+.wb-roster {
+  /* Height is the inline style — the grab-edge under the section writes it,
+     remembered per browser. `overflow: visible` would kill the scroll, and
+     the resizer needs the RELATIVE box to hang from. */
+  position: relative;
+  flex: none; overflow-y: auto; overscroll-behavior: contain;
+  padding: 10px 12px; border-bottom: 1px solid var(--line);
+}
+/* **A name is written one way, everywhere.**
+
+   These were uppercased: AGENTS, DIRECTORY, and — in the panel below them —
+   CHAT. On the canvas the same words are buttons that say "Chat" and
+   "Agents", so the app was shouting its own nouns in one room and speaking
+   them in another. Reported three times about the canvas before it was
+   believed; the workbench had the identical bug one screen over.
+
+   Uppercase is not banned. A DESCRIPTIVE label — "made by this conversation"
+   — is a caption and may be set however it reads best. What may not vary is a
+   NAME: Chat, Files, Agents are things this product has, and a thing has one
+   spelling. The size and the colour still say "section label"; only the
+   shouting is gone. */
+.wb-roster h3 {
+  margin: 0 0 8px; font-size: 11px; font-weight: 600;
+  letter-spacing: -0.01em; color: var(--ink-soft);
+  display: flex; align-items: center; justify-content: space-between;
+}
+/* The bound directory. A slim section between the roster and the thread —
+   scrollable on its own, capped so the thread keeps its room. */
+.wb-files {
+  position: relative;
+  flex: none; overflow-y: auto; overscroll-behavior: contain;
+  padding: 8px 12px; border-bottom: 1px solid var(--line);
+}
+.wb-files h3 {
+  margin: 0 0 6px; font-size: 11px; font-weight: 600;
+  letter-spacing: -0.01em; color: var(--ink-soft);
+}
+.wb-tree { margin: 0; padding: 0; list-style: none; font-size: 11.5px; }
+.wb-tree li { display: flex; align-items: center; min-width: 0; line-height: 1.7; }
+.wb-tree-dir { color: var(--ink-soft); }
+.wb-tree-file {
+  display: inline-flex; align-items: center; gap: 5px; min-width: 0;
+  color: var(--ink-muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+button.wb-tree-file {
+  font: inherit; padding: 0; border: none; background: none; cursor: pointer;
+  text-align: left;
+}
+/* Already shared: the file is an item, and the row is a door to its stage. */
+.wb-tree-file.on-canvas { color: var(--ink); }
+.wb-tree-file.on-canvas:hover { color: var(--accent-text); }
+.wb-tree-add {
+  flex: none; font: inherit; font-size: 11px; line-height: 1.2; cursor: pointer;
+  padding: 0 5px; border-radius: 999px;
+  border: 1px solid var(--line-soft); background: none; color: var(--ink-soft);
+}
+.wb-tree-add:hover { color: var(--ink); border-color: var(--accent); }
+.wb-tree-add:disabled { opacity: 0.5; cursor: default; }
+.wb-section-resizer {
+  position: absolute; left: 0; right: 0; bottom: -4px; height: 8px;
+  cursor: row-resize; z-index: 1;
+}
+.wb-section-resizer:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.wb-stage { flex: 1; min-width: 0; min-height: 0; display: flex; }
+.wb-stage > * { flex: 1; }
+.wb-empty {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+}
+.wb-empty p {
+  max-width: 40ch; margin: 0; font-size: 12.5px; line-height: 1.6;
+  color: var(--ink-muted); text-align: center;
+}
+.wb-empty code { font-size: 11.5px; }
+/* Attaching a directory from the pane that noticed there wasn't one. The row
+   is a field and its verb; the line under it is either the explanation or the
+   daemon's refusal, verbatim — never both, because a refusal that shares a
+   line with an explanation reads as decoration. */
+.wb-bind { display: flex; flex-direction: column; gap: 6px; padding: 0 2px 4px; }
+.wb-bind-row { display: flex; gap: 6px; align-items: center; }
+.wb-bind-row .text-input { flex: 1; min-width: 0; font-size: 11.5px; }
+.wb-bind-row .btn { flex: none; }
+.wb-bind code { background: var(--chip); border-radius: 3px; padding: 0 3px; font-size: 0.92em; }
+/* The picker: one level of directories, opened under the Attach row. It is a
+   list rather than a tree because the daemon serves one level at a time —
+   enumerating a disk recursively is the thing `pickList` deliberately will
+   not do, and a UI that implied otherwise would be promising it. */
+.wb-pick { display: flex; flex-direction: column; gap: 4px; padding: 6px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--chip); }
+.wb-pick-at { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--ink-muted); }
+/* The path can be long and the panel narrow; the tail is the part that says
+   where you are, so the HEAD is what gets clipped. */
+/* Clipped in JS (`tailOf`), not here: `text-overflow` only eats the tail, and
+   the `direction: rtl` workaround for clipping the head reorders the neutral
+   characters at a string's edges — it rendered "/Users/dalmaer" as
+   "Users/dalmaer/". This just keeps it on one line. */
+.wb-pick-at span { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; }
+/* The shared face, on a class of its own — `.resize-handle`'s pattern, and
+   for its reason: a class that appears in two rules is where a lost scope
+   hides (`oneblock.test.ts`), so the common half gets its own name in the
+   markup rather than a comma. */
+.wb-pick-btn {
+  font: inherit; font-size: 11.5px; cursor: pointer; border-radius: 6px;
+  border: 1px solid transparent; background: none; color: var(--ink); padding: 1px 5px;
+}
+.wb-pick-btn:hover { background: var(--card); border-color: var(--line); }
+.wb-pick-up { flex: none; border-color: var(--line-soft); }
+.wb-pick-list { list-style: none; margin: 0; padding: 0; max-height: 160px; overflow-y: auto; }
+.wb-pick-list li { display: flex; align-items: center; gap: 4px; }
+.wb-pick-in { flex: 1; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wb-pick-take { flex: none; color: var(--accent-text); }
+.wb-pick-take.here { align-self: flex-start; border-color: var(--line-soft); }
+/* Already spoken for: said rather than offered, so nobody picks it and meets
+   a refusal a click later. It carries the NAME of the canvas that has it —
+   the bare word "bound" was a label with nothing to learn from it — so it is
+   clipped rather than allowed to push the row's folder name off the left. */
+.wb-pick-bound {
+  flex: none; font-size: 10px; color: var(--ink-soft);
+  max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* The clone that already knows what it is. Offered, not blocked — taking it
+   writes nothing into the repo — and worded, because "✓" beside a folder you
+   have never bound reads as a fresh binding rather than a recognition. */
+.wb-pick-take.adopt { border-color: var(--line-soft); font-size: 10.5px; }
+/* The files section names its directory; the hint draws the line the word
+   "Files" could not — this pane is a folder on disk, while the canvas's own
+   Files panel lists what is on the canvas. Same pattern as the Chat header. */
+.wb-files-hint { font-style: normal; font-weight: 400; color: var(--ink-soft); font-size: 10.5px; margin-left: 6px; }
+.wb-inspector-section h3 {
+  margin: 0 0 8px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--ink-soft);
+}

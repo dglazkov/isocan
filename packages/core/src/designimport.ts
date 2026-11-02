@@ -1,5 +1,5 @@
-import type { DesignTokens } from "./designmd.ts";
-import { dtcgColorString, dtcgDimensionString } from "./tokens.ts";
+import { parseDesignJson, type DesignTokens } from "./designmd.ts";
+import { DTCG_EXTENSION, dtcgColorString, dtcgDimensionString, fromDtcg } from "./tokens.ts";
 
 /**
  * **Bringing somebody else's theme onto this canvas.**
@@ -28,6 +28,8 @@ interface ImportedDesign {
   tokens: DesignTokens;
   /** What could not be read or placed, in the importer's own words. */
   problems: string[];
+  /** Conversion limits that apply even when all token values were read. */
+  notes: string[];
   /** Which shape it turned out to be, for the report. */
   format: "css" | "dtcg";
 }
@@ -190,6 +192,7 @@ export function importDesign(text: string, source?: string): ImportedDesign {
   // agent cannot cite by name is one it will not cite.
   const tokens: DesignTokens = source ? { name: importedName(source) } : {};
   const problems: string[] = [];
+  const notes: string[] = format === "css" ? ["CSS import reads token values only and cannot restore isocan policies, recipes, exceptions or other extension data. Use the native DESIGN.md or vendor-extended DTCG JSON to retain a contract."] : [];
   const put = (bucket: Exclude<Bucket, null>, key: string, value: string): void => {
     if (bucket === "typography") {
       // Typography in DESIGN.md is a named ROLE with properties, not a flat
@@ -212,14 +215,32 @@ export function importDesign(text: string, source?: string): ImportedDesign {
   if (format === "dtcg") {
     let parsed: unknown;
     try {
-      parsed = JSON.parse(text);
+      parsed = parseDesignJson(text);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("DTCG must be a JSON object");
     } catch (err) {
-      return { tokens, problems: [`not valid JSON: ${(err as Error).message}`], format };
+      return { tokens, problems: [`not valid JSON: ${(err as Error).message}`], notes, format };
+    }
+    const document = parsed as Record<string, unknown>;
+    const extensions = document.$extensions as Record<string, unknown> | undefined;
+    const ours = extensions?.[DTCG_EXTENSION];
+    const nativeGroups = new Set(["color", "colors", "spacing", "rounded", "typography"]);
+    // An isocan export uses native names in its contract references. A generic
+    // importer prefixes DTCG group names and would break those references.
+    if (ours !== undefined) {
+      try { Object.assign(tokens, fromDtcg(document)); }
+      catch (error) { return { tokens, problems: [(error as Error).message], notes, format }; }
     }
     const leaves = new Map<string, { value: string; type?: string }>();
     walkDtcg(parsed, [], leaves);
-    if (leaves.size === 0) problems.push("no tokens found — expected objects carrying `$value`");
+    if (leaves.size === 0 && !ours) problems.push("no tokens found — expected objects carrying `$value`");
     for (const [path, leaf] of leaves) {
+      const group = path.split(".")[0]!;
+      if (ours && nativeGroups.has(group)) {
+        const bucket = group === "color" ? "colors" : group as "colors" | "spacing" | "rounded" | "typography";
+        const restored = Object.keys(tokens[bucket] ?? {}).some(key => path === `${group}.${key}` || (bucket === "typography" && path.startsWith(`${group}.${key}.`)));
+        if (!restored) problems.push(`${path}: unsupported native DTCG value could not be restored; preserved contract references may be unresolved`);
+        continue;
+      }
       if (leaf.type === "composite") {
         problems.push(`${path}: a composite value (shadow, gradient) has no home in DESIGN.md yet`);
         continue;
@@ -242,7 +263,7 @@ export function importDesign(text: string, source?: string): ImportedDesign {
       }
       put(bucket, path, bucket === "colors" ? normaliseColour(leaf.value) : leaf.value);
     }
-    return { tokens, problems, format };
+    return { tokens, problems, notes, format };
   }
 
   const props = readCssTokens(text);
@@ -256,7 +277,7 @@ export function importDesign(text: string, source?: string): ImportedDesign {
     }
     put(bucket, key, bucket === "colors" ? normaliseColour(value) : value);
   }
-  return { tokens, problems, format };
+  return { tokens, problems, notes, format };
 }
 
 /**

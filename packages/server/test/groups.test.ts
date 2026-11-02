@@ -28,7 +28,7 @@ import {
   WS_NOT_ADMITTED,
 } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
-import { mintTestBadge, type TestBadge } from "./badge.ts";
+import { currentSocketUrl, mintTestBadge, type TestBadge } from "./badge.ts";
 
 /**
  * **The group** (roles phase 5; journeys 4 and 6): a named set of people
@@ -407,7 +407,7 @@ describe("the door reads membership", () => {
     await post(owner, grantsRoute(canvasId), { subject: JORDAN, capability: "read" });
     const jordanBadge = await holderOf(JORDAN);
     expect(await rungIn(jordanBadge, canvasId)).toBe("read");
-    const ws = new WebSocket(`${base.replace("http:", "ws:")}/ws?canvasId=${canvasId}`, {
+    const ws = new WebSocket(currentSocketUrl(`${base.replace("http:", "ws:")}/ws?canvasId=${canvasId}`), {
       headers: jordanBadge.headers,
     });
     const heard: ServerMessage[] = [];
@@ -453,7 +453,7 @@ describe("the door reads membership", () => {
     await inviteGroup(canvasId, group.id);
     const jordanBadge = await holderOf(JORDAN);
     expect((await enter(jordanBadge, canvasId)).status).toBe(200);
-    const ws = new WebSocket(`${base.replace("http:", "ws:")}/ws?canvasId=${canvasId}`, {
+    const ws = new WebSocket(currentSocketUrl(`${base.replace("http:", "ws:")}/ws?canvasId=${canvasId}`), {
       headers: jordanBadge.headers,
     });
     const closed = new Promise<{ code: number; reason: string }>((resolve) =>

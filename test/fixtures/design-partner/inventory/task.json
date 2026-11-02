@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 1,
+  "id": "inventory",
+  "title": "Sparse inventory app",
+  "family": "receiving",
+  "instruction": "Build an inventory app for Acme.",
+  "deliveryType": "standalone-html",
+  "viewports": [
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 1280,
+      "height": 900
+    }
+  ],
+  "knownFacts": {},
+  "answerBank": [
+    {
+      "id": "audience",
+      "questionMeaning": "audience",
+      "answer": "Warehouse staff receiving stock on a phone.",
+      "availability": "on-question",
+      "appliesTo": [
+        "A",
+        "B",
+        "C"
+      ]
+    },
+    {
+      "id": "primary-task",
+      "questionMeaning": "primary-task",
+      "answer": "Receive a batch rapidly, then review and correct quantities.",
+      "availability": "on-question",
+      "appliesTo": [
+        "A",
+        "B",
+        "C"
+      ]
+    },
+    {
+      "id": "constraints",
+      "questionMeaning": "constraints",
+      "answer": "Use the supplied inventory data; local prototype storage is sufficient.",
+      "availability": "on-question",
+      "appliesTo": [
+        "A",
+        "B",
+        "C"
+      ]
+    },
+    {
+      "id": "tradeoff",
+      "questionMeaning": "tradeoff",
+      "answer": "Prefer continuous scanning with an explicit final review.",
+      "availability": "on-question",
+      "appliesTo": [
+        "A",
+        "B",
+        "C"
+      ]
+    }
+  ],
+  "references": [
+    {
+      "id": "reference",
+      "itemId": "inventory-reference",
+      "versionId": "inventory-reference-v1",
+      "kind": "local",
+      "state": "available",
+      "path": "reference.md"
+    },
+    {
+      "id": "stock-data",
+      "itemId": "inventory-stock",
+      "versionId": "inventory-stock-v1",
+      "kind": "local",
+      "state": "available",
+      "path": "stock.csv"
+    }
+  ],
+  "initialSnapshot": "snapshot.json",
+  "files": [
+    "reference.md",
+    "stock.csv",
+    "snapshot.json"
+  ],
+  "primaryTask": {
+    "id": "inventory-primary",
+    "goal": "Receive 12 insulated bottles against delivery AC-104, correct the quantity to 10, and confirm the saved receipt.",
+    "steps": [
+      "Start an empty receipt",
+      "Find or scan SKU BTL-20",
+      "Enter 12; reject a negative quantity with an associated error",
+      "Save the receipt",
+      "Correct it to 10 without duplicating the stock change"
+    ]
+  },
+  "forbiddenRegressions": [
+    "No invented backend connection",
+    "No tiny scan/quantity controls",
+    "No false saved state when validation fails"
+  ],
+  "entryPoints": {
+    "canvas-chat": {
+      "requestingActor": "acme-human",
+      "targetGroupId": "primary",
+      "threadId": "inventory-main",
+      "selectedItemIds": []
+    },
+    "external-agent": {
+      "requestingActor": "acme-human",
+      "targetGroupId": "primary",
+      "projectBinding": "same-canvas",
+      "selectedItemIds": []
+    }
+  }
+}

@@ -1,0 +1,139 @@
+{
+  "title": "Acme planning (synthetic bench fixture)",
+  "notes": [
+    {
+      "id": "n01",
+      "title": "Notes",
+      "body": "Notes\nQ4 launch sync, Tuesday. Present: Maya, Ravi, Ana, Theo.\n\nLaunch date: the Q4 launch slips two weeks, from 3 November to 17 November. Reason: the billing migration is not done and Theo will not ship pricing changes on the old billing system.\n\nPricing page: Ravi owns it. Draft by Friday. Three tiers stay (Starter, Team, Business); Business moves from $49 to $59 per seat. Maya wants an annual toggle above the fold.\n\nEU data residency: open question. Two enterprise prospects asked whether data can stay in Frankfurt. Nobody knows what it costs yet. Ravi to ask Theo's team for an estimate; decision deferred to the 24 October sync.\n\nMarketing: Ana says the launch post needs final screenshots by 10 November, which now works with the new date.\n\nRisks: if billing slips again we lose the conference slot on 19 November.\n\nNext sync: 24 October."
+    },
+    {
+      "id": "n02",
+      "title": "Pricing page spec",
+      "body": "Pricing page spec\nOwner: Ravi. Status: draft v2.\n\nGoal: a visitor can pick a plan in under a minute and understand what changes at each tier.\n\nLayout: three columns, Starter ($0), Team ($19 per seat), Business ($59 per seat). Team is highlighted as the recommended plan. An annual/monthly toggle sits above the columns; annual shows a 20% discount.\n\nEach column lists at most six features. The full comparison table is collapsed below the fold behind a \"Compare all features\" link.\n\nFAQ: five questions, starting with refunds and seat changes.\n\nOut of scope: regional pricing, a calculator, and enterprise quotes (those go to a contact form).\n\nAcceptance: the page loads in under 1.5 seconds on a mid-range phone; every price matches the billing system; screen readers announce the toggle state."
+    },
+    {
+      "id": "n03",
+      "title": "Ideas",
+      "body": "Ideas\n- Keyboard shortcut sheet behind the ? key\n- Dark mode for the public share page\n- Weekly digest email of what changed on a project\n- Templates gallery for new projects\n- Import from CSV\n- Slack notification when a card moves to Done\n- Offline mode for the mobile app\n- A public roadmap page"
+    },
+    {
+      "id": "n04",
+      "title": "Call Ravi",
+      "body": "Call Ravi\nAbout the EU data residency question before Thursday."
+    },
+    {
+      "id": "n05",
+      "title": "Retro 7 Oct",
+      "body": "Retro 7 Oct\nSprint 41 retro. Facilitator: Ana.\n\nWent well: the copy fixes shipped in one day; the new on-call rota meant nobody was paged twice; Theo's billing migration plan was clear and everyone read it.\n\nWent badly: the Safari crash reached 3% of sessions before anyone noticed, because our error alerts only watch Chrome. Two stories were carried over for the third sprint running. Standups ran long, often 25 minutes.\n\nActions:\n1. Ana adds Safari and Firefox to the error alert filters by Friday.\n2. Theo splits the billing migration into four smaller stories.\n3. Standups cap at 15 minutes; parking-lot items go in the channel.\n4. Maya reviews the carried-over stories and either cuts or re-scopes them.\n\nMood vote: 3.4 out of 5, down from 3.9 last sprint."
+    },
+    {
+      "id": "n06",
+      "title": "Hiring",
+      "body": "Hiring\nWe have approval for two roles this quarter: one senior backend engineer for the billing team and one product designer. Theo runs the backend loop, Maya runs design. Target: offers out by 15 December. Referral bonus is $2,000. The designer role needs a portfolio review before the onsite."
+    },
+    {
+      "id": "n07",
+      "title": "Bug: Safari crash",
+      "body": "Bug: Safari crash\nSafari 18 crashes the editor tab when a user pastes an image larger than 8 MB. Affects about 3% of sessions. Repro: open any project, paste a 10 MB PNG. Ana is on it. Suspected cause: the thumbnail worker allocating the full image twice. Workaround for customers: drag the file in instead of pasting."
+    },
+    {
+      "id": "n08",
+      "title": "Reminder",
+      "body": "Reminder\nExpense reports are due on the 28th."
+    },
+    {
+      "id": "n09",
+      "title": "Customer call: Globex",
+      "body": "Customer call: Globex\nWith Dana (ops lead) and Sam (IT). 45 minutes. Interviewer: Maya.\n\nThey have 140 seats on Team and are considering Business. What they use most: shared boards for weekly planning and the comment threads.\n\nPain points: (1) permissions are confusing; Dana could not tell why a contractor could see a private board, and it took her a day to find the setting. (2) They want SSO before they upgrade; IT will not approve Business without it. (3) Exports to CSV drop comments.\n\nWhat would make them upgrade: SSO, an audit log, and clearer permissions. Price was not the issue; Sam said the $59 seat price is fine if SSO is in.\n\nFollow-ups: Maya sends the SSO timeline; Ravi checks whether audit log can move into Q1. Sentiment: positive but blocked on SSO."
+    },
+    {
+      "id": "n10",
+      "title": "Copy fixes",
+      "body": "Copy fixes\n- \"Invite teammate\" button says \"Invite team mate\" on mobile\n- Empty state on Projects says \"Nothing here yet\" with no next step; add \"Create your first project\"\n- Billing error says \"Error 402\"; replace with \"Your card was declined\"\n- Settings tab \"Perms\" should read \"Permissions\""
+    },
+    {
+      "id": "n11",
+      "title": "Onboarding: research",
+      "body": "Onboarding: research\nWe watched 12 new sign-ups in moderated sessions. 7 of 12 finished sign-up without help. The 5 who stalled all stopped at the same place: the workspace name step, because they did not know whether it was their company name or a project name. Median time to first project was 6 minutes; the fastest was 2. Nobody read the welcome tooltip tour; 9 of 12 dismissed it in the first two seconds. People who imported a template reached a first project twice as fast as people who started blank."
+    },
+    {
+      "id": "n12",
+      "title": "Onboarding: open questions",
+      "body": "Onboarding: open questions\nShould the workspace name step be skippable? Do we drop the tooltip tour entirely or replace it with a checklist? Who owns the template picker, onboarding or the templates team? Maya wants an answer to all three before design starts."
+    },
+    {
+      "id": "n13",
+      "title": "Checkout: metrics",
+      "body": "Checkout: metrics\nLast 30 days: 4,812 checkouts started, 3,105 completed, a 64.5% completion rate. Biggest drop is the payment step, where 22% leave. Mobile completion is 51%, desktop 71%. Average time on the payment step is 94 seconds. Card declines are 6% of attempts; half of those never retry. Apple Pay was used in 18% of completed mobile checkouts."
+    },
+    {
+      "id": "n14",
+      "title": "Checkout: decision",
+      "body": "Checkout: decision\nWe go with the single-page checkout and drop the separate review step. Theo signed off. Revisit after two weeks of data."
+    },
+    {
+      "id": "n15",
+      "title": "Permissions: problem",
+      "body": "Permissions: problem\nToday a person's access to a board comes from four places: workspace role, team membership, board sharing, and guest links. The settings page shows only the workspace role, so nobody can tell why someone has access. Support tickets about permissions doubled in September, to 86. Globex's ops lead spent a day finding why a contractor could see a private board. Admins ask for one place that answers \"who can see this, and why\"."
+    },
+    {
+      "id": "n16",
+      "title": "Permissions: proposal",
+      "body": "Permissions: proposal\nOwner: Ana. Proposal: one Access panel per board.\n\nThe panel lists every person who can see the board, each with the reason (\"workspace admin\", \"member of Design team\", \"shared directly by Maya\", \"guest link\"). Admins can remove access from the panel, and removing it says what else changes.\n\nGuest links get an expiry, 30 days by default.\n\nThe workspace settings page keeps roles only, and links to each board's panel.\n\nNot in this proposal: custom roles and SSO group sync, which wait for the SSO project.\n\nSuccess measure: permission tickets back under 40 a month by end of Q1."
+    },
+    {
+      "id": "n17",
+      "title": "Mobile: scope",
+      "body": "Mobile: scope\nThe mobile dashboard v1 shows three things: today's cards assigned to you, recent activity on projects you follow, and a quick-add button. No board editing on mobile in v1. iOS first, Android six weeks later. Theo estimates five sprints for iOS. Offline is out of scope for v1, despite it being on the ideas list."
+    },
+    {
+      "id": "n18",
+      "title": "Mobile: perf budget",
+      "body": "Mobile: perf budget\n- Cold start under 2 seconds on an iPhone 12\n- Dashboard first paint under 800 ms\n- App download under 40 MB\n- Activity feed pages of 20, loaded on scroll\n- No more than 3 network requests before first paint"
+    },
+    {
+      "id": "n19",
+      "title": "Weekly metrics",
+      "body": "Weekly metrics\nWeek of 6 October. Weekly active users: 18,240, up 4% on the week before. New workspaces: 612. Paid conversions: 74, of which 9 were Business. Churned workspaces: 21. Support tickets: 310, of which 86 were about permissions. Median first-response time: 3 hours 10 minutes. Uptime: 99.94%, with one 26-minute incident on Thursday caused by a database failover."
+    },
+    {
+      "id": "n20",
+      "title": "Welcome",
+      "body": "Welcome\nWelcome to the Acme planning canvas."
+    }
+  ],
+  "screens": [
+    { "id": "s01", "title": "Sign-up", "file": "screens/s01-signup.html", "w": 390, "h": 760 },
+    { "id": "s02", "title": "Workspace name", "file": "screens/s02-workspace.html", "w": 390, "h": 760 },
+    { "id": "s03", "title": "Cart", "file": "screens/s03-cart.html", "w": 390, "h": 760 },
+    { "id": "s04", "title": "Payment", "file": "screens/s04-payment.html", "w": 390, "h": 760 },
+    { "id": "s05", "title": "Team permissions", "file": "screens/s05-permissions.html", "w": 800, "h": 520 },
+    { "id": "s06", "title": "Board access panel", "file": "screens/s06-access-panel.html", "w": 800, "h": 520 },
+    { "id": "s07", "title": "Mobile home", "file": "screens/s07-mobile-home.html", "w": 390, "h": 760 },
+    { "id": "s08", "title": "Activity feed", "file": "screens/s08-activity.html", "w": 390, "h": 760 }
+  ],
+  "groups": [
+    { "id": "g01", "title": "Onboarding flow", "members": ["n11", "n12", "s01", "s02"] },
+    { "id": "g02", "title": "Checkout redesign", "members": ["n13", "n14", "s03", "s04"] },
+    { "id": "g03", "title": "Settings & permissions", "members": ["n15", "n16", "s05", "s06"] },
+    { "id": "g04", "title": "Mobile dashboard", "members": ["n17", "n18", "s07", "s08"] }
+  ],
+  "areas": [
+    { "id": "a01", "title": "To do", "x": 0, "y": 2000, "w": 400, "h": 900 },
+    { "id": "a02", "title": "Doing", "x": 440, "y": 2000, "w": 400, "h": 900 },
+    { "id": "a03", "title": "Done", "x": 880, "y": 2000, "w": 400, "h": 900 }
+  ],
+  "cards": [
+    { "id": "c01", "title": "SSO with Okta and Google", "body": "Needed before Globex upgrades.", "x": 20, "y": 2060 },
+    { "id": "c02", "title": "Audit log", "body": "Ravi checking whether it fits Q1.", "x": 20, "y": 2180 },
+    { "id": "c03", "title": "CSV export keeps comments", "body": "", "x": 20, "y": 2300 },
+    { "id": "c04", "title": "Guest link expiry (30 days)", "body": "Part of the Access panel proposal.", "x": 20, "y": 2420 },
+    { "id": "c05", "title": "Billing migration", "body": "Theo. Split into four stories.", "x": 460, "y": 2060 },
+    { "id": "c06", "title": "Copy fix: Invite teammate", "body": "", "x": 460, "y": 2180 },
+    { "id": "c07", "title": "Copy fix: billing decline message", "body": "", "x": 460, "y": 2300 },
+    { "id": "c08", "title": "Safari crash on image paste", "body": "Ana is on it.", "x": 460, "y": 2420 },
+    { "id": "c09", "title": "On-call rota", "body": "", "x": 900, "y": 2060 },
+    { "id": "c10", "title": "Copy fix: empty state on Projects", "body": "", "x": 900, "y": 2180 },
+    { "id": "c11", "title": "Safari and Firefox in error alerts", "body": "Ana, from the retro.", "x": 900, "y": 2300 }
+  ]
+}

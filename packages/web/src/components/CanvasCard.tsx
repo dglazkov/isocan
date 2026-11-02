@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import type { CanvasContents, Item } from "@isocan/core";
-import { isArea, isCanvasItem, itemKind } from "@isocan/core";
-import { blobUrl, fetchPresenceWhere, getSnapshot } from "../lib/api.ts";
+import { groupAncestors, isArea, isGroupItem, isCanvasItem, automaticCanvasTarget, sourceOf, itemKind } from "@isocan/core";
+import { authoritativeHome, sourceSnapshot, sourcePresence, sourcePicture } from "../lib/personal.ts";
+import { CanvasPreviewBoundary } from "./CanvasPreviewBoundary.tsx";
 import { everyWhileVisible } from "../lib/whilevisible.ts";
 
 /**
@@ -31,14 +32,21 @@ const PULL_MS = 30_000;
  *  cost a thousand nodes in a card. */
 const MOST_ITEMS = 120;
 
-export function CanvasCard({
+/** Direct card consumers share the same gate as every VersionContent face. */
+export function CanvasCard(props: Parameters<typeof OrdinaryCanvasCard>[0]) {
+  return <CanvasPreviewBoundary key={`${props.canvasId}:${props.source}`} canvasId={props.canvasId} source={props.source ?? null} destinationCanvasId={props.destinationCanvasId}><OrdinaryCanvasCard {...props} /></CanvasPreviewBoundary>;
+}
+
+function OrdinaryCanvasCard({
   canvasId,
+  destinationCanvasId,
   width,
   height,
   picture = null,
   source = null,
 }: {
   canvasId: string;
+  destinationCanvasId: string;
   width: number;
   height: number;
   /** A screenshot version of this item, when one was taken — the picture
@@ -60,22 +68,24 @@ export function CanvasCard({
   })();
   const [state, setState] = useState<
     | { kind: "loading" }
-    | { kind: "ready"; title: string; canvas: CanvasContents; here: number }
+    | { kind: "ready"; title: string; canvas: CanvasContents; here: number; home: string }
     | { kind: "refused"; why: string }
   >(elsewhere ? { kind: "refused", why: `Lives at ${elsewhere.replace(/^https?:\/\//, "")} — open it there.` } : { kind: "loading" });
 
   useEffect(() => {
     if (elsewhere) return;
     let live = true;
+    const controller = new AbortController();
     const pull = async () => {
       try {
+        const home = await authoritativeHome(destinationCanvasId, controller.signal);
         const [snapshot, presence] = await Promise.all([
-          getSnapshot(canvasId),
-          fetchPresenceWhere().catch(() => ({ where: [] })),
+          sourceSnapshot({ canvasId, expectedHome: home }, controller.signal),
+          home === window.location.origin ? sourcePresence(home, controller.signal).catch(() => ({ where: [] })) : Promise.resolve({ where: [] }),
         ]);
         if (!live) return;
         const here = new Set(presence.where.filter((row) => row.canvasId === canvasId).map((row) => row.actor.id)).size;
-        setState({ kind: "ready", title: snapshot.project.title, canvas: snapshot.canvas, here });
+        setState({ kind: "ready", title: snapshot.project.title, canvas: snapshot.canvas, here, home });
       } catch (err) {
         if (!live) return;
         // A refusal at the door is the common case and has a plain meaning;
@@ -93,9 +103,10 @@ export function CanvasCard({
     const stop = everyWhileVisible(() => void pull(), PULL_MS);
     return () => {
       live = false;
+      controller.abort();
       stop();
     };
-  }, [canvasId, elsewhere]);
+  }, [canvasId, destinationCanvasId, elsewhere]);
 
   if (state.kind === "loading") return <div className="canvas-embed canvas-embed-note">Looking…</div>;
   if (state.kind === "refused") {
@@ -110,7 +121,7 @@ export function CanvasCard({
   }
 
   const items = Object.values(state.canvas.items);
-  const count = items.filter((one) => !isArea(one)).length;
+  const count = items.filter((one) => !isArea(one) && !isGroupItem(one)).length;
   return (
     <div className="canvas-embed">
       <div className="canvas-embed-head">
@@ -120,7 +131,7 @@ export function CanvasCard({
           {state.here > 0 ? ` · ${state.here} here` : ""}
         </span>
       </div>
-      <Miniature canvasId={canvasId} items={items} width={width} height={Math.max(0, height - 40)} />
+      <Miniature home={state.home} canvasId={canvasId} canvas={state.canvas} items={items} width={width} height={Math.max(0, height - 40)} />
     </div>
   );
 }
@@ -131,7 +142,7 @@ export function CanvasCard({
  * text and everything else as a block in the kind's colour with its title
  * when there is room to read it.
  */
-function Miniature({ canvasId, items, width, height }: { canvasId: string; items: Item[]; width: number; height: number }) {
+function Miniature({ canvasId, home, canvas, items, width, height }: { home: string; canvasId: string; canvas: CanvasContents; items: Item[]; width: number; height: number }) {
   if (items.length === 0) return <div className="canvas-embed-note">Nothing on it yet.</div>;
   const minX = Math.min(...items.map((one) => one.x));
   const minY = Math.min(...items.map((one) => one.y));
@@ -141,11 +152,11 @@ function Miniature({ canvasId, items, width, height }: { canvasId: string; items
   const scale = Math.min((width - pad * 2) / Math.max(1, maxX - minX), (height - pad * 2) / Math.max(1, maxY - minY));
   const offsetX = pad + ((width - pad * 2) - (maxX - minX) * scale) / 2;
   const offsetY = pad + ((height - pad * 2) - (maxY - minY) * scale) / 2;
-  const ordered = [...items].sort((a, b) => Number(isArea(b)) - Number(isArea(a))).slice(0, MOST_ITEMS);
+  const ordered = [...items].sort((a, b) => Number(isArea(b) || isGroupItem(b)) - Number(isArea(a) || isGroupItem(a)) || (isGroupItem(a) && isGroupItem(b) ? groupAncestors(canvas, a.id).length - groupAncestors(canvas, b.id).length : 0)).slice(0, MOST_ITEMS);
   return (
     <div className="canvas-mini" style={{ width, height }} aria-hidden>
       {ordered.map((one) => {
-        const kind = isArea(one) ? "area" : itemKind(one);
+        const kind = isArea(one) || isGroupItem(one) ? "area" : itemKind(one);
         const box = {
           left: offsetX + (one.x - minX) * scale,
           top: offsetY + (one.y - minY) * scale,
@@ -153,20 +164,36 @@ function Miniature({ canvasId, items, width, height }: { canvasId: string; items
           height: Math.max(2, one.height * scale),
         };
         const current = one.versions.find((v) => v.id === one.currentVersionId) ?? one.versions[0];
-        const picture = kind === "image" && current ? blobUrl(canvasId, current.blobHash) : null;
+        const picture = automaticCanvasTarget(one.properties.canvas ?? null, sourceOf(one)).kind === "none" && kind === "image" && current ? current.blobHash : null;
         // One level deep: a canvas inside the picture is a block, not a picture.
         const label = box.width > 60 && box.height > 14 ? one.title : "";
         return (
           <span
             key={one.id}
             className={`canvas-mini-item kind-${kind}${isCanvasItem(one) ? " nested" : ""}`}
-            style={{ ...box, ...(picture ? { backgroundImage: `url(${picture})` } : {}) }}
+            style={box}
             title={one.title}
           >
+            {picture && <SourcePicture canvasId={canvasId} home={home} hash={picture} />}
             {label}
           </span>
         );
       })}
     </div>
   );
+}
+
+function SourcePicture({ canvasId, home, hash }: { canvasId: string; home: string; hash: string }) {
+  const scope = `${canvasId}:${home}:${hash}`;
+  const [image, setImage] = useState<{ scope: string; url: string } | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    let url: string | null = null;
+    void sourcePicture(canvasId, hash, home, controller.signal).then((blob) => {
+      if (controller.signal.aborted) return;
+      url = URL.createObjectURL(blob); setImage({ scope, url });
+    }).catch(() => {});
+    return () => { controller.abort(); if (url) URL.revokeObjectURL(url); };
+  }, [canvasId, home, hash, scope]);
+  return image?.scope === scope ? <img src={image.url} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain" }} /> : null;
 }

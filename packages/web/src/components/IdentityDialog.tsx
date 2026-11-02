@@ -2,7 +2,7 @@ import { faceMark } from "@isocan/core";
 import { useState } from "react";
 import type { Actor, Attestation, AttestOffer } from "@isocan/core";
 import { adoptIdentity, enterAs, knownIdentities } from "../lib/identity.ts";
-import { actorColorIn, useActorColors } from "../lib/colors.ts";
+import { useActorColors } from "../lib/colors.ts";
 import { faceMarkClass, faceMarkStyle } from "../lib/face.ts";
 import { useActorMarks } from "../lib/marks.ts";
 import { canVerifyEmail, resumableIn, sendSignInLink, useAttestOffer } from "../lib/signin.ts";

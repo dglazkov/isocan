@@ -86,6 +86,16 @@ describe("UndoStacks, for a person with two ids (multi-identity phase 5)", () =>
   });
 });
 
+describe("dependent grouped redo", () => {
+  it("keeps original order across restart and joined authors", () => {
+    const first = entry(1, alice, { group: "gesture" }), second = entry(2, bob, { group: "gesture" });
+    const history = [first, second, undoEntry(3, alice, 2), undoEntry(4, alice, 1)];
+    const stacks = UndoStacks.rebuild(history);
+    expect(stacks.nextRedoGroup([alice.id, bob.id])).toEqual([{ targetSeq: 1, undoSeq: 4 }, { targetSeq: 2, undoSeq: 3 }]);
+    stacks.record(redoEntry(5, alice, 1)); expect(stacks.nextRedoGroup([alice.id, bob.id])).toEqual([{ targetSeq: 2, undoSeq: 3 }]);
+  });
+});
+
 describe("UndoStacks", () => {
   it("hands each actor only their own ops, newest first", () => {
     const stacks = UndoStacks.rebuild([

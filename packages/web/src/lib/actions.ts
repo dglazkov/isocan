@@ -1,15 +1,21 @@
+import { isGroupItem, keyFor, stackToggle } from "@isocan/core";
+import { changeCanvasGroup, groupsEnabled, enterCanvasGroup, groupTask, openGroupCreation, openGroupMigration, openGroupAddition, selectParentGroup } from "./canvasgroups.ts";
 import type { NavigateFunction } from "react-router-dom";
 import type { Actor, AlignEdge } from "@isocan/core";
-import { alignMoves, canvasPath, deckPath, itemPath, modulePagePath } from "@isocan/core";
+import { groupArrangeAction, groupScopeRoots, alignMoves, canvasPath, deckPath, itemPath, modulePagePath, nodeCapabilitiesFor, workbenchItemPath } from "@isocan/core";
 import { sendEchoed } from "../stores/canvasStore.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
-import { openPanel } from "./panels.ts";
+import { chatHiddenNow, extensionPanelKey, openPanel } from "./panels.ts";
+import { panelExtensionItems } from "@isocan/core";
 import { zoomBy, zoomTo100, zoomToFit, zoomToSelection } from "./zoomactions.ts";
-import { formatMoves, formatScope } from "@isocan/core";
+import { formatMoves, formatScope, itemChrome, tidyMoves, type FormatMode, type Item } from "@isocan/core";
+import { hasRoomForChrome } from "./chrome.ts";
 import { canEditNow } from "./capability.ts";
+import { explainItem, walkItem } from "./itemactions.ts";
 import { hideChrome, showAllChrome, showChrome } from "./hideable.ts";
-import { modules, modulePages } from "../modules.ts";
+import { openUiDevtools, startUiPiecePicker } from "./uitweaks.ts";
+import { modules, moduleViews } from "../modules.ts";
 
 /**
  * **The things the app does itself.**
@@ -61,10 +67,31 @@ export interface Action {
 }
 
 const onCanvas = (ctx: ActionContext) => ctx.canvasId !== null;
+/** An item whose showing version is HTML — a screen whose words can be varied. */
+const isScreen = (id: string) => {
+  const item = useCanvasStore.getState().canvas?.items[id];
+  return item?.versions.find((v) => v.id === item.currentVersionId)?.mimeType === "text/html";
+};
+const selectedCaps = (ctx: ActionContext) => {
+  if (ctx.selection.length !== 1) return null;
+  const item = useCanvasStore.getState().canvas?.items[ctx.selection[0]!];
+  const version = item?.versions.find((v) => v.id === item.currentVersionId);
+  return item && version ? nodeCapabilitiesFor(item, version) : null;
+};
 const withSelection = (ctx: ActionContext) => ctx.selection.length > 0;
 
 /** Everything the launcher can do, grouped in the order it shows them. */
 export const ACTIONS: readonly Action[] = [
+  { id: "group-selection", name: "Group selection", keys: keyFor("Group selection") ?? "", group: "Canvas", writes: true, available: (ctx) => onCanvas(ctx) && withSelection(ctx), run: (ctx) => openGroupCreation([...ctx.selection]) },
+  { id: "migrate-canvas-groups", name: "Preview group conversion…", group: "Canvas", available: (ctx) => onCanvas(ctx) && !groupsEnabled(), run: openGroupMigration },
+  { id: "new-canvas-group", name: "New group", group: "Canvas", writes: true, available: onCanvas, run: () => openGroupCreation() },
+  { id: "ungroup-selection", name: "Ungroup", keys: keyFor("Ungroup") ?? "", group: "Canvas", writes: true, available: (ctx) => ctx.selection.some((id) => { const item = useCanvasStore.getState().canvas?.items[id]; return item && isGroupItem(item); }), run: (ctx) => groupTask(() => changeCanvasGroup(ctx.canvasId!, ctx.actor, { kind: "ungroup", itemIds: ctx.selection.filter((id) => { const item = useCanvasStore.getState().canvas?.items[id]; return item && isGroupItem(item); }) })) },
+  { id: "enter-group", name: "Enter group", group: "Open", available: (ctx) => ctx.selection.length === 1 && !!useCanvasStore.getState().canvas?.items[ctx.selection[0]!] && isGroupItem(useCanvasStore.getState().canvas!.items[ctx.selection[0]!]!), run: (ctx) => enterCanvasGroup(ctx.selection[0]!) },
+  { id: "parent-group", name: "Select parent group", group: "Open", available: (ctx) => ctx.selection.length === 1 && !!useCanvasStore.getState().canvas?.items[ctx.selection[0]!]?.containerId, run: (ctx) => selectParentGroup(ctx.selection[0]!) },
+  { id: "add-to-group", name: "Add to group…", group: "Canvas", writes: true, available: (ctx) => onCanvas(ctx) && withSelection(ctx), run: (ctx) => openGroupAddition([...ctx.selection]) },
+  { id: "stack-group", name: "Stack or spread the group", keys: keyFor("Stack or spread the group") ?? "", group: "Canvas", writes: true, available: (ctx) => { const canvas = useCanvasStore.getState().canvas; return onCanvas(ctx) && !!canvas && stackToggle(canvas, ctx.selection, useUiStore.getState().activeGroupId) !== null; }, run: async (ctx) => (await import("./groupstack.ts")).toggleStack(ctx.canvasId!, ctx.actor) },
+  { id: "fit-group", name: "Fit frame to contents", group: "Canvas", writes: true, available: (ctx) => ctx.selection.length === 1 && !!useCanvasStore.getState().canvas?.items[ctx.selection[0]!] && isGroupItem(useCanvasStore.getState().canvas!.items[ctx.selection[0]!]!), run: (ctx) => groupTask(() => changeCanvasGroup(ctx.canvasId!, ctx.actor, { kind: "frame", itemId: ctx.selection[0]!, fit: true })) },
+
   {
     id: "add",
     name: "Add…",
@@ -151,6 +178,23 @@ export const ACTIONS: readonly Action[] = [
     },
   },
   {
+    id: "ui-devtools",
+    name: "Customize UI (Devtools)…",
+    hint: "tweak control sizes, frosted glass opacity, z-index layers, radii, and colors live",
+    keys: "⌥D",
+    group: "View",
+    available: onCanvas,
+    run: () => openUiDevtools(),
+  },
+  {
+    id: "ui-pick-piece",
+    name: "Pick UI piece to tweak…",
+    hint: "point at any bar, rail, dock, or card on screen to open its Devtools",
+    group: "View",
+    available: onCanvas,
+    run: () => startUiPiecePicker(),
+  },
+  {
     id: "theme",
     name: "Switch light and dark",
     hint: "or follow the system",
@@ -193,7 +237,8 @@ export const ACTIONS: readonly Action[] = [
       name: `Open ${name}`,
       hint,
       group: "Open",
-      available: onCanvas,
+      // Inside a pane that hides the Chat (`?embed=1`) there is none to open.
+      available: panel === "main" ? (ctx) => onCanvas(ctx) && !chatHiddenNow() : onCanvas,
       run: (ctx) => openPanel(ctx.canvasId!, panel),
     }),
   ),
@@ -216,9 +261,8 @@ export const ACTIONS: readonly Action[] = [
     id: "switch-canvas",
     name: "Switch canvas…",
     hint: "the ones you were on lately first; type to find any",
-    keys: "⌘O",
+    keys: keyFor("Switch canvas") ?? "",
     group: "Open",
-    available: onCanvas,
     /* The palette handles this one itself — it flips the window to the
        switcher rather than closing it — so `run` is what a caller OUTSIDE the
        palette gets: the same window, opened on that face. */
@@ -232,6 +276,13 @@ export const ACTIONS: readonly Action[] = [
     run: (ctx) => ctx.navigate("/"),
   },
   {
+    id: "open-public",
+    name: "Public canvases",
+    hint: "canvases their owners listed on this home",
+    group: "Open",
+    run: (ctx) => ctx.navigate("/public"),
+  },
+  {
     id: "open-help",
     name: "Keyboard shortcuts",
     keys: "?",
@@ -240,9 +291,18 @@ export const ACTIONS: readonly Action[] = [
   },
   // ---- Canvas ----
   {
+    id: "tidy-in-place",
+    name: "Tidy in place",
+    hint: "line the selection up where it is — nothing re-dealt, nothing overlapping",
+    group: "Canvas",
+    available: (ctx) => onCanvas(ctx) && ctx.selection.length > 1,
+    writes: true,
+    run: (ctx) => runFormat(ctx, "in-place"),
+  },
+  {
     id: "format-grid",
     name: "Format: grid",
-    hint: "straighten the lines, decide nothing",
+    hint: "re-deal onto one lattice, decide nothing",
     group: "Canvas",
     available: onCanvas,
     writes: true,
@@ -258,13 +318,23 @@ export const ACTIONS: readonly Action[] = [
     run: (ctx) => runFormat(ctx, "smart"),
   },
   {
-    id: "full-screen",
-    name: "Full screen this",
-    hint: "the selected item, filling the screen",
+    id: "view-selection",
+    name: "View selection",
+    hint: "open View Focus for the selected item",
     keys: "↵",
     group: "Canvas",
-    available: (ctx) => onCanvas(ctx) && ctx.selection.length === 1,
+    available: (ctx) => onCanvas(ctx) && selectedCaps(ctx)?.view === true,
     run: (ctx) => ctx.navigate(itemPath(ctx.canvasId!, ctx.selection[0]!)),
+  },
+  {
+    id: "edit-selection",
+    name: "Edit selection",
+    hint: "open Edit Focus for the selected item",
+    keys: "E",
+    group: "Canvas",
+    writes: true,
+    available: (ctx) => onCanvas(ctx) && selectedCaps(ctx)?.edit === true,
+    run: (ctx) => ctx.navigate(workbenchItemPath(ctx.canvasId!, ctx.selection[0]!)),
   },
   {
     id: "export-deck",
@@ -295,6 +365,20 @@ export const ACTIONS: readonly Action[] = [
       );
     },
   },
+  // Proactive-agent phase 4: how the selected item got here — `isocan explain`'s door.
+  { id: "explain", name: "Explain this item", group: "Open", available: (ctx) => onCanvas(ctx) && ctx.selection.length === 1, run: (ctx) => explainItem(ctx.canvasId!, ctx.actor, ctx.selection[0]!) },
+  // Proactive-agent phase 9: the selected flow walked as simulated people — `isocan walk`'s door.
+  { id: "walk", name: "Walk it as someone else", group: "Open", available: (ctx) => onCanvas(ctx) && ctx.selection.length === 1, run: (ctx) => walkItem(ctx.canvasId!, ctx.actor, ctx.selection[0]!) },
+  {
+    // Copy-edit phase 2: N voices for one screen's words, as variations — `isocan words vary`'s door.
+    id: "vary-copy",
+    name: "Vary the copy…",
+    hint: "write voices for the selected screen's words, each a variation",
+    group: "Canvas",
+    writes: true,
+    available: (ctx) => onCanvas(ctx) && ctx.selection.length === 1 && isScreen(ctx.selection[0]!),
+    run: (ctx) => void import("../components/VaryCopy.tsx").then((m) => m.openVaryCopy({ canvasId: ctx.canvasId!, actor: ctx.actor, itemId: ctx.selection[0]! })),
+  },
   {
     id: "workbench",
     name: "Open the workbench",
@@ -319,7 +403,7 @@ export const ACTIONS: readonly Action[] = [
  */
 function moduleActions(): Action[] {
   // A module's pages are doors like the workbench's: "Open Documents".
-  const pages = modulePages().map(
+  const pages = moduleViews().map(
     (page): Action => ({
       id: `open-page-${page.segment}`,
       name: `Open ${page.label}`,
@@ -331,7 +415,21 @@ function moduleActions(): Action[] {
   );
   return pages.concat(modules().flatMap((m) =>
     (m.actions ?? []).map(
-      (a): Action => ({
+      (a): Action =>
+        // An action that OPENS a dialog is a door, not a write (proposed:
+        // `dialogs`): offered on a read-only canvas too, and the dialog says
+        // what it cannot do there.
+        a.opens !== undefined ? {
+        id: a.id,
+        name: a.name,
+        ...(a.hint ? { hint: a.hint } : {}),
+        group: "Canvas",
+        available: (ctx) => {
+          const canvas = useCanvasStore.getState().canvas;
+          return onCanvas(ctx) && canvas !== null && (a.available?.({ canvas, selection: ctx.selection }) ?? true);
+        },
+        run: () => useUiStore.getState().openModuleDialog(a.opens!, a.args),
+      } : ({
         id: a.id,
         name: a.name,
         ...(a.hint ? { hint: a.hint } : {}),
@@ -344,7 +442,7 @@ function moduleActions(): Action[] {
         run: async (ctx) => {
           const canvas = useCanvasStore.getState().canvas;
           if (!canvas || !ctx.canvasId) return;
-          for (const op of a.run({ canvas, selection: ctx.selection }) ?? []) {
+          for (const op of a.run?.({ canvas, selection: ctx.selection }) ?? []) {
             await sendEchoed(ctx.canvasId, ctx.actor, op);
           }
         },
@@ -365,15 +463,36 @@ function moduleActions(): Action[] {
  * it was asked for, on work that was not selected. `formatScope` is the fold
  * both surfaces read, so the same selection lands on the same coordinates
  * whether the ask came from here or from `isocan tidy <items...>`.
+ *
+ * **`in-place` is what Tidy on a selection means** (14 Oct 2026): the
+ * arrangement kept, its lines straightened (`tidy.ts` in core). The footprint
+ * it keeps clear is the one on screen — the name strip and marks row at THIS
+ * zoom, where the item is big enough to wear them — and "nearly lined up" is
+ * a few screen pixels at this zoom too, so it means what it looks like.
  */
 export async function tidyItems(
   canvasId: string,
   actor: Actor,
   itemIds: readonly string[],
-  mode: "grid" | "smart",
+  mode: FormatMode,
 ): Promise<void> {
   const canvas = useCanvasStore.getState().canvas;
   if (!canvas) return;
+  const scale = useUiStore.getState().viewport.scale;
+  const chrome = (item: Item) => hasRoomForChrome(item.width, item.height, scale) ? itemChrome(item, scale) : { above: 0, below: 0 };
+  const tolerance = 16 / scale;
+  if (groupsEnabled()) {
+    const project = useCanvasStore.getState().record!;
+    const ids = itemIds.length ? [...itemIds] : groupScopeRoots(canvas, useUiStore.getState().activeGroupId).map((item) => item.id);
+    if (ids.length) await changeCanvasGroup(canvasId, actor, groupArrangeAction({ project, canvas }, ids, { kind: "tidy", mode, ...(mode === "in-place" ? { chrome, tolerance } : {}) }));
+    return;
+  }
+  if (mode === "in-place") {
+    const ids = itemIds.length ? itemIds : Object.keys(canvas.items);
+    const moves = tidyMoves(canvas, ids, { chrome, tolerance });
+    if (moves.length) await sendEchoed(canvasId, actor, { type: "items.move", moves });
+    return;
+  }
   const scoped = formatScope(canvas, itemIds);
   const moves = scoped
     ? formatMoves(scoped.scope, { mode, origin: scoped.origin })
@@ -398,6 +517,11 @@ export async function alignItems(
 ): Promise<void> {
   const canvas = useCanvasStore.getState().canvas;
   if (!canvas) return;
+  if (groupsEnabled()) {
+    const project = useCanvasStore.getState().record!;
+    await changeCanvasGroup(canvasId, actor, groupArrangeAction({ project, canvas }, itemIds, { kind: "align", edge }));
+    return;
+  }
   const boxes = itemIds
     .map((id) => canvas.items[id])
     .filter((one): one is NonNullable<typeof one> => Boolean(one))
@@ -407,7 +531,14 @@ export async function alignItems(
   await sendEchoed(canvasId, actor, { type: "items.move", moves });
 }
 
-async function runFormat(ctx: ActionContext, mode: "grid" | "smart"): Promise<void> {
+/** Equal spacing uses the same annotated placement units as group moves and the CLI. */
+export async function distributeGroupItems(canvasId: string, actor: Actor, itemIds: string[], axis: "h" | "v"): Promise<void> {
+  const { record: project, canvas } = useCanvasStore.getState();
+  if (!project || !canvas || !groupsEnabled()) return;
+  await changeCanvasGroup(canvasId, actor, groupArrangeAction({ project, canvas }, itemIds, { kind: "distribute", axis }));
+}
+
+async function runFormat(ctx: ActionContext, mode: FormatMode): Promise<void> {
   if (!ctx.canvasId) return;
   await tidyItems(ctx.canvasId, ctx.actor, ctx.selection, mode);
 }
@@ -415,11 +546,23 @@ async function runFormat(ctx: ActionContext, mode: "grid" | "smart"): Promise<vo
 /** What can be run right now, in the order the groups are declared. On the
  * read-only canvas the actions that write are not in the list at all. */
 export function availableActions(ctx: ActionContext): Action[] {
+  if (!ctx.canvasId) return ACTIONS.filter((action) => ["open-lens", "switch-canvas", "open-canvases", "open-public"].includes(action.id));
   // The module actions are read live, so a runtime module's arrive without a
   // reload; the build-time ones are already in ACTIONS and are not doubled.
   const live = moduleActions();
+  const canvas = useCanvasStore.getState().canvas;
+  const panelActions: Action[] = canvas
+    ? panelExtensionItems(canvas).map((item) => ({
+        id: `open-panel-${item.id}`,
+        name: `Open ${item.title}`,
+        hint: "canvas panel extension",
+        group: "Open",
+        available: onCanvas,
+        run: (c) => openPanel(c.canvasId!, extensionPanelKey(item.id)),
+      }))
+    : [];
   const known = new Set(ACTIONS.map((a) => a.id));
-  return [...ACTIONS, ...live.filter((a) => !known.has(a.id))].filter((action) => {
+  return [...ACTIONS, ...panelActions, ...live.filter((a) => !known.has(a.id))].filter((action) => {
     if (!canEditNow() && action.writes) return false;
     return action.available?.(ctx) ?? true;
   });

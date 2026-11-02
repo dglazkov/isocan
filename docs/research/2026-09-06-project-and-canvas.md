@@ -1,9 +1,9 @@
 ---
-status: designed
-since: 2026-09-06
+status: partial
+since: 2026-09-24
 issue: 135
 see: switcher, roles, multiuser
-note: designed 6 Sep — one word each: a CANVAS is the surface, a PROJECT is the directory that holds it (one today, several later), a SPACE is an access grouping. Counted 331 "project" against 4,879 "canvas" in source; every survivor is inventoried and sorted into keep (the wire, the marker), rename (code that names the surface), and reword (help text, README). Nothing renamed yet
+note: steps 1–2 built 24 Sep — one word each: a CANVAS is the surface, a PROJECT is the directory that holds it (one today, several later), a SPACE is an access grouping. The glossary is in architecture.md with a README sentence; the web store's field is `record` and the list page's setter `setCanvases`; `test/one-word.test.ts` holds the README, agent guide, CLI and web strings to it. The wire keeps `project`. Step 3, the type split, is the multi-canvas project and is not built
 ---
 # Project and canvas: one word each
 

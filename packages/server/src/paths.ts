@@ -20,11 +20,41 @@ export const canvasDir = (home: string, id: string) => path.join(canvasesDir(hom
 export const canvasMetaFile = (home: string, id: string) => path.join(canvasDir(home, id), "project.json");
 export const canvasFile = (home: string, id: string) => path.join(canvasDir(home, id), "canvas.json");
 export const trashFile = (home: string, id: string) => path.join(canvasDir(home, id), "trash.json");
+/**
+ * **The takedown flag** (operator phase 2) — its own file rather than a field
+ * in `project.json`.
+ *
+ * `project.json` holds the `Canvas` record, which is replicated state: every
+ * writer of that file writes the whole object, so a field smuggled into it
+ * would be erased by the next `saveCanvas` and, worse, would ride out to
+ * replicas on the snapshot. A takedown is the home's and must never travel.
+ * Present means taken down; the file's contents say when.
+ */
+export const takedownFile = (home: string, id: string) =>
+  path.join(canvasDir(home, id), "takendown.json");
+/**
+ * **The purge mark** (operator phase 3) — its own file, beside the flag and
+ * not inside it, because `setTakenDown(null)` REMOVES `takendown.json` and a
+ * mark that lived there would go with it. This one is never removed: with
+ * `project.json` it is the whole of what a purge leaves in the directory, and
+ * `load` refuses on it whatever the flag says, so a lift cannot serve an empty
+ * canvas under a taken name.
+ */
+export const purgedFile = (home: string, id: string) =>
+  path.join(canvasDir(home, id), "purged.json");
 export const oplogFile = (home: string, id: string) => path.join(canvasDir(home, id), "oplog.jsonl");
 export const oplogArchiveFile = (home: string, id: string) =>
   path.join(canvasDir(home, id), "oplog-archive.jsonl");
 export const blobsDir = (home: string, id: string) => path.join(canvasDir(home, id), "blobs");
 export const blobsIndexFile = (home: string, id: string) => path.join(canvasDir(home, id), "blobs.json");
+/** Cached semantic-zoom cards for `FileStore` (`summaries/<id>/<key>.json`); hosted homes keep these in GCS (`canvases/{id}/summaries/{key}.json`) via `CloudStore`. */
+export const summariesDir = (home: string, id: string) =>
+  path.join(home, "summaries", encodeURIComponent(id));
+/** Per-canvas daily summary spend ledger for `FileDesk` (`summaries/<id>.stats.json`); hosted homes keep this in Firestore (`summaryStats/{id}`) via `CloudDesk`. */
+export const summaryStatsFile = (home: string, id: string) =>
+  path.join(home, "summaries", `${encodeURIComponent(id)}.stats.json`);
+/** Durable per-agent park cursors for `FileDesk` (`park-cursors.json`); hosted homes keep these in Firestore (`parks/{canvasId}__{actorId}`) via `CloudDesk`. */
+export const parkCursorsFile = (home: string) => path.join(home, "park-cursors.json");
 export const daemonFile = (home: string) => path.join(home, "daemon.json");
 export const daemonLogFile = (home: string) => path.join(home, "daemon.log");
 export const identityFile = (home: string) => path.join(home, "identity.json");
@@ -111,6 +141,11 @@ export const commandFile = (home: string, name: string) =>
  * directory itself; this file only answers "where on disk does that canvas's
  * work live" without a filesystem crawl. */
 export const dirsFile = (home: string) => path.join(home, "dirs.json");
+/** Out-of-tree directory bindings (`realpath → MarkerFile`) for workspaces
+ * that have no enclosing `.git` repository (non-git VCS checkouts or when
+ * `nonRepoBindings: "home"` is configured in `config.json`), so binding a
+ * non-git directory never dirties its working tree. */
+export const bindingsFile = (home: string) => path.join(home, "bindings.json");
 /**
  * **Which home each canvas on this machine belongs to** — `canvasId →
  * homeUrl | null`, phase 10.3's one new file.
@@ -136,3 +171,5 @@ export const dirsFile = (home: string) => path.join(home, "dirs.json");
  * `POST /api/home/join`, which goes through the daemon like everything else.
  */
 export const homesFile = (home: string) => path.join(home, "homes.json");
+/** Short-lived credential-helper cache (`auth-cache/<sha256>.json`, mode `0600`) for `homeAuth`. */
+export const authCacheDir = (home: string) => path.join(home, "auth-cache");

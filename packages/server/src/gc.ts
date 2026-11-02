@@ -8,7 +8,7 @@ import type {
   LogEntry,
   Operation,
 } from "@isocan/core";
-import { blobsInProperties, undoneSeqs } from "@isocan/core";
+import { blobsInProperties, blobsNamedBy, undoneSeqs } from "@isocan/core";
 import type { Engine } from "./engine.ts";
 
 /**
@@ -70,15 +70,49 @@ export function chooseRetained(entries: LogEntry[], keepOps: number): LogEntry[]
   return entries.filter((entry) => retained.has(entry.seq));
 }
 
+function versionBlobHashes(version: {
+  blobHash: string;
+  visual?: { blobHash: string } | undefined;
+  faces?: Partial<Record<string, { blobHash: string } | undefined>> | undefined;
+}): string[] {
+  const hashes = [version.blobHash];
+  if (version.visual?.blobHash) hashes.push(version.visual.blobHash);
+  if (version.faces) {
+    for (const face of Object.values(version.faces)) {
+      if (face?.blobHash) hashes.push(face.blobHash);
+    }
+  }
+  return hashes;
+}
+
 /** Every blobHash an operation can (re-)introduce. */
 function hashesInOperation(op: Operation): string[] {
   switch (op.type) {
+    case "group.change": {
+      const versions = op.action.kind === "create" ? [op.action.group.version]
+        : op.action.kind === "insert" ? [op.action.item.version]
+        : op.action.kind === "content" && op.action.operation.type === "item.addVersion" ? [op.action.operation.version]
+        : op.action.kind === "apply" ? [
+          ...op.action.change.writes.flatMap((write) => write.kind === "create" ? write.item.versions : write.kind === "patch" ? write.content?.versions ?? [] : []),
+          ...op.action.change.expected.flatMap((row) => row.content?.versions ?? []),
+        ] : [];
+      const fromFaces =
+        op.action.kind === "content" &&
+        op.action.operation.type === "item.update" &&
+        op.action.operation.faces
+          ? Object.values(op.action.operation.faces).flatMap((f) => (f?.blobHash ? [f.blobHash] : []))
+          : [];
+      return [...versions.flatMap(versionBlobHashes), ...fromFaces];
+    }
+    case "item.update": {
+      if (!op.faces) return [];
+      return Object.values(op.faces).flatMap((f) => (f?.blobHash ? [f.blobHash] : []));
+    }
     case "item.add":
     case "item.addVersion":
+    case "item.edit":
     case "item.restoreVersion": {
-      const hashes = [op.version.blobHash];
-      if (op.version.visual?.blobHash) hashes.push(op.version.visual.blobHash);
-      return hashes;
+      return versionBlobHashes(op.version);
     }
     default:
       return [];
@@ -103,17 +137,18 @@ function hashesInOperation(op: Operation): string[] {
  */
 export function reachableHashes(state: CanvasState, retained: LogEntry[]): Set<string> {
   const marked = new Set<string>();
+  // Full metadata references include request provenance, both in saved comments
+  // and in retained comment inverses, after their source items have gone.
+  for (const hash of blobsNamedBy(retained, state).keys()) marked.add(hash);
   for (const hash of blobsInProperties(state)) marked.add(hash);
   for (const item of Object.values(state.canvas.items)) {
     for (const version of item.versions) {
-      marked.add(version.blobHash);
-      if (version.visual?.blobHash) marked.add(version.visual.blobHash);
+      for (const hash of versionBlobHashes(version)) marked.add(hash);
     }
   }
   for (const entry of state.canvas.trash) {
     for (const version of entry.item.versions) {
-      marked.add(version.blobHash);
-      if (version.visual?.blobHash) marked.add(version.visual.blobHash);
+      for (const hash of versionBlobHashes(version)) marked.add(hash);
     }
   }
   for (const entry of retained) {

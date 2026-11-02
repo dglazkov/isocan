@@ -1,5 +1,5 @@
 import type { AttentionDocument } from "./TextAttentionView.tsx";
-import { lazy, Suspense } from "react";
+import { lazy, memo, Suspense } from "react";
 import type { PluggableList } from "unified";
 
 /**
@@ -39,7 +39,19 @@ export function preloadMarkdown(): void {
   void import("./markdown-body.tsx");
 }
 
-export function Markdown({
+/**
+ * **Memoised, because react-markdown parses on every render** (26 Sep 2026).
+ *
+ * A thread or the Chat re-renders whenever the canvas changes, and handed this
+ * the same words each time — which parsed every comment on the screen again for
+ * an operation that touched none of them. The props are the words and a few
+ * flags (and a plugin list the callers already memoise), so a shallow compare
+ * is the whole of the question "did anything this renders change". What the
+ * renderer subscribes to itself still reaches it.
+ */
+export const Markdown = memo(MarkdownView);
+
+function MarkdownView({
   children,
   breaks = false,
   rehypePlugins,

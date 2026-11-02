@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "canvasId": "acme-eval-marketing",
+  "title": "Marketing page with supplied proof",
+  "groups": [
+    {
+      "id": "primary",
+      "title": "Acme product"
+    }
+  ],
+  "selectedItemIds": [],
+  "items": [
+    {
+      "id": "marketing-reference",
+      "versionId": "marketing-reference-v1",
+      "path": "reference.md",
+      "mime": "text/markdown",
+      "scope": "primary"
+    },
+    {
+      "id": "marketing-proof",
+      "versionId": "marketing-proof-v1",
+      "path": "proof.md",
+      "mime": "text/markdown",
+      "scope": "primary"
+    }
+  ],
+  "decisions": [],
+  "repository": null
+}

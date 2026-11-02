@@ -1,15 +1,16 @@
-import { Suspense, lazy, useEffect, useState, type ReactNode } from "react";
+import { Suspense, lazy, useCallback, useEffect, useState, type ReactNode } from "react";
 import { preloadMarkdown } from "./lib/markdown.tsx";
 import { BrowserRouter, matchPath, Route, Routes, useLocation } from "react-router-dom";
 import type { Actor } from "@isocan/core";
-import { CANVAS_ROUTE, DECK_ROUTE, ITEM_ROUTE, MODULE_PAGE_ROUTE, WORKBENCH_ITEM_ROUTE, WORKBENCH_ROUTE } from "@isocan/core";
-import { getSnapshot } from "./lib/api.ts";
-import { Viewer } from "./components/Viewer.tsx";
-import { readIdentity } from "./lib/identity.ts";
+import { CANVAS_ROUTE, DECK_ROUTE, ITEM_ROUTE, MODULE_PAGE_ROUTE, MOTION_RENDER_ROUTE, WORKBENCH_ITEM_ROUTE, WORKBENCH_ROUTE } from "@isocan/core";
+import { ApiError, getSnapshot } from "./lib/api.ts";
+import { CANVAS_GROUPS_REQUIRED } from "@isocan/core";
+import { Viewer } from "./components/LazyViewer.tsx";
+import { adoptIdentity, enterFromAttestOffer, knownIdentities, readIdentity } from "./lib/identity.ts";
+import { noteClaimed, useSelf } from "./lib/names.ts";
 import type { Arrival, ArrivalRefused } from "./lib/arrival.ts";
-import type { SignIn, SignInLanding } from "./lib/signin.ts";
-import { adoptIdentity } from "./lib/identity.ts";
-import { faceFor } from "./lib/faces.ts";
+import { attesterOffer, type SignIn, type SignInLanding } from "./lib/signin.ts";
+import { faceFor, isSsoHome, PUBLIC_PATH } from "./lib/faces.ts";
 import { IdentityDialog } from "./components/IdentityDialog.tsx";
 import { CanvasPage } from "./pages/CanvasPage.tsx";
 import { FrontPage } from "./pages/FrontPage.tsx";
@@ -42,11 +43,35 @@ import { TermsPage } from "./pages/TermsPage.tsx";
  * `fallback={null}` for the frame the chunk takes, the way `CanvasPage`
  * already loads its palette and its workbench.
  */
+const Navigation = lazy(() => import("./components/Navigation.tsx").then((m) => ({ default: m.Navigation })));
 const LensPage = lazy(() => import("./pages/LensPage.tsx").then((m) => ({ default: m.LensPage })));
 const CanvasListPage = lazy(() =>
   import("./pages/CanvasListPage.tsx").then((m) => ({ default: m.CanvasListPage })),
 );
 const NotHerePage = lazy(() => import("./pages/NotHerePage.tsx").then((m) => ({ default: m.NotHerePage })));
+const PublicPage = lazy(() => import("./pages/PublicPage.tsx").then((m) => ({ default: m.PublicPage })));
+/**
+ * **The movie renderer** (motion phase 1): a page a terminal's headless
+ * browser opens, never a first visit — and it carries the H.264 muxer, which
+ * nothing else in the app needs. Not behind the `motion` experiment: the
+ * CLI's browser has no settings to turn one on.
+ */
+const MotionRenderPage = lazy(() => import("./pages/MotionRenderPage.tsx").then((m) => ({ default: m.MotionRenderPage })));
+/**
+ * **The operator's prove page, behind the same boundary** (operator phase 1).
+ *
+ * The rarest surface this app has: one page, opened by a terminal, for the one
+ * person who runs the home — so every byte of it in the entry chunk would be
+ * paid for by every visitor who will never see it. `LazyGate`'s argument
+ * exactly, and the entry chunk is near `scripts/bundle-ceiling.mjs`'s bound.
+ *
+ * It is rendered from `Doorway` rather than from `<Routes>` (see `faceFor`),
+ * so it carries its own `Suspense`: the router's boundary is inside the
+ * branch this never reaches.
+ */
+const OperatorProvePage = lazy(() =>
+  import("./pages/OperatorProvePage.tsx").then((m) => ({ default: m.OperatorProvePage })),
+);
 
 export function App({ arrival, signIn }: { arrival: Arrival; signIn: SignIn }) {
   // A tab holding a pass is not anybody yet, whatever localStorage says: the
@@ -55,7 +80,20 @@ export function App({ arrival, signIn }: { arrival: Arrival; signIn: SignIn }) {
   // silently replaced.
   const [redeeming, setRedeeming] = useState(arrival !== null);
   const [refused, setRefused] = useState<ArrivalRefused | null>(null);
-  const [actor, setActor] = useState<Actor | null>(readIdentity);
+  const [stored, setStored] = useState<Actor | null>(readIdentity);
+  /**
+   * **One "you", reconciled here and handed down** (14 Oct 2026): the header
+   * chip, the identity menu, your face in the pile and every other surface
+   * that says who you are read this actor, whose name is the registry's —
+   * see `useSelf`. Every identity answer arrives through `setActor`, and a
+   * claim's answer is noted in the registry first, so a rename that just
+   * landed is not overruled by the roster heard before it.
+   */
+  const setActor = useCallback((next: Actor | null) => {
+    if (next) noteClaimed(next);
+    setStored(next);
+  }, []);
+  const actor = useSelf(stored, setStored);
   /**
    * What a tab that came back from an inbox proved — and who it may now be.
    *
@@ -105,7 +143,7 @@ export function App({ arrival, signIn }: { arrival: Arrival; signIn: SignIn }) {
     return () => {
       live = false;
     };
-  }, [arrival]);
+  }, [arrival, setActor]);
 
   useEffect(() => {
     if (!signIn) return;
@@ -124,9 +162,12 @@ export function App({ arrival, signIn }: { arrival: Arrival; signIn: SignIn }) {
     <BrowserRouter>
       <Doorway actor={actor} onIdentity={setActor}>
         {(who) => (
+          <>
+          <Suspense fallback={null}><Navigation key={who.id} actor={who} /></Suspense>
           <Suspense fallback={null}>
           <Routes>
             <Route path="/" element={<CanvasListPage actor={who} onIdentity={setActor} />} />
+            <Route path={PUBLIC_PATH} element={<PublicPage />} />
             {/* The canvas's address, built from core's one spelling of it — see
                 `address.ts` for why that is worth a module. */}
             <Route path={CANVAS_ROUTE} element={<CanvasPage actor={who} onIdentity={setActor} />} />
@@ -144,6 +185,9 @@ export function App({ arrival, signIn }: { arrival: Arrival; signIn: SignIn }) {
                 flipping to them. */}
             <Route path={WORKBENCH_ROUTE} element={<CanvasPage actor={who} onIdentity={setActor} />} />
             <Route path={WORKBENCH_ITEM_ROUTE} element={<CanvasPage actor={who} onIdentity={setActor} />} />
+            {/* A motion recorded to an MP4 — its own page, not a cover over
+                the canvas: it reads the canvas and draws nothing of it. */}
+            <Route path={MOTION_RENDER_ROUTE} element={<MotionRenderPage />} />
             {/* The catch-all, and it is required rather than tidy. The daemon's
                 SPA fallback answers every path with the app shell and a 200, so
                 without a route here a mistyped or doc-shaped share link renders
@@ -155,6 +199,7 @@ export function App({ arrival, signIn }: { arrival: Arrival; signIn: SignIn }) {
             <Route path="*" element={<NotHerePage />} />
           </Routes>
           </Suspense>
+          </>
         )}
       </Doorway>
       {/* Over whatever face you landed on, because a refused pass is about how
@@ -211,13 +256,41 @@ export function Doorway({
   children: (actor: Actor) => ReactNode;
 }) {
   const { pathname } = useLocation();
-  const face = faceFor(pathname, actor);
+  const sso = isSsoHome();
+  const face = faceFor(pathname, actor, sso);
   // Before the actor branch, exactly as the rule orders them: the terms are the
   // same document for a stranger, for somebody with a badge, and for an agent
   // (phase 13.7).
   if (face === "terms") return <TermsPage />;
+  if (face === "public") return <Suspense fallback={<div className="page-note">Loading public canvases…</div>}><PublicPage /></Suspense>;
+  /**
+   * Beside the terms and above the actor branch, for the same reason: a
+   * terminal opens this in whatever browser the person uses, and asking them
+   * to pick a name before showing them what they are being asked to authorise
+   * is both the wrong question and the wrong order.
+   */
+  if (face === "operator-prove") {
+    return (
+      <Suspense fallback={null}>
+        <OperatorProvePage />
+      </Suspense>
+    );
+  }
   if (face === "here" && actor) return <>{children(actor)}</>;
   if (face === "front-page") return <FrontPage onIdentity={onIdentity} />;
+  /**
+   * On an SSO home, a cold browser (`knownIdentities().length === 0`) already
+   * holds a proxy-attested badge and can auto-resume or auto-claim straight
+   * into the canvas list. A browser that deliberately stepped out ("Leave —
+   * enter as someone else") has a non-empty roster and meets the door directly
+   * so it is not forced back into the persona it just left.
+   */
+  const door =
+    sso && knownIdentities().length === 0 ? (
+      <SsoGate onIdentity={onIdentity} door={<IdentityDialog onDone={onIdentity} />} />
+    ) : (
+      <IdentityDialog onDone={onIdentity} />
+    );
   /**
    * A stranger at a canvas address may be a VIEWER (#88), and a viewer is not
    * asked who they are — there is nothing their name would attach to. The
@@ -231,11 +304,46 @@ export function Doorway({
       <ViewerGate
         canvasId={canvasish.params.canvasId}
         itemId={(canvasish.params as { itemId?: string }).itemId ?? null}
-        door={<IdentityDialog onDone={onIdentity} />}
+        door={door}
       />
     );
   }
-  return <IdentityDialog onDone={onIdentity} />;
+  return door;
+}
+
+/**
+ * **Auto-enter on an SSO home** — asks `GET /api/attest` for the badge's
+ * attested email and resumable personas, auto-resumes or auto-claims when
+ * unambiguous, and falls back to `IdentityDialog` when multiple personas exist
+ * or a name is taken.
+ */
+export function SsoGate({
+  onIdentity,
+  door,
+}: {
+  onIdentity: (actor: Actor) => void;
+  door: ReactNode;
+}) {
+  const [standing, setStanding] = useState<"asking" | "door">("asking");
+  useEffect(() => {
+    let live = true;
+    setStanding("asking");
+    attesterOffer()
+      .then((offer) => enterFromAttestOffer(offer))
+      .then((actor) => {
+        if (!live) return;
+        if (actor) onIdentity(actor);
+        else setStanding("door");
+      })
+      .catch(() => {
+        if (live) setStanding("door");
+      });
+    return () => {
+      live = false;
+    };
+  }, [onIdentity]);
+  if (standing === "asking") return <div className="page-note">Letting you in…</div>;
+  return <>{door}</>;
 }
 
 /**
@@ -249,7 +357,7 @@ export function Doorway({
  * words). The read is not wasted work: it is the same request that admits the
  * badge at the door, one flight earlier.
  */
-function ViewerGate({
+export function ViewerGate({
   canvasId,
   itemId,
   door,
@@ -258,7 +366,7 @@ function ViewerGate({
   itemId: string | null;
   door: ReactNode;
 }) {
-  const [standing, setStanding] = useState<"asking" | "view" | "door">("asking");
+  const [standing, setStanding] = useState<"asking" | "view" | "door" | "upgrade-required">("asking");
   useEffect(() => {
     let live = true;
     setStanding("asking");
@@ -268,7 +376,7 @@ function ViewerGate({
     // 1), and the page picks the read-only surface once they are through.
     getSnapshot(canvasId)
       .then((s) => live && setStanding(s.capability === "view" ? "view" : "door"))
-      .catch(() => live && setStanding("door"));
+      .catch((err) => live && setStanding(err instanceof ApiError && err.code === CANVAS_GROUPS_REQUIRED ? "upgrade-required" : "door"));
     return () => {
       live = false;
     };
@@ -276,6 +384,7 @@ function ViewerGate({
   // The door's own sentence for the beat the answer takes, so a viewer never
   // sees the name prompt flash before the presentation replaces it.
   if (standing === "asking") return <div className="page-note">Letting you in…</div>;
+  if (standing === "upgrade-required") return <div className="page-note page-note-stack"><div>This canvas needs an updated isocan app.</div><div className="page-note-hint">Reload to continue. Any queued changes remain saved in this browser for review.</div><button className="btn" onClick={() => window.location.reload()}>Reload app</button></div>;
   if (standing === "view") return <Viewer canvasId={canvasId} itemId={itemId} />;
   return <>{door}</>;
 }
