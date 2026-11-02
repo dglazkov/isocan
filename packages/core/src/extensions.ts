@@ -488,7 +488,7 @@ export function panelCapabilities(panel: PanelExtension): string[] {
   return [
     `shows ${panel.bytes.filename} (${panel.bytes.itemId}): its bytes are an item on this canvas, and the manifest can name no other source`,
     `whoever may edit ${panel.src} decides what this panel shows, without touching this manifest — and its versions are the panel's history, so a bad one rolls back`,
-    "renders as a sandboxed page served from the content origin — never isocan's own origin, so it holds no badge and cannot act as you",
+    "renders as an opaque-origin sandboxed page served from the content origin — never isocan's own origin, so it holds no badge and cannot act as you; panel localStorage is unavailable",
     `paints in the ${panel.side} dock and nowhere else: not over the canvas, the top bar or another panel`,
     "cannot read what is selected yet: the selection message is not built in this phase",
     "asks through a narrow versioned postMessage door as its own actor: may send operations in the vocabulary that its grant on this canvas permits, and receives only the operation result",

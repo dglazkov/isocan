@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useRef } from "react";
 import { panelActorId } from "@isocan/core";
 import { useUiStore } from "../stores/uiStore.ts";
 import { extensionPanelKey, openPanel } from "../lib/panels.ts";
@@ -41,6 +41,7 @@ export function ExtensionPanelSurface({
 }) {
   const panelWidth = useUiStore((s) => s.panelWidth);
   const frameRef = useRef<HTMLIFrameElement | null>(null);
+  const detachBridge = useRef<(() => void) | null>(null);
   const frame = active.panel
     ? panelFrame(origin, canvasId, active.panel.bytes.blobHash)
     : null;
@@ -51,13 +52,18 @@ export function ExtensionPanelSurface({
       : null;
 
   const originBase = origin?.base ?? null;
-  useEffect(() => {
-    if (unavailable || !originBase) return;
-    return bridgePanelFrame({
+  // Remount instead of navigating a reused WindowProxy when its authority or
+  // bytes change. The ref callback retires the old bridge in the same commit.
+  const frameKey = JSON.stringify([canvasId, active.itemId, frame?.src]);
+  const bindFrame = useCallback((element: HTMLIFrameElement | null) => {
+    detachBridge.current?.();
+    detachBridge.current = null;
+    frameRef.current = element;
+    if (!element || unavailable || !originBase) return;
+    detachBridge.current = bridgePanelFrame({
       canvasId,
       itemId: active.itemId,
-      contentOrigin: originBase,
-      frameWindow: () => frameRef.current?.contentWindow ?? null,
+      frameWindow: () => frameRef.current === element ? element.contentWindow : null,
     });
   }, [canvasId, active.itemId, unavailable, originBase]);
 
@@ -112,7 +118,8 @@ export function ExtensionPanelSurface({
           </div>
         ) : (
           <iframe
-            ref={frameRef}
+            key={frameKey}
+            ref={bindFrame}
             className="extension-panel-frame"
             title={active.title}
             src={frame!.src}

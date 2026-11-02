@@ -21,8 +21,8 @@ import { ApiError, postOp } from "./api.ts";
  * stamped with the panel's actor (`ext_…`) from phase 5 and sent through the
  * same `/api/ops` door a person's op goes through.
  *
- * - Messages from any origin other than the content origin (`contentOrigin`)
- *   are ignored.
+ * - Only the bound live panel window with its sandbox's opaque (`null`)
+ *   origin is accepted. Its bytes still load from the content origin.
  * - Messages carrying an unknown protocol version are refused (`bad-version`)
  *   rather than guessed at.
  * - Messages naming an operation outside the vocabulary are refused
@@ -34,10 +34,8 @@ import { ApiError, postOp } from "./api.ts";
 interface PanelBridgeOptions {
   canvasId: string;
   itemId: string;
-  /** The content origin (`origin.base`), e.g. `http://127.0.0.1:4442`. */
-  contentOrigin: string;
-  /** Optional window/source check so only this panel's `<iframe>` is answered. */
-  frameWindow?: () => MessageEventSource | null;
+  /** Required live-window check; a null or replaced frame has no authority. */
+  frameWindow: () => Window | null;
   /** Window to listen on (defaults to `window`). */
   win?: Pick<Window, "addEventListener" | "removeEventListener">;
   /** Optional custom `fetch` implementation for testing. */
@@ -105,6 +103,7 @@ async function submitPanelOp(
   op: Operation,
   requestId?: string,
   fetchImpl: typeof fetch = fetch,
+  isLive: () => boolean = () => true,
 ): Promise<PanelOpResult> {
   const checked = readPanelOpMessage({
     type: "isocan:panel-op",
@@ -123,6 +122,9 @@ async function submitPanelOp(
     );
   }
   const auth = await resolvePanelCredential(canvasId, itemId, fetchImpl);
+  // Enrollment may finish after the panel was closed or replaced. Never turn
+  // that late result into a new write under the previous frame's authority.
+  if (!isLive()) return panelOpResult({ ok: false, code: "detached", error: "panel was detached" }, requestId);
   if (!auth.ok) {
     return panelOpResult({ ok: false, code: auth.code, error: auth.error }, requestId);
   }
@@ -200,37 +202,34 @@ export function clearPanelBridgeCredentials(): void {
 
 /**
  * Attach the narrow `postMessage` bridge for a hosted panel `<iframe>` on the
- * content origin. Returns the teardown function.
+ * content origin under an opaque sandbox. Returns the teardown function.
  */
 export function bridgePanelFrame(options: PanelBridgeOptions): () => void {
   const {
     canvasId,
     itemId,
-    contentOrigin,
     frameWindow,
     win = typeof window !== "undefined" ? window : undefined,
     fetchImpl = fetch,
     onReply,
   } = options;
-  if (!win || !contentOrigin || contentOrigin === "null") return () => {};
+  const target = frameWindow?.();
+  if (!win || !target) return () => {};
+  let attached = true;
+  const isLive = () => attached && frameWindow() === target;
 
   const onMessage = (e: MessageEvent) => {
-    // 1. Only messages from the content origin are ever read or answered.
-    if (e.origin !== contentOrigin) return;
-    // 2. When a specific panel iframe window is bound, ignore other frames.
-    if (frameWindow) {
-      const expected = frameWindow();
-      if (expected === null || e.source !== expected) return;
-    }
+    // Opaque origins all serialize to "null"; that string alone grants nothing.
+    if (!isLive() || e.origin !== "null" || e.source !== target) return;
     const parsed = readPanelOpMessage(e.data);
     if (parsed === null) return;
 
     const replyToFrame = (result: PanelOpResult) => {
-      onReply?.(result, contentOrigin);
-      const target = e.source ?? frameWindow?.() ?? null;
-      if (target && "postMessage" in target && typeof target.postMessage === "function") {
-        (target as Window).postMessage(result, contentOrigin);
-      }
+      if (!isLive()) return;
+      // Opaque destinations require '*'. It is sent only to the captured,
+      // still-live window, never to a broadcast or a replacement frame.
+      target.postMessage(result, "*");
+      onReply?.(result, "*");
     };
 
     if (!parsed.ok) {
@@ -240,7 +239,7 @@ export function bridgePanelFrame(options: PanelBridgeOptions): () => void {
       return;
     }
 
-    void submitPanelOp(canvasId, itemId, parsed.op, parsed.requestId, fetchImpl).then(
+    void submitPanelOp(canvasId, itemId, parsed.op, parsed.requestId, fetchImpl, isLive).then(
       replyToFrame,
       (err: unknown) => {
         const message = err instanceof Error ? err.message : "panel operation failed";
@@ -251,6 +250,7 @@ export function bridgePanelFrame(options: PanelBridgeOptions): () => void {
 
   win.addEventListener("message", onMessage as EventListener);
   return () => {
+    attached = false;
     win.removeEventListener("message", onMessage as EventListener);
   };
 }

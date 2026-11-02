@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-06
 see: extensions
-note: stages 1 and 2 built 6 Sep; phase 3 closed 18 Sep; phase 4 closed 14 Oct; phases 5 and 6 closed 15 Oct — a declarative tool as an item with `role=tool`, `does` limited to a slash command that exists, a closed icon set, reserved labels, and the capability list printed before `--yes`; `isocan tool list/add` and the rail render from ONE reader in core. The walk was re-cut 18 Sep and now lives in phases.md: the demand went to the other end of the list, so the hosted tier (stage 5, whose content-origin gate cleared 6 Sep) comes first as phases 3, 4 and 6, the extension actor (stage 4) follows as phase 5 because that is where it first has a subject, and declarative panels (stage 3) go last as phase 7, waiting on evidence rather than on work. Phase 3 closed 18 Sep: `role=panel` is an item whose manifest names a title, a slot and a `src` pointing at a page item on the same canvas, read by `readPanelExtension` beside the tool's reader and refused in prose naming the field; `isocan panel list/add` prints derived capabilities and adds nothing without `--yes`. Phase 4 closed 14 Oct: the left dock renders a panel as a sandboxed frame on `contentBase()`, wearing its own extension colour (`EXTENSION_COLORS`) and stating when its blob is missing. Phase 5 closed 15 Oct: each panel gets its own actor (`ext_…`) and `panel:<itemId>` grant on the identity desk, attributing its ops (`isocan activity <extension>`), isolating per-actor undo, expelling its badge on grant revocation through the existing door test, and carrying it in presence. Phase 6 closed 15 Oct: a hosted panel talks to isocan over a narrow versioned `postMessage` bridge (`isocan:panel-op`, `version: 1`) from the content origin only, stamping operations with the panel's actor, enforcing the panel's grant through `/api/ops`, refusing unknown ops and versions, and returning only a frozen `PanelOpResult`. Phase 7 (declarative panels) waits on evidence
+note: stages 1 and 2 built 6 Sep; phase 3 closed 18 Sep; phase 4 closed 14 Oct; phases 5 and 6 closed 15 Oct — a declarative tool as an item with `role=tool`, `does` limited to a slash command that exists, a closed icon set, reserved labels, and the capability list printed before `--yes`; `isocan tool list/add` and the rail render from ONE reader in core. The walk was re-cut 18 Sep and now lives in phases.md: the demand went to the other end of the list, so the hosted tier (stage 5, whose content-origin gate cleared 6 Sep) comes first as phases 3, 4 and 6, the extension actor (stage 4) follows as phase 5 because that is where it first has a subject, and declarative panels (stage 3) go last as phase 7, waiting on evidence rather than on work. Phase 3 closed 18 Sep: `role=panel` is an item whose manifest names a title, a slot and a `src` pointing at a page item on the same canvas, read by `readPanelExtension` beside the tool's reader and refused in prose naming the field; `isocan panel list/add` prints derived capabilities and adds nothing without `--yes`. Phase 4 closed 14 Oct: the left dock renders a panel as a sandboxed frame on `contentBase()`, wearing its own extension colour (`EXTENSION_COLORS`) and stating when its blob is missing. Phase 5 closed 15 Oct: each panel gets its own actor (`ext_…`) and `panel:<itemId>` grant on the identity desk, attributing its ops (`isocan activity <extension>`), isolating per-actor undo, expelling its badge on grant revocation through the existing door test, and carrying it in presence. Phase 6 closed 15 Oct: a hosted panel talks to isocan over a narrow versioned `postMessage` bridge (`isocan:panel-op`, `version: 1`) only from its bound opaque-origin frame, stamping operations with the panel's actor, enforcing the panel's grant through `/api/ops`, refusing unknown ops and versions, and returning only a frozen `PanelOpResult`. Phase 7 (declarative panels) waits on evidence
 ---
 # Extending the canvas from inside it
 
@@ -100,6 +100,24 @@ cookie and act as the user.
 
 The panel talks to isocan over `postMessage`, and the API it gets is narrow,
 versioned, and made of operations — never a handle to internal state.
+
+**Panel isolation (2 November 2026):** the URL still points at the content
+origin, but the panel iframe grants only `allow-scripts`, so its document has a
+unique opaque origin. An ordinary HTML item must not be able to inject into a
+privileged panel and borrow its grant. Ordinary item frames retain their existing
+content-origin storage; panel `localStorage` and other origin storage are unavailable.
+Restoring persistent panel origin storage needs a separate design for dedicated
+per-panel origins; it is not safe to restore `allow-same-origin` on the shared one.
+
+The version-1 wire shape is unchanged: the panel sends `isocan:panel-op` with
+`version: 1`, optional `requestId`, and `op` to its parent. The parent accepts only
+`event.origin === "null"` **and** the exact live iframe window captured at bridge
+creation. An unrelated opaque frame has no authority. Only the sanitized
+`isocan:panel-op-result` goes back to that captured window, using target origin
+`*` because opaque origins cannot be named. There is no broadcast. Closing or
+replacing the frame retires its bridge; canvas, panel and source URL changes
+create a new iframe. A pending enrollment cannot dispatch a write after retirement,
+and a pending operation result cannot reach the retired or replacement frame.
 
 ## An extension is an actor
 

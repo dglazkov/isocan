@@ -151,8 +151,9 @@ the top bar or another panel, and may not use the identity colours of people on
 the canvas, because that is somebody's face. The app's served CSP gains
 `frame-src <content-origin>`; the content origin's own `CONTENT_CSP` is
 unchanged, `connect-src 'none'` included, so a panel in this phase can render
-and remember and cannot talk. A canvas whose panel blob is gone says the panel
-is unavailable rather than silently dropping it.
+and cannot talk. The phase-6 isolation repair below deliberately removes panel
+origin storage; ordinary item storage is unchanged. A canvas whose panel blob is
+gone says the panel is unavailable rather than silently dropping it.
 
 **Proof:** a panel item renders a frame whose `src` origin is `contentBase()`
 and never the app's, asserted in `packages/web/test/`; falsified by pointing the
@@ -230,8 +231,10 @@ permit is refused at the door, the same refusal a person with that grant would
 get. The protocol carries its version and a message from an unknown version is
 refused rather than guessed at. A test forbids the bridge handing the frame any
 object other than the operation result — no store, no client, no badge.
-Messages from any origin but the content origin are ignored. `npm test` and
-`npm run typecheck` whole.
+Messages from nonopaque origins or any window other than the captured live panel
+are ignored. The panel URL remains on the content origin, but its sandbox grants
+only `allow-scripts`; ordinary content-origin items cannot access its document.
+`npm test` and `npm run typecheck` whole.
 
 **Trajectory:**
 
@@ -247,6 +250,16 @@ Messages from any origin but the content origin are ignored. `npm test` and
   `/api/ops` (so the existing door test and capability check enforce the panel's
   grant identically to a person's), and reply to the frame with only the frozen
   `PanelOpResult`.
+
+- **2026-11-02 — Isolation repair:** a real-browser negative control showed an
+  ordinary content-origin sibling injecting into the panel document and causing
+  an operation under its grant. Panel frames now have opaque origins; the bridge
+  requires their exact live source, retires on replacement, and replies only to
+  that captured window. Panel localStorage is deliberately unavailable pending
+  dedicated per-panel origins; ordinary HTML item storage remains unchanged.
+  `node --import tsx scripts/panel-isolation-proof.mjs` checks sibling injection,
+  legitimate sanitized replies, ordinary storage, and panel/blob/canvas switches.
+  See [the measured proof and limitations](isolation-evidence.md).
 
 ## Phase 7 — Declarative panels
 

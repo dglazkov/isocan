@@ -18,7 +18,7 @@ import {
   type PanelOpResult,
 } from "@isocan/core";
 import { ExtensionPanelSurface } from "../src/components/ExtensionPanel.tsx";
-import { panelFrame, type ContentOrigin } from "../src/lib/frame.ts";
+import { itemFrame, panelFrame, type ContentOrigin } from "../src/lib/frame.ts";
 import {
   bridgePanelFrame,
   clearPanelBridgeCredentials,
@@ -104,7 +104,8 @@ describe("extensions phase 4: the panel frame on the content origin", () => {
     expect(html).toContain(
       'src="http://127.0.0.1:4442/api/projects/prj_acme/blobs/hash_itm_page"',
     );
-    expect(html).toContain('sandbox="allow-scripts allow-same-origin"');
+    expect(html).toContain('sandbox="allow-scripts"');
+    expect(itemFrame(contentOrigin, "prj_acme", "hash_itm_page")?.sandbox).toBe("allow-scripts allow-same-origin");
 
     // Never falls back to the app origin when contentBase() is null.
     expect(panelFrame(null, "prj_acme", "hash_itm_page")).toBeNull();
@@ -239,6 +240,49 @@ describe("extensions phase 6: the narrow door (postMessage bridge)", () => {
     };
   }
 
+  it.each(["detach", "replace"])("does not dispatch after delayed enrollment when the frame is %s", async (change) => {
+    clearPanelBridgeCredentials();
+    const win = makeMockWindow();
+    const replies: unknown[] = [];
+    const frame = { postMessage: (value: unknown) => replies.push(value) } as unknown as Window;
+    let current: Window | null = frame;
+    let enrolled!: (response: Response) => void;
+    const calls: string[] = [];
+    const cleanup = bridgePanelFrame({ canvasId: "prj_late", itemId: "itm_panel", win,
+      frameWindow: () => current, fetchImpl: async (input) => {
+        calls.push(String(input));
+        return new Promise<Response>((resolve) => { enrolled = resolve; });
+      } });
+    win.dispatch({ origin: "null", source: frame, data: { type: PANEL_OP_MESSAGE_TYPE, version: 1,
+      op: { type: "item.move", itemId: "itm_page", x: 1, y: 2 } } });
+    if (change === "detach") cleanup();
+    else current = { postMessage: () => { throw new Error("replacement received stale reply"); } } as unknown as Window;
+    enrolled(new Response(JSON.stringify({ token: "synthetic", actor: { id: "ext_panel", name: "Acme" } })));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(calls).toEqual([panelActorRoute("prj_late", "itm_panel")]);
+    expect(replies).toEqual([]);
+    cleanup();
+  });
+
+  it("drops a delayed operation reply after teardown", async () => {
+    clearPanelBridgeCredentials();
+    const win = makeMockWindow(), replies: unknown[] = [];
+    const frame = { postMessage: (value: unknown) => replies.push(value) } as unknown as Window;
+    let complete!: (response: Response) => void;
+    const cleanup = bridgePanelFrame({ canvasId: "prj_response", itemId: "itm_panel", win,
+      frameWindow: () => frame, fetchImpl: async (input) => {
+        if (String(input).endsWith("/actor")) return new Response(JSON.stringify({ token: "synthetic", actor: { id: "ext_panel", name: "Acme" } }));
+        return new Promise<Response>((resolve) => { complete = resolve; });
+      } });
+    win.dispatch({ origin: "null", source: frame, data: { type: PANEL_OP_MESSAGE_TYPE, version: 1,
+      op: { type: "item.move", itemId: "itm_page", x: 1, y: 2 } } });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    cleanup();
+    complete(new Response(JSON.stringify({ seq: 1, envelope: { id: "op_late" } })));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(replies).toEqual([]);
+  });
+
   it("requires a live bound frame and its exact message source", async () => {
     clearPanelBridgeCredentials();
     const win = makeMockWindow();
@@ -249,7 +293,6 @@ describe("extensions phase 6: the narrow door (postMessage bridge)", () => {
     const cleanup = bridgePanelFrame({
       canvasId: "prj_acme",
       itemId: "itm_panel",
-      contentOrigin: "https://content.example",
       frameWindow: () => currentFrame,
       win,
       fetchImpl: async (input) => {
@@ -263,17 +306,17 @@ describe("extensions phase 6: the narrow door (postMessage bridge)", () => {
       version: PANEL_BRIDGE_VERSION,
       op: { type: "item.move", itemId: "itm_page", x: 10, y: 20 },
     };
-    win.dispatch({ origin: "https://content.example", source: null, data });
-    win.dispatch({ origin: "https://content.example", source: {} as Window, data });
+    win.dispatch({ origin: "null", source: null, data });
+    win.dispatch({ origin: "null", source: {} as Window, data });
     currentFrame = null;
-    win.dispatch({ origin: "https://content.example", source: frame, data });
+    win.dispatch({ origin: "null", source: frame, data });
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(requests).toEqual([]);
     expect(replies).toEqual([]);
     cleanup();
   });
 
-  it("ignores messages from any origin other than the content origin", async () => {
+  it("ignores nonopaque messages even from the bound window", async () => {
     clearPanelBridgeCredentials();
     const win = makeMockWindow();
     const calls: string[] = [];
@@ -288,7 +331,6 @@ describe("extensions phase 6: the narrow door (postMessage bridge)", () => {
     const cleanup = bridgePanelFrame({
       canvasId: "prj_acme",
       itemId: "itm_panel",
-      contentOrigin: "http://127.0.0.1:4442",
       frameWindow: () => fakeFrame,
       win,
       fetchImpl: async (input) => {
@@ -301,7 +343,7 @@ describe("extensions phase 6: the narrow door (postMessage bridge)", () => {
     for (const badOrigin of [
       "http://127.0.0.1:4441",
       "https://evil.example",
-      "null",
+      "http://127.0.0.1:4442",
       "",
     ]) {
       win.dispatch({
@@ -337,7 +379,6 @@ describe("extensions phase 6: the narrow door (postMessage bridge)", () => {
     const cleanup = bridgePanelFrame({
       canvasId: "prj_acme",
       itemId: "itm_panel",
-      contentOrigin: "http://127.0.0.1:4442",
       frameWindow: () => fakeFrame,
       win,
       fetchImpl: async (input) => {
@@ -347,7 +388,7 @@ describe("extensions phase 6: the narrow door (postMessage bridge)", () => {
     });
 
     win.dispatch({
-      origin: "http://127.0.0.1:4442",
+      origin: "null",
       source: fakeFrame,
       data: {
         type: PANEL_OP_MESSAGE_TYPE,
@@ -359,7 +400,7 @@ describe("extensions phase 6: the narrow door (postMessage bridge)", () => {
 
     expect(calls).toEqual([]);
     expect(frameReplies).toHaveLength(1);
-    expect(frameReplies[0]!.targetOrigin).toBe("http://127.0.0.1:4442");
+    expect(frameReplies[0]!.targetOrigin).toBe("*");
     expect(frameReplies[0]!.msg).toEqual({
       type: PANEL_OP_RESULT_TYPE,
       version: PANEL_BRIDGE_VERSION,
@@ -386,7 +427,6 @@ describe("extensions phase 6: the narrow door (postMessage bridge)", () => {
     const cleanup = bridgePanelFrame({
       canvasId: "prj_acme",
       itemId: "itm_panel",
-      contentOrigin: "http://127.0.0.1:4442",
       frameWindow: () => fakeFrame,
       win,
       fetchImpl: async (input) => {
@@ -396,7 +436,7 @@ describe("extensions phase 6: the narrow door (postMessage bridge)", () => {
     });
 
     win.dispatch({
-      origin: "http://127.0.0.1:4442",
+      origin: "null",
       source: fakeFrame,
       data: {
         type: PANEL_OP_MESSAGE_TYPE,
@@ -434,7 +474,6 @@ describe("extensions phase 6: the narrow door (postMessage bridge)", () => {
     const cleanup = bridgePanelFrame({
       canvasId: "prj_acme",
       itemId: "itm_panel",
-      contentOrigin: "http://127.0.0.1:4442",
       frameWindow: () => fakeFrame,
       win,
       fetchImpl: async (input, init) => {
@@ -482,7 +521,7 @@ describe("extensions phase 6: the narrow door (postMessage bridge)", () => {
     });
 
     win.dispatch({
-      origin: "http://127.0.0.1:4442",
+      origin: "null",
       source: fakeFrame,
       data: {
         type: PANEL_OP_MESSAGE_TYPE,
