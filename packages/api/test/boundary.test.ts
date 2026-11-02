@@ -74,6 +74,9 @@ describe("the API/CLI seam", () => {
       path.join(repo, "scripts", "journeys.mjs"),
       path.join(repo, "scripts", "journey-personal.mjs"),
       path.join(repo, "scripts", "check-text-selection.mjs"),
+      // Owned loopback fixture server for the production panel browser proof;
+      // handles synthetic requests and never constructs a daemon client.
+      path.join(repo, "scripts", "panel-isolation-proof.mjs"),
     ]);
     const offenders: string[] = [];
     for (const file of scriptFiles(path.join(repo, "scripts"))) {

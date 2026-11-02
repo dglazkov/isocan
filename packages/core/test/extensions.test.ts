@@ -434,7 +434,7 @@ describe("what a panel may do, before you keep it", () => {
 
     // Operations outside the vocabulary are refused and told that proposing a
     // new op is proposing a product feature.
-    for (const unknownType of ["panel.deploy", "item.teleport", "custom.widget"]) {
+    for (const unknownType of ["panel.deploy", "item.teleport", "custom.widget", "toString", "constructor", "__proto__"]) {
       const read = readPanelOpMessage({
         type: PANEL_OP_MESSAGE_TYPE,
         version: PANEL_BRIDGE_VERSION,

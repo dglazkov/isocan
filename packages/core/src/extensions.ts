@@ -593,7 +593,7 @@ export function readPanelOpMessage(raw: unknown): PanelMessageRead | null {
       error: "a panel message must carry an `op` object with a `type` string",
     };
   }
-  if (opWords(type) === undefined) {
+  if (typeof opWords(type) !== "string") {
     return {
       ok: false,
       ...(requestId !== undefined ? { requestId } : {}),
