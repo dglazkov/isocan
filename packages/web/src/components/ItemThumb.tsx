@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import { canvasIdOf, itemKind, isTextItem, visualFaceOf, type Item } from "@isocan/core";
+import { activeFaceIdOf, automaticCanvasTarget, sourceOf, itemKind, isTextItem, visualFaceOf, type Item } from "@isocan/core";
 import { blobUrl } from "../lib/api.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useOnScreen } from "../lib/onscreen.ts";
@@ -59,8 +59,8 @@ export function ItemThumb({
   if (!item) return null;
   const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0];
   if (!current) return null;
-  const visual = visualFaceOf(current);
-  if (visual.mimeType.startsWith("image/")) {
+  const visual = visualFaceOf(current, activeFaceIdOf(item, current, useCanvasStore.getState().canvas));
+  if (visual.mimeType.startsWith("image/") && automaticCanvasTarget(item.properties.canvas ?? null, sourceOf(item)).kind === "none") {
     return (
       <img
         className="item-thumb"
@@ -87,6 +87,7 @@ export function ItemThumb({
       >
         <VersionContent
           canvasId={canvasId}
+          designVersion={current}
           blobHash={visual.blobHash}
           mimeType={visual.mimeType}
           filename={visual.filename ?? current.filename}
@@ -95,7 +96,8 @@ export function ItemThumb({
           // A canvas item's thumbnail is its miniature — the lens, the files
           // panel and the card peek draw a canvas the way the card does
           // (inception phase 3).
-          canvasOf={canvasIdOf(item)}
+          canvasOf={item.properties.canvas ?? null}
+          canvasSource={sourceOf(item)}
           size={{ width: item.width, height: item.height }}
         />
       </span>

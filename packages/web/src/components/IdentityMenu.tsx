@@ -1,5 +1,5 @@
-import { faceMark } from "@isocan/core";
-import { useRef, useState } from "react";
+import { attestedEmail, faceMark } from "@isocan/core";
+import { lazy, type ReactNode, Suspense, useEffect, useRef, useState } from "react";
 import type { Actor } from "@isocan/core";
 import {
   adoptIdentity,
@@ -8,23 +8,42 @@ import {
   renameIdentity,
   signOut,
 } from "../lib/identity.ts";
+import { isSsoHome } from "../lib/faces.ts";
 import { IDENTITY_COLORS, actorColorIn, loadActorColors, useActorColors } from "../lib/colors.ts";
 import { faceMarkClass, faceMarkStyle } from "../lib/face.ts";
 import { setActorColor, setActorMark } from "../lib/identitycolor.ts";
 import { invalidateOwnActors, useOwnActors } from "../lib/ownactors.ts";
 import { refreshActorMarks, useActorMarks } from "../lib/marks.ts";
 import { type ThemePref, useTheme } from "../lib/theme.ts";
-import { HIDEABLE, showAllChrome } from "../lib/hideable.ts";
+import { DISPLAY_SWITCHES, HIDEABLE, showAllChrome } from "../lib/hideable.ts";
+import { openUiDevtools } from "../lib/uitweaks.ts";
 import { EXPERIMENTS } from "../lib/experiments.ts";
+import type { TextPictures } from "@isocan/core/text";
+import { fetchTextPictures } from "../lib/api.ts";
+import { actorNameIn, useActorNames } from "../lib/names.ts";
 import { loadExperiments } from "../modules.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { EmojiPicker } from "./EmojiPicker.tsx";
 import { TerminalDialog } from "./TerminalDialog.tsx";
 import { CloudAgentDialog } from "./CloudAgentDialog.tsx";
 import { SurfacesDialog } from "./SurfacesDialog.tsx";
+import { YourBench } from "./YourBench.tsx";
 import { VerifyDialog } from "./VerifyDialog.tsx";
 import { canVerifyEmail, useAttestOffer } from "../lib/signin.ts";
 import { RefusalNote, type Refusal, refusalFor } from "./NameTaken.tsx";
+import { AgentsGlyph } from "./Glyphs.tsx";
+
+/** The settings area (keys phase 2) — a chunk of its own, fetched only when opened. */
+const KeysDialog = lazy(() => import("./KeysDialog.tsx").then((m) => ({ default: m.KeysDialog })));
+
+/**
+ * **Is this page served by this machine's own daemon?** A loopback hostname is
+ * the answer the key routes themselves ask (`key-routes.ts`: loopback Host and
+ * Origin), so the row is offered exactly where its routes can answer — the
+ * daemon on 4441 and the Vite dev page alike. Anywhere else, the honest
+ * sentence instead of a door that would 404.
+ */
+const servedByThisMachine = () => typeof location !== "undefined" && ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname);
 
 const THEME_OPTS: { value: ThemePref; label: string }[] = [
   { value: "light", label: "Light" },
@@ -108,7 +127,13 @@ export function IdentityMenu({
   const mine = marks[actor.id] ?? null;
   const [picking, setPicking] = useState(false);
   const markButton = useRef<HTMLButtonElement>(null);
-  const [name, setName] = useState(actor.name);
+  /** What everybody else sees you called: the registry, not the name this
+   * browser stored when it signed in. A rename made elsewhere (the terminal,
+   * another browser, a fold) left the stored one behind, and the field opened
+   * on a name the hover card above it no longer showed. */
+  const current = actorNameIn(useActorNames(), actor);
+  const [name, setName] = useState(current);
+  useEffect(() => setName(current), [current]);
   const [others, setOthers] = useState(() =>
     knownIdentities().filter((known) => known.id !== actor.id),
   );
@@ -121,27 +146,67 @@ export function IdentityMenu({
   const [terminal, setTerminal] = useState(false);
   const [cloud, setCloud] = useState(false);
   const [surfaces, setSurfaces] = useState(false);
+  const [bench, setBench] = useState(false);
   const [verify, setVerify] = useState(false);
+  const [keys, setKeys] = useState(false);
   // The same gate every control of this project stands behind: the refusal's
   // "Prove your address" is drawn only where the home can verify an email.
   const offer = useAttestOffer();
-  const canProve = offer !== null && canVerifyEmail(offer);
+  const sso = isSsoHome();
+  const ssoEmail = sso && offer ? attestedEmail(offer.attestations) : null;
+  const canProve = !sso && offer !== null && canVerifyEmail(offer);
   const themePref = useTheme((s) => s.pref);
   const setThemePref = useTheme((s) => s.setPref);
   const hiddenChrome = useUiStore((s) => s.hiddenChrome);
+  /* The glow's switch moved here from the `···` menu on 13 Sep: one category
+     had two homes. The store is unchanged — this reads and writes the same
+     `isocan.cursorGlow` the menu row did. */
+  const cursorGlow = useUiStore((s) => s.cursorGlow);
+  const setCursorGlow = useUiStore((s) => s.setCursorGlow);
+  const minimapOpen = useUiStore((s) => s.minimapOpen);
+  const setMinimapOpen = useUiStore((s) => s.setMinimapOpen);
+  /**
+   * Each switch's current answer and how to change it, by the id the registry
+   * uses. Written out rather than derived: two entries is not a mechanism, and
+   * `hideable.test.ts` fails on a switch the registry names and this map does
+   * not — so a row that would render as permanently off cannot ship.
+   */
+  const display: Record<string, { on: boolean; set: (on: boolean) => void }> = {
+    "cursor.glow": { on: cursorGlow, set: setCursorGlow },
+    "canvas.minimap": { on: minimapOpen, set: setMinimapOpen },
+  };
   const setChromeHidden = useUiStore((s) => s.setChromeHidden);
   const experiments = useUiStore((s) => s.experiments);
   const setExperiment = useUiStore((s) => s.setExperiment);
+  /**
+   * Whether the home's text model looks at pictures, asked only while a row
+   * that needs it could show (Semantic Zoom's "look at pictures", design
+   * §11): with a model that takes none the row says so and stays off. Null
+   * until the home answers; an unanswered ask reads as "not here".
+   */
+  const askPictures = EXPERIMENTS.some((entry) => entry.needsPictures && (!entry.under || experiments.includes(entry.under)));
+  const [pictures, setPictures] = useState<TextPictures | null>(null);
+  useEffect(() => {
+    if (!askPictures) return;
+    let live = true;
+    fetchTextPictures().then(
+      (answer) => live && setPictures(answer),
+      () => live && setPictures({ pictures: false, why: "This home did not say whether its text model takes pictures, so this stays off." }),
+    );
+    return () => {
+      live = false;
+    };
+  }, [askPictures]);
   const trimmed = name.trim();
   /**
    * **Is there a rename to do?** — the same question the submit handler
-   * already asks before it does anything (`!trimmed || trimmed === actor.name`
+   * already asks before it does anything (`!trimmed || trimmed === current`
    * closes without sending). The button was live for both answers, so it went
    * blue and pressable over a name nobody had touched, and pressing it just
    * shut the menu. A control that offers an act it will not perform teaches
    * people not to believe the next one.
    */
-  const renames = trimmed !== "" && trimmed !== actor.name;
+  const renames = trimmed !== "" && trimmed !== current;
 
   /** Send a claim; `name` is what the person asked to be called, for the
    * refusal to name. */
@@ -186,6 +251,14 @@ export function IdentityMenu({
     return <CloudAgentDialog actor={actor} canvasId={canvasId} onClose={onClose} />;
   }
   if (surfaces) return <SurfacesDialog onClose={onClose} />;
+  if (bench) return <YourBench actor={actor} onClose={onClose} />;
+  if (keys) {
+    return (
+      <Suspense fallback={null}>
+        <KeysDialog onClose={onClose} />
+      </Suspense>
+    );
+  }
   if (verify) {
     return <VerifyDialog actor={actor} onIdentity={onIdentity} onClose={onClose} />;
   }
@@ -243,23 +316,39 @@ export function IdentityMenu({
             onClose={() => setPicking(false)}
             onPick={(emoji) => {
               setPicking(false);
+              setError(null);
               /* Picking the one you wear takes it back — the same gesture
                  both ways, which is why the picker shows it pressed. */
-              void setActorMark(actor, emoji === mine ? null : emoji);
+              setActorMark(actor, emoji === mine ? null : emoji).catch((err: unknown) =>
+                setError(refusalFor(err, trimmed)),
+              );
             }}
           />
         )}
+        {/* **Not a credential, and the password managers have to be told.**
+            A single focused text field beside a submit button is the shape
+            they all look for, so 1Password parks its inline button on top of
+            the name you are typing. Each vendor reads its own opt-out
+            attribute and ignores the others, so all three are here; they cost
+            nothing and they fix it for everybody, where the extension's own
+            setting fixes it for one person on one machine. */}
         <input
           className="text-input"
           autoFocus
           aria-label="Your name"
           value={name}
           onChange={(e) => setName(e.target.value)}
+          autoComplete="off"
+          data-1p-ignore
+          data-lpignore="true"
+          data-bwignore="true"
+          data-form-type="other"
         />
         <button className="btn primary" type="submit" disabled={!renames}>
           Rename
         </button>
       </form>
+      {ssoEmail && <div className="share-link-note">{ssoEmail}</div>}
       {error && <RefusalNote refusal={error} onProve={canProve ? () => setVerify(true) : null} />}
       {others.length > 0 && (
         <>
@@ -284,16 +373,16 @@ export function IdentityMenu({
                 {claimed?.has(other.id) && folding !== other.id && (
                   <button
                     className="btn identity-fold"
-                    title={`Make ${other.name} the same person as ${actor.name}, everywhere`}
+                    title={`Make ${other.name} the same person as ${current}, everywhere`}
                     onClick={() => setFolding(other.id)}
                   >
-                    Fold into {actor.name}
+                    Fold into {current}
                   </button>
                 )}
                 {claimed?.has(other.id) && folding === other.id && (
                   <div className="identity-fold-arm">
                     <span>
-                      Everything written as {other.name} becomes {actor.name}&rsquo;s. This cannot
+                      Everything written as {other.name} becomes {current}&rsquo;s. This cannot
                       be undone.
                     </span>
                     <button
@@ -312,6 +401,100 @@ export function IdentityMenu({
             ))}
           </div>
         </>
+      )}
+      {/**
+        * **The doors, above the settings, and drawn as doors** (2 Oct 2026).
+        *
+        * They sat at the foot of the menu as centred grey buttons under the
+        * preferences, and Dion asked whether they should "go more at the top
+        * and be clear they are actions". A centred label is how this app draws
+        * a CHOICE (Theme's segments, the Fold button); a door that opens a
+        * panel is a row in a menu, and the app already has that row: the
+        * context menu's, left-aligned, lit on hover, a glyph in front and a `›`
+        * at the far edge for "this opens something". Every one of these
+        * replaces the menu with a panel, so every one carries the chevron.
+        *
+        * Each row says why you would open it in one quiet line under the label
+        * — not only Prove, which got its line first (multi-identity phase 4)
+        * for the reason that now holds for all five: a label says what the
+        * gesture is, and nobody hovers a menu row to find out why.
+        *
+        * Grouped by whose they are. **You** is this person's own standing —
+        * proving an address is what CREATES a second surface, so it comes
+        * before the list of surfaces (the order it had). **Your agents** is the
+        * bench first, because it needs no canvas and is always here, then the
+        * two doors that mint a pass for this canvas — your own machine before
+        * the cloud, the order a person meets them, and both behind the canvas
+        * guard because a pass names exactly one canvas.
+        */}
+      {!sso && (
+        <>
+          <div className="identity-menu-head">You</div>
+          <div className="identity-actions">
+            <Action
+              icon={<AddressMark />}
+              label="Prove your address…"
+              note="So your other machines can be you, and so somebody can invite you by email."
+              title="Prove an email address — so your other machines can be you, and so somebody can invite you by email"
+              onClick={() => setVerify(true)}
+            />
+            <Action
+              icon={<SurfacesMark />}
+              label="Your surfaces…"
+              note="Every browser and machine that is you; end one from here."
+              title="Every surface that carries your identity — and end one that should not"
+              onClick={() => setSurfaces(true)}
+            />
+          </div>
+        </>
+      )}
+      <div className="identity-menu-head">Your agents</div>
+      <div className="identity-actions">
+        <Action
+          icon={<AgentsGlyph size={14} />}
+          label="Your bench…"
+          note="Agents you have, and which ones follow you."
+          title="The agents you have, and whether anything could answer for one right now"
+          onClick={() => setBench(true)}
+        />
+        {canvasId && (
+          <Action
+            icon={<MachineMark />}
+            label="Bring your own agent…"
+            note="Hand an agent on your machine a pass to this canvas."
+            title="Run your own agent on this canvas, from your own machine"
+            onClick={() => setTerminal(true)}
+          />
+        )}
+        {canvasId && (
+          <Action
+            icon={<CloudMark />}
+            label="Run an agent in the cloud…"
+            note="Start one that runs without your machine."
+            title="Run an agent somewhere that doesn't close when your laptop does"
+            onClick={() => setCloud(true)}
+          />
+        )}
+      </div>
+      {/* **This machine** (keys phase 2): what belongs to the computer this
+          page is served from rather than to you — model keys first. Shown as
+          a door only where the daemon is this machine's; on a hosted home the
+          group is one sentence, because the keys there are the operator's. */}
+      <div className="identity-menu-head">This machine</div>
+      {servedByThisMachine() ? (
+        <div className="identity-actions">
+          <Action
+            icon={<KeyMark />}
+            label="Model keys…"
+            note="The keys this machine spends on the judge, words and voice."
+            title="Set, replace, test or remove this machine's model keys — never shown, only the last four"
+            onClick={() => setKeys(true)}
+          />
+        </div>
+      ) : (
+        <div className="share-link-note">
+          Your keys live on your machine; this home&rsquo;s keys are set by whoever runs it.
+        </div>
       )}
       <div className="identity-menu-head">Your color</div>
       <div className="identity-colors" role="group" aria-label="Your color">
@@ -362,9 +545,46 @@ export function IdentityMenu({
             </label>
           );
         })}
+        {/* The effects, in the same list and read the same way. They are a
+            separate registry because `HIDEABLE`'s rule is that a control may
+            be hidden only when what it does is reachable another way, and an
+            effect does nothing — see `DISPLAY_SWITCHES`. Below the controls
+            because a person looking for a control is looking for something
+            they lost, and a person looking for the glow is deciding about
+            taste. */}
+        {DISPLAY_SWITCHES.map((entry) => {
+          const shown = display[entry.id];
+          return (
+            <label key={entry.id} className="chrome-row">
+              <input
+                type="checkbox"
+                checked={shown?.on ?? false}
+                onChange={(e) => shown?.set(e.target.checked)}
+              />
+              <span className="chrome-name">{entry.name}</span>
+              <span className="chrome-where">{entry.what}</span>
+            </label>
+          );
+        })}
         {hiddenChrome.length > 0 && (
+          /* It said "Show everything", which reads as an action on the CANVAS
+             — reveal what is hidden out there, or select the lot. It acts on
+             this list and nothing else, so it says which list and how many:
+             "Turn all 3 back on" is a sentence about the boxes above it. */
           <button type="button" className="btn chrome-show-all" onClick={showAllChrome}>
-            Show everything
+            Turn all {hiddenChrome.length} back on
+          </button>
+        )}
+        {canvasId && (
+          <button
+            type="button"
+            className="btn chrome-show-all"
+            onClick={() => {
+              openUiDevtools("glass");
+              onClose();
+            }}
+          >
+            Customize UI (Devtools)…
           </button>
         )}
       </div>
@@ -385,102 +605,128 @@ export function IdentityMenu({
         <>
           <div className="identity-menu-head">Experiments</div>
           <div className="chrome-list" role="group" aria-label="Experiments you can turn on">
-            {EXPERIMENTS.map((entry) => (
-              <label key={entry.id} className="chrome-row">
-                <input
-                  type="checkbox"
-                  checked={experiments.includes(entry.id)}
-                  onChange={(e) => {
-                    setExperiment(entry.id, e.target.checked);
-                    void loadExperiments();
-                  }}
-                />
-                <span className="chrome-name">{entry.name}</span>
-                <span className="chrome-where">{entry.what}</span>
-              </label>
-            ))}
+            {EXPERIMENTS.filter((entry) => !entry.under || experiments.includes(entry.under)).map((entry) => {
+              // A row that needs pictures, at a home whose model takes none (or has not said yet), is off and says why.
+              const refused = entry.needsPictures && !pictures?.pictures;
+              return (
+                <label key={entry.id} className="chrome-row">
+                  <input
+                    type="checkbox"
+                    checked={!refused && experiments.includes(entry.id)}
+                    disabled={refused}
+                    onChange={(e) => {
+                      setExperiment(entry.id, e.target.checked);
+                      void loadExperiments();
+                    }}
+                  />
+                  <span className="chrome-name">{entry.name}</span>
+                  <span className="chrome-where">{entry.what}{refused && pictures?.why ? ` ${pictures.why}` : ""}</span>
+                </label>
+              );
+            })}
           </div>
         </>
       )}
-      {/* Escalation, one click from your own face — "the canvas teaches its
-          own escalation", so nobody is ever sent to documentation to find out
-          how to get their own agent working here. Named for what the person
-          came for (their agent on this canvas) and not for the surface they
-          pass through on the way (a terminal). */}
-      {canvasId && (
+      {!sso && (
         <button
-          className="btn identity-terminal"
-          title="Run your own agent on this canvas, from your own machine"
-          onClick={() => setTerminal(true)}
+          className="btn identity-leave"
+          onClick={() => {
+            signOut();
+            onIdentity(null);
+            onClose(); // don't leave the menu hanging open behind the door
+          }}
         >
-          Bring your own agent…
+          Leave — enter as someone else
         </button>
       )}
-      {/* Scene 6's sibling door, and it sits directly under Scene 5's because
-          the journey groups them by what they are: both are *extend my reach*,
-          minted from an admitted session. The order is the order a person
-          meets them — your own machine is the obvious answer, and the cloud is
-          what you reach for once you have watched a lid take your agent with
-          it. */}
-      {canvasId && (
-        <button
-          className="btn identity-terminal"
-          title="Run an agent somewhere that doesn't close when your laptop does"
-          onClick={() => setCloud(true)}
-        >
-          Run an agent in the cloud…
-        </button>
-      )}
-      {/* Proving an address — phase 9 stage 2, and it belongs on this menu for
-          the reason the whole menu exists: what this browser has proved is a
-          fact about how it is connected here. Above "Your surfaces…" because
-          it is the thing that CREATES a second surface of one person, and
-          reading a list of your surfaces makes more sense after you have one.
-
-          Shown unconditionally rather than only on a home that has borrowed an
-          attester: the panel behind it says, in one sentence, that this home
-          has borrowed nothing and that the link is how sharing works. Hiding
-          the entry would make a person hunt for a control that is deliberately
-          absent, which is a worse answer than being told.
-
-          The reason is written under the label, not only in the tooltip
-          (multi-identity phase 4). The label says what the gesture is and
-          nothing about why; a person on their first machine has no cause to
-          hover over it, and the why is what would make them do it before a
-          second machine needs it done. */}
-      <div className="identity-prove-entry">
-        <button
-          className="btn identity-terminal"
-          title="Prove an email address — so your other machines can be you, and so somebody can invite you by email"
-          onClick={() => setVerify(true)}
-        >
-          Prove your address…
-        </button>
-        <div className="share-link-note">
-          So your other machines can be you, and so somebody can invite you by email.
-        </div>
-      </div>
-      {/* Kill-a-badge, one click from your own face. It is above Leave on
-          purpose: both end something, and the one that ends a holder's
-          recognition everywhere should not sit under the one that only
-          forgets a persona in this browser. */}
-      <button
-        className="btn identity-terminal"
-        title="Every surface that carries your identity — and end one that should not"
-        onClick={() => setSurfaces(true)}
-      >
-        Your surfaces…
-      </button>
-      <button
-        className="btn identity-leave"
-        onClick={() => {
-          signOut();
-          onIdentity(null);
-          onClose(); // don't leave the menu hanging open behind the door
-        }}
-      >
-        Leave — enter as someone else
-      </button>
     </div>
   );
 }
+
+/**
+ * One door in the menu: a context-menu row (`.context-item`, so "the row you
+ * are pointing at" has one look in this app), a glyph, the label, the one line
+ * that says why, and the `›` that says it opens a panel.
+ */
+function Action({
+  icon,
+  label,
+  note,
+  title,
+  onClick,
+}: {
+  icon: ReactNode;
+  label: string;
+  note: string;
+  title: string;
+  onClick: () => void;
+}) {
+  return (
+    <button type="button" className="context-item identity-action" title={title} onClick={onClick}>
+      <span className="menu-icon">{icon}</span>
+      <span className="identity-action-words">
+        {label}
+        <span className="share-link-note">{note}</span>
+      </span>
+      <span className="menu-more" aria-hidden>
+        ›
+      </span>
+    </button>
+  );
+}
+
+/**
+ * **The marks for the doors**, drawn to `Glyphs.tsx`'s rules — 16 grid,
+ * `currentColor`, round joins, 1.5 stroke at 14 — and kept HERE rather than
+ * there on purpose: `Glyphs.tsx` is in the entry chunk (the toolbar wears it),
+ * so a mark only this lazy menu uses would be bytes every first visit pays
+ * for. The bench reuses the agents' spark, which is already paid for.
+ */
+function Mark({ children }: { children: ReactNode }) {
+  return (
+    <svg viewBox="0 0 16 16" width={14} height={14} aria-hidden fill="none" stroke="currentColor"
+      strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round">
+      {children}
+    </svg>
+  );
+}
+
+/** An envelope: the address you prove. */
+const AddressMark = () => (
+  <Mark>
+    <rect x="1.8" y="3.4" width="12.4" height="9.2" rx="1.4" />
+    <path d="M2.4 4.4 8 8.6l5.6-4.2" />
+  </Mark>
+);
+
+/** A screen and a phone: the surfaces that are you. */
+const SurfacesMark = () => (
+  <Mark>
+    <rect x="1.6" y="2.6" width="9" height="6.6" rx="1.2" />
+    <path d="M6.1 9.2v3.4M4.2 12.6h3.8" />
+    <rect x="11.6" y="5.8" width="3" height="7.6" rx="0.9" />
+  </Mark>
+);
+
+/** A prompt: an agent on your own machine. */
+const MachineMark = () => (
+  <Mark>
+    <rect x="1.8" y="2.6" width="12.4" height="10.8" rx="1.4" />
+    <path d="M4.6 6.2 6.8 8.2 4.6 10.2M8.6 10.2h2.8" />
+  </Mark>
+);
+
+/** A key: the model keys this machine holds. */
+const KeyMark = () => (
+  <Mark>
+    <circle cx="5.2" cy="10.8" r="2.8" />
+    <path d="M7.2 8.8 13.6 2.4M11.4 4.6l1.8 1.8M9.6 6.4l1.4 1.4" />
+  </Mark>
+);
+
+/** A cloud: an agent that is not on your machine. */
+const CloudMark = () => (
+  <Mark>
+    <path d="M4.5 12.4h7a2.8 2.8 0 0 0 .3-5.6 3.9 3.9 0 0 0-7.5-.7 3.2 3.2 0 0 0 .2 6.3z" />
+  </Mark>
+);

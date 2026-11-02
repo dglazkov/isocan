@@ -9,7 +9,8 @@
  * against this file, and impossible to check against a screenshot.
  */
 
-interface Shortcut {
+/** One key (or several for one act), what it does, where the help panel files it. */
+export interface Shortcut {
   /** As a person would say it, e.g. "⌘K" or "Shift-drag". Several when the
    * same act has more than one key. */
   keys: string[];
@@ -21,6 +22,7 @@ interface Shortcut {
   note?: string;
 }
 
+/** The help panel's columns. */
 type ShortcutGroup = "Tools" | "Moving around" | "Items" | "Talking" | "Ink";
 
 export const SHORTCUT_GROUPS: ShortcutGroup[] = [
@@ -39,6 +41,12 @@ export const SHORTCUTS: Shortcut[] = [
   { keys: ["P"], does: "Pen — draw on the canvas", group: "Tools", note: "HOLD P and everything you draw is ONE drawing, however long you take between strokes" },
   { keys: ["T"], does: "Text — click the canvas and type", group: "Tools", note: "double-click a text node to re-word it; ⌘Enter or click away to commit" },
   { keys: ["C"], does: "Comment — click anywhere to start a thread", group: "Tools" },
+  {
+    keys: ["⌥D"],
+    does: "Customize UI",
+    group: "Tools",
+    note: "Open per-piece Devtools to tweak glass opacity, control sizes, z-index, spacing, and colors live",
+  },
   { keys: ["⇧C"], does: "Comment on the selection", group: "Talking", note: "Anchored to the item, so the thread rides it when somebody moves it — and @-mentioning an agent there wakes it, the same as any other thread" },
   { keys: ["Esc"], does: "Back out: leave full screen, stop watching, close a popover, drop the tool, deselect", group: "Tools", note: "One layer per press, outermost first — and how you get back to Select" },
 
@@ -54,15 +62,29 @@ export const SHORTCUTS: Shortcut[] = [
     group: "Moving around",
     note: "The canvases you were on lately first, then the rest by activity; type a few letters to find one. Also ⌘K → Switch canvas…, or the ⌄ beside the canvas's name",
   },
+  {
+    keys: ["⌥A"],
+    does: "Include archived canvases",
+    group: "Moving around",
+    note: "In the switcher, when anything is archived. For this opening only: it starts at the canvases in the list every time, the way `canvas list` does without --with-archived",
+  },
   { keys: ["⌘←", "⌘→", "⌘↑", "⌘↓"], does: "Jump to the nearest item that way", group: "Moving around", note: "Only items clear of the edge you leave — something overlapping you is beside you, not above it. In full screen the next item opens full screen too: a row of screens is a slideshow" },
-  { keys: ["←", "→", "↑", "↓"], does: "Flip through the slides", group: "Moving around", note: "Full screen only. Items marked 🎬 (right-click → Make this a slide) are the deck, in reading order; with none marked, every item is. Page Up/Down flip too, so a presenter's clicker works" },
+  { keys: ["←", "→", "↑", "↓", "PgUp", "PgDn"], does: "Flip through the slides", group: "Moving around", note: "Full screen only. Items marked 🎬 (right-click → Make this a slide) are the deck, in reading order; with none marked, every item is. Page Up/Down flip too, so a presenter's clicker works" },
+  { keys: ["N"], does: "Speaker notes, in full screen", group: "Moving around" },
   { keys: ["Scroll", "Pinch"], does: "Pan and zoom", group: "Moving around" },
 
   // ---- Items ----
+  { keys: ["⌘G"], does: "Group selection", group: "Items", note: "Wrap selected roots in a named frame, preserving their arrangement" },
+  { keys: ["⌘⇧G"], does: "Ungroup", group: "Items", note: "Dissolve the selected group frames and preserve their members. On a member instead of a group, take it out of its group" },
+  { keys: ["⌘-click"], does: "Select one item inside a group", group: "Items", note: "Reaches past the group to the item under the pointer, at any depth, and steps into its group. Hold ⌘ to see which item before you press" },
+  { keys: ["⌘-drag"], does: "Drag one item in or out of its group", group: "Items", note: "It lands where the pointer is — in another group, or out on the canvas — and the label says which before you let go. A plain drag never takes an item out: its group grows to keep it" },
+  { keys: ["⇧F10"], does: "Open selection menu", group: "Items", note: "The Menu key also opens it; arrows move and Enter chooses" },
   { keys: ["←", "→", "↑", "↓"], does: "Nudge the selection", group: "Items" },
   { keys: ["⇧-drag"], does: "Snap harder to the guides", group: "Items", note: "Blue says aligned; purple says the gaps match" },
   { keys: ["F2", "Double-click the name"], does: "Rename", note: "The file follows the title", group: "Items" },
   { keys: ["S"], does: "Show the version stack", group: "Items", note: "On an item with more than one version. Escape or S again closes it" },
+  { keys: ["←", "→"], does: "Flip through a stack", group: "Items", note: "With a stacked group selected: which card is in front, for you only — nothing moves and nothing is saved. ↑ ↓ and ⇧-arrows still move the stack" },
+  { keys: ["⇧S"], does: "Stack or spread the group", group: "Items", note: "Stacks a spread group into a pile and spreads a stacked one. On a member, its group; with nothing selected, the group you are in. Several at once all go the same way" },
   { keys: ["⇧F"], does: "Fit the item to its content", group: "Items", note: "F fits the view to an item; ⇧F fits the item to what is in it. Several at once are settled so nothing overlaps" },
   { keys: ["⇧D"], does: "Download", group: "Items", note: "The item's current version, under the filename it carries — the one the version stack and a rename both follow" },
   { keys: ["Delete", "Backspace"], does: "Move the selection to the trash", group: "Items", note: "One undo for the whole selection" },
@@ -81,7 +103,8 @@ export const SHORTCUTS: Shortcut[] = [
   },
   { keys: ["Scroll a selected item"], does: "Its content moves, not the canvas", group: "Items", note: "Only the wheel is handed over, so a drag still moves it. A page in a frame has to be entered first" },
   { keys: ["Double-click an item"], does: "Step inside it: scroll it, click its links", group: "Items", note: "Inline, without leaving the canvas. Enter gives it the whole screen instead" },
-  { keys: ["Enter"], does: "Open the selection full screen", group: "Items", note: "The address bar holds the screen you are on, so it is a link you can send — and Back leaves it. Esc comes back to the canvas, where you left it" },
+  { keys: ["Enter"], does: "View the selection", group: "Items", note: "On a group, enter its scope instead. Otherwise opens View Focus (/i/:item); Esc returns to the canvas" },
+  { keys: ["E"], does: "Edit the selection", group: "Items", note: "Open Edit Focus for the selected item; Esc returns to the canvas" },
   { keys: ["⌥-click"], does: "Reach the item underneath", group: "Items" },
   { keys: ["Drag a box"], does: "Select several", group: "Items" },
 
@@ -101,13 +124,13 @@ export const SHORTCUTS: Shortcut[] = [
     keys: ["⌘J"],
     does: "Open or close the Chat",
     group: "Talking",
-    note: "Shut, the rail is a 48px strip: what you have not read, and which agents are working",
+    note: "Shut, the rail is a 48px strip: what you have not read, and which agents are working. Chat at the bottom: opens or minimizes its bar",
   },
   { keys: ["⏎"], does: "Send it", group: "Talking", note: "⇧⏎ makes a new line instead; the composer grows to hold it and drops back to one line once sent" },
   { keys: ["⌘⏎"], does: "Send the comment you are writing", group: "Talking", note: "Works from a reply box too, where ⏎ is a new line" },
   { keys: ["@"], does: "Address someone", note: "They wake for it", group: "Talking" },
   { keys: ["#"], does: "Point at an item", note: "It rides along as a card", group: "Talking" },
-  { keys: ["/"], does: "Ask for a known piece of work", group: "Talking", note: "At the start of a message only — that is the only place it counts" },
+  { keys: ["/"], does: "Signal on your cursor, or ask for a known piece of work", group: "Talking", note: "On the canvas, type a short message in place of your name for 20s (Esc clears); at the start of a message, opens slash commands" },
   { keys: ["?"], does: "This list", group: "Talking" },
 ];
 
@@ -130,24 +153,16 @@ export function shortcutsIn(group: ShortcutGroup): Shortcut[] {
  * what a menu offers has never had one — and it is the reason this returns
  * rather than throws.
  */
+/**
+ * The canonical key, in the glyphs the table is authored in.
+ *
+ * **Deliberately NOT translated here.** Rendering inside this function was
+ * tried and is wrong: half a dozen tests compare what one surface offers
+ * against what another prints, and they can only do that while both sides
+ * speak one vocabulary. Translate at the point of DISPLAY — `renderKeys` —
+ * so comparison stays canonical and only the pixels change.
+ */
 export function keyFor(does: string): string | null {
   const found = SHORTCUTS.find((shortcut) => shortcut.does === does);
   return found?.keys[0] ?? null;
-}
-
-/** The whole list as text, for a terminal or a comment: the same answer the
- * overlay gives, in the medium an agent can pass on. */
-export function shortcutsAsText(): string {
-  // The column is measured, not guessed: a fixed 24 ran "Double-click the
-  // name" straight into its description, and the next long key would have done
-  // it again. One width for the whole list so the descriptions line up.
-  const keysOf = (s: Shortcut) => s.keys.join(" / ");
-  const column = Math.max(...SHORTCUTS.map((s) => keysOf(s).length)) + 2;
-  return SHORTCUT_GROUPS.map((group) => {
-    const rows = shortcutsIn(group).map((s) => {
-      const head = `  ${keysOf(s).padEnd(column)}${s.does}`;
-      return s.note ? `${head}\n  ${"".padEnd(column)}${s.note}` : head;
-    });
-    return `${group}\n${rows.join("\n")}`;
-  }).join("\n\n");
 }

@@ -1,29 +1,30 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { lazy, Suspense, useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { FrameAnchor } from "../lib/frameanchor.ts";
 import type { Actor } from "@isocan/core";
-import { canvasPath, deckStep, itemPath, isFramedItem, noteFor } from "@isocan/core";
+import { deckTransitionOf, sourceOf, canvasPath, deckStep, itemPath, workbenchItemPath, nodeCapabilitiesFor, isFramedItem, noteFor, visualFaceOf, isDesignSystem, isTextItem } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
+import { useFocusStore } from "../stores/focusStore.ts";
 import { readBlobText } from "../lib/api.ts";
 import { Markdown } from "../lib/markdown.tsx";
+import { VersionContent } from "./ItemView.tsx";
 import { ArtifactStage } from "./ArtifactStage.tsx";
-import { KindIcon } from "./KindIcon.tsx";
-import { CanvasPresence, CanvasTitle, ShareButton} from "./CanvasCrumb.tsx";
-import { iconKindFor } from "../lib/kinds.ts";
+import { MorphStage } from "./MorphStage.tsx";
+import { FocusHeader } from "./FocusHeader.tsx";
+import { useCanEdit } from "../lib/capability.ts";
 import { findNextItem, type Direction } from "../lib/spatialnav.ts";
-import { flipTo } from "../lib/deckflip.ts";
+import { FLIP_NEXT, FLIP_PREV, REST_AFTER_MS, flipTo, framingOf } from "../lib/deckflip.ts";
 import { revealItem } from "../lib/zoomactions.ts";
 import { isTyping } from "../lib/keys.ts";
 
 const DIRECTIONS = new Set<string>(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
 
-/** Bare keys that flip the deck (#87). Forward and back each answer to three
- * keys because a presenter's clicker sends Page Up/Down, and because "left/
- * right (and up/down)" is how the ask was written: the deck is LINEAR, in
- * reading order, so both axes flip rather than up/down meaning something
- * spatial that would strand a presenter at the end of a row. */
-const FLIP_NEXT = new Set<string>(["ArrowRight", "ArrowDown", "PageDown"]);
-const FLIP_PREV = new Set<string>(["ArrowLeft", "ArrowUp", "PageUp"]);
+import { usePhone } from "../lib/phone.ts";
+import { useTouchNavigation } from "../lib/touchnavigation.ts";
+import "./presentation.css";
+import "./mobile-navigation.css";
+const PhonePresenting = lazy(() => import("./PhonePresenting.tsx").then((m) => ({ default: m.PhonePresenting })));
 
 /**
  * One item, filling the screen, live.
@@ -48,11 +49,6 @@ const FLIP_PREV = new Set<string>(["ArrowLeft", "ArrowUp", "PageUp"]);
  * work, its scroll is its own, and its scripts run. That is the point of
  * asking for it.
  */
-/** Still for this long and the chrome bows out. Long enough that reading a
- *  slide does not dismiss it by accident, short enough to be gone by the
- *  second slide of a talk. */
-const REST_AFTER_MS = 2500;
-
 export function FullScreen({
   canvasId,
   itemId,
@@ -65,7 +61,24 @@ export function FullScreen({
   onIdentity: (actor: Actor | null) => void;
 }) {
   const navigate = useNavigate();
+  // `?at=` on the route is the frame's fragment: `at=screen%3D…` opens a prototype at that screen
+  // (lib/frameanchor.ts). A query, not the route's own `#`: a fragment on a canvas address is a pass
+  // (lib/arrival.ts), and a reload would try to spend this one.
+  const anchor = new URLSearchParams(useLocation().search).get("at") ?? "";
+  const phone = usePhone();
+  const gestures = useTouchNavigation((direction) => {
+    const canvas = useCanvasStore.getState().canvas;
+    if (!canvas || !itemId) return;
+    const next = deckStep(canvas, itemId, direction === "ArrowRight" ? 1 : -1);
+    if (next) navigate(itemPath(canvasId, next.id));
+  }, undefined, true);
+
   const item = useCanvasStore((s) => s.canvas?.items[itemId] ?? null);
+  const canEdit = useCanEdit();
+
+  useEffect(() => {
+    useFocusStore.getState().syncItem(itemId);
+  }, [itemId]);
 
   const back = () => navigate(canvasPath(canvasId));
 
@@ -106,6 +119,25 @@ export function FullScreen({
         navigate(itemPath(canvasId, next.id));
         return;
       }
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "j") {
+        if (isTyping(e.target)) return;
+        const current = useCanvasStore.getState().canvas?.items[itemId];
+        if (!current || !canEdit || !nodeCapabilitiesFor(current).edit) return;
+        e.preventDefault();
+        e.stopPropagation();
+        useFocusStore.getState().setChatOpen(true);
+        navigate(workbenchItemPath(canvasId, itemId));
+        return;
+      }
+      if (!e.metaKey && !e.ctrlKey && !e.altKey && (e.key === "e" || e.key === "E")) {
+        if (isTyping(e.target)) return;
+        const current = useCanvasStore.getState().canvas?.items[itemId];
+        if (!current || !canEdit || !nodeCapabilitiesFor(current).edit) return;
+        e.preventDefault();
+        e.stopPropagation();
+        navigate(workbenchItemPath(canvasId, itemId));
+        return;
+      }
       // N: the speaker notes, under the slide, for the presenter (core/slides.ts).
       // A mode you flip and the browser remembers, so the second slide of a
       // talk does not ask again.
@@ -113,8 +145,10 @@ export function FullScreen({
         if (isTyping(e.target)) return;
         e.preventDefault();
         e.stopPropagation();
+        // A phone's notes are a sheet its presenting bar owns, and that bar
+        // answers N itself (PhonePresenting).
         const ui = useUiStore.getState();
-        ui.setPresenterNotes(!ui.presenterNotes);
+        if (!phone) ui.setPresenterNotes(!ui.presenterNotes);
         return;
       }
       // Bare arrows flip the deck (#87): the items marked as slides, in
@@ -137,16 +171,18 @@ export function FullScreen({
         if (!next) return; // the deck's edge: stay put rather than wrap
         useUiStore.getState().select(next.id);
         revealItem(next.id);
-        // The push, not a cut — the motion belongs to the deck flip alone;
-        // ⌘-arrows above are a spatial walk and stay instant. Except for a
-        // screen or a site: those are iframes, and an iframe photographs
-        // blank, so animating one is a white flash. See `flipTo`.
+        // The deck's transition, not a cut — the motion belongs to the deck
+        // flip alone; ⌘-arrows above are a spatial walk and stay instant.
+        // Which motion is the canvas's choice (`deckTransitionOf`). A screen
+        // or a site is an iframe, which photographs blank, so two frames are
+        // animated live and a frame beside anything else cuts. See `flipTo`.
         const here = canvas.items[itemId];
         flipTo(
           navigate,
           itemPath(canvasId, next.id),
           forward ? "next" : "prev",
-          isFramedItem(next) || (here !== undefined && isFramedItem(here)),
+          framingOf(here !== undefined && isFramedItem(here), isFramedItem(next)),
+          deckTransitionOf(useCanvasStore.getState().record ?? {}),
         );
       }
     }
@@ -161,7 +197,8 @@ export function FullScreen({
    * the stage as markdown. Nothing here writes; the note is edited where
    * every text node is.
    */
-  const presenterNotes = useUiStore((s) => s.presenterNotes);
+  const keptNotes = useUiStore((s) => s.presenterNotes);
+  const presenterNotes = !phone && keptNotes;
   const note = useCanvasStore((s) => (s.canvas ? noteFor(s.canvas, itemId) : null));
   const noteHash = note ? (note.versions.find((v) => v.id === note.currentVersionId) ?? note.versions[0])?.blobHash ?? null : null;
   const [noteText, setNoteText] = useState<string | null>(null);
@@ -237,45 +274,32 @@ export function FullScreen({
   // like (see ArtifactStage). The bar renders either way: the way back must
   // not depend on the item existing.
   return (
-    <div className={`fullscreen${resting ? " resting" : ""}`}>
-      <div className="fs-bar">
-        {/* The way back, and it says where back IS. An arrow alone would be a
-            guess; "Canvas" is the answer to "where am I". */}
-        <div className="floats fs-cluster">
-        <button className="fullscreen-back" onClick={back} title="Back to the canvas (Esc)">
-          ← Canvas
-        </button>
-        <CanvasTitle actor={actor} />
-        {item && (
-          <span className="fullscreen-title">
-            <KindIcon className="kind-icon" kind={iconKindFor(item)} />
-            <b>{item.title}</b>
-            <i>{item.versions.find((v) => v.id === item.currentVersionId)?.filename}</i>
-          </span>
-        )}
-        </div>
-        <span className="spacer" />
-        <div className="floats fs-cluster">
-        {/* No "Copy link" button: the address bar already holds the address of
-            this exact view — that IS what the route bought — and a button that
-            re-copies what the browser is already showing is chrome earning
-            nothing. What belongs here instead is what this view had been
-            throwing away: which canvas you are in, and who is in it. */}
-        <button
-          type="button"
-          className={`fullscreen-notes-toggle${presenterNotes ? " on" : ""}`}
-          onClick={() => useUiStore.getState().setPresenterNotes(!presenterNotes)}
-          title={presenterNotes ? "Hide the speaker notes (N)" : "Show the speaker notes under the slide (N)"}
-          aria-pressed={presenterNotes}
-        >
-          Notes
-        </button>
-        <ShareButton actor={actor} />
-          <CanvasPresence actor={actor} onIdentity={onIdentity} />
-        </div>
-      </div>
-      <div className={`fullscreen-stage${presenterNotes ? " with-notes" : ""}`}>
-        <ArtifactStage canvasId={canvasId} itemId={itemId} actor={actor} surface="fullscreen" />
+    <div data-presented-item={itemId ?? undefined} className={`fullscreen${phone ? " touch-presenting" : ""}${resting ? " resting" : ""}`}>
+      {phone ? <Suspense><PhonePresenting canvasId={canvasId} itemId={itemId} title={item?.title ?? "Presentation"} onExit={back} /></Suspense> : (
+        <FocusHeader
+          canvasId={canvasId}
+          item={item}
+          mode="view"
+          actor={actor}
+          onIdentity={onIdentity}
+          onBack={back}
+          presenterNotes={presenterNotes}
+          onToggleNotes={() => useUiStore.getState().setPresenterNotes(!presenterNotes)}
+        />
+      )}
+      {/* The morph's twins, when the deck is set to morph (MorphStage) —
+          BEFORE the stage, so they paint beneath the live slide until a
+          morph raises them. */}
+      {!phone && <MorphStage canvasId={canvasId} itemId={itemId} />}
+      <div className={`fullscreen-stage${presenterNotes ? " with-notes" : ""}`} {...gestures}>
+        <FrameAnchor.Provider value={anchor}>
+        {phone && item ? (() => {
+          const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0];
+          if (!current) return <p>This item has no preview.</p>;
+          const visual = visualFaceOf(current, item.properties.face);
+          return <VersionContent canvasOf={item.properties.canvas ?? null} canvasSource={sourceOf(item)} canvasId={canvasId} blobHash={visual.blobHash} mimeType={visual.mimeType} filename={visual.filename ?? current.filename} entered designSystem={isDesignSystem(item)} textNode={isTextItem(item)} reloadToken={0} />;
+        })() : <ArtifactStage canvasId={canvasId} itemId={itemId} actor={actor} surface="fullscreen" />}
+        </FrameAnchor.Provider>
       </div>
       {/* Under the stage, never over it: the audience's picture keeps its
           frame and the presenter reads below it. A slide with no note says

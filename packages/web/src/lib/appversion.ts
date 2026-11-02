@@ -45,3 +45,23 @@ export async function checkForUpdate(): Promise<boolean> {
     return false;
   }
 }
+
+/** What stands between an outdated tab and reloading itself unasked. */
+interface UnseenReload {
+  /** The tab is in the background: nobody is looking at it. */
+  hidden: boolean;
+  /** Changes the home has not confirmed yet. */
+  unsynced: number;
+  /** Ink or words that live only in this page until they commit. */
+  unfinished: boolean;
+}
+
+/**
+ * A tab nobody is looking at does not need a pill asking to be reloaded — it
+ * can just reload, and be the current app when it is next opened. Only when
+ * nothing is lost by it: a visible tab is somebody's to reload, and a stroke
+ * or a half-typed sentence is not ours to throw away.
+ */
+export function mayReloadUnseen({ hidden, unsynced, unfinished }: UnseenReload): boolean {
+  return hidden && unsynced === 0 && !unfinished;
+}

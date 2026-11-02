@@ -17,8 +17,8 @@ export async function makeBuild(
   options: { claims?: string; broken?: boolean } = {},
 ): Promise<string> {
   const root = paths.buildRoot(dir);
-  const bin = path.join(root, "packages", "cli", "bin");
-  await fs.mkdir(bin, { recursive: true });
+  const dist = path.join(root, "packages", "cli", "dist");
+  await fs.mkdir(dist, { recursive: true });
   await fs.writeFile(
     path.join(root, "package.json"),
     JSON.stringify(
@@ -26,7 +26,7 @@ export async function makeBuild(
         name: "isocan",
         version: "0.1.0",
         type: "module",
-        bin: { isocan: "packages/cli/bin/isocan.js" },
+        bin: { isocan: "./packages/cli/dist/isocan.mjs" },
         isocan: { commit: sha, builtAt: "2026-08-20T09:00:00.000Z" },
       },
       null,
@@ -35,7 +35,7 @@ export async function makeBuild(
   );
   const reports = options.claims ?? sha;
   await fs.writeFile(
-    path.join(bin, "isocan.js"),
+    path.join(dist, "isocan.mjs"),
     `#!/usr/bin/env node
 import { promises as fs } from "node:fs";
 import http from "node:http";
@@ -82,6 +82,7 @@ server.listen(Number(process.env.ISOCAN_PORT ?? 0), "127.0.0.1", async () => {
 });
 for (const signal of ["SIGTERM", "SIGINT"]) process.on(signal, () => process.exit(0));
 `,
+    { mode: 0o755 },
   );
   return root;
 }

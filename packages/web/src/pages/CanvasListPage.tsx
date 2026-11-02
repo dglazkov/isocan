@@ -1,4 +1,7 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import "../components/canvas-list.css";
+import { Inbox } from "../components/Inbox.tsx";
+import { useUiStore } from "../stores/uiStore.ts";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Actor, MetaPatch, Canvas, Space } from "@isocan/core";
 import {
@@ -18,25 +21,32 @@ import {
   ownsSpace,
   sortCanvases,
   type CanvasSort,
+  type TakedownNotice,
   faceMark,
 } from "@isocan/core";
+import { recentCanvases } from "../lib/recents.ts";
 import {
-  addToSpace,
   ApiError,
-  createSpace,
-  deleteSpace,
   fetchHomes,
+  fetchTakedowns,
   listCanvases,
-  listSpaces,
-  removeFromSpace,
   sendOp,
 } from "../lib/api.ts";
+import { withDeadline } from "../lib/deadline.ts";
+import {
+  addToSpace,
+  createSpace,
+  deleteSpace,
+  listSpaces,
+  removeFromSpace,
+} from "../lib/api-access.ts";
 // A modal, loaded when it is opened — see `CanvasCrumb` for the reasoning.
 const ShareDialog = lazy(() =>
   import("../components/ShareDialog.tsx").then((m) => ({ default: m.ShareDialog })),
 );
+const PublicCatalogue = lazy(() => import("../components/PublicCatalogue.tsx").then((m) => ({ default: m.PublicCatalogue })));
 import { GroupsPanel } from "../components/GroupsPanel.tsx";
-import { actorColorIn, useActorColors } from "../lib/colors.ts";
+import { useActorColors } from "../lib/colors.ts";
 import { faceMarkClass, faceMarkStyle } from "../lib/face.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
 import { CanvasEditor } from "../components/CanvasEditor.tsx";
@@ -46,10 +56,16 @@ const IdentityMenu = lazy(() => import("../components/IdentityMenu.tsx").then((m
 import { HomeGlyph } from "../components/Glyphs.tsx";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
 import { useActorMarks } from "../lib/marks.ts";
+import { isSsoHome } from "../lib/faces.ts";
 
 const SORT_KEY = "isocan.canvases.sort";
 /** Above this many canvases, the filter and the sort appear. */
 const BROWSE_FROM = 8;
+/** How long the canvas list may take before the page says it could not be
+ * read. Longer than a slow home, shorter than somebody's patience. */
+const LIST_READ_DEADLINE_MS = 10_000;
+/** The spaces and the takedowns cost only headings and greying when late. */
+const SIDE_READ_DEADLINE_MS = 10_000;
 
 export function CanvasListPage({
   actor,
@@ -61,7 +77,10 @@ export function CanvasListPage({
   const colors = useActorColors();
   const marks = useActorMarks();
   const names = useActorNames();
-  const [canvases, setProjects] = useState<Canvas[] | null>(null);
+  /** The home's half of the Inbox experiment; `Navigation` owns the reading,
+   * and with the experiment off nothing here asks for one. */
+  const inboxOn = useUiStore((s) => s.experiments.includes("inbox"));
+  const [canvases, setCanvases] = useState<Canvas[] | null>(null);
   const [title, setTitle] = useState("");
   const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
@@ -86,7 +105,7 @@ export function CanvasListPage({
   /**
    * **A list that could not be read is not an empty list.**
    *
-   * This swallowed the failure into `setProjects([])`, so a daemon that was
+   * This swallowed the failure into `setCanvases([])`, so a daemon that was
    * down, a badge that was refused and a genuinely empty home all rendered the
    * same page: "no canvases yet". That is the most confident possible way to
    * be wrong, and it is the same silence the create below had.
@@ -103,29 +122,66 @@ export function CanvasListPage({
    * but the headings.
    */
   const [spaces, setSpaces] = useState<Space[]>([]);
-  const refresh = useCallback(
-    () =>
-      Promise.all([
-        listCanvases(),
-        listSpaces().then(
-          (answer) => answer.spaces,
-          () => [] as Space[],
-        ),
-      ]).then(
-        ([found, seen]) => {
-          setProjects(found);
-          setSpaces(seen);
+  const [birthSpaceId, setBirthSpaceId] = useState("");
+  /**
+   * **Which of these this home has stopped serving, and what it says about
+   * them** (operator phase 2), by canvas id.
+   *
+   * Read BESIDE the canvases and never instead of them, exactly as the spaces
+   * beside it are: a home too old for the route, or one that simply will not
+   * answer, must cost this list nothing but the greying. Empty is the answer
+   * on every home in this repo, and an empty map renders the list it always
+   * rendered.
+   */
+  const [takenDown, setTakenDown] = useState<Map<string, TakedownNotice>>(new Map());
+  /**
+   * **Three reads, and only one of them can hold the list.**
+   *
+   * They were one `Promise.all`, which is "beside" in the comments above and
+   * "instead" in the code: a rejection was caught, but a takedowns or spaces
+   * read that simply never answered held the canvases with it, and the page
+   * sat on "Loading…" for good (14 Oct 2026). So each lands on its own, the
+   * canvases paint the moment they arrive, and every read has a deadline —
+   * a list that does not answer in time takes the error path it always had
+   * (the sentence, and the recent canvases), never an endless "Loading…".
+   *
+   * `asked` numbers each refresh, so a slow answer from an earlier one cannot
+   * land over a newer one's.
+   */
+  const asked = useRef(0);
+  const refresh = useCallback(() => {
+    const turn = ++asked.current;
+    const current = () => asked.current === turn;
+    void withDeadline(SIDE_READ_DEADLINE_MS, "the spaces did not answer", listSpaces).then(
+      (answer) => { if (current()) setSpaces(answer.spaces); },
+      () => { if (current()) setSpaces([]); },
+    );
+    void withDeadline(SIDE_READ_DEADLINE_MS, "the takedowns did not answer", (signal) => fetchTakedowns(undefined, signal)).then(
+      (down) => { if (current()) setTakenDown(new Map(down.map((row) => [row.canvasId, row]))); },
+      () => { if (current()) setTakenDown(new Map()); },
+    );
+    return withDeadline(
+      LIST_READ_DEADLINE_MS,
+      `the canvases could not be read — this home did not answer in ${LIST_READ_DEADLINE_MS / 1000}s`,
+      listCanvases,
+    ).then(
+      (found) => {
+        if (current()) {
+          setCanvases(found);
           setListError(null);
-          return found;
-        },
-        (err: unknown) => {
-          setProjects([]);
+        }
+        return found;
+      },
+      (err: unknown) => {
+        const fallback = recentCanvases();
+        if (current()) {
+          setCanvases((prev) => (prev && prev.length > 0 ? prev : fallback));
           setListError(err instanceof Error ? err.message : "the canvases could not be read");
-          return [] as Canvas[];
-        },
-      ),
-    [],
-  );
+        }
+        return fallback;
+      },
+    );
+  }, []);
   useEffect(() => {
     void refresh();
   }, [refresh]);
@@ -428,6 +484,27 @@ export function CanvasListPage({
     return () => clearTimeout(t);
   }, [justMade]);
 
+  const birthSpacePicker = spaces.length > 0 || birthSpaceId ? (
+    <>
+      <label htmlFor="birth-space">Space</label>
+      <select
+        id="birth-space"
+        className="text-input"
+        value={birthSpaceId}
+        disabled={creating}
+        onChange={(e) => setBirthSpaceId(e.target.value)}
+        aria-describedby={birthSpaceId ? "birth-space-note" : undefined}
+      >
+        <option value="">No space</option>
+        {birthSpaceId && !spaces.some((space) => space.id === birthSpaceId) && (
+          <option value={birthSpaceId}>Selected space unavailable</option>
+        )}
+        {spaces.map((space) => <option key={space.id} value={space.id}>{space.name}</option>)}
+      </select>
+      {birthSpaceId && <p className="create-note" id="birth-space-note">A space owner can create here. Access comes from this space.</p>}
+    </>
+  ) : null;
+
   async function create(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = title.trim();
@@ -436,7 +513,7 @@ export function CanvasListPage({
     setCreateNote(null);
     const canvasId = newCanvasId();
     try {
-      await sendOp(null, actor, { type: "project.create", canvasId, title: trimmed });
+      await sendOp(null, actor, { type: "project.create", canvasId, title: trimmed }, undefined, undefined, birthSpaceId || undefined);
     } catch (err) {
       /**
        * **It threw into nothing before.** `create` was an async submit handler
@@ -507,9 +584,22 @@ export function CanvasListPage({
    * share this page's state without a prop per control.
    */
   function card(canvas: Canvas) {
+    /**
+     * **A canvas this home has taken down is here, greyed, with the sentence**
+     * (operator phase 2; journey 4 step 3) — *listed for its members with the
+     * sentence, not hidden, so the owner is told.*
+     *
+     * Hiding it was the obvious alternative and is the wrong one: Priya's
+     * canvas disappearing from her own list is indistinguishable from her
+     * having lost it, and she would spend her afternoon looking for a thing
+     * that has an explanation nobody showed her.
+     */
+    const down = takenDown.get(canvas.id) ?? null;
     return (
           <div
-            className={`canvas-card${justMade === canvas.id ? " just-made" : ""}`}
+            className={`canvas-card${justMade === canvas.id ? " just-made" : ""}${
+              down ? " taken-down" : ""
+            }`}
             key={canvas.id}
             /* A card is dragged onto a heading (roles phase 4): the id rides
                the drag, and the drop is `move`. */
@@ -556,6 +646,23 @@ export function CanvasListPage({
                     link now and the other two are behind the same `···` the
                     canvas uses, which is also what stops Delete sitting one
                     pixel from Open. */}
+                {/**
+                 * **It does not open**, and the sentence is in its place.
+                 *
+                 * A `<Link>` that led to the refusal would be one more click
+                 * to reach the same words; a card that looked ordinary and
+                 * refused when clicked would be the silence this whole phase
+                 * exists to remove. So the card keeps its title and its meta
+                 * line — it is still her canvas — and the thing that opened it
+                 * is replaced by the home's own account of why it does not.
+                 */}
+                {down ? (
+                  <div className="card-open">
+                    <h3>{canvas.title}</h3>
+                    <div className="card-taken-down">{down.sentence}</div>
+                    <div className="meta">Nothing has been erased, and it can be brought back.</div>
+                  </div>
+                ) : (
                 <Link className="card-open" to={canvasPath(canvas.id)}>
                   {/**
                     * **Which of these did I put away?** (#194). `Archived`
@@ -597,6 +704,7 @@ export function CanvasListPage({
                     </span>
                   </div>
                 </Link>
+                )}
                 {/* In the card's box but OUT of its flow. This used to sit
                     in flow between the link and the ··· row — "the card has
                     room for it" — and every hover grew the card by the peek's
@@ -781,7 +889,7 @@ export function CanvasListPage({
         <div className="who" ref={whoRef}>
           <button
             className={`who-btn${identityOpen ? " active" : ""}`}
-            title="You — rename yourself, or enter as someone else"
+            title={isSsoHome() ? "You — rename yourself" : "You — rename yourself, or enter as someone else"}
             onClick={() => setIdentityOpen(!identityOpen)}
           >
             <span className={faceMarkClass(marks, actor)} style={faceMarkStyle(colors, actor)}>
@@ -829,6 +937,8 @@ export function CanvasListPage({
        * nesting the two made the smaller question inherit the larger one's
        * answer.
        */}
+      {inboxOn && <Inbox actor={actor} />}
+      <h2 className="working-canvases-head">Your canvases</h2>
       {(browsing || hasShelf) && (
         <div className="canvas-browse">
           {browsing && (
@@ -913,6 +1023,7 @@ export function CanvasListPage({
             value={title}
             onChange={(e) => setTitle(e.target.value)}
           />
+          {birthSpacePicker}
           <button className="btn primary" type="submit" disabled={!title.trim() || creating}>
             {creating ? "Creating…" : "Create"}
           </button>
@@ -945,6 +1056,7 @@ export function CanvasListPage({
             value={title}
             onChange={(e) => setTitle(e.target.value)}
           />
+          {birthSpacePicker}
           <button className="btn primary" type="submit" disabled={!title.trim() || creating}>
             {creating ? "Creating…" : "Create"}
           </button>
@@ -1032,6 +1144,7 @@ export function CanvasListPage({
       {canvases === null && <p className="canvases-loading">Loading…</p>}
       {/* An unreadable list is not an empty one, and must not render as one. */}
       {listError && <p className="canvases-error">{listError}</p>}
+      <Suspense fallback={<p>Loading public canvases…</p>}><PublicCatalogue /></Suspense>
     </div>
   );
 }

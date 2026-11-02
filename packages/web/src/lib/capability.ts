@@ -40,6 +40,13 @@ export function canEditNow(): boolean {
  * canvas.
  */
 export const HIDDEN_WRITES: readonly { what: string; file: string; gate: string }[] = [
+  { what: "starting a design task", file: "components/DesignTaskPanel.tsx", gate: "startSource && canEdit" },
+  { what: "correcting a design task", file: "components/DesignTaskCard.tsx", gate: "edit && canEdit" },
+  { what: "design task lifecycle actions", file: "components/DesignTaskCard.tsx", gate: "canEdit && !checking && !edit && !mutation.pending" },
+  { what: "publishing design evidence", file: "components/DesignTaskCard.tsx", gate: "publishing && canEdit && actor" },
+  { what: "answering design questions", file: "components/QuestionnairePanel.tsx", gate: "active && canEdit" },
+  { what: "publishing design questions", file: "components/QuestionnairePanel.tsx", gate: "publishing && thread && canEdit" },
+  { what: "group migration confirmation", file: "components/GroupMigration.tsx", gate: "{canEdit && <button" },
   {
     what: "the tool rail — the create actions: pen, text, comment, upload, site",
     file: "pages/CanvasPage.tsx",
@@ -73,7 +80,7 @@ export const HIDDEN_WRITES: readonly { what: string; file: string; gate: string 
   {
     what: "the stage composer — the editor pane, and editing a text node",
     file: "components/ArtifactStage.tsx",
-    gate: "const editable = editableText(current.mimeType) && canEdit;",
+    gate: "const editable = editableText(current.mimeType) && canEdit && !current.designRecord;",
   },
   {
     what: "the comment composer — a new thread",
@@ -82,8 +89,18 @@ export const HIDDEN_WRITES: readonly { what: string; file: string; gate: string 
   },
   {
     what: "the comment composer — a reply",
-    file: "components/CommentLayer.tsx",
+    file: "components/CommentPopovers.tsx",
     gate: "{canEdit && (\n        <form",
+  },
+  {
+    what: "the main Chat comment composer — frozen context stays readable",
+    file: "components/MainThreadPanel.tsx",
+    gate: "{canEdit && <form",
+  },
+  {
+    what: "cleaning up the Chat — a message's ✕ and the owner's Clean up menu",
+    file: "components/MainThreadPanel.tsx",
+    gate: "{canEdit && <Suspense fallback={null}><ChatTidy",
   },
   {
     what: "reactions — adding one, and toggling one already worn",
@@ -115,7 +132,10 @@ export const HIDDEN_WRITES: readonly { what: string; file: string; gate: string 
     file: "components/ZoomControls.tsx",
     // The inner `!undoHidden` is chrome you can turn off — a person's own
     // hiding, inside the reader's gate, never instead of it.
-    gate: "{canEdit && (\n        <>\n          {!undoHidden && (\n            <button\n              className=\"btn icon\"\n              title=\"Undo (⌘Z)\"",
+    // The anchor deliberately stops before the label. This gate is about
+    // `canEdit`, and pinning it to a tooltip's wording made a capability
+    // check fail the day the modifier key learned to say Ctrl on Windows.
+    gate: "{canEdit && (\n        <>\n          {!undoHidden && (\n            <button\n              className=\"btn icon\"",
   },
   {
     what: "the keyboard's writes — delete, paste, undo, nudge, the tool letters, ⇧C, ⇧F, F2",

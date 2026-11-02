@@ -14,6 +14,7 @@
  * gs://{bucket}/canvases/{id}/blobs/{hash}.{ext}     the bytes, same addressing as a disk
  * gs://{bucket}/canvases/{id}/oplog-archive.jsonl    what compaction set aside
  * gs://{bucket}/canvases/{id}/ops/{paddedSeq}.json   an entry too big for a document
+ * gs://{bucket}/canvases/{id}/summaries/{key}.json   Semantic Zoom summary cache
  * ```
  */
 
@@ -43,8 +44,17 @@ export const canvasDoc = (id: string) => `${CANVASES}/${id}`;
 export const opsCollection = (id: string) => `${CANVASES}/${id}/ops`;
 export const blobMetaCollection = (id: string) => `${CANVASES}/${id}/blobmeta`;
 
+/** Everything a canvas holds in the bucket lives under this, and a purge
+ * (operator phase 3) is a delete of exactly this prefix — the trailing slash
+ * is what keeps `canvases/prj_1/` from also naming `canvases/prj_10/`. */
+export const canvasPrefix = (id: string) => `${CANVASES}/${id}/`;
 export const snapshotKey = (id: string) => `${CANVASES}/${id}/snapshot.json`;
 export const blobKey = (id: string, file: string) => `${CANVASES}/${id}/blobs/${file}`;
 export const archiveKey = (id: string) => `${CANVASES}/${id}/oplog-archive.jsonl`;
 export const opOverflowKey = (id: string, seq: number) =>
   `${CANVASES}/${id}/ops/${padSeq(seq)}.json`;
+/** Bucket prefix for a canvas's cached semantic-zoom summary objects (`canvases/{id}/summaries/`), under `canvasPrefix(id)` so `purgeCanvas` deletes them with the rest of the canvas's bucket bytes. */
+export const summaryPrefix = (id: string) => `${CANVASES}/${id}/summaries/`;
+/** Bucket key for one cached semantic-zoom summary (`canvases/{id}/summaries/{key}.json`). */
+export const summaryObjectKey = (id: string, key: string) =>
+  `${CANVASES}/${id}/summaries/${key}.json`;

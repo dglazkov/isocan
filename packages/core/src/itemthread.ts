@@ -43,12 +43,13 @@ export function atCorner(canvas: CanvasContents, thread: CommentThread): boolean
  * The corner-anchored one wins when several exist, because that is the one ⇧C
  * and `isocan comment add --item` both put there; a thread anchored somewhere
  * else on the item (dropped in comment mode, aimed at a particular spot) is
- * about that spot and is left alone. Oldest first among equals, so the answer
+ * about that spot and is left alone. A quoted passage is its own discussion,
+ * never the default item conversation. Oldest first among equals, so the answer
  * does not change as people talk.
  */
 export function itemThread(canvas: CanvasContents, itemId: string): CommentThread | null {
   const mine = Object.values(canvas.threads)
-    .filter((thread) => !thread.main && thread.anchorItemId === itemId)
+    .filter((thread) => !thread.main && !thread.textAnchor && thread.anchorItemId === itemId)
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   return mine.find((thread) => atCorner(canvas, thread)) ?? mine[0] ?? null;
 }

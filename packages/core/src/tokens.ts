@@ -1,4 +1,4 @@
-import type { DesignTokens, DesignTypography } from "./designmd.ts";
+import { assertDesignConvertible, assertJsonCompatible, type DesignTokens, type DesignTypography } from "./designmd.ts";
 import { parseHex } from "./contrast.ts";
 
 /**
@@ -56,6 +56,7 @@ export interface DtcgDimension {
 
 /** DESIGN.md front matter → W3C design tokens (DTCG 2025.10). */
 export function toDtcg(tokens: DesignTokens): Record<string, unknown> {
+  assertDesignConvertible(tokens);
   const out: Record<string, unknown> = { $schema: DTCG_SCHEMA };
   /** What DTCG cannot say: kept, with the reason, never dropped in silence. */
   const unexported: Record<string, { value: unknown; why: string }> = {};
@@ -90,6 +91,7 @@ export function toDtcg(tokens: DesignTokens): Record<string, unknown> {
     if (Object.keys(group).length > 0) out.typography = group;
   }
   const ours: Record<string, unknown> = {};
+  if (Object.hasOwn(tokens, "isocan")) ours.isocan = JSON.parse(JSON.stringify(tokens.isocan));
   if (tokens.components && Object.keys(tokens.components).length > 0) {
     // No DTCG type for "a component's properties", so the whole map rides in
     // the file's extensions rather than being dropped the way the reference
@@ -250,6 +252,7 @@ function dimensionOrZero(value: unknown): DtcgDimension | null {
  *  Reads both this exporter's output and the legacy string shape, both group
  *  names (`color` and `colors`), and the reference exporter's files. */
 export function fromDtcg(dtcg: Record<string, unknown>): DesignTokens {
+  assertJsonCompatible(dtcg, "DTCG");
   const tokens: DesignTokens = {};
 
   const colorGroup = (dtcg.color ?? dtcg.colors) as Record<string, unknown> | undefined;
@@ -265,9 +268,26 @@ export function fromDtcg(dtcg: Record<string, unknown>): DesignTokens {
   const typography = leaves(dtcg.typography as Record<string, unknown> | undefined, (value, leaf) => typographyLevel(value, leaf));
   if (typography) tokens.typography = typography as Record<string, DesignTypography>;
 
-  const ours = (dtcg.$extensions as Record<string, unknown> | undefined)?.[DTCG_EXTENSION] as { components?: unknown } | undefined;
+  const ours = (dtcg.$extensions as Record<string, unknown> | undefined)?.[DTCG_EXTENSION] as { components?: unknown; isocan?: unknown; unexported?: Record<string, { value: unknown; why: string }> } | undefined;
+  if (ours !== undefined && (!ours || typeof ours !== "object" || Array.isArray(ours))) throw new Error(`DTCG $extensions["${DTCG_EXTENSION}"]: expected an object; native extension data cannot be restored`);
   if (ours?.components && typeof ours.components === "object") {
     tokens.components = ours.components as Record<string, Record<string, string>>;
+  }
+  if (ours && Object.hasOwn(ours, "isocan")) tokens.isocan = JSON.parse(JSON.stringify(ours.isocan));
+  // Values that DTCG could only carry as vendor metadata still have their
+  // native home. Restoring it keeps contract references valid on import.
+  for (const [path, entry] of Object.entries(ours?.unexported ?? {})) {
+    const [bucket, ...name] = path.split(".");
+    const key = name.join(".");
+    if (!key || !entry || typeof entry !== "object" || !Object.hasOwn(entry, "value")) continue;
+    assertJsonCompatible({ [key]: entry.value }, `DTCG.unexported.${path}`);
+    if (bucket === "colors" || bucket === "rounded" || bucket === "spacing") {
+      if (typeof entry.value !== "string" && !(bucket === "spacing" && typeof entry.value === "number")) continue;
+      const group = (tokens[bucket] ??= {}) as Record<string, string | number>;
+      group[key] = entry.value;
+    } else if (bucket === "typography" && entry.value && typeof entry.value === "object" && !Array.isArray(entry.value)) {
+      (tokens.typography ??= {})[key] = entry.value as DesignTypography;
+    }
   }
   return tokens;
 }
@@ -347,9 +367,18 @@ function round(n: number): number {
   return Math.round(n * 10000) / 10000;
 }
 
+/** The loss boundary belongs with the converter so both surfaces say the
+ * same thing. Native and vendor-extended DTCG preserve the whole extension. */
+export function designConversionNotes(tokens: DesignTokens, format: "css" | "dtcg" | "native"): string[] {
+  return format === "css" && Object.hasOwn(tokens, "isocan") ? [
+    "CSS exports token values only; isocan policies, recipes, exceptions and other extension data are not preserved. Use DESIGN.md or DTCG JSON for a contract round trip.",
+  ] : [];
+}
+
 /** Custom properties, ready to paste into the page being built. */
 export function toCss(tokens: DesignTokens): string {
-  const lines: string[] = [":root {"];
+  assertDesignConvertible(tokens);
+  const lines: string[] = [...designConversionNotes(tokens, "css").map(note => `/* ${note} */`), ":root {"];
   const put = (name: string, value: unknown) => lines.push(`  --${name}: ${String(value)};`);
   for (const [name, value] of Object.entries(tokens.colors ?? {})) put(`color-${kebab(name)}`, deref(value));
   for (const [name, value] of Object.entries(tokens.spacing ?? {})) put(`space-${kebab(name)}`, deref(value));

@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { keyFor } from "@isocan/core";
-import { useUiStore } from "../stores/uiStore.ts";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { keyFor, renderKeys } from "@isocan/core";
+import { menuAim } from "../lib/menuaim.ts";
+import "./context-menu.css";
 
 /**
  * **Right-click: the acts you can already do, where your hand already is.**
@@ -29,8 +30,10 @@ export interface MenuAction {
    *  the accelerator is looked up rather than written. */
   shortcutFor?: string;
   run: () => void;
-  /** Offered but not available right now — shown, dimmed, so the menu's shape
-   *  does not change under the pointer between one open and the next. */
+  /** Offered but not available right now — shown, dimmed, where seeing it is
+   *  the hint (Paste with nothing copied). A row that cannot apply to what was
+   *  right-clicked is left out instead (`itemMenu`, 14 Oct 2026): a third of a
+   *  menu in grey teaches people to stop reading it. */
   disabled?: boolean;
   danger?: boolean;
   /** This entry changes the canvas. On the read-only canvas (roles phase 1)
@@ -59,6 +62,14 @@ export interface MenuAction {
   /** What the parent row shows to the right of its label — the chosen one,
    *  where a submenu names a set with a current member. */
   value?: string;
+  /**
+   * **A small picture of what this row puts on** (living grounds phase 4): the
+   * URL of a ground's still frame, shown as a thumbnail in a submenu row. The
+   * still is the honest preview — a living ground at rest IS its still — and
+   * it costs one cached JPEG, fetched only when the submenu opens. It drifts
+   * on hover, in CSS, unless the viewer asked for reduced motion.
+   */
+  preview?: string;
 }
 
 export type MenuEntry = MenuAction | { separator: string };
@@ -78,6 +89,11 @@ export function ContextMenu({
      right-click menu on an item — nothing is indented for a column that is
      not there. */
   const marks = entries.some((entry) => "icon" in entry && entry.icon !== undefined);
+  /* Which submenu is open lives HERE, not in each row: whether a crossed row
+     may take it is a question about the whole menu (`lib/menuaim.ts`). */
+  const [sub, setSub] = useState<string | null>(null);
+  const [aim] = useState(() => menuAim(setSub, () => box.current?.querySelector(".context-submenu")?.getBoundingClientRect()));
+  useEffect(() => aim.stop, [aim]);
 
   useEffect(() => {
     // Anything that is not a press inside the menu closes it — including a
@@ -89,11 +105,37 @@ export function ContextMenu({
       onClose();
     }
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        e.stopPropagation(); // Escape closes the menu, not the selection behind it
-        onClose();
+      const root = box.current;
+      if (!root) return;
+      const focused = document.activeElement as HTMLElement | null;
+      const menu = focused?.closest('[role="menu"]') ?? root;
+      const rows = [...menu.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')].filter((row) => row.closest('[role="menu"]') === menu);
+      if (["Escape", "ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Home", "End", "Enter", " ", "Tab"].includes(e.key)) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      } else return;
+      if (e.key === "Escape") { onClose(); return; }
+      if (e.key === "ArrowLeft" && menu === root) return;
+      if (e.key === "ArrowLeft" && menu !== root) {
+        const parent = menu.parentElement?.querySelector<HTMLButtonElement>(":scope > button");
+        if (parent) { parent.dataset.menuIntent = "close"; parent.click(); parent.focus(); }
+        return;
       }
+      if (e.key === "ArrowRight" && focused?.getAttribute("aria-haspopup") !== "menu") return;
+      if (e.key === "Enter" || e.key === " " || e.key === "ArrowRight") {
+        if (focused instanceof HTMLButtonElement && !focused.disabled) {
+          if (focused.getAttribute("aria-haspopup") === "menu") focused.dataset.menuIntent = "keyboard-open";
+          focused.click();
+        }
+        return;
+      }
+      if (!rows.length) return;
+      const current = rows.indexOf(focused as HTMLButtonElement);
+      const next = e.key === "Home" ? 0 : e.key === "End" ? rows.length - 1 : (current + ((e.key === "ArrowUp" || (e.key === "Tab" && e.shiftKey)) ? -1 : 1) + rows.length) % rows.length;
+      rows[next]?.focus();
+      rows[next]?.scrollIntoView({ block: "nearest" });
     }
+    box.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
     document.addEventListener("pointerdown", away, true);
     document.addEventListener("wheel", away, true);
     document.addEventListener("keydown", onKey, true);
@@ -127,6 +169,9 @@ export function ContextMenu({
       role="menu"
       style={{ left: at.x, top: at.y }}
       onContextMenu={(e) => e.preventDefault()}
+      onPointerMove={(e) => box.current?.toggleAttribute("data-aim", aim.move({ x: e.clientX, y: e.clientY }))}
+      // A finger lifting "leaves" too; only a mouse leaving means "not this".
+      onPointerLeave={(e) => e.pointerType === "mouse" && aim.want(null)}
     >
       {entries.map((entry, i) =>
         "separator" in entry ? (
@@ -134,7 +179,7 @@ export function ContextMenu({
             {entry.separator}
           </div>
         ) : entry.submenu ? (
-          <Submenu key={entry.label} entry={entry} marks={marks} onClose={onClose} />
+          <Submenu key={entry.label} entry={entry} marks={marks} onClose={onClose} open={sub === entry.label} aim={aim} />
         ) : (
           <button
             key={entry.label}
@@ -142,6 +187,8 @@ export function ContextMenu({
             aria-checked={entry.checked === undefined ? undefined : entry.checked}
             className={`context-item${entry.danger ? " danger" : ""}${entry.checked === true ? " checked" : ""}`}
             disabled={entry.disabled === true}
+            title={entry.value}
+            onPointerEnter={() => aim.want(null)}
             onClick={() => {
               onClose();
               entry.run();
@@ -149,6 +196,7 @@ export function ContextMenu({
           >
             {marks && <span className="menu-icon">{entry.icon}</span>}
             <span>{entry.label}</span>
+            {entry.value && <span className="menu-value">{entry.value}</span>}
             {/* The tick is the only thing on the row that says what is TRUE
                 rather than what would happen, so it sits where the eye scans
                 for state — after the words, before the accelerator. */}
@@ -157,7 +205,7 @@ export function ContextMenu({
                 {entry.checked ? "✓" : ""}
               </span>
             )}
-            {entry.shortcutFor && <kbd>{keyFor(entry.shortcutFor) ?? ""}</kbd>}
+            {entry.shortcutFor && <kbd>{renderKeys(keyFor(entry.shortcutFor) ?? "")}</kbd>}
           </button>
         ),
       )}
@@ -171,8 +219,9 @@ export function ContextMenu({
  * The first nested menu in this app, and it is deliberately small. It opens on
  * hover AND on click, because those are two different people: a pointer that
  * drifts across the row expects it, and a person who has just tabbed to it
- * needs a key that works. It closes when the pointer leaves the pair, not the
- * row, or the children would vanish on the way to them.
+ * needs a key that works. Hover opens after a beat and closes after a grace,
+ * and a pointer on its way to the children keeps them (`lib/menuaim.ts`); a
+ * click or a key never waits.
  *
  * The parent shows the current member beside its own name (`value`), so the
  * answer to "what is it now" needs no opening — which is the whole reason this
@@ -183,13 +232,18 @@ function Submenu({
   entry,
   marks,
   onClose,
+  open,
+  aim,
 }: {
   entry: MenuAction;
   marks: boolean;
   onClose: () => void;
+  open: boolean;
+  aim: ReturnType<typeof menuAim>;
 }): ReactNode {
-  const [open, setOpen] = useState(false);
+  const [focusChildren, setFocusChildren] = useState(false);
   const panel = useRef<HTMLDivElement | null>(null);
+  const trigger = useRef<HTMLButtonElement | null>(null);
   const children = entry.submenu ?? [];
 
   /**
@@ -205,36 +259,54 @@ function Submenu({
    * then the pointer leaving the child crosses the parent and re-opens it.
    * Vertically it slides, because nothing is covered by moving up.
    */
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = panel.current;
-    if (!open || !el) return;
-    el.style.left = "";
-    el.style.right = "";
-    el.style.top = "";
-    const r = el.getBoundingClientRect();
-    if (r.right > window.innerWidth - 8) {
-      el.style.left = "auto";
-      el.style.right = "calc(100% + 4px)";
+    const button = trigger.current;
+    if (!open || !el || !button) return;
+    function position() {
+      const anchor = button!.getBoundingClientRect();
+      const bounds = el!.getBoundingClientRect();
+      // Fixed positioning escapes the parent menu's scrolling clip. The
+      // trigger still owns the anchor; scrolling keeps the two together.
+      const left = anchor.right + 4 + bounds.width <= window.innerWidth - 8
+        ? anchor.right + 4 : anchor.left - bounds.width - 4;
+      el!.style.left = `${Math.max(8, left)}px`;
+      el!.style.top = `${Math.max(8, Math.min(anchor.top - 5, window.innerHeight - bounds.height - 8))}px`;
     }
-    const over = el.getBoundingClientRect().bottom - (window.innerHeight - 8);
-    if (over > 0) el.style.top = `${-5 - over}px`;
+    position();
+    document.addEventListener("scroll", position, true);
+    return () => document.removeEventListener("scroll", position, true);
   }, [open, children.length]);
+  // React mounts the children after the opening event. A keyboard request
+  // focuses here, after commit; pointer hover never requests this focus.
+  useLayoutEffect(() => {
+    if (!open || !focusChildren) return;
+    const first = panel.current?.querySelector<HTMLButtonElement>("button:not(:disabled)");
+    first?.focus();
+    first?.scrollIntoView({ block: "nearest" });
+    setFocusChildren(false);
+  }, [open, focusChildren]);
   return (
     <div
       className="context-sub"
-      onPointerEnter={() => setOpen(true)}
-      onPointerLeave={() => setOpen(false)}
+      onPointerEnter={() => aim.want(entry.label)}
     >
       <button
         role="menuitem"
         aria-haspopup="menu"
+        ref={trigger}
         aria-expanded={open}
         className={`context-item${open ? " open" : ""}`}
         disabled={entry.disabled === true}
-        onClick={() => setOpen((was) => !was)}
+        onClick={(event) => {
+          const intent = event.currentTarget.dataset.menuIntent;
+          delete event.currentTarget.dataset.menuIntent;
+          if (intent === "keyboard-open") setFocusChildren(true);
+          aim.set(intent === "close" ? null : entry.label);
+        }}
         onKeyDown={(e) => {
-          if (e.key === "ArrowRight" || e.key === "Enter" || e.key === " ") setOpen(true);
-          if (e.key === "ArrowLeft") setOpen(false);
+          if (e.key === "ArrowRight" || e.key === "Enter" || e.key === " ") { setFocusChildren(true); aim.set(entry.label); }
+          if (e.key === "ArrowLeft") aim.set(null);
         }}
       >
         {marks && <span className="menu-icon">{entry.icon}</span>}
@@ -263,6 +335,9 @@ function Submenu({
                   child.run();
                 }}
               >
+                {child.preview !== undefined && (
+                  <span className="menu-preview" aria-hidden style={{ backgroundImage: `url(${child.preview})` }} />
+                )}
                 <span>{child.label}</span>
                 {child.checked !== undefined && (
                   <span className="menu-check" aria-hidden>
@@ -276,9 +351,4 @@ function Submenu({
       )}
     </div>
   );
-}
-
-/** Open and close from anywhere, the way the other popovers are driven. */
-export function openContextMenu(at: { x: number; y: number }, entries: MenuEntry[]): void {
-  useUiStore.getState().setContextMenu({ at, entries });
 }

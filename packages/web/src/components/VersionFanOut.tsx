@@ -1,15 +1,26 @@
 import { useEffect, useState } from "react";
 import type { Actor, Item } from "@isocan/core";
-import { canvasIdOf, isDesignSystem, isTextItem, sourceOf, visualFaceOf } from "@isocan/core";
+import { isDesignSystem, isTextItem, prunedVersions, sourceOf, visualFaceOf } from "@isocan/core";
 
 import { useUiStore } from "../stores/uiStore.ts";
 import { VersionContent } from "./ItemView.tsx";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
 import { useOnScreen } from "../lib/onscreen.ts";
 import { sendEchoed } from "../stores/canvasStore.ts";
+import "./version-fan.css";
 
 const FAN_SCALE = 0.62;
 const FAN_GAP = 18;
+
+/**
+ * **Past this depth the fan offers to prune.** Fourteen is a fortnight of a
+ * daily generator, which is the only thing that makes stacks this deep — a
+ * person iterating by hand gets to five or six and stops. A shallower stack
+ * is somebody's history and the fan says nothing about cutting it.
+ */
+export const PRUNE_OFFER_DEPTH = 14;
+/** What the offer keeps: the fortnight, and the current version whatever its age. */
+export const PRUNE_KEEP = 14;
 
 /**
  * The 0.5D unfolded: all versions of an item as a row of live cards to its
@@ -34,6 +45,7 @@ export function VersionFanOut({
   const setFanned = useUiStore((s) => s.setFanned);
   const names = useActorNames();
   const [mounted, setMounted] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   useEffect(() => {
     const raf = requestAnimationFrame(() => setMounted(true));
     return () => cancelAnimationFrame(raf);
@@ -42,6 +54,7 @@ export function VersionFanOut({
   const cardW = Math.max(140, item.width * FAN_SCALE);
   const cardH = Math.max(100, item.height * FAN_SCALE) + 22;
   const newestFirst = [...item.versions].reverse();
+  const dropping = item.versions.length > PRUNE_OFFER_DEPTH ? prunedVersions(item, PRUNE_KEEP) : [];
 
   return (
     <>
@@ -60,6 +73,43 @@ export function VersionFanOut({
           onPicked={() => setFanned(null)}
         />
       ))}
+      {dropping.length > 0 && (
+        <div
+          className="fan-prune"
+          style={{ left: item.x + item.width + 28, top: item.y - 34 }}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          {confirming ? (
+            <>
+              <button
+                className="btn danger"
+                onClick={() => {
+                  setConfirming(false);
+                  void sendEchoed(canvasId, actor, {
+                    type: "item.pruneVersions",
+                    itemId: item.id,
+                    keep: PRUNE_KEEP,
+                  });
+                }}
+              >
+                Really drop {dropping.length} older version{dropping.length === 1 ? "" : "s"} —
+                can't be undone
+              </button>{" "}
+              <button className="btn" onClick={() => setConfirming(false)}>
+                Keep
+              </button>
+            </>
+          ) : (
+            <button
+              className="btn"
+              title={`${item.versions.length} versions here — keep the newest ${PRUNE_KEEP} (and the current one). isocan version prune ${item.id} --keep ${PRUNE_KEEP}`}
+              onClick={() => setConfirming(true)}
+            >
+              Keep only the latest {PRUNE_KEEP}…
+            </button>
+          )}
+        </div>
+      )}
     </>
   );
 }
@@ -132,6 +182,22 @@ function FanCard({
         <b>v{item.versions.indexOf(version) + 1}</b>
         <span>{actorNameIn(names, version.createdBy)}</span>
         <span>{new Date(version.createdAt).toLocaleDateString()}</span>
+        {/* What this version changed, or how it differs from the one showing
+            — the inspector loads on the click (docs/projects/version-diff). */}
+        {item.versions.length > 1 && (
+          <button
+            className="fan-compare"
+            title={version.id === item.currentVersionId ? "Compare with the version before it" : "Compare with the version showing"}
+            aria-label={`Compare v${item.versions.indexOf(version) + 1}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onPicked();
+              void import("./VersionCompare.tsx").then((m) => m.openCompare({ canvasId, actor, itemId: item.id, from: version.id }));
+            }}
+          >
+            Compare
+          </button>
+        )}
       </div>
       <div className="fan-body">
         {onScreen && (
@@ -153,7 +219,7 @@ function FanCard({
             entered={false}
             designSystem={isDesignSystem(item)}
             textNode={isTextItem(item)}
-            canvasOf={canvasIdOf(item)}
+            canvasOf={item.properties.canvas ?? null}
             canvasSource={sourceOf(item)}
             size={{ width: item.width, height: item.height }}
           />

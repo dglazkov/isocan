@@ -1,11 +1,51 @@
+import { readFileSync } from "node:fs";
+import { availableParallelism } from "node:os";
 import { defineConfig } from "vitest/config";
+import { DEEP, runningDeep } from "./test/deep.ts";
+import DurationSequencer from "./test/shard-sequencer.ts";
+
+/**
+ * **A `.md` import is its text**, here as everywhere else: source mode gets
+ * the rule from `packages/cli/bin/workspace-loader.mjs`, the release bundle
+ * from esbuild's text loader in `scripts/release.mjs`, runtime modules from
+ * `scripts/module-build.mjs`, and the suite from this. Four adapters, one
+ * rule, because the guides an agent reads have to survive being folded into a
+ * bundle that sits nowhere near them
+ * (`docs/projects/first-minute/design.md`).
+ */
+const markdownAsText = {
+  name: "isocan-md-text",
+  transform(_code: string, id: string) {
+    if (!id.endsWith(".md")) return null;
+    return { code: `export default ${JSON.stringify(readFileSync(id.split("?")[0]!, "utf8"))};`, map: null };
+  },
+};
 
 export default defineConfig({
+  plugins: [markdownAsText],
   test: {
     include: ["packages/*/test/**/*.test.ts", "packages/modules/*/test/**/*.test.ts", "test/**/*.test.ts"],
+    /**
+     * **The deep lane, left out unless asked for.** The files in `test/deep.ts`
+     * drive the real binary and are about half this suite's CPU; `npm test`
+     * skips them and says so, `npm run test:deep` runs them, and CI sets
+     * `ISOCAN_REQUIRE_DEEP` so the run that decides a release never skips.
+     * The exclusion has to be empty when that switch is set — an anti-skip
+     * switch that skipped would be worse than no switch.
+     */
+    exclude: [
+      "**/node_modules/**",
+      "**/dist/**",
+      ...(runningDeep() ? [] : DEEP.map((d) => d.file)),
+    ],
     // Runs in every worker, before every test file: see test/setup.ts for what
     // a run leaves behind without it.
     setupFiles: ["test/setup.ts"],
+    /* The default reporter prints the duration; `timing-reporter.ts` is what
+       remembers it. Every run, no flag — `scripts/timings.mjs` reads them back
+       and says which kind of run is getting slower. */
+    reporters: ["default", "./test/timing-reporter.ts"],
+    sequence: { sequencer: DurationSequencer },
     /**
      * NOT the 5-second default, and this is the third time it has been paid
      * for.
@@ -36,10 +76,34 @@ export default defineConfig({
      */
     testTimeout: 30_000,
     hookTimeout: 30_000,
+    /**
+     * **Half the cores when the deep lane runs, not one per core** (27 Sep
+     * 2026). A deep file keeps TWO processes busy — the worker, and the CLI or
+     * board script it spawns per case (plus an in-process daemon) — so
+     * vitest's default of one worker per core put this machine at about twice
+     * its cores exactly while the spawn-heavy files ran. Seven of eight deep
+     * runs that week had a timeout somewhere in them (`prune` five times,
+     * `place`, `canvas-board`'s child budget, `grid`, `rc`, `restart`,
+     * `room`), each passing alone.
+     *
+     * Measured on 14 cores, one run each way: 13 workers took 350–460 s of
+     * wall clock with the per-test times summing to 4,200–5,400 s; 7 workers
+     * took 373 s with them summing to 2,380 s and no failure. Every test ran
+     * about twice as fast and the machine did no less work — oversubscription
+     * bought nothing but the timeouts. This is not a raised limit: nothing
+     * here gets longer to fail, and the tests got faster.
+     *
+     * **Not on CI.** The same rule there cut each 4-core shard from 3 workers
+     * to 2, and the release run's slowest shard went from 457–568 s to 702 s:
+     * at that size the third worker's overlap with its children paid for
+     * itself, and no shard had been timing out. So this is the laptop's rule —
+     * the machine with fourteen cores, other sessions, and the flakes.
+     */
+    ...(runningDeep() && !process.env["CI"] ? { maxWorkers: Math.max(2, Math.floor(availableParallelism() / 2)) } : {}),
     // Runs ONCE, in the main process, before any worker exists — which is the
     // only place a Firestore emulator can be started and have every worker
     // inherit its address. See test/emulator.ts for the three tiers and for
     // what happens on a machine that has none.
-    globalSetup: ["test/emulator.ts"],
+    globalSetup: ["test/emulator.ts", "test/deepgate.ts", "test/cli-build.ts"],
   },
 });

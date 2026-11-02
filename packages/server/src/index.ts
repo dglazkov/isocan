@@ -1,4 +1,19 @@
-export { startDaemon, runDaemon, stopDaemons } from "./daemon.ts";
+/**
+ * **The daemon is NOT here, and that is the point** (phase 3 of
+ * `docs/projects/first-minute`).
+ *
+ * This index used to re-export `startDaemon`, `runDaemon`, `stopDaemons` and
+ * one constant from `http.ts`. Sixteen files in the CLI and the API import
+ * this module for `paths`, `readConfigFile` or `readBadge` — and every one of
+ * them was therefore importing fastify. Measured in the bundle: `isocan
+ * --version` loaded a 2.1 MB chunk of fastify and its plugins to print a
+ * version string, 1.3 MB of the 5.8 MB it read at startup.
+ *
+ * So the daemon has its own entry, `@isocan/server/daemon`, and the CLI's
+ * `serve` reaches it with `await import()`. Its TYPES stay below, because a
+ * type import is erased and costs nothing. The constant went with no
+ * replacement: nothing outside `http.ts` ever used it.
+ */
 export type { Daemon, DaemonOptions, RunDaemonOptions } from "./daemon.ts";
 export { Engine, CanvasNotFoundError, NothingToUndoError } from "./engine.ts";
 export type {
@@ -6,12 +21,31 @@ export type {
   BlobMeta,
   BlobUploadRequest,
   LoadedCanvas,
+  PurgeReport,
   Store,
 } from "./store.ts";
 export { FileStore } from "./file-store.ts";
-export type { Desk, BadgeRecord, Admission, PassRecord, Provenance, BadgeKind } from "./desk.ts";
+export type { Desk, BadgeRecord, Admission, PassRecord, ParkRow, Provenance, BadgeKind } from "./desk.ts";
 export { FileDesk } from "./file-desk.ts";
-export { readConfigFile, resolveHomeUrl, updateConfigFile } from "./config.ts";
+export type { Workstation } from "./workstation.ts";
+export { FileWorkstation } from "./file-workstation.ts";
+/**
+ * `liveAdmission` crosses the package boundary because the second desk backing
+ * has to ask it too (operator phase 2): "an admission that has run out is
+ * replaced, not kept" is one rule, and two backings that each had their own
+ * copy of it would be two rules.
+ */
+export { admissionIn, liveAdmission, rungOfAdmission, keepsAdmission } from "./grants.ts";
+export { Refusals, TakenDownError, RefusedError } from "./takedowns.ts";
+/** Configuration readers, birth-home resolution, and per-home proxy auth lookup (`homeAuth`). */
+export {
+  configuredHomeAuthUrl,
+  gatewayBaseFor,
+  homeAuthFor,
+  readConfigFile,
+  resolveHomeUrl,
+  updateConfigFile,
+} from "./config.ts";
 export {
   DocRefusal,
   clearGoogleToken,
@@ -24,9 +58,10 @@ export {
   type FetchedDoc,
   type GoogleToken,
 } from "./google.ts";
-export type { HomeConfig } from "./config.ts";
-export { askTheDoor, bearerHeader, knockOnDoor, readBadge, writeBadge } from "./badge-store.ts";
-export type { DoorAnswer, StoredBadge } from "./badge-store.ts";
+/** Machine configuration schema (`~/.isocan/config.json`) and per-home proxy auth types. */
+export type { HomeAuthConfig, HomeAuthEntry, HomeConfig } from "./config.ts";
+export { adoptIdentity, askTheDoor, bearerHeader, fileBadgeStore, knockOnDoor, readBadge, writeBadge, writeIdentityActor, writeIdentityName } from "./badge-store.ts";
+export type { BadgeStore, DoorAnswer, StoredBadge } from "./badge-store.ts";
 export { MINT_PER_MINUTE, TOO_MANY_BADGES } from "./meter.ts";
 export { HomeLink, HomeRefusedError, HomeUnreachableError } from "./home-link.ts";
 export type {
@@ -36,11 +71,10 @@ export type {
   HomeHello,
   HomeRegistry,
 } from "./home-link.ts";
-export { HomeLinks } from "./home-links.ts";
+export { HomeLinks, NotAReplicaError, SelfLinkError, isSelfAddress } from "./home-links.ts";
 export type { HomeLinksOptions } from "./home-links.ts";
 export { homesRecorded, readHomes, writeHomes } from "./homes.ts";
 export type { HomeAssignments } from "./homes.ts";
-export { HOME_HEADER } from "./http.ts";
 export { buildStamp, describeBuild, plausibleSha, stalenessOf, upgradeVerdict } from "./build.ts";
 export type { BuildStamp, HomeBuild } from "./build.ts";
 export * as paths from "./paths.ts";
@@ -58,7 +92,12 @@ export {
   markerFile,
   readMarker,
   recordDir,
+  removeMarker,
   writeMarker,
 } from "./binding.ts";
 export type { DirBinding, DirMarker } from "./binding.ts";
 export * from "./personas.ts";
+
+export * from "./personal-desk.ts";
+
+export type { CanvasLifecycle } from "./store.ts";

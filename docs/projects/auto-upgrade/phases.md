@@ -27,7 +27,7 @@ multiuser project. Dev needs no permission — `green` already deploys it.
 
 ---
 
-**Where we are: ALL FOUR PHASES DONE (27–29 Aug 2026).** isocan.io can say
+**Where we are: all four phases are CLOSED (27–29 Aug 2026).** isocan.io can say
 which commit it is running; a CLI that disagrees with its home says so, once,
 naming both builds; an upgrade is a build installed aside, started and asked
 which commit it is, and a symlink flipped only if it answered correctly; and
@@ -58,6 +58,7 @@ rather than queued here:
   already puts somebody else's agent on somebody else's laptop. `--pin` and
   `off` are the recovery paths; the boundary itself is still on the
   Deliberately-open list, where it should be read before the day it matters.
+  *Still open on 11 Sep 2026 — Dion is still weighing it.*
 
 This project is not gated on the multiuser project, and nothing there is gated
 on this. Multiuser phase 14 closed with next steps being a choice, not a
@@ -140,7 +141,7 @@ passes" is not a measurement when the claim is about a real machine.
 
 ## Phase 1 — The home that can report which build it is ⚑ promote
 
-**Status: DONE 27 Aug 2026 — proof taken on isocan.io.**
+**Status: CLOSED, 27 Aug 2026 — proof taken on isocan.io.**
 
 ```
 $ curl -s https://isocan.io/api/healthz
@@ -235,7 +236,7 @@ and a plausible sha passes through.
 
 ## Phase 2 — A third kind of stale
 
-**Status: DONE 28 Aug 2026 — proof taken on this machine, against a stub
+**Status: CLOSED, 28 Aug 2026 — proof taken on this machine, against a stub
 home.**
 
 ```
@@ -355,7 +356,7 @@ green (1814 tests), plus the hand walk quoted in the status above.
 
 ## Phase 3 — The managed install root
 
-**Status: DONE 29 Aug 2026 — proof taken on this machine, against the real
+**Status: CLOSED, 29 Aug 2026 — proof taken on this machine, against the real
 `release` branch on GitHub.**
 
 ```
@@ -555,7 +556,7 @@ try.
 
 ## Phase 4 — Applying it unattended
 
-**Status: DONE 29 Aug 2026 — proof taken on this machine, two real managed
+**Status: CLOSED, 29 Aug 2026 — proof taken on this machine, two real managed
 builds and a real park.**
 
 ```

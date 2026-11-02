@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-import { rules, withoutComments } from "./cssrules.ts";
+import { loadedWith, rules } from "./cssrules.ts";
 
 /**
  * **A create that worked, made visible.**
@@ -75,7 +75,7 @@ describe("the new canvas introduces itself", () => {
 });
 
 describe("the mark's stylesheet", () => {
-  const sheet = rules(withoutComments());
+  const sheet = rules(loadedWith("canvas-list.css"));
   const mark = sheet.filter((r) => r.selector.includes(".just-made"));
 
   it("exists at all", () => {

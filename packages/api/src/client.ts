@@ -2,9 +2,268 @@ import { promises as fs, realpathSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { existsSync, openSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { paths } from "@isocan/server";
-import { DaemonRoutes } from "./routes.ts";
+import { packageBin, packageRoot } from "@isocan/core/packageroot";
+import { Agent, Dispatcher, EnvHttpProxyAgent, Pool, fetch as undiciFetch, setGlobalDispatcher } from "undici";
+import { isLoopbackBase } from "@isocan/core";
+import type { BadgeStore, SourceRequestContext } from "@isocan/core";
+import { fileBadgeStore, gatewayBaseFor, homeAuthFor, paths, plausibleSha, upgradeVerdict } from "@isocan/server";
+import { authHeaderFetch } from "./auth-helper.ts";
+import { isBadgeUpstream } from "./identity.ts";
+import { harnessSessions } from "./harness.ts";
+import { DaemonRoutes, platformFetch, type Health } from "./routes.ts";
+
+if (
+  process.env.https_proxy?.trim() ||
+  process.env.HTTPS_PROXY?.trim() ||
+  process.env.http_proxy?.trim() ||
+  process.env.HTTP_PROXY?.trim()
+) {
+  setGlobalDispatcher(new EnvHttpProxyAgent({ proxyTunnel: false }));
+}
+
+const upstreamBadgeStore: BadgeStore = {
+  upstream: true,
+  async read() {
+    return null;
+  },
+  async keep() {},
+};
+
+async function defaultSessionKey(home: string): Promise<string | null> {
+  const present = await harnessSessions(home);
+  const primary = present.find((s) => s.deliberate) ?? present[0];
+  if (!primary || primary.harness.toLowerCase() === "agent") return null;
+  return primary.key;
+}
+
+/**
+ * The proxy URL configured in `env` for `base`, or `null` when none is set or
+ * `NO_PROXY` / `no_proxy` excludes the target host and port.
+ */
+function proxyForBase(base: string, env: NodeJS.ProcessEnv = process.env): string | null {
+  let url: URL;
+  try {
+    url = new URL(base);
+  } catch {
+    return null;
+  }
+  const raw =
+    url.protocol === "https:"
+      ? (env.https_proxy ?? env.HTTPS_PROXY ?? env.http_proxy ?? env.HTTP_PROXY)
+      : (env.http_proxy ?? env.HTTP_PROXY ?? env.https_proxy ?? env.HTTPS_PROXY);
+  const proxy = raw?.trim();
+  if (!proxy) return null;
+  const noProxy = (env.no_proxy ?? env.NO_PROXY ?? "").trim();
+  if (noProxy === "*") return null;
+  if (noProxy) {
+    const host = url.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+    const port = Number.parseInt(url.port, 10) || (url.protocol === "https:" ? 443 : 80);
+    for (const part of noProxy.split(/[,\s]+/)) {
+      if (!part) continue;
+      const m = /^(.+):(\d+)$/.exec(part);
+      const entryHost = (m ? m[1]! : part)
+        .replace(/^\*?\./, "")
+        .replace(/^\[|\]$/g, "")
+        .toLowerCase();
+      const entryPort = m ? Number.parseInt(m[2]!, 10) : 0;
+      if (entryPort && entryPort !== port) continue;
+      if (host === entryHost || host.endsWith(`.${entryHost}`)) return null;
+    }
+  }
+  return proxy;
+}
+
+/**
+ * Plain HTTP/1.1 forward-proxy dispatcher for local sidecar proxies (`127.0.0.1` / `localhost`)
+ * that originate the upstream TLS / client-certificate connection themselves (`proxyTunnel: false`).
+ *
+ * `undici`'s `EnvHttpProxyAgent({ proxyTunnel: false })` only skips `CONNECT` for `http:` targets
+ * and still issues `CONNECT` for `https:` URLs (`shouldProxyTunnel` in `proxy-agent.js`). When a
+ * loopback proxy terminates/originates TLS on the client's behalf, sending `CONNECT` + a second TLS
+ * handshake fails with `ERR_SSL_WRONG_VERSION_NUMBER`; forwarding origin-form HTTP/1.1 with
+ * `Host: <target-host>` over loopback lets the local proxy attach its client certificate and speak
+ * TLS upstream.
+ */
+function originatingProxyDispatcher(proxyUrl: string): Dispatcher {
+  return new Pool(proxyUrl).compose((dispatch) => (opts, handler) => {
+    const { host } = new URL(String(opts.origin));
+    const headers =
+      opts.headers && typeof opts.headers === "object" && !Array.isArray(opts.headers)
+        ? { ...(opts.headers as Record<string, string | string[] | undefined>), host }
+        : { host };
+    return dispatch({ ...opts, headers }, handler);
+  });
+}
+
+function proxyFetch(base: string, proxyUrl: string, proxyTunnel?: boolean): typeof fetch {
+  if (proxyTunnel === false && (!isLoopbackBase(proxyUrl) || !proxyUrl.toLowerCase().startsWith("http://"))) {
+    return async () => {
+      throw new Error(
+        `refusing proxyTunnel: false for non-loopback httpProxy ${proxyUrl} (for ${base})`,
+      );
+    };
+  }
+  const dispatcher =
+    proxyTunnel === false
+      ? originatingProxyDispatcher(proxyUrl)
+      : new EnvHttpProxyAgent({
+          httpProxy: proxyUrl,
+          httpsProxy: proxyUrl,
+          noProxy: "",
+          proxyTunnel: false,
+        });
+  return async (input, init) => {
+    try {
+      return (await undiciFetch(input as Parameters<typeof undiciFetch>[0], {
+        ...(init as Parameters<typeof undiciFetch>[1]),
+        dispatcher,
+      })) as unknown as Response;
+    } catch (err) {
+      if (err instanceof Error) {
+        const cause = (err as { cause?: { code?: string; message?: string } }).cause;
+        const detail = cause?.code ?? cause?.message ?? err.message;
+        err.message = `could not reach proxy ${proxyUrl} (for ${base}): ${detail}`;
+      }
+      throw err;
+    }
+  };
+}
+
+function gatewayFetch(base: string, gatewayUrl: string): typeof fetch {
+  return (input, init) => {
+    const matchesBase =
+      typeof input === "string" &&
+      (input === base || input.startsWith(`${base}/`) || input.startsWith(`${base}?`));
+    const rewritten = matchesBase ? `${gatewayUrl}${input.slice(base.length)}` : input;
+    return platformFetch(rewritten, init);
+  };
+}
+
+/**
+ * **A SYN that goes nowhere costs a second, not eight** — the product half of
+ * the flake family's 3 Sep fix (`docs/research/2026-08-29-the-flake-family.md`).
+ *
+ * A loopback connect is the kernel's own work: measured at 1ms even against a
+ * daemon whose event loop is blocked for five seconds, because the kernel
+ * completes the handshake and the process only accepts afterwards. So on this
+ * machine a connect that takes longer than a moment is not a slow daemon, it
+ * is a SYN that was dropped or parked — and the kernel's retransmit ladder
+ * then holds it for ~7.8s, measured, past every budget the product has.
+ * Nothing recovers it, because `request` makes one attempt: what a person
+ * types gets `error: fetch failed` after eight seconds from a daemon that was
+ * alive the whole time.
+ *
+ * **Why a retry here is safe when an abort would not be.** The rule is
+ * `test/setup.ts`'s and it is the reason that fix was possible at all: a
+ * retry is allowed only when nothing reached the server, and an `AbortError`
+ * carries no syscall — it cannot tell a connect that never completed from a
+ * POST already on the wire, so retrying on it would let an op land twice.
+ * `Agent({ connect: { timeout } })` bounds the TCP connect ALONE and fails it
+ * with `UND_ERR_CONNECT_TIMEOUT`, which by construction means no request was
+ * ever written. That is the whole licence, and it is why the deadline is on
+ * the connect and not on the request.
+ *
+ * **Why only loopback.** Over a network the same connect is an RTT away —
+ * 34-45ms to the hosted homes, measured — and on a bad link it is seconds.
+ * A deadline that is generous on this machine would refuse a slow link that
+ * was working, and a remote base has no 7.8s ladder to escape in the first
+ * place, so it keeps today's behaviour exactly: the platform's fetch, one
+ * attempt, no deadline. `isLoopbackBase` is the same question `healthPath`
+ * asks, asked once.
+ *
+ * **The numbers, and what they really are.** 1.2s per attempt inside a 3s
+ * budget, the pair the suite proved. undici's connect deadline runs on its
+ * own ~500ms timer wheel (`setupConnectTimeout` calls `setFastTimeout`, which
+ * never takes the native path), so the deadline is quantized: 1.2s fires at
+ * about 1.5s, and asking for less than a second buys nothing. Two or three
+ * attempts fit the budget, and a connect that lands on the second returns in
+ * ~1.6s where today it is a hard failure at 7.8s.
+ */
+const CONNECT_BUDGET_MS = 3000;
+const CONNECT_ATTEMPT_MS = 1200;
+
+const connectBounded = new Agent({ connect: { timeout: CONNECT_ATTEMPT_MS } });
+
+/**
+ * **A connect that TIMED OUT, and nothing else** — undici's own word for the
+ * deadline above, plus the kernel's for the ladder it replaces. Both mean, by
+ * construction, that no byte was written, which is what makes replaying the
+ * request safe.
+ *
+ * `ECONNREFUSED` is deliberately NOT here, though `test/setup.ts` retries on
+ * it. It is equally provable and equally safe — and it is also the answer for
+ * a daemon that simply is not running, which is instant today and would
+ * become three seconds of hopeful sleeping before the same failure. The suite
+ * wants that (its daemons are always coming back); a person at a terminal
+ * does not. The thing being bought here is the 7.8s ladder, so the predicate
+ * is exactly the ladder.
+ */
+function neverLeftThisMachine(err: unknown): boolean {
+  const cause = (err as { cause?: { syscall?: string; code?: string } }).cause;
+  return (
+    cause?.code === "UND_ERR_CONNECT_TIMEOUT" ||
+    (cause?.syscall === "connect" && (cause.code === "ETIMEDOUT" || cause.code === "ECONNRESET")) ||
+    (cause?.syscall === "write" && cause.code === "EPIPE")
+  );
+}
+
+/*
+ * **macOS 27 resets where macOS 26 dropped** (measured 6 Oct 2026, Darwin
+ * 27.0). A full accept queue on a stopped or busy listener used to swallow
+ * the SYN, which is the 7.8s ladder above. Darwin 27 answers it with a reset
+ * instead: most attempts fail at once with `connect ECONNRESET`, and some
+ * report connected and are reset a millisecond later, so the first write
+ * fails with `EPIPE`. Neither reached the daemon — a reset connect never
+ * completed, and an EPIPE is the kernel refusing the request's bytes, so the
+ * daemon never held a whole request to act on. Both are the same licence as
+ * the timeout, and without them the recovery this file exists for — a
+ * connect that becomes possible inside the budget — fails on the first
+ * attempt on every Mac that has updated. `read ECONNRESET` is deliberately
+ * NOT here: by then the request may have been read.
+ */
+
+/**
+ * The loopback fetch: connect-bounded, retried inside a clock budget, and —
+ * when it does give up — carrying the sentence a person can act on.
+ *
+ * `TypeError: fetch failed` names no address, no syscall and no duration;
+ * the flake family spent a week undifferentiated on that message alone, and
+ * `error: fetch failed` is what the CLI prints today for every one of these.
+ * What replaces it says which daemon, what happened to the connection, and
+ * that it was tried more than once — so the next occurrence in somebody's
+ * terminal is evidence rather than another sighting.
+ */
+function boundedFetch(base: string): typeof fetch {
+  return async (input, init) => {
+    const started = Date.now();
+    for (let attempt = 0; ; attempt++) {
+      init?.signal?.throwIfAborted();
+      try {
+        return (await undiciFetch(input as Parameters<typeof undiciFetch>[0], {
+          ...(init as Parameters<typeof undiciFetch>[1]),
+          dispatcher: connectBounded,
+        })) as unknown as Response;
+      } catch (err) {
+        const spent = Date.now() - started;
+        if (!neverLeftThisMachine(err) || spent >= CONNECT_BUDGET_MS) {
+          if (neverLeftThisMachine(err)) {
+            const cause = (err as { cause?: { code?: string } }).cause;
+            (err as Error).message =
+              `could not reach the daemon at ${base} — ` +
+              (cause?.code === "EPIPE" ? "the connection was reset before the request was written " : "the connection was never made ") +
+              `(${cause?.code ?? "?"}, ${attempt + 1} attempt${attempt === 0 ? "" : "s"} in ` +
+              `${(spent / 1000).toFixed(1)}s). Nothing was sent, so nothing landed twice; ` +
+              `"isocan status" says whether a daemon is there.`;
+          }
+          throw err;
+        }
+        // Lengthen the pause the way the suite's does: a machine that could
+        // not answer a SYN now is likely to be busy a millisecond from now.
+        await new Promise((resolve) => setTimeout(resolve, 50 * (attempt + 1)));
+      }
+    }
+  };
+}
 
 /**
  * **The Node-only half of the client** — how a daemon comes to exist on this
@@ -15,6 +274,75 @@ import { DaemonRoutes } from "./routes.ts";
  * and nothing in `DaemonRoutes` may.
  */
 export class DaemonClient extends DaemonRoutes {
+  /** The client home directory: where this machine's badge, daemon log and
+   * managed builds live. The route surface takes the badge store alone. */
+  readonly home: string;
+  /** True when this client speaks directly to a remote home with no local
+   * daemon in front of it (`direct` mode). In that arrangement the remote
+   * home's `/api/healthz` carries no `upgrade` field of its own, so
+   * `probeHealth` computes the verdict against this CLI's build stamp. */
+  direct = false;
+
+  constructor(base: string, home: string, lifetime?: AbortSignal, sourceContext?: SourceRequestContext) {
+    const homeAuth = homeAuthFor(base, home);
+    super(
+      base,
+      isBadgeUpstream() || homeAuth !== null ? upstreamBadgeStore : fileBadgeStore(home, base),
+      lifetime,
+      sourceContext,
+    );
+    this.home = home;
+    if (!isBadgeUpstream()) {
+      this.useSessionKey(() => defaultSessionKey(this.home));
+    }
+    const gateway = gatewayBaseFor(this.base, this.home);
+    if (gateway) {
+      const via = gatewayFetch(this.base, gateway);
+      this.fetcher = via;
+      this.probeFetcher = via;
+    } else {
+      const proxy = homeAuth?.httpProxy ?? proxyForBase(this.base);
+      if (proxy) {
+        const via = proxyFetch(this.base, proxy, homeAuth?.httpProxy ? homeAuth.proxyTunnel : undefined);
+        this.fetcher = via;
+        this.probeFetcher = via;
+      } else if (isLoopbackBase(this.base)) {
+        this.fetcher = boundedFetch(this.base);
+      }
+    }
+    if (homeAuth?.authHeaderCommand) {
+      this.fetcher = authHeaderFetch(this.base, this.home, homeAuth, this.fetcher);
+      this.probeFetcher = authHeaderFetch(this.base, this.home, homeAuth, this.probeFetcher);
+    }
+  }
+
+  override async probeHealth(
+    timeoutMs = 5_000,
+  ): Promise<{ ok: true; health: Health } | { ok: false; why: string }> {
+    const res = await super.probeHealth(timeoutMs);
+    if (res.ok && this.direct && !res.health.upgrade) {
+      const verdict = upgradeVerdict({
+        url: this.base,
+        commit: plausibleSha(typeof res.health.commit === "string" ? res.health.commit : undefined),
+        builtAt: typeof res.health.builtAt === "string" ? res.health.builtAt : null,
+      });
+      if (verdict) return { ok: true, health: { ...res.health, upgrade: verdict } };
+    }
+    return res;
+  }
+
+  /**
+   * **A blob, as the bytes Node code reads.** The route
+   * surface answers a `Uint8Array`, because `isocan/rc` hands that surface to
+   * hosts that have no `Buffer`; the CLI and the modules read what this
+   * returns with `.toString("utf8")`, so the Node half wraps the same memory
+   * — a view, not a copy.
+   */
+  override async downloadBlob(canvasId: string, blobHash: string, signal?: AbortSignal): Promise<Buffer> {
+    const bytes = await super.downloadBlob(canvasId, blobHash, signal);
+    return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  }
+
   /**
    * **Which copy a daemon started from here should run** (auto-upgrade phase
    * 4). Normally this one — the process asking for a daemon is the obvious
@@ -38,23 +366,22 @@ export class DaemonClient extends DaemonRoutes {
    * argument).
    */
   private daemonBin(): string {
-    const own = path.resolve(
-      path.dirname(fileURLToPath(import.meta.url)),
-      "../../cli/bin/isocan.js",
-    );
-    if (shaOfRoot(this.home, path.resolve(own, "../../../..")) === null) return own;
-    const current = path.join(
-      paths.currentLink(this.home),
-      "node_modules/isocan/packages/cli/bin/isocan.js",
-    );
+    const root = packageRoot();
+    const own = packageBin(root);
+    if (shaOfRoot(this.home, root) === null) return own;
+    const installed = path.join(paths.currentLink(this.home), "node_modules/isocan");
+    const current = packageBin(installed);
     return existsSync(current) ? current : own;
   }
 
   /** Start the daemon detached if it isn't answering, then wait for healthz. */
   async ensureDaemon(): Promise<void> {
+    this.lifetime?.throwIfAborted();
     if (await this.health()) return;
+    this.lifetime?.throwIfAborted();
     const cliBin = this.daemonBin();
     await fs.mkdir(this.home, { recursive: true });
+    this.lifetime?.throwIfAborted();
     const log = openSync(paths.daemonLogFile(this.home), "a");
     const port = new URL(this.base).port;
     spawn(process.execPath, [cliBin, "serve", "--foreground"], {
@@ -84,6 +411,7 @@ export class DaemonClient extends DaemonRoutes {
      */
     const deadline = Date.now() + 20_000;
     while (Date.now() < deadline) {
+      this.lifetime?.throwIfAborted();
       if (await this.health(1000)) return;
       await new Promise((r) => setTimeout(r, 150));
     }

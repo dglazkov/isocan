@@ -1,5 +1,14 @@
 import type { CanvasContents, Item, ItemVersion } from "./model.ts";
 import { childrenOf, parentOf } from "./lineage.ts";
+import type { MetaPatch, Operation } from "./ops.ts";
+import { copyPreferencePatch } from "./preference.ts";
+import { PROPOSAL_PROP, proposalMarked } from "./proposal.ts";
+
+/** `goodnight.ts`'s `PROMISE_TAKE_PROP`, spelled here for the same reason as the stance below: a failed promise that still shows the take it would have made. */
+const PROMISE_TAKE_PROP = "promiseTake";
+
+/** `copy-variants.ts`'s `COPY_STANCE_PROP`, spelled here so core's barrel never imports the lazy copy-variants chunk. */
+const COPY_STANCE_PROP = "copyStance";
 
 /**
  * **This one won.**
@@ -37,9 +46,10 @@ import { childrenOf, parentOf } from "./lineage.ts";
  * So what actually records the decision is what the canvas already keeps: the
  * winner's content is now the source's top version with its own author and
  * time, and every explored sibling sits in the trash under the name somebody
- * gave it, recoverable. `label` below is the sentence the CLI prints, not a
- * field anything stores — and calling it what it is beats implying a record
- * that does not exist.
+ * gave it, recoverable. When the winner is a copy variant with sibling voices,
+ * `preference` records the winning stance and `preferredOver` on the source in
+ * the same op group (copy-edit phase 6). `label` below is the sentence the CLI
+ * prints.
  */
 interface ConvergePlan {
   /** The item the winner folds into. */
@@ -50,6 +60,8 @@ interface ConvergePlan {
   trash: string[];
   /** The sentence a surface says about this decision. Not stored. */
   label: string;
+  /** On a copy variant with sibling voices: the preference patch for `parentId`. */
+  preference?: MetaPatch;
 }
 
 type ConvergeRefusal = { refused: string };
@@ -67,6 +79,15 @@ export function convergePlan(
 ): ConvergePlan | ConvergeRefusal {
   const chosen = canvas.items[chosenId];
   if (!chosen) return { refused: `no item ${chosenId} on this canvas` };
+
+  // A night's promise is kept only once it holds something (proactive-agent
+  // phase 2): an empty frame, or a failure with no take, would fold a
+  // placeholder into the person's work.
+  const state = chosen.properties[PROPOSAL_PROP];
+  if (state === "promised") return { refused: `"${chosen.title}" is a promised frame, still empty — there is nothing in it to keep yet` };
+  if (state === "failed" && !chosen.properties[PROMISE_TAKE_PROP]) {
+    return { refused: `"${chosen.title}" is a promise that did not work, with no take to show — delete it, or ask for another try` };
+  }
 
   const parentId = parentOf(chosen);
   if (parentId === null) {
@@ -88,17 +109,55 @@ export function convergePlan(
   // Every sibling, the winner included. `childrenOf` is the same reader
   // `isocan lineage` prints from, so what converges is exactly what that
   // command says was made from this source.
-  const family = childrenOf(canvas, parentId).map((item: Item) => item.id);
-  const trash = family.includes(chosenId) ? family : [chosenId, ...family];
+  const siblings = childrenOf(canvas, parentId);
+  const family = siblings.map((item: Item) => item.id);
+  // A proposal is Kept alone (proactive-agent §3): it folds in and goes, and
+  // every other child of the source — another agent's proposal, the person's
+  // own variations — stays where it is. A proposal is not one of a set of
+  // takes the person chose between; it is one note somebody left.
+  const trash = proposalMarked(chosen) ? [chosenId] : family.includes(chosenId) ? family : [chosenId, ...family];
+
+  const stance = chosen.properties[COPY_STANCE_PROP]?.trim();
+  const losingCopy = stance ? siblings.filter((s) => s.id !== chosenId && Boolean(s.properties[COPY_STANCE_PROP]?.trim())) : [];
+  const preference =
+    stance && losingCopy.length > 0
+      ? copyPreferencePatch(parent, {
+          how: "choose",
+          stance,
+          against: losingCopy.map((s) => s.properties[COPY_STANCE_PROP]!.trim()),
+          chosen: chosenId,
+          againstIds: losingCopy.map((s) => s.id),
+        })
+      : null;
 
   return {
     parentId,
     version,
     trash,
     label: `chose ${chosen.title}`,
+    ...(preference ? { preference } : {}),
   };
 }
 
 export function isRefusal(plan: ConvergePlan | ConvergeRefusal): plan is ConvergeRefusal {
   return "refused" in plan;
 }
+
+/**
+ * **The ops a choice sends, in order**: the winner onto the parent's stack,
+ * the copy preference on the parent when choosing between copy variants,
+ * then every child to the trash. The caller sends them under ONE group, so
+ * one ⌘Z takes the version back and brings every child out of the trash.
+ *
+ * Here rather than in either client because there are two: `isocan choose`
+ * and the item menu's "Choose this variation" both send exactly this list
+ * (`packages/web/test/choose.test.ts` holds them equal against a daemon).
+ */
+export function convergeOps(plan: ConvergePlan): Operation[] {
+  return [
+    { type: "item.addVersion", itemId: plan.parentId, version: plan.version },
+    ...(plan.preference ? [{ type: "item.update" as const, itemId: plan.parentId, patch: plan.preference }] : []),
+    ...plan.trash.map((itemId): Operation => ({ type: "item.delete", itemId })),
+  ];
+}
+

@@ -1,0 +1,132 @@
+{
+  "recordedAt": "2026-09-15T11:37:53.596Z",
+  "base": "97af446a8e181049ffbf40e32568ee51c3fc73df",
+  "files": [
+    {
+      "path": "index.mjs",
+      "sha256": "abee711b68b30abc14f45cf384ce2e5f416ae780baf3fd90e72e64d16bcd9dc6",
+      "size": 5045
+    },
+    {
+      "path": "packages/api/package.json",
+      "sha256": "c5414d130d4498004274e2249754f734af5375ab002bee55ea0268fe4b6441cb",
+      "size": 919
+    },
+    {
+      "path": "packages/api/src/connect.ts",
+      "sha256": "823282f50376e03c5af2ea49f71524d53708a09689c569ec3eeab8bf59af2e4d",
+      "size": 49357
+    },
+    {
+      "path": "packages/api/src/craft/package-pin.ts",
+      "sha256": "9ee8750d6e448e2e225dc736224d915473627639831a832583161ac48fe57500",
+      "size": 11781
+    },
+    {
+      "path": "packages/api/src/craft/sources.ts",
+      "sha256": "4794651739d57565135921ca376a3b1ca3ba8c2738eb4a2f93d90422e33e39e7",
+      "size": 13308
+    },
+    {
+      "path": "packages/api/src/design-craft-files.ts",
+      "sha256": "b55082d42f54f70074b27ab4a70812f4ce09e93b3a2862f9834bece9db8e52b4",
+      "size": 4847
+    },
+    {
+      "path": "packages/api/src/design-craft-guidance.ts",
+      "sha256": "04a525e2f79066e68418ac7e7131c41eb2ec0a99e067ebaf439b578709345d0a",
+      "size": 5424
+    },
+    {
+      "path": "packages/api/src/design-craft-packet.ts",
+      "sha256": "d7025819d803a1594b3c9d70c5fe6a16d70a3914c30185d36b82fdcbb061963c",
+      "size": 15971
+    },
+    {
+      "path": "packages/api/src/design-craft-reader.ts",
+      "sha256": "56b6f2cc0e179daf52a161f469d5b94fad24726c514a61a7be2358fc5fa23438",
+      "size": 12193
+    },
+    {
+      "path": "packages/api/src/design-request-reader.ts",
+      "sha256": "af2a97e5447f96b8702d289a7f2eefe87a5fefebe26e0a521087303bc2c8395d",
+      "size": 29515
+    },
+    {
+      "path": "packages/api/src/design-system-reader.ts",
+      "sha256": "2dc3ce107dca1fee9e8ffb1cfb4bcecbede1f2137e38379b9cf27d6f3369e5e3",
+      "size": 16765
+    },
+    {
+      "path": "packages/api/src/design-workflow.ts",
+      "sha256": "1ff71393ff5cbd279e7c8f717abb5c8e28dc17ab90e4ae4fdfae9671c374b1a2",
+      "size": 10149
+    },
+    {
+      "path": "packages/api/src/index.ts",
+      "sha256": "d827c393e3d9e43b549cc97cefba54ccfe5f5a741c7b1bd3f2418803b716ebe3",
+      "size": 2460
+    },
+    {
+      "path": "packages/api/test/design-craft.test.ts",
+      "sha256": "15e012b76a7e72dc8dfe60ed3b0fc84c3d6dd52aa89470be7b736eaa3a698b35",
+      "size": 19728
+    },
+    {
+      "path": "packages/cli/bin/workspace-loader.mjs",
+      "sha256": "4f0fc7f40b7a28e579afdbce163d0169b03b8d6bcff45e331a17e1b1e8bd5936",
+      "size": 4505
+    },
+    {
+      "path": "packages/cli/src/agent-guide.md",
+      "sha256": "85a250a52b83c553280dc8938d2c03ee36350ec60da1d933054f69fb22cdaf00",
+      "size": 186424
+    },
+    {
+      "path": "packages/cli/src/design-craft.ts",
+      "sha256": "2fa26f337b13ff2e68422eb03b8c3de95d67be180d03b8141eb7c4def5c683d4",
+      "size": 3818
+    },
+    {
+      "path": "packages/cli/src/main.ts",
+      "sha256": "e6f2a05b6bc909b245639e81fe79b8ccd54eede795356b5f2fb958d874bcd183",
+      "size": 702451
+    },
+    {
+      "path": "packages/cli/test/design-craft.test.ts",
+      "sha256": "95f3e77b169fbb18185ceb4dfdf3c52be7dce8af9a460dbe3746d61d49f93b7e",
+      "size": 4983
+    },
+    {
+      "path": "packages/web/src/components/DesignCraftButton.tsx",
+      "sha256": "f3dd1415d001af23763360b4bb477eb94609c528af8321adf4b5da1bc69b91bd",
+      "size": 1413
+    },
+    {
+      "path": "packages/web/src/components/DesignCraftPanel.tsx",
+      "sha256": "7dd43d2237d358443186b1cde71a07c23014eb6d820f3d459ccca8a20bf2619d",
+      "size": 10375
+    },
+    {
+      "path": "packages/web/src/components/DesignTaskCard.tsx",
+      "sha256": "5d69d14d8146dc86f61bf8d7001db8b47e2f00157edcd69b6d8cc45698540c36",
+      "size": 15420
+    },
+    {
+      "path": "scripts/journey-design-craft.mjs",
+      "sha256": "21311d594a53ee0e7d0f20864b84dfe0e87e6c6a1e0e57dbb4bc125ec0cd15f9",
+      "size": 14829
+    },
+    {
+      "path": "test/deep.ts",
+      "sha256": "e322065daa9b953e570715f096886466c5aec55dbace472b71ea3b359a829cf6",
+      "size": 17069
+    }
+  ],
+  "entry": {
+    "path": "packages/web/dist/assets/index-DEF98bII.js",
+    "sha256": "ca5c47e5d19ff5901d1c6e9b96e43240e4b2884ca87c2275cf9a21eb7de3cdaa",
+    "size": 742315
+  },
+  "entryCeiling": 743900
+}

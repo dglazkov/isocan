@@ -1,13 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
-import { spawn, type ChildProcess } from "node:child_process";
+import { type ChildProcess } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { PresenceSession } from "@isocan/core";
-import { startDaemon, type Daemon } from "@isocan/server";
-import { harnessVars } from "@isocan/api";
+import { type Daemon } from "@isocan/server";
+import { startDaemon } from "@isocan/server/daemon";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
+import { cliBin, cliEnv, collect, spawnCli as startCli } from "./cli.ts";
 
 /**
  * **Dispatch** (agents-on-demand phase 4): a comment addressed to an
@@ -24,7 +25,6 @@ import { mintTestBadge, type TestBadge } from "./badge.ts";
  * appearing with the turn and fading when it ends.
  */
 
-const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 const fakeAcp = fileURLToPath(new URL("./fake-acp.mjs", import.meta.url));
 const nico = { id: "usr_nico", name: "Nico" };
 const dimitri = { id: "usr_dimitri", name: "Dimitri" };
@@ -82,32 +82,16 @@ function sessions(): Promise<PresenceSession[]> {
 }
 
 function spawnCli(args: string[], extraEnv: Record<string, string> = {}): ChildProcess {
-  const env = { ...process.env };
-  for (const name of harnessVars) delete env[name];
-  return spawn(process.execPath, [cliBin, ...args], {
-    env: {
-      ...env,
+  return startCli(args, {
+    cwd: home,
+    env: cliEnv({
       ISOCAN_HOME: home,
       ISOCAN_PORT: new URL(base).port,
       FAKE_ACP_REPLY: "1",
       FAKE_ACP_CLI: cliBin,
       ...extraEnv,
-    },
-    cwd: home,
-    stdio: ["ignore", "pipe", "pipe"],
+    }),
   });
-}
-
-function collect(child: ChildProcess): Promise<{ code: number; stdout: string; stderr: string }> {
-  let stdout = "";
-  let stderr = "";
-  child.stdout!.setEncoding("utf8");
-  child.stdout!.on("data", (chunk) => (stdout += chunk));
-  child.stderr!.setEncoding("utf8");
-  child.stderr!.on("data", (chunk) => (stderr += chunk));
-  return new Promise((resolve) =>
-    child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })),
-  );
 }
 
 const isocan = (...args: string[]) => collect(spawnCli(args));
@@ -155,6 +139,17 @@ function startRc(extraEnv: Record<string, string> = {}): {
   return { child, out: () => out, done };
 }
 
+/**
+ * **A team's agent, said out loud** (owner-only summons, 11 Sep 2026). This
+ * file's summonses come from Dimitri at the test badge, and the rc belongs to
+ * Nico (identity.json) — so an agent enrolled with nothing said now answers
+ * Nico alone, and every doorbell below would be turned away at the gate.
+ * These tests are about dispatch, not consent, so their agents are enrolled
+ * the way a team's agent is: open to everyone, explicitly. What the default
+ * does is pinned in its own block at the end of this file.
+ */
+const TEAM = ["--listen", "everyone"];
+
 const summon = (threadId: string, body: string) =>
   post("/api/ops", {
     canvasId: "prj_1",
@@ -172,7 +167,7 @@ const summon = (threadId: string, body: string) =>
 describe("the doorbell works (journey 2)", () => {
   it("a comment to an enrolled, not-running agent produces a reply in its thread", async () => {
     await isocan("agent", "add", "Sian");
-    await isocan("rc", "add", "Sian", "--harness", "fake").catch(() => {}); // idempotent path guard
+    await isocan("rc", "add", "Sian", "--harness", "fake", ...TEAM).catch(() => {}); // idempotent path guard
     const rc = startRc();
     await until(async () => rc.out(), (o) => o.includes("answering on"), "the rc to come up");
 
@@ -199,7 +194,7 @@ describe("the doorbell works (journey 2)", () => {
   }, 40_000);
 
   it("presence appears when the turn starts, works visibly, and fades because the session ended", async () => {
-    await isocan("rc", "add", "Sian", "--harness", "fake");
+    await isocan("rc", "add", "Sian", "--harness", "fake", ...TEAM);
     const rc = startRc({ FAKE_ACP_SLOW_MS: "6000", FAKE_ACP_TOOL_MS: "3000" });
     await until(async () => rc.out(), (o) => o.includes("answering on"), "the rc to come up");
 
@@ -227,11 +222,11 @@ describe("the doorbell works (journey 2)", () => {
     const pointer = JSON.parse(await fs.readFile(path.join(pointerDir, pointers[0]!), "utf8"));
     expect(pointer).toMatchObject({ canvasId: "prj_1", sessionId: face.sessionId });
 
-    // The adapter's tool call becomes an inferred status — the face keeps
-    // saying what the turn is doing instead of freezing on its first line.
+    // The adapter's tool call becomes a humanized inferred status — the face
+    // keeps saying what the turn is doing instead of freezing on its first line.
     const busy = await until(
       sessions,
-      (list) => list.some((s) => s.actor.name === "Sian" && s.status === "Bash: isocan comment reply"),
+      (list) => list.some((s) => s.actor.name === "Sian" && s.status === "writing a reply…"),
       "the tool call narrated on the face",
     );
     expect(busy.find((s) => s.actor.name === "Sian")!.statusSource).toBe("inferred");
@@ -253,7 +248,7 @@ describe("the doorbell works (journey 2)", () => {
 
 describe("routing (journey 4) and the overnight batch (journey 3)", () => {
   it("bulk noise starts zero turns; a matching change starts one; a mention pierces any filter", async () => {
-    await isocan("rc", "add", "Sian", "--harness", "fake", "--rules", '{"ops":["item.move"]}');
+    await isocan("rc", "add", "Sian", "--harness", "fake", "--rules", '{"ops":["item.move"]}', ...TEAM);
     const rc = startRc();
     await until(async () => rc.out(), (o) => o.includes("answering on"), "the rc to come up");
 
@@ -299,7 +294,7 @@ describe("routing (journey 4) and the overnight batch (journey 3)", () => {
     // Enrolled, then abandoned: three comments land with nothing running —
     // not even a cursor row older than the enrolment. The seedAt floor is
     // what makes this deliverable at all.
-    await isocan("rc", "add", "Sian", "--harness", "fake");
+    await isocan("rc", "add", "Sian", "--harness", "fake", ...TEAM);
     await summon("th_n1", "@Sian one");
     await summon("th_n2", "@Sian two");
     await summon("th_n3", "@Sian three");
@@ -322,7 +317,7 @@ describe("routing (journey 4) and the overnight batch (journey 3)", () => {
 
 describe("a limit and a reason (journey 5 and 6, phase 5)", () => {
   it("a session that never starts is loud in the thread it failed for — in the system voice", async () => {
-    await isocan("rc", "add", "Sian", "--harness", "fake");
+    await isocan("rc", "add", "Sian", "--harness", "fake", ...TEAM);
     const rc = startRc({ FAKE_ACP_CRASH: "boot" });
     await until(async () => rc.out(), (o) => o.includes("answering on"), "the rc to come up");
     await summon("th_f", "@Sian can you take a look?");
@@ -343,7 +338,7 @@ describe("a limit and a reason (journey 5 and 6, phase 5)", () => {
   }, 40_000);
 
   it("a session that dies mid-turn reaches the thread the same way", async () => {
-    await isocan("rc", "add", "Sian", "--harness", "fake");
+    await isocan("rc", "add", "Sian", "--harness", "fake", ...TEAM);
     const rc = startRc({ FAKE_ACP_CRASH: "turn" });
     await until(async () => rc.out(), (o) => o.includes("answering on"), "the rc to come up");
     await summon("th_d", "@Sian still there?");
@@ -369,7 +364,7 @@ describe("a limit and a reason (journey 5 and 6, phase 5)", () => {
         rcLimits: { turnsPerHour: 1 },
       }),
     );
-    await isocan("rc", "add", "Sian", "--harness", "fake");
+    await isocan("rc", "add", "Sian", "--harness", "fake", ...TEAM);
     const rc = startRc();
     await until(async () => rc.out(), (o) => o.includes("answering on"), "the rc to come up");
     await summon("th_c1", "@Sian first");
@@ -413,7 +408,7 @@ describe("a limit and a reason (journey 5 and 6, phase 5)", () => {
         rcLimits: { agentChain: 0 },
       }),
     );
-    await isocan("rc", "add", "Sian", "--harness", "fake");
+    await isocan("rc", "add", "Sian", "--harness", "fake", ...TEAM);
     // Percy is enrolled the web dialog's way — his actor minted on THIS
     // badge, so this badge may speak as him (the CLI's Percy would be one
     // actor wearing two faces, and the desk rightly refuses that).
@@ -536,7 +531,7 @@ describe("a wake that lands mid-turn is never starved", () => {
     // roster read as {} and dispatch skipped every agent forever. Pinned
     // deterministically: one slow turn, one comment landing inside it,
     // then total silence — the second summons must still happen.
-    await isocan("rc", "add", "Sian", "--harness", "fake");
+    await isocan("rc", "add", "Sian", "--harness", "fake", ...TEAM);
     const rc = startRc({ FAKE_ACP_SLOW_MS: "3000", FAKE_ACP_REPLY: "0" });
     await until(async () => rc.out(), (o) => o.includes("answering on"), "the rc to come up", 30_000);
 
@@ -565,9 +560,16 @@ describe("the roster tells the truth (journey 7, phase 6)", () => {
   it("answerable is the connection, and only the connection — a dead rc reads enrolled at once", async () => {
     await isocan("rc", "add", "Sian", "--harness", "fake");
     // Nothing running: enrolled, and the roster says nobody is listening.
-    // …and which harness Sian would run on, from this machine's rc half.
+    // …and which harness Sian would run on, from this machine's rc half —
+    // and whose word she takes: this machine's person's, the default since
+    // owner-only summons, read to that person as "you".
     expect(await whoStanding()).toEqual([
-      { actor: expect.objectContaining({ name: "Sian" }), state: "enrolled", harness: "fake" },
+      {
+        actor: expect.objectContaining({ name: "Sian" }),
+        state: "enrolled",
+        harness: "fake",
+        listens: "listens only to you (Nico)",
+      },
     ]);
 
     const rc = startRc();
@@ -593,7 +595,7 @@ describe("the roster tells the truth (journey 7, phase 6)", () => {
   }, 40_000);
 
   it("a mid-turn agent is a live row, not a standing one — three readings, distinguishable", async () => {
-    await isocan("rc", "add", "Sian", "--harness", "fake");
+    await isocan("rc", "add", "Sian", "--harness", "fake", ...TEAM);
     await isocan("rc", "add", "Percy", "--harness", "fake");
     const rc = startRc({ FAKE_ACP_SLOW_MS: "4000", FAKE_ACP_REPLY: "0" });
     await until(async () => rc.out(), (o) => o.includes("answering on"), "the rc to come up");
@@ -631,8 +633,188 @@ describe("the rules are readable in one place (journey 4)", () => {
     await isocan("agent", "add", "Percy");
     const run = await isocan("agent", "rules");
     expect(run.code).toBe(0);
-    expect(run.stdout).toContain("Sian — changes touching itm_9; ops: item.move");
-    expect(run.stdout).toContain("Percy — comments addressed to them (the default)");
+    // The gate first — who, before what — and since owner-only summons there
+    // always is one to say: the owner alone, unless the owner widened it.
+    expect(run.stdout).toContain("Sian — listens only to you (Nico); changes touching itm_9; ops: item.move");
+    expect(run.stdout).toContain("Percy — listens only to you (Nico); comments addressed to them (the default)");
     expect(run.stdout).toContain("comes through any rule set");
+    expect(run.stdout).toContain("isocan rc listen <name> --to <names|everyone>");
   }, 30_000);
+});
+
+/**
+ * **Owner-only summons** (decided 11 Sep 2026 — issue #238). Nico's rc, and
+ * Dimitri at the canvas: an agent enrolled with nothing said answers Nico
+ * alone, a mention from Dimitri is answered in words in its thread and starts
+ * nothing, Nico's own word still wakes it, and Nico widening it is what lets
+ * Dimitri in. This is also the migration: an enrolment with no gate — every
+ * one written before 9 Sep — is exactly this agent.
+ */
+describe("owner-only summons (issue #238)", () => {
+  it("a stranger's mention of a default agent starts nothing, is said in words, and the owner's widening lets them in", async () => {
+    await isocan("rc", "add", "Sian", "--harness", "fake");
+    const rc = startRc();
+    // Said at start, where the person who pays is guaranteed to look — and
+    // printed AFTER "answering on", which is why THIS is what the start
+    // waits for. Waiting on "answering on" and asserting on a line the rc
+    // has not written yet is the shape lessons.md #53 is about; it cost
+    // `rc.test.ts` five releases on 11 Sep 2026.
+    await until(
+      async () => rc.out(),
+      (o) => o.includes("Sian listens only to you (Nico)"),
+      "the rc to come up and announce Sian's gate",
+    );
+
+    // The rc announces its policy with its hold: `who` reads it, and to
+    // Nico it is his own.
+    const who = await until(
+      async () => JSON.parse((await isocan("--json", "who")).stdout) as { standing: Array<{ state: string; policy?: unknown }> },
+      (w) => w.standing.some((r) => r.state === "answerable" && r.policy !== undefined),
+      "the announced policy",
+    );
+    expect(who.standing[0]!.policy).toEqual({ owner: nico, listen: [] });
+
+    await summon("th_no", "@Sian this spacing looks wrong");
+    const said = await until(
+      threads,
+      (t) => (t["th_no"]?.comments ?? []).some((c) => c.author.name === "isocan"),
+      "the refusal in the thread",
+    );
+    const refusal = said["th_no"]!.comments.find((c) => c.author.name === "isocan")!;
+    // In the system voice, naming the owner and the exact gesture.
+    expect(refusal.author.id).toBe("sys_isocan");
+    expect(refusal.body).toBe(
+      "Sian listens only to Nico — this did not wake Sian, and spent nothing. " +
+        "Nico can widen it: isocan rc listen Sian --to Dimitri",
+    );
+    expect(rc.out()).toContain("Sian · Dimitri asked; listens only to you (Nico) — said so in the thread, nothing started");
+    expect(rc.out()).not.toContain("starting a session");
+
+    // Asked again in the same thread: said once, not once per ask.
+    await post("/api/ops", {
+      canvasId: "prj_1",
+      actor: dimitri,
+      op: { type: "thread.reply", threadId: "th_no", comment: { id: "cmt_again", body: "@Sian hello?" } },
+    });
+    await new Promise((r) => setTimeout(r, 1500));
+    const again = await threads();
+    expect(again["th_no"]!.comments.filter((c) => c.author.name === "isocan")).toHaveLength(1);
+    expect(rc.out()).not.toContain("starting a session");
+
+    // The owner's own word wakes her, as it always did.
+    const mine = await isocan("comment", "add", "@Sian over to you", "--at", "0,0");
+    expect(mine.code).toBe(0);
+    await until(async () => rc.out(), (o) => o.includes("Sian · summons from Nico"), "the owner's summons");
+    await until(async () => rc.out(), (o) => o.includes("turn ended"), "the owner's turn");
+
+    // Nico widens it; the rc reads it on its next lap and says so.
+    const widened = await isocan("rc", "listen", "Sian", "--to", "everyone");
+    expect(widened.code).toBe(0);
+    await until(async () => rc.out(), (o) => o.includes("enrolled Sian — answerable here · listens to everyone"), "the widening narrated");
+    await summon("th_yes", "@Sian now you can hear me");
+    await until(
+      async () => rc.out(),
+      (o) => o.includes("Sian · summons from Dimitri"),
+      "Dimitri's summons, now inside the gate",
+    );
+    rc.child.kill("SIGINT");
+    await rc.done;
+  }, 60_000);
+
+  it("a grant that ran out refuses in the same words, and says it lapsed (#272 phase 3)", async () => {
+    /* The phase's whole acceptance: a lapse must not read as a gate that
+       never had them — "you were never let in" and "you were, until
+       Tuesday" have different next moves, and only the second one is the
+       owner's to repeat. The gate is Nico's own word, written with an
+       expiry already behind it. */
+    await isocan("rc", "add", "Sian", "--harness", "fake");
+    // Nico's own word, through the verb a person would use — `--until` takes
+    // an instant as readily as a span, and this one is already behind us.
+    const ago = new Date(Date.now() - 3_600_000).toISOString();
+    const grant = await isocan("rc", "listen", "Sian", "--to", "Dimitri", "--until", ago);
+    expect(grant.code).toBe(0);
+    const rc = startRc();
+    await until(async () => rc.out(), (o) => o.includes("answering on"), "the rc to come up");
+    await summon("th_lapsed", "@Sian still there?");
+    const said = await until(
+      threads,
+      (t) => (t["th_lapsed"]?.comments ?? []).some((c) => c.author.name === "isocan"),
+      "the refusal in the thread",
+    );
+    const refusal = said["th_lapsed"]!.comments.find((c) => c.author.name === "isocan")!.body;
+    // The same sentence a gate with no grant at all would give…
+    expect(refusal).toContain(
+      "Sian listens only to Nico — this did not wake Sian, and spent nothing.",
+    );
+    // …plus the one clause that says which refusal this is.
+    expect(refusal).toContain("Dimitri's access lapsed 1h ago.");
+    // And the suggestion does not carry the lapsed grant back in as though
+    // it still stood: re-granting is a decision, not a default.
+    expect(refusal).toContain("--to Dimitri");
+    expect(refusal).not.toContain(" until 2026");
+    expect(rc.out()).not.toContain("starting a session");
+    rc.child.kill("SIGINT");
+    await rc.done;
+  }, 60_000);
+
+  it("a stranger turned away is not let in one hop later by an open sibling's reply", async () => {
+    /* Walked in a browser before it was a test: Dimitri's Chat line woke
+       Percy (open to everyone), and Percy's reply in the Chat — Nico's own
+       machine talking — woke Sian, who listens only to Nico. The gate now
+       reads the word Percy's turn carries, which is Dimitri's. */
+    await isocan("rc", "add", "Percy", "--harness", "fake", ...TEAM);
+    await isocan("rc", "add", "Sian", "--harness", "fake");
+    const rc = startRc();
+    await until(async () => rc.out(), (o) => o.includes("answering on"), "the rc to come up");
+    await post("/api/ops", {
+      canvasId: "prj_1",
+      actor: dimitri,
+      op: { type: "thread.create", threadId: "th_chat", x: 0, y: 0, anchorItemId: null, main: true, comment: { id: "cmt_chat", body: "morning, anyone about?" } },
+    });
+    // Percy answers in the Chat (the scripted adapter replies where it was
+    // summoned), which is a Chat line from Nico's machine…
+    await until(async () => rc.out(), (o) => o.includes("Percy · turn ended"), "Percy's turn");
+    await until(
+      threads,
+      (t) => (t["th_chat"]?.comments ?? []).some((c) => c.author.name === "Percy"),
+      "Percy's reply in the Chat",
+    );
+    // …carrying Dimitri's word, so Sian stays asleep.
+    await new Promise((r) => setTimeout(r, 1500));
+    expect(rc.out()).not.toContain("Sian · summons");
+    rc.child.kill("SIGINT");
+    await rc.done;
+  }, 40_000);
+
+  it("a gate somebody other than the owner wrote is set aside, and the rc says so", async () => {
+    await isocan("rc", "add", "Sian", "--harness", "fake");
+    const sian = Object.values(
+      ((await (await fetch(`${base}/api/projects/prj_1/canvas`, { headers: badge.headers })).json()) as {
+        canvas: { agents: Record<string, { actor: { id: string; name: string } }> };
+      }).canvas.agents,
+    )[0]!.actor;
+    // Dimitri re-enrols Nico's agent open to everyone — a record any admitted
+    // member can write. The canvas may narrow; it may never spend Nico.
+    await post("/api/ops", {
+      canvasId: "prj_1",
+      actor: dimitri,
+      op: { type: "agent.enroll", agent: sian, rules: { listen: ["*"] } },
+    });
+    const rc = startRc();
+    await until(async () => rc.out(), (o) => o.includes("answering on"), "the rc to come up");
+    await until(
+      async () => rc.out(),
+      (o) => o.includes("Sian's gate was last written by Dimitri, not you — answering only you"),
+      "the set-aside said",
+    );
+    await summon("th_forged", "@Sian I opened you up");
+    await until(
+      threads,
+      (t) => (t["th_forged"]?.comments ?? []).some((c) => c.author.name === "isocan"),
+      "the refusal in the thread",
+    );
+    expect(rc.out()).not.toContain("starting a session");
+    rc.child.kill("SIGINT");
+    await rc.done;
+  }, 40_000);
 });

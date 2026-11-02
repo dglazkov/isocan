@@ -1,0 +1,113 @@
+{
+  "at": "2026-10-10",
+  "commit": "50d8a8152",
+  "machine": "Apple M4 Pro, 48 GB, darwin arm64",
+  "chrome": "Chrome/154.0.8037.100",
+  "gl": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+  "page": "2560x1440",
+  "throttle": 4,
+  "items": 6,
+  "runs": 3,
+  "plain": {
+    "frames": 1060,
+    "p50": 16.7,
+    "p95": 16.8,
+    "worst": 16.8,
+    "dropped": 0,
+    "mainMsPerFrame": 2.16,
+    "scriptMsPerFrame": 0.47
+  },
+  "grounds": {
+    "meadow": {
+      "frames": 1053,
+      "p50": 16.7,
+      "p95": 16.7,
+      "worst": 16.8,
+      "dropped": 0,
+      "mainMsPerFrame": 2.38,
+      "scriptMsPerFrame": 0.63,
+      "groundFrames": 1048,
+      "asleepFrames": 0,
+      "sleptAfterMs": 1624,
+      "canvas": "2560x1440"
+    },
+    "night": {
+      "frames": 1058,
+      "p50": 16.7,
+      "p95": 16.8,
+      "worst": 16.8,
+      "dropped": 0,
+      "mainMsPerFrame": 3.62,
+      "scriptMsPerFrame": 0.92,
+      "groundFrames": 1054,
+      "asleepFrames": 0,
+      "sleptAfterMs": 1624,
+      "canvas": "2560x1440"
+    },
+    "galaxy": {
+      "frames": 1057,
+      "p50": 16.7,
+      "p95": 16.7,
+      "worst": 16.8,
+      "dropped": 0,
+      "mainMsPerFrame": 2.36,
+      "scriptMsPerFrame": 0.62,
+      "groundFrames": 1052,
+      "asleepFrames": 0,
+      "sleptAfterMs": 15790,
+      "canvas": "2560x1440"
+    },
+    "snow": {
+      "frames": 1056,
+      "p50": 16.7,
+      "p95": 16.7,
+      "worst": 16.8,
+      "dropped": 0,
+      "mainMsPerFrame": 2.35,
+      "scriptMsPerFrame": 0.6,
+      "groundFrames": 1050,
+      "asleepFrames": 0,
+      "sleptAfterMs": 2226,
+      "canvas": "2560x1440"
+    },
+    "aurora": {
+      "frames": 1062,
+      "p50": 16.7,
+      "p95": 16.7,
+      "worst": 16.8,
+      "dropped": 0,
+      "mainMsPerFrame": 3.21,
+      "scriptMsPerFrame": 0.71,
+      "groundFrames": 1056,
+      "asleepFrames": 0,
+      "sleptAfterMs": 2636,
+      "canvas": "2560x1440"
+    },
+    "pond": {
+      "frames": 1051,
+      "p50": 16.7,
+      "p95": 16.7,
+      "worst": 16.8,
+      "dropped": 0,
+      "mainMsPerFrame": 2.44,
+      "scriptMsPerFrame": 0.65,
+      "groundFrames": 1046,
+      "asleepFrames": 0,
+      "sleptAfterMs": 2633,
+      "canvas": "2560x1440"
+    },
+    "zen": {
+      "frames": 1060,
+      "p50": 16.7,
+      "p95": 16.8,
+      "worst": 16.8,
+      "dropped": 0,
+      "mainMsPerFrame": 2.36,
+      "scriptMsPerFrame": 0.61,
+      "groundFrames": 1055,
+      "asleepFrames": 0,
+      "sleptAfterMs": 1622,
+      "canvas": "2560x1440"
+    }
+  }
+}

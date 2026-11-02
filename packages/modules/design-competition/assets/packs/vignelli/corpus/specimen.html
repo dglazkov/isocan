@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Grid Is the Argument — Specimen</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #ffffff;
+      color: #000000;
+      font-family: Inter, "Helvetica Neue", Arial, sans-serif;
+      padding: 40px;
+    }
+    .sheet { max-width: 760px; margin: 0 auto; border-top: 6px solid #000000; padding-top: 20px; }
+    h1 {
+      font-size: 72px;
+      font-weight: 700;
+      line-height: 0.92;
+      letter-spacing: -0.03em;
+      margin-bottom: 36px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 24px;
+      border-top: 2px solid #000000;
+      padding-top: 16px;
+    }
+    .col { border-top: 1px solid #000000; padding-top: 10px; }
+    .lbl { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 6px; }
+    .val { font-size: 22px; font-weight: 700; letter-spacing: -0.015em; }
+    .cta {
+      grid-column: span 2;
+      height: 56px;
+      background: #e32619;
+      color: #ffffff;
+      border: 0;
+      padding: 0 20px;
+      font-size: 22px;
+      font-weight: 700;
+      text-align: left;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <main class="sheet">
+    <h1>Ficus<br/>Lyrata.</h1>
+    <div class="grid">
+      <div class="col"><div class="lbl">Vessel</div><div class="val">Stoneware 24cm</div></div>
+      <div class="col"><div class="lbl">Dispatch</div><div class="val">Thu 14:00</div></div>
+      <button class="cta" type="button">Dispatch — $84 →</button>
+    </div>
+  </main>
+</body>
+</html>

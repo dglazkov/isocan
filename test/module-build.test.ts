@@ -43,8 +43,17 @@ describe("scripts/module-build.mjs", () => {
       expect(code, `${half} reaches the platform through the host`).toContain("globalThis.isocan.");
       expect(code, `${half} imports nothing it could not resolve`).not.toMatch(/from\s*["'](react|react\/jsx-runtime|react-dom|@isocan\/[a-z]+)["']/);
     }
-    // The CLI half still finds its guide beside it: `../agent-guide.md`
-    // from `dist/cli.js` is the module's root, the same as from `src/`.
-    expect(await fs.readFile(path.join(out, "dist/cli.mjs"), "utf8")).toContain("../agent-guide.md");
+    // The CLI half CARRIES its guide rather than finding it. It used to read
+    // `../agent-guide.md` relative to `dist/cli.mjs`, which is the module's
+    // root and happened to be right; the same expression in the bundled
+    // isocan CLI points at nothing, because every folded-in file shares the
+    // bundle's `import.meta.url` (`docs/projects/first-minute/design.md`). So
+    // the import is the file's text, inlined at build time here and in
+    // `scripts/release.mjs` — and the guide is still copied out beside it,
+    // because `manifest.guide` is what a daemon serves and what
+    // `runtime-modules.ts` prefers.
+    const cli = await fs.readFile(path.join(out, "dist/cli.mjs"), "utf8");
+    expect(cli, "the guide travels inside the built half").toContain("Mind maps");
+    expect(cli, "and it does not go looking for it on disk").not.toContain("../agent-guide.md");
   }, 120_000);
 });

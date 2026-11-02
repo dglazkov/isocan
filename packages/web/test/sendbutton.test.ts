@@ -22,7 +22,7 @@ const read = (rel: string) =>
 
 describe("everything that sends says it can be pressed", () => {
   const composers = [
-    "../src/components/CommentLayer.tsx",
+    "../src/components/CommentPopovers.tsx",
     "../src/components/MainThreadPanel.tsx",
     "../src/components/ShareDialog.tsx",
   ];

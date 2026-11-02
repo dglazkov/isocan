@@ -1,5 +1,4 @@
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import guideText from "../agent-guide.md";
 import type { Command } from "commander";
 import type { CliHost, CliModule } from "@isocan/cli/modulehost";
 import { documentsModule, documentsOn, isDocumentItem, outlineOf, outlineText, readingMinutes, wordCount } from "./core.ts";
@@ -16,6 +15,7 @@ function register(host: CliHost): void {
 
   docs
     .command("ls", { isDefault: true })
+    .alias("list")
     .description("Every document on this canvas — words, minutes, headings — newest edit first")
     .option("--canvas <canvas>")
     .action(
@@ -63,7 +63,7 @@ function register(host: CliHost): void {
 export const documentsCli: CliModule = {
   core: documentsModule,
   register,
-  guide: readFileSync(fileURLToPath(new URL("../agent-guide.md", import.meta.url)), "utf8"),
+  guide: guideText,
 };
 
 export default documentsCli;

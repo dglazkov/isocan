@@ -63,10 +63,18 @@ try {
   // The replica arrives after the page does; the pages count is the sign.
   await until(b, `Number(document.querySelector(".deck-print").dataset.pages) > 0 || document.querySelector(".deck-empty") !== null`, "the slides to arrive", 20_000);
   const count = Number(await b.ev(`document.querySelector(".deck-print").dataset.pages`));
+  // exitCode, not exit(): `process.exit` skips the `finally` below, which is
+  // what closes Chrome — an empty deck left one running per attempt (cleanup
+  // phase 4, DC-1, 27 Sep 2026).
   if (count === 0) {
     console.error("this canvas has no slides to export");
-    process.exit(1);
-  }
+    process.exitCode = 1;
+  } else await exportDeck(b, count);
+} finally {
+  await b.close();
+}
+
+async function exportDeck(b, count) {
   // Every frame loaded — `complete` is not readable across the sandbox, so
   // the load event is counted from this side — then a settle for scripts.
   await b.ev(`new Promise((done) => {
@@ -120,6 +128,4 @@ try {
     }
     console.log(`wrote ${count} ${count === 1 ? "slide" : "slides"} to ${png}/`);
   }
-} finally {
-  await b.close();
 }

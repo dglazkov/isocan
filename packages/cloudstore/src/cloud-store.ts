@@ -1,6 +1,8 @@
+import type { CanvasLifecycle } from "@isocan/server";
 import { createHash, randomUUID } from "node:crypto";
 import type { Readable } from "node:stream";
 import type { CollectionReference, DocumentData, Firestore } from "@google-cloud/firestore";
+import { FieldValue } from "@google-cloud/firestore";
 import type {
   ActorRegistry,
   LogEntry,
@@ -9,6 +11,7 @@ import type {
   SlashCommand,
   UploadTicket,
 } from "@isocan/core";
+import type { SummaryEntry } from "@isocan/core/semantic-zoom";
 import {
   applyActorColor,
   applyActorJoin,
@@ -18,6 +21,7 @@ import {
   COMMAND_NAME,
   emptyCanvas,
   extensionFor,
+  healedBlobType,
   OplogFencedError,
   OpValidationError,
   parseCommandFile,
@@ -28,6 +32,7 @@ import type {
   BlobMeta,
   BlobUploadRequest,
   LoadedCanvas,
+  PurgeReport,
   Store,
 } from "@isocan/server";
 import type { ObjectStore } from "./objects.ts";
@@ -38,13 +43,17 @@ import {
   blobKey,
   blobMetaCollection,
   canvasDoc,
+  canvasPrefix,
   CANVASES,
   COMMANDS,
   opOverflowKey,
   opsCollection,
   padSeq,
   snapshotKey,
+  summaryObjectKey,
+  summaryPrefix,
 } from "./naming.ts";
+import { hostedPurgeHorizons } from "./purge-horizons.ts";
 
 /** gRPC `ALREADY_EXISTS`. What a create-only precondition refuses with, and
  * the single fact this whole backing's safety rests on. */
@@ -93,6 +102,7 @@ interface PendingSnapshot {
 }
 
 interface SnapshotObject {
+  groupCohorts?: CanvasState["canvas"]["groupCohorts"];
   lastSeq: number;
   items: CanvasState["canvas"]["items"];
   threads: CanvasState["canvas"]["threads"];
@@ -101,6 +111,8 @@ interface SnapshotObject {
    * before the field — those predate any `agent.enroll` op, so absent means
    * empty, never lost. */
   agents?: CanvasState["canvas"]["agents"];
+  /** Withdrawals a pet respects (pets phase 2). Absent when there are none. */
+  withdrawn?: CanvasState["canvas"]["withdrawn"];
 }
 
 /**
@@ -193,6 +205,28 @@ export class CloudStore implements Store {
     return canvases;
   }
 
+  async canvasRecord(id: string): Promise<Canvas | null> {
+    const doc = await this.db.doc(canvasDoc(id)).get();
+    const data = doc.data();
+    if (!data || data["deleted"] === true || typeof data["takenDownAt"] === "string" || typeof data["purgedAt"] === "string") return null;
+    return (data["project"] as Canvas | undefined) ?? null;
+  }
+
+  async canvasLifecycle(id: string): Promise<CanvasLifecycle> {
+    const doc = await this.db.doc(canvasDoc(id)).get();
+    const data = doc.data();
+    if (typeof data?.["purgedAt"] === "string") return "purged";
+    if (typeof data?.["takenDownAt"] === "string") return "taken-down";
+    if (data?.["deleted"] === true) return "deleted";
+    if (data?.["project"]) return "live";
+    if (doc.exists || !(await this.db.collection(opsCollection(id)).limit(1).get()).empty) return "incomplete";
+    return "absent";
+  }
+
+  async readBirthLog(id: string): Promise<LogEntry[]> {
+    return this.readOps(id, 0);
+  }
+
   /** A bucket has no directories and Firestore has no schema, so there is
    * nothing to make. The name is a filesystem word for "make room for a
    * canvas" and it stays — renaming it would churn the engine and its tests
@@ -222,11 +256,117 @@ export class CloudStore implements Store {
     return (await this.db.doc(canvasDoc(id)).get()).exists;
   }
 
+  async takenDownAt(id: string): Promise<string | null> {
+    const canvas = await this.db.doc(canvasDoc(id)).get();
+    return (canvas.data()?.["takenDownAt"] as string | undefined) ?? null;
+  }
+
+  /**
+   * A merge onto the canvas document, beside `deleted` — and `null` to lift.
+   *
+   * `null` rather than `FieldValue.delete()` on purpose: the field's absence
+   * and its null both read as "not taken down" through `takenDownAt` above,
+   * and a stored null leaves the document saying, to anybody reading it in the
+   * console, that this canvas has a takedown history. The desk row is the
+   * record; this is only the flag, and a flag that has been lowered is worth
+   * seeing lowered.
+   *
+   * The pending snapshot is flushed first, as `softDeleteCanvas` does: a
+   * debounced write landing after the flag would be this home writing to a
+   * canvas it has just stopped serving.
+   */
+  async setTakenDown(id: string, at: string | null): Promise<void> {
+    await this.flushSnapshot(id);
+    this.pending.delete(id);
+    await this.db.doc(canvasDoc(id)).set({ takenDownAt: at }, { merge: true });
+  }
+
+  async purgedAt(id: string): Promise<string | null> {
+    const canvas = await this.db.doc(canvasDoc(id)).get();
+    return (canvas.data()?.["purgedAt"] as string | undefined) ?? null;
+  }
+
+  /**
+   * **The one hard delete this backing has, and the one place a seq is ever
+   * freed** (operator phase 3; design, "Purge: the bytes").
+   *
+   * Everything under `canvases/{id}/` in the bucket — snapshot, blobs, archive,
+   * overflow ops, and any scratch part a crashed compose left — and the `ops`
+   * and `blobmeta` subcollections in Firestore. The `canvases/{id}` document
+   * STAYS, with `purgedAt` merged onto it: that is the tombstone, and it is
+   * what keeps `canvasExists` true so the id can never be adopted, teleported
+   * into or created again.
+   *
+   * **On the freed seqs.** `compactOplog` deletes nothing because a freed seq
+   * is one a stale writer's create-only precondition would pass on. Here the
+   * seqs ARE freed, and what stands in for the precondition is the tombstone:
+   * the engine drops its copy at the takedown and `load` refuses on both
+   * flags, so nothing at this home can produce an append for the id again.
+   * The residual is the same one the takedown already lives with — a second
+   * instance during a rollout that still holds the canvas in memory — and it
+   * is named in the design's own table rather than papered over here.
+   *
+   * The order: the mark first, so a crash mid-way leaves a canvas `load`
+   * already refuses and a second purge finishes; then bytes before records,
+   * as `deleteBlobs` does, so a crash leaves records naming nothing rather
+   * than bytes nothing can name.
+   */
+  async purgeCanvas(id: string): Promise<PurgeReport> {
+    if ((await this.takenDownAt(id)) === null) {
+      throw new Error(`${id} is not taken down; a purge is refused on a canvas this home still serves`);
+    }
+    await this.flushSnapshot(id);
+    this.pending.delete(id);
+    this.writtenCanvas.delete(id);
+    const ref = this.db.doc(canvasDoc(id));
+    if ((await this.purgedAt(id)) === null) {
+      await ref.set({ purgedAt: new Date().toISOString() }, { merge: true });
+    }
+
+    const blobs = await this.db.collection(blobMetaCollection(id)).get();
+    const files = blobs.size;
+    const bytes = blobs.docs.reduce(
+      (total, doc) => total + ((doc.data()["size"] as number | undefined) ?? 0),
+      0,
+    );
+
+    const keys = await this.objects.list(canvasPrefix(id));
+    for (const key of keys) await this.objects.delete(key);
+
+    const ops = await this.deleteCollection(this.db.collection(opsCollection(id)));
+    await this.deleteCollection(this.db.collection(blobMetaCollection(id)));
+
+    return { files, bytes, ops, objects: keys.length, keeps: hostedPurgeHorizons() };
+  }
+
+  /** Every document in a collection, in batches under Firestore's limit.
+   * `listDocuments` rather than `get`: the refs are all a delete needs, and
+   * a canvas with a long history should not be read whole to be erased. */
+  private async deleteCollection(collection: CollectionReference): Promise<number> {
+    const refs = await collection.listDocuments();
+    for (const chunk of chunks(refs, BATCH_LIMIT)) {
+      const batch = this.db.batch();
+      for (const ref of chunk) batch.delete(ref);
+      await batch.commit();
+    }
+    return refs.length;
+  }
+
   async load(id: string): Promise<LoadedCanvas | null> {
     const canvas = await this.db.doc(canvasDoc(id)).get();
     if (!canvas.exists) return null;
     const data = canvas.data()!;
     if (data["deleted"] === true) return null;
+    // **Exactly where `deleted` refuses**, and the line above is the reason
+    // this one is beside it rather than anywhere else (operator phase 2). The
+    // ops, the blobs and the snapshot are all untouched; what stops is this
+    // home opening the canvas, which is what `--lift` restores by clearing a
+    // field.
+    if (typeof data["takenDownAt"] === "string") return null;
+    // And a purged one, whatever the takedown flag says (operator phase 3):
+    // a tombstone with no ops and no snapshot would otherwise load as an
+    // empty canvas under a taken name.
+    if (typeof data["purgedAt"] === "string") return null;
     const record = data["project"] as Canvas | undefined; // stored field name: holdout
     if (!record) return null;
     const compactedThrough = (data["compactedThrough"] as number | undefined) ?? 0;
@@ -240,6 +380,8 @@ export class CloudStore implements Store {
             threads: snapshot.threads,
             trash: snapshot.trash,
             agents: snapshot.agents ?? {},
+            ...(snapshot.groupCohorts ? { groupCohorts: snapshot.groupCohorts } : {}),
+            ...(snapshot.withdrawn ? { withdrawn: snapshot.withdrawn } : {}),
           }
         : { ...emptyCanvas(), trash: [] },
     };
@@ -494,6 +636,20 @@ export class CloudStore implements Store {
     }
   }
 
+  /**
+   * The newest `actors/{seq}` document, by Firestore's single-field index on
+   * `seq` — one small document read, same as `tipSeq(canvasId)`. Falls back to
+   * `ACTORS_SNAPSHOT.lastSeq` when the log collection is empty.
+   */
+  async tipActorsSeq(): Promise<number> {
+    const newest = await this.db.collection(ACTORS).orderBy("seq", "desc").limit(1).get();
+    if (!newest.empty) {
+      return (newest.docs[0]!.data()["seq"] as number | undefined) ?? 0;
+    }
+    const snapshot = await this.db.doc(ACTORS_SNAPSHOT).get();
+    return (snapshot.data()?.["lastSeq"] as number | undefined) ?? 0;
+  }
+
   // ---- blobs ----
 
   async putBlob(
@@ -506,7 +662,7 @@ export class CloudStore implements Store {
     const existing = await ref.get();
     if (existing.exists) {
       const found = existing.data() as BlobMeta;
-      return { blobHash, size: found.size, mimeType: found.mimeType };
+      return { blobHash, size: found.size, mimeType: await this.healBlobType(ref, found, meta) };
     }
     const file = `${blobHash}.${extensionFor(meta.filename, meta.mimeType)}`;
     await this.objects.put(blobKey(id, file), data, { contentType: meta.mimeType });
@@ -525,14 +681,44 @@ export class CloudStore implements Store {
       // construction, so there is nothing to reconcile.
       if ((err as { code?: number }).code !== ALREADY_EXISTS) throw err;
       const found = (await ref.get()).data() as BlobMeta;
-      return { blobHash, size: found.size, mimeType: found.mimeType };
+      return { blobHash, size: found.size, mimeType: await this.healBlobType(ref, found, meta) };
     }
     return { blobHash, size: data.length, mimeType: meta.mimeType };
+  }
+
+  /**
+   * The same bytes again: heal the recorded type when it said nothing and this
+   * upload says something (`healedBlobType` — two specific types keep the
+   * first). The stored object keeps the key it was written under. Answers the
+   * type the record now holds.
+   */
+  private async healBlobType(
+    ref: ReturnType<CollectionReference["doc"]>,
+    found: BlobMeta,
+    meta: { mimeType: string; filename: string },
+  ): Promise<string> {
+    const healed = healedBlobType(found.mimeType, meta.mimeType);
+    if (!healed) return found.mimeType;
+    await ref.update({ mimeType: healed, filename: meta.filename });
+    return healed;
   }
 
   async blobMeta(id: string, blobHash: string): Promise<BlobMeta | null> {
     const doc = await this.db.collection(blobMetaCollection(id)).doc(blobHash).get();
     return doc.exists ? (doc.data() as BlobMeta) : null;
+  }
+
+  /** `getAll` in batches: one RPC per `BATCH_LIMIT` hashes rather than a
+   * document read per round trip, which is what the per-blob HEAD cost. */
+  async heldBlobs(id: string, blobHashes: readonly string[]): Promise<Set<string>> {
+    const held = new Set<string>();
+    if (blobHashes.length === 0) return held;
+    const collection = this.db.collection(blobMetaCollection(id));
+    for (const chunk of chunks([...new Set(blobHashes)], BATCH_LIMIT)) {
+      const docs = await this.db.getAll(...chunk.map((hash) => collection.doc(hash)));
+      for (const doc of docs) if (doc.exists) held.add(doc.id);
+    }
+    return held;
   }
 
   async openBlob(
@@ -582,7 +768,7 @@ export class CloudStore implements Store {
     } catch (err) {
       if ((err as { code?: number }).code !== ALREADY_EXISTS) throw err;
       const found = (await ref.get()).data() as BlobMeta;
-      return { blobHash: request.blobHash, size: found.size, mimeType: found.mimeType };
+      return { blobHash: request.blobHash, size: found.size, mimeType: await this.healBlobType(ref, found, request) };
     }
     return { blobHash: request.blobHash, size: stat.size, mimeType: request.mimeType };
   }
@@ -696,6 +882,45 @@ export class CloudStore implements Store {
       .map((line) => JSON.parse(line) as LogEntry);
   }
 
+  // ---- semantic zoom summaries ----
+
+  async listSummaries(id: string): Promise<Array<{ entry: SummaryEntry; touched: number }>> {
+    const prefix = summaryPrefix(id);
+    const objectKeys = await this.objects.list(prefix);
+    const rows: Array<{ entry: SummaryEntry; touched: number }> = [];
+    for (const objectKey of objectKeys) {
+      if (!objectKey.startsWith(prefix) || !objectKey.endsWith(".json")) continue;
+      const key = objectKey.slice(prefix.length, -5);
+      if (!SUMMARY_KEY.test(key)) continue;
+      const [raw, stat] = await Promise.all([
+        this.objects.readAll(objectKey),
+        this.objects.stat(objectKey),
+      ]);
+      const entry = parseSummaryBuffer(raw);
+      if (entry) rows.push({ entry, touched: stat?.updated.getTime() ?? 0 });
+    }
+    return rows;
+  }
+
+  async getSummary(id: string, key: string): Promise<SummaryEntry | null> {
+    if (!SUMMARY_KEY.test(key)) return null;
+    return parseSummaryBuffer(await this.objects.readAll(summaryObjectKey(id, key)));
+  }
+
+  async putSummary(id: string, entry: SummaryEntry): Promise<void> {
+    if (!SUMMARY_KEY.test(entry.key)) throw new Error(`invalid summary key: ${entry.key}`);
+    await this.objects.put(
+      summaryObjectKey(id, entry.key),
+      Buffer.from(JSON.stringify(entry), "utf8"),
+      { contentType: "application/json" },
+    );
+  }
+
+  async deleteSummary(id: string, key: string): Promise<void> {
+    if (!SUMMARY_KEY.test(key)) return;
+    await this.objects.delete(summaryObjectKey(id, key));
+  }
+
   // ---- internals ----
 
   private actorOverflowKey(seq: number): string {
@@ -709,7 +934,10 @@ export class CloudStore implements Store {
     if (this.writtenCanvas.get(canvas.id) === encoded) return;
     await this.db.doc(canvasDoc(canvas.id)).set(
       // `project` is the stored field name — a deliberate holdout (phase 13.5).
-      { project: jsonSafe(canvas), deleted: false },
+      // Merge preserves operator fields beside the project. Absence of a
+      // migration boundary or legacy mode field is meaningful, however:
+      // Firestore must remove it instead of retaining the previous map key.
+      { project: { ...jsonSafe(canvas), ...(canvas.groupMode === undefined ? { groupMode: FieldValue.delete() } : {}), ...(canvas.groupMigration === undefined ? { groupMigration: FieldValue.delete() } : {}) }, deleted: false },
       { merge: true },
     );
     this.writtenCanvas.set(canvas.id, encoded);
@@ -723,11 +951,13 @@ export class CloudStore implements Store {
 
   private async writeSnapshot(id: string, state: CanvasState, lastSeq: number): Promise<void> {
     const snapshot: SnapshotObject = {
+      ...(state.canvas.groupCohorts ? { groupCohorts: state.canvas.groupCohorts } : {}),
       lastSeq,
       items: state.canvas.items,
       threads: state.canvas.threads,
       trash: state.canvas.trash,
       agents: state.canvas.agents ?? {},
+      ...(state.canvas.withdrawn ? { withdrawn: state.canvas.withdrawn } : {}),
     };
     await this.objects.put(snapshotKey(id), Buffer.from(JSON.stringify(snapshot), "utf8"), {
       contentType: "application/json",
@@ -834,6 +1064,18 @@ export function actorsFromDocument(
     colors: (saved.colors as ActorRegistry["colors"]) ?? {},
   };
   return { registry, lastSeq: (data?.["lastSeq"] as number | undefined) ?? 0 };
+}
+
+const SUMMARY_KEY = /^[0-9a-f]{64}$/;
+
+function parseSummaryBuffer(raw: Buffer | null): SummaryEntry | null {
+  if (!raw) return null;
+  try {
+    const entry = JSON.parse(raw.toString("utf8")) as SummaryEntry;
+    return entry && typeof entry.key === "string" && Array.isArray(entry.sourceIds) ? entry : null;
+  } catch {
+    return null;
+  }
 }
 
 function* chunks<T>(items: readonly T[], size: number): Generator<T[]> {

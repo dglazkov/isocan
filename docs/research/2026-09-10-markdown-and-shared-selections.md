@@ -1,9 +1,9 @@
 ---
 status: partial
-since: 2026-09-10
+since: 2026-09-11
 issue: 236
 see: modules, context
-note: reading controls, typography, outline, shared text projection and live version-specific selections built 11 September; CLI quote selection and two-browser owner/read-only acceptance included. Durable comments remain issue 49; richer editing and relative-asset resolution are separate follow-ups.
+note: steps 1–4 built 11 September — reading controls, typography, outline, shared text projection and live version-specific selections, with CLI quote selection and two-browser owner/read-only acceptance; then durable quoted comments (#49's Markdown and plain-text half) and relative saved-file links/local image bundling. Step 5, richer editing, remains separate, and cross-browser/device acceptance is still owed.
 ---
 
 # Markdown that reads well, and selections another person can see
@@ -37,8 +37,10 @@ The Chrome pan/zoom probe with 21 mounted documents recorded zero samples in
 the Markdown chunk out of 997 CPU samples. This is a bounded regression probe,
 not a cross-device performance guarantee.
 
-Remaining: durable comments (#49), relative-file/asset resolution, richer
-editing, and cross-browser/device acceptance. Browsers without Custom
+Remaining at the time: durable comments (#49), relative-file/asset
+resolution, richer editing, and cross-browser/device acceptance. The first two
+landed later the same day — "Durable discussion and relative resources" below
+— so richer editing and cross-browser/device acceptance are what is left. Browsers without Custom
 Highlights retain named attention and Show selection rather than a fabricated
 pixel overlay. The original proposal below is preserved as research, not a
 claim that every later-stage idea has shipped.
@@ -134,12 +136,59 @@ This strengthens #49: resolve its persistent anchors forward only when unambiguo
 
 ## Recommended implementation order and proof
 
-- [ ] **1. Reading pass:** explicit Read/Select entry, focused typography, preview continuation and safe overflow. Browser-test narrow/wide documents, light/dark themes, keyboard access and read-only users. Keep text nodes distinct from document cards.
-- [ ] **2. Projection spike:** pure shared projection with DOM mapping and fixtures for repeated text, nested emphasis, links/entities, emoji/combining characters, RTL, code, tables, breaks and cross-block ranges. Same-version mapping must round-trip before networking.
-- [ ] **3. Live selection:** add bounded presence descriptors and render local ranges. Prove two independent sessions over the real transport, with different widths, pan/zoom, scrolling, clears, reconnect, hidden tabs, overlapping selections and version changes. Neither user's native selection may be replaced; no content op may be emitted.
-- [ ] **4. Durable selection comments:** deliver #49 on the same resolver, with CLI quote selection and explicit unresolved/ambiguous output. Markdown/plain text first; HTML selection reporting stays separate.
+Steps 1–4 were built on 11 September (see the two sections above); step 5 is
+the one still open. #49's HTML half stays separate, as step 4 said it would.
+
+- [x] **1. Reading pass:** explicit Read/Select entry, focused typography, preview continuation and safe overflow. Browser-test narrow/wide documents, light/dark themes, keyboard access and read-only users. Keep text nodes distinct from document cards.
+- [x] **2. Projection spike:** pure shared projection with DOM mapping and fixtures for repeated text, nested emphasis, links/entities, emoji/combining characters, RTL, code, tables, breaks and cross-block ranges. Same-version mapping must round-trip before networking.
+- [x] **3. Live selection:** add bounded presence descriptors and render local ranges. Prove two independent sessions over the real transport, with different widths, pan/zoom, scrolling, clears, reconnect, hidden tabs, overlapping selections and version changes. Neither user's native selection may be replaced; no content op may be emitted.
+- [x] **4. Durable selection comments:** deliver #49 on the same resolver, with CLI quote selection and explicit unresolved/ambiguous output. Markdown/plain text first; HTML selection reporting stays separate.
 - [ ] **5. Only then assess rich or simultaneous editing** against real demand and a Markdown round-trip corpus.
 
 For agents, expose text attention through the existing presence read/write surfaces with a named descriptor and quote-resolution helper; a CLI should be able to report “Taylor selected this passage” and deliberately point to a passage itself. A command must report ambiguity, never invent a match. These are proposed surface extensions, not currently available CLI syntax.
 
 Regression proof must include a many-document pan/zoom trace: the existing memoization was introduced after Markdown parsing dominated canvas movement. Selection updates should touch range decorations, not parse every document. No new operation is needed for reading or presence; #49 extends the anchor contract for persistent comments. Source Markdown, versions and the HTML isolation boundary remain the authority.
+
+
+## Durable discussion and relative resources — 11 September
+
+Selecting words now offers **Comment on selection**. The existing
+`thread.create` operation saves a `textAnchor` alongside the item offset:
+version ID, displayed blob hash, projection flavor, Unicode-point range,
+quote, and surrounding context. `thread.setAnchor` replaces or clears it in
+one undoable act. The original selector is never overwritten merely because
+a newer version happens to contain the passage.
+
+A unique quote follows edits. Repeated text needs matching context; missing
+or ambiguous text keeps the item pin and explains the unresolved passage.
+The document highlights the opened thread's quote with CSS Highlights,
+outside the native selection. Pin locations are derived from the current
+rendered range and remeasured on resize and scroll; an offscreen quote falls
+back to its item pin. Full-screen composition uses the same popover above the
+viewer. An open comment can be moved to another selected passage. Plain text
+and displayed Markdown visual faces use the same representation checks.
+
+The CLI offers `comment add --item … --quote …`, optional `--occurrence`,
+`comment anchor … --quote …`, and resolution status in `comment list --json`.
+This implementation uses rendered quotes rather than Markdown source-line
+numbers. It does not introduce rich-text editing or PDF selectors.
+
+Relative Markdown links resolve against saved canvas files, using explicit
+`file`/`visualFile` paths first, import `sourcePath` next, and filename last.
+They open the target item's route, including a heading fragment. Duplicate,
+missing or unsafe paths stay visibly unavailable. Images can use saved canvas
+image blobs. CLI Markdown `add`/file `edit` also bundles local image references
+into a visual face while keeping the exact source available through `get`.
+Image discovery uses the Markdown parser: balanced filenames and references
+work, while code examples, ordinary links and literal HTML stay untouched.
+`sourcePath` is provenance, never an instruction to write a file to disk.
+Browser uploads cannot inspect neighboring local files; import those assets
+or use self-contained Markdown. No filesystem-reading server endpoint was
+added and the content-origin boundary is unchanged.
+
+`check-text-selection.mjs` now covers the prior presence checks plus native
+browser composition, receiving the thread as a read-only user, CLI resolution,
+reflow, full-screen composition, an imported PNG, missing-link treatment and
+navigation to another document's heading. Core tests cover Unicode offsets,
+context ambiguity, version provenance, operation undo/restore and safe path
+resolution. CLI tests cover source/visual identity, edits and re-anchoring.

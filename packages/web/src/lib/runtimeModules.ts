@@ -1,7 +1,7 @@
 import * as React from "react";
 import * as jsxRuntime from "react/jsx-runtime";
-import { manifestRecord, moduleWebPath, registerModule, type ModuleManifest } from "@isocan/core";
-import { addModule, type ShellModule } from "../modules.ts";
+import { manifestRecord, moduleSlug, moduleWebPath, registerModule, registerModuleBase, type ModuleManifest } from "@isocan/core";
+import { addModule, noteRegistryChanged, type ShellModule } from "../modules.ts";
 
 /**
  * **Runtime modules, in the app** (`docs/projects/modules/design.md`, phase 3).
@@ -53,7 +53,27 @@ declare global {
 }
 
 export async function activateRuntimeModules(manifests: readonly ModuleManifest[]): Promise<void> {
-  for (const m of manifests) registerModule(manifestRecord(m));
+  for (const m of manifests) {
+    registerModule(manifestRecord(m));
+    // Where this module's files are served (proposed: `assets`): a
+    // contribution — a fighter from a data-only module — names its avatar
+    // relative to the module that contributed it, and resolves against this.
+    const base = `/modules/${moduleSlug(m.name)}/`;
+    registerModuleBase(m.name, base);
+    // A runtime module's CSS had "no home yet" (authoring.md). This is it: one
+    // stylesheet, named by the convention, linked while the module is loaded.
+    if (m.assets?.some((a) => a.path === "assets/styles.css") && typeof document !== "undefined") {
+      const href = `${base}assets/styles.css`;
+      if (!document.querySelector(`link[data-module="${m.name}"]`)) {
+        const link = document.createElement("link");
+        link.rel = "stylesheet";
+        link.href = href;
+        link.dataset.module = m.name;
+        document.head.appendChild(link);
+      }
+    }
+  }
+  if (manifests.some((m) => m.contributes)) noteRegistryChanged();
   const withWeb = manifests.filter((m) => m.web);
   if (withWeb.length === 0) return;
   const core = await import("@isocan/core");

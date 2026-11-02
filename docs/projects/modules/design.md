@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-04
 see: modules, extensions, workbench, mindmap, iso-api, atlas
-note: designed 4 Sep from the research note's counts; phases 1 (the registries, the mind map as the first internal module), 2 (Mermaid, the first node-type module — the union paid), 3 (runtime loading — module add/rm/ls, a host object, no import map) and 4 (documents — the inspector, page and command slots; the prose editor deferred) built 4–5 Sep; phase 4.5 (WebHost, overlays, drops, the module API's own version and a PROPOSED list) built 9 Sep from #156's field report. Phase 5, sandboxes, waits on three gates: the content origin (CLEARED 6 Sep, live on prod), extension actors (which extensions stage 4 found has no subject to attribute until a panel ACTS, so it waits on that rather than on the calendar) and compute consent
+note: designed 4 Sep from the research note's counts; phases 1 (the registries, the mind map as the first internal module), 2 (Mermaid, the first node-type module — the union paid), 3 (runtime loading — module add/rm/ls, a host object, no import map) and 4 (documents — the inspector, page and command slots; the prose editor deferred) built 4–5 Sep; phase 4.5 (WebHost, overlays, drops, the module API's own version and a PROPOSED list) built 9 Sep from #156's field report. Phase 5's three gates were read on 12 Sep and two are clear: the content origin (6 Sep, live on prod) and compute consent, which named agent-custody's "whose ask a parked rc honors" and was answered 11 Sep by owner-only summons, with `rc --sandbox` answering the reach half. The third, extension actors ("who stamps a sandbox's writes"), splits: it binds the browser-FRAME sandbox, which is extensions tier 3 and stays gated behind the extensions walk (re-cut 18 Sep: phases 4 and 6 build the frame and its door, phase 5 the actor) and the CSP line, and does not bind the agent-side one, whose writer is whoever typed the verb. So phase 5's agent-side half was built the same day — `@isocan/sandbox`: a program is an ordinary file wearing `sandbox.run`, `isocan sandbox run` unpacks it into a scratch directory and runs it fenced (no network at all, one writable path, `$HOME` denied) on the machine that typed the verb, and the transcript lands as a version. `CliHost.runFenced` is the first helper promotion this design predicted, and there is no unfenced path through it. No kind, no op, no mime; the vocabulary stays at 33. See phases.md
 ---
 # Modules — a package that contributes to both surfaces, and can be taken away
 
@@ -86,7 +86,7 @@ only way "removed" can mean removed.
 The shell owns the slots and the modules fill them. A slot is a place in the
 shell's tree where it maps over `MODULES` and mounts what each contributes,
 handing it **facts as props, never stores**: the module's component gets the
-canvas and the live drag, not the zustand hooks. That keeps the dependency
+canvas with the live gesture already folded in, not the zustand hooks. That keeps the dependency
 pointing one way — a module knows core and React; it does not know the shell.
 
 Slots, in the order they are needed:

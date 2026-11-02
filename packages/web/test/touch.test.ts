@@ -42,7 +42,12 @@ describe("one finger moves the canvas", () => {
        there is no way to deselect. One function, called from both, so a tap
        and a click cannot drift apart. */
     expect(bare).toContain("function clearBackgroundFocus()");
-    expect(bare).toMatch(/if \(!moved && opts\.tapClears\) clearBackgroundFocus\(\);/);
+    // A cancelled touch is not a tap. A completed tap first applies the
+    // same group boundary as mouse selection, then shares the deselection.
+    expect(bare).toMatch(/if \(!moved && opts\.tapClears && ev\.type !== "pointercancel"\) \{\s*leaveGroupAtPoint\(screenToWorld\(useUiStore\.getState\(\)\.viewport, ev\.clientX, ev\.clientY\)\);\s*clearBackgroundFocus\(\);\s*\}/);
+    const marquee = bare.slice(bare.indexOf("function startMarquee"));
+    expect(marquee.indexOf("leaveGroupAtPoint(startWorld)")).toBeGreaterThanOrEqual(0);
+    expect(marquee.indexOf("leaveGroupAtPoint(startWorld)")).toBeLessThan(marquee.indexOf("const baseSelection"));
     expect(bare).toMatch(/if \(!moved && !additive\) clearBackgroundFocus\(\);/);
   });
 
@@ -141,11 +146,15 @@ describe("the chrome fits a phone", () => {
     expect(rule(".canvases-head")?.body).toContain("flex-wrap: wrap");
   });
 
-  it("lifts the minimap clear of the zoom row on a narrow window", () => {
+  it("lifts an unfolded minimap clear of the zoom row on a narrow window", () => {
+    /* Below 460 the map starts folded by the width (`minimapnarrow.test.ts`),
+       and its handle sits in the corner clear of the row. The lift is for a
+       map somebody tapped open there, so it applies to the unfolded dock
+       only — a lifted handle would float for no reason. */
     const lifted = sheet.find(
-      (r) => r.selector === ".minimap-dock" && r.body.includes("var(--zoom-row)"),
+      (r) => r.selector === ".minimap-dock:not(.folded)" && r.body.includes("var(--zoom-row)"),
     );
-    expect(lifted, "a narrow-window rule stacks them").toBeTruthy();
+    expect(lifted, "a narrow-window rule stacks an open map").toBeTruthy();
     expect(lifted!.at.join(" "), "and only on a narrow window").toMatch(/max-width/);
   });
 

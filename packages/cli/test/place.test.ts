@@ -1,11 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
-import { spawn, type ChildProcess } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { startDaemon, type Daemon } from "@isocan/server";
-import { harnessVars } from "@isocan/api";
+import { type Daemon } from "@isocan/server";
+import { startDaemon } from "@isocan/server/daemon";
+import { cliEnv, runCli, type Run } from "./cli.ts";
 
 /**
  * **A canvas placed on a canvas, over the wire** (inception phase 0). Placed
@@ -14,7 +13,6 @@ import { harnessVars } from "@isocan/api";
  * and it lands inside a sheet like anything else.
  */
 
-const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 const kit = { id: "usr_kit", name: "Kit" };
 
 let home: string;
@@ -34,27 +32,8 @@ afterEach(async () => {
   await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
-interface Run {
-  code: number;
-  stdout: string;
-  stderr: string;
-}
-
 function isocan(...args: string[]): Promise<Run> {
-  const env = { ...process.env };
-  for (const name of harnessVars) delete env[name];
-  const child: ChildProcess = spawn(process.execPath, [cliBin, ...args], {
-    env: { ...env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(base).port },
-    cwd: home,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  let stdout = "";
-  let stderr = "";
-  child.stdout!.setEncoding("utf8");
-  child.stdout!.on("data", (chunk) => (stdout += chunk));
-  child.stderr!.setEncoding("utf8");
-  child.stderr!.on("data", (chunk) => (stderr += chunk));
-  return new Promise((resolve) => child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })));
+  return runCli(args, { cwd: home, env: cliEnv({ ISOCAN_HOME: home, ISOCAN_PORT: new URL(base).port }) });
 }
 
 async function json(...args: string[]): Promise<any> {
@@ -105,12 +84,12 @@ describe("placing a canvas on a canvas", () => {
     expect(linked.inherit).toBe(true);
     // Phase 3: the first link lays the Context sheet and lands on it; the
     // second finds the sheet already there.
-    const sheets = (await json("ls", "--canvas", S)).filter((i: { properties: { kind?: string } }) => i.properties.kind === "area");
+    const sheets = (await json("ls", "--canvas", S)).filter((i: { properties: { kind?: string } }) => i.properties.kind === "group");
     expect(sheets.map((s: { title: string }) => s.title)).toEqual(["Work", "Context"]);
     expect((await json("ls", "--in", "Context", "--canvas", S)).map((i: { id: string }) => i.id)).toContain(linked.itemId);
     const second = await json("canvas", "place", "sports", "--inherit", "--title", "Twice", "--canvas", S);
     expect((await json("ls", "--in", "Context", "--canvas", S)).length).toBe(2);
-    expect((await json("ls", "--canvas", S)).filter((i: { properties: { kind?: string } }) => i.properties.kind === "area").length).toBe(2);
+    expect((await json("ls", "--canvas", S)).filter((i: { properties: { kind?: string } }) => i.properties.kind === "group").length).toBe(2);
     await isocan("rm", second.itemId, "--canvas", S);
     const layers = await json("context", "--canvas", S);
     expect(layers.map((l: { heading: string }) => l.heading)).toEqual(["This canvas", "Sports Schedule Constraint Solver"]);
@@ -127,5 +106,9 @@ describe("placing a canvas on a canvas", () => {
     const self = await isocan("canvas", "place", S, "--canvas", S);
     expect(self.code).not.toBe(0);
     expect(self.stderr).toContain("cannot be placed on itself");
-  });
+    // Thirty-odd CLI walks in one case: 14-17s on a laptop, and it timed out at
+    // the default 30s on a loaded release shard (run 34893853023, 14 Sep 2026).
+    // The same 40s the other long walks here take — `dispatch.test.ts` and
+    // friends — rather than a case that is fine until the runner is busy.
+  }, 40_000);
 });

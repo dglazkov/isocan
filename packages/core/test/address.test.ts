@@ -9,7 +9,11 @@ import {
   canvasPath,
   canvasUrl,
   canvasUrlWithPass,
+  embedCanvasUrl,
+  isEmbedded,
+  isEmbeddedChatHidden,
   parseCanvasAddress,
+  parseItemAddress,
   setupCommand,
   cloudAgentInstructions,
   localAgentInstructions,
@@ -56,6 +60,32 @@ describe("a canvas's address", () => {
     });
   });
 
+  it("builds a chat-free embed address by default, and round-trips through parseCanvasAddress", () => {
+    const token = "pss_abc123.s3cr3t-value_x";
+    const embedded = embedCanvasUrl("https://isocan.io", "prj_acme", token);
+    expect(embedded).toBe(`https://isocan.io/p/prj_acme?embed=1#${token}`);
+    // Keeping the Chat dock does not stop it being an embed: the host bridge
+    // still answers, and only the dock comes back.
+    const withChat = embedCanvasUrl("https://isocan.io", "prj_acme", token, { chat: true });
+    expect(withChat).toBe(`https://isocan.io/p/prj_acme?embed=1&chat=on#${token}`);
+    expect(isEmbeddedChatHidden(new URL(withChat).search)).toBe(false);
+    expect(parseCanvasAddress(embedded)).toEqual({
+      origin: "https://isocan.io",
+      canvasId: "prj_acme",
+      pass: token,
+    });
+    expect(isEmbeddedChatHidden("?embed=1")).toBe(true);
+    expect(isEmbeddedChatHidden("embed=1")).toBe(true);
+    expect(isEmbeddedChatHidden("?embed=1&chat=on")).toBe(false);
+    expect(isEmbeddedChatHidden("")).toBe(false);
+    // One spelling, the one the writer writes: a synonym nothing emits is
+    // not an embed, and `chat=off` outside an embed hides nothing.
+    expect(isEmbedded("?embed=true")).toBe(false);
+    expect(isEmbeddedChatHidden("?chat=off")).toBe(false);
+    expect(isEmbedded("?embed=1&chat=on")).toBe(true);
+    expect(isEmbedded("?thread=t_1")).toBe(false);
+  });
+
   it("treats a bare address, and a trailing #, as no pass at all", () => {
     expect(splitPassFragment("https://isocan.io/p/prj_acme")).toEqual({
       address: "https://isocan.io/p/prj_acme",
@@ -95,6 +125,10 @@ describe("a canvas's address", () => {
     });
     // A trailing slash is what a browser adds; it is not a different canvas.
     expect(parseCanvasAddress("https://isocan.io/p/prj_acme/")?.canvasId).toBe("prj_acme");
+    // A malformed percent escape is not an address and is not a throw: the
+    // null contract is the whole reason callers do not catch around this.
+    expect(parseCanvasAddress("https://isocan.io/p/%E0%A4%A")).toBeNull();
+    expect(parseItemAddress("https://isocan.io/p/prj_acme/i/%E0%A4%A")).toBeNull();
     // Round trip, both directions, against the one writer.
     const built = canvasUrlWithPass("https://isocan.io", "prj_acme", "pss_1.s3cret");
     expect(parseCanvasAddress(built)).toEqual({

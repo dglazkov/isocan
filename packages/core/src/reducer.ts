@@ -1,3 +1,6 @@
+import { validateDesignRepairCanonical } from "./design-repair-state.ts";
+import { validateTextAnchor } from "./text-anchor.ts";
+import { validateContextManifest } from "./canvas-group-context.ts";
 import type {
   Actor,
   Canvas,
@@ -10,7 +13,16 @@ import type {
 import { emptyCanvas, mainThread } from "./model.ts";
 import type { MetaPatch, NewComment, NewVersion, OpEnvelope } from "./ops.ts";
 import { OpValidationError, unknownOperation } from "./errors.ts";
+import { BEYOND_CEILING } from "./ceiling.ts";
+import { questionnaireQuestionMarkdown, validateQuestionnaireComment, questionnaireStates, rejectQuestionnaireMetadata } from "./questionnaire.ts";
+import { DesignPartnerContractError, parseDesignQuestionSet, parseDesignResponse } from "./design-partner.ts";
+import { designResponseMarkdown } from "./design-partner-plan.ts";
 import { positionIsMeaningful, resolvePlacement } from "./placement.ts";
+import { applyGroupChange, resolveGroupOperation, validateGroupForest } from "./canvas-groups.ts";
+import { validateDesignRecordState, validateDesignRecordEffect } from "./design-record.ts";
+import { validateClick } from "./prototype-click.ts";
+import { PROPOSAL_PROP, proposalRefusal } from "./proposal.ts";
+import { DesignRestoreConflict, designDecisionMarkdown, designTargetMatches, rejectDesignDecisionMetadata, sameDesignValue, validateDesignDecisionComment } from "./design-decision-state.ts";
 
 /**
  * The shared pure reducer. The daemon runs it authoritatively; the web client
@@ -26,6 +38,38 @@ export function applyOperation(
   state: CanvasState | null,
   envelope: OpEnvelope,
 ): CanvasState | null {
+  try { return applyValidatedOperation(state, envelope); }
+  catch (error) {
+    if (error instanceof DesignPartnerContractError) throw new OpValidationError("bad-op", error.message);
+    throw error;
+  }
+}
+function applyValidatedOperation(state: CanvasState | null, envelope: OpEnvelope): CanvasState | null {
+  const op = envelope.op;
+  rejectQuestionnaireMetadata(op);
+  rejectDesignDecisionMetadata(op);
+  if ((op.type === "item.add" || op.type === "item.edit" || op.type === "item.addVersion") && op.version.designRecord !== undefined) throw new OpValidationError("bad-op", "design admission requires its canonical design operation");
+  const contexts = op.type === "questionnaire.ask" || op.type === "questionnaire.answer" ? [op.context]
+    : op.type === "thread.create" || op.type === "thread.reply" || op.type === "comment.restore" ? [op.comment.context]
+    : op.type === "comment.update" ? [op.context]
+    : op.type === "thread.restore" ? op.thread.comments.map((comment) => comment.context) : [];
+  if (op.type === "comment.restore") validateQuestionnaireComment(op.comment, envelope.canvasId!);
+  if (op.type === "thread.restore") for (const comment of op.thread.comments) validateQuestionnaireComment(comment, envelope.canvasId!);
+  for (const context of contexts) if (context) {
+    if (!state || state.project.groupMode !== "groups") throw new OpValidationError("bad-op", "frozen context requires a group-mode canvas");
+    validateContextManifest(context, state.project.id);
+  }
+  const next = reduceOperation(state, envelope);
+  // Historical area canvases keep their original reduction. Explicit group
+  // state is validated after EVERY operation, including ordinary inverses.
+  if (next?.project.groupMode === "groups") validateGroupForest(next);
+  if (next) validateDesignRecordState(next);
+  if (next) for (const thread of Object.values(next.canvas.threads)) for (const comment of thread.comments) validateDesignDecisionComment(comment, next.project.id);
+  return next;
+}
+
+/** Primitive existing effects also compile a bounded content write before group-frame repair. */
+export function reduceOperation(state: CanvasState | null, envelope: OpEnvelope): CanvasState | null {
   const { op, actor, ts } = envelope;
 
   if (op.type === "project.create") {
@@ -37,6 +81,7 @@ export function applyOperation(
       title: op.title,
       description: op.description ?? "",
       properties: { ...op.properties },
+      ...(op.groupMode !== undefined ? { groupMode: op.groupMode } : {}),
       createdAt: ts,
       createdBy: actor,
       updatedAt: ts,
@@ -92,6 +137,61 @@ export function applyOperation(
   };
 
   switch (op.type) {
+    case "design.repair": {
+      validateDesignRepairCanonical(envelope);
+      if (!designTargetMatches(canvas, op.repair.target)) throw new OpValidationError("edit-conflict", "The captured repair target changed.");
+      const next = reduceOperation(state, { ...envelope, actor: { id: actor.id, name: actor.name }, op: op.effect! })!;
+      return { ...next, project: { ...next.project, lastOp: op.type } };
+    }
+    case "design.compare":
+    case "design.respond": {
+      const comment = op.canonicalComment, expected = op.type === "design.compare" ? op.comparison : op.response;
+      if (!comment || comment.id !== op.commentId || comment.author.id !== actor.id || comment.designDecision?.opId !== envelope.id || !sameDesignValue(comment.designDecision.record, expected)) throw new OpValidationError("bad-op", "canonical comparison effect disagrees with intent");
+      validateDesignDecisionComment(comment, project.id);
+      return reduceOperation(state, { ...envelope, op: { type: "comment.restore", threadId: op.threadId, comment } });
+    }
+    case "design.decide": {
+      const effect = op.effect, record = effect?.comment.designDecision?.record;
+      if (!effect || Object.keys(effect).some((key) => !["edit", "threadId", "comment"].includes(key)) || effect.edit.type !== "item.edit" || Object.keys(effect.edit).some((key) => !["type", "itemId", "version", "expectedVersionId", "expectedMetadata", "patch"].includes(key)) || effect.threadId !== op.threadId || effect.comment.id !== op.commentId || effect.comment.author.id !== actor.id || effect.comment.designDecision?.opId !== envelope.id || record?.kind !== "adoption-decision" || !sameDesignValue(record.input, op.decision) || effect.edit.itemId !== op.decision.basis.target.artifact.itemId || effect.edit.version.id !== op.decision.versionId || effect.edit.version.blobHash !== record.adopted.blobHash || Object.keys(effect.edit.patch).length || !sameDesignValue(effect.edit.expectedMetadata, { title: op.decision.basis.target.title, properties: op.decision.basis.target.properties }) || !designTargetMatches(canvas, op.decision.basis.target)) throw new OpValidationError("edit-conflict", "canonical adoption pair disagrees or its approved target changed");
+      validateDesignDecisionComment(effect.comment, project.id);
+      if (record.input.source.kind === "comparison") {
+        const source = record.input.source.source, sourceComment = canvas.threads[source.threadId]?.comments.find((c) => c.id === source.commentId);
+        if (source.threadId !== op.threadId || !sourceComment || !sameDesignValue(sourceComment.designDecision?.record, record.comparison) || sourceComment.body !== designDecisionMarkdown(record.comparison) || !sameDesignValue(sourceComment.author, record.recommendationAuthor)) throw new OpValidationError("bad-op", "canonical adoption source or recommendation author disagrees");
+      } else if (!sameDesignValue(record.recommendationAuthor, { id: actor.id, name: actor.name })) throw new OpValidationError("bad-op", "direct recommendation author disagrees");
+      const retained = effect.comment.designReferences!.find((r) => sameDesignValue(r.artifact, record.adopted))!;
+      const { createdAt: _createdAt, createdBy: _createdBy, ...version } = retained.version;
+      if (!sameDesignValue(effect.edit.version, version) || effect.edit.expectedVersionId !== record.input.basis.target.artifact.versionId || effect.comment.createdAt !== ts || !sameDesignValue(effect.comment.author, { id: actor.id, name: actor.name })) throw new OpValidationError("bad-op", "canonical edit differs from its retained adopted version");
+      const edited = reduceOperation(state, { ...envelope, actor: { id: actor.id, name: actor.name }, op: effect.edit })!;
+      const next = reduceOperation(edited, { ...envelope, op: { type: "comment.restore", threadId: effect.threadId, comment: effect.comment } })!;
+      return { ...next, project: { ...next.project, lastOp: op.type } };
+    }
+    case "design.restore": {
+      const e = op.effect, current = canvas.threads[e.threadId]?.comments.find((c) => c.id === e.commentId) ?? null;
+      if (!designTargetMatches(canvas, e.target) || !canvas.threads[e.threadId] || !sameDesignValue(current, e.expectedComment) || e.item.itemId !== e.target.artifact.itemId || e.comment && e.comment.id !== e.commentId || e.comment === null && e.expectedComment === null) throw new DesignRestoreConflict("The adopted target or decision comment changed; neither half was restored.");
+      if (Object.keys(e).some((key) => !["target", "item", "threadId", "commentId", "expectedComment", "comment"].includes(key)) || e.item.type !== "item.removeVersion" && e.item.type !== "item.restoreVersion") throw new DesignRestoreConflict("Invalid paired restoration.");
+      const original = e.expectedComment ?? e.comment, record = original?.designDecision?.record;
+      if (!original || record?.kind !== "adoption-decision") throw new DesignRestoreConflict("Paired restoration requires its original decision.");
+      validateDesignDecisionComment(original, project.id);
+      const adopted = original.designReferences!.find((r) => sameDesignValue(r.artifact, record.adopted))!.version;
+      const removing = e.item.type === "item.removeVersion";
+      if (Object.keys(e.item).some((key) => !(removing ? ["type", "itemId", "versionId", "prevCurrentVersionId", "patch"] : ["type", "itemId", "version", "patch"]).includes(key))) throw new DesignRestoreConflict("Unknown paired restoration semantics.");
+      if (!sameDesignValue(e.target, { ...record.input.basis.target, artifact: removing ? record.adopted : record.input.basis.target.artifact }) || e.item.patch && Object.keys(e.item.patch).length || e.item.type === "item.removeVersion" && (e.comment !== null || e.item.versionId !== record.adopted.versionId || e.item.prevCurrentVersionId !== record.input.basis.target.artifact.versionId) || e.item.type === "item.restoreVersion" && (e.expectedComment !== null || !sameDesignValue(e.item.version, adopted))) throw new DesignRestoreConflict("Restoration disagrees with its exact original target/comment pair.");
+      const edited = reduceOperation(state, { ...envelope, op: e.item })!;
+      const next = reduceOperation(edited, { ...envelope, op: e.comment ? { type: "comment.restore", threadId: e.threadId, comment: e.comment } : { type: "comment.remove", threadId: e.threadId, commentId: e.commentId } })!;
+      return { ...next, project: { ...next.project, lastOp: op.type } };
+    }
+    case "design.request":
+    case "design.receipt": {
+      if (!op.effect) throw new OpValidationError("bad-op", "design act requires its canonical writer effect");
+      validateDesignRecordEffect(state, envelope);
+      const next = reduceOperation(state, { ...envelope, op: op.effect });
+      return next && { ...next, project: { ...next.project, lastOp: op.type } };
+    }
+    case "group.change": {
+      const resolved = op.action.kind === "apply" ? op : resolveGroupOperation(state, op, { actor, ts, opId: envelope.id });
+      if (resolved.action.kind !== "apply") throw new OpValidationError("bad-op", "unresolved group operation");
+      return applyGroupChange(state, resolved.action.change, actor, ts);
+    }
     case "actor.claim":
     case "actor.setColor":
     case "actor.setMark":
@@ -111,6 +211,13 @@ export function applyOperation(
         throw new OpValidationError("duplicate-id", `item id already exists: ${op.itemId}`);
       }
       requireFinite({ width: op.width, height: op.height }, "item.add");
+      // No trigger, no proposal; and one agent's open proposals are capped
+      // (`proposal.ts`). Here, at the one writer, so every surface is refused
+      // by the same sentence rather than trusted to ask first.
+      if (op.properties?.[PROPOSAL_PROP] !== undefined) {
+        const refused = proposalRefusal(canvas, actor.id, op.properties);
+        if (refused) throw new OpValidationError("bad-op", refused);
+      }
       if ("x" in op.placement) {
         requireFinite({ x: op.placement.x, y: op.placement.y }, "item.add placement");
       }
@@ -205,27 +312,58 @@ export function applyOperation(
 
     case "item.update": {
       const item = getItem(op.itemId);
-      const renamed =
-        op.filename === undefined
+      const updatedVersions =
+        op.filename === undefined && op.faces === undefined
           ? item.versions
-          : item.versions.map((version) =>
-              version.id === item.currentVersionId ? { ...version, filename: op.filename! } : version,
-            );
+          : item.versions.map((version) => {
+              if (version.id !== item.currentVersionId) return version;
+              let nextFaces = version.faces ? { ...version.faces } : undefined;
+              if (op.faces !== undefined) {
+                nextFaces = nextFaces ?? {};
+                for (const [key, value] of Object.entries(op.faces)) {
+                  const faceKey = key as keyof typeof nextFaces;
+                  if (value === null || value === undefined) {
+                    delete nextFaces[faceKey];
+                  } else {
+                    nextFaces[faceKey] = value;
+                  }
+                }
+                if (Object.keys(nextFaces).length === 0) nextFaces = undefined;
+              }
+              const { faces: _oldFaces, ...restVersion } = version;
+              return {
+                ...restVersion,
+                ...(op.filename !== undefined ? { filename: op.filename } : {}),
+                ...(nextFaces ? { faces: nextFaces } : {}),
+              };
+            });
       return putItem({
         ...item,
         ...applyMetaPatch(item, op.patch),
-        versions: renamed,
+        versions: updatedVersions,
         ...stamp,
       });
     }
 
+    case "item.edit":
     case "item.addVersion": {
       const item = getItem(op.itemId);
+      if (op.type === "item.edit") {
+        const expected = op.expectedMetadata;
+        if (item.currentVersionId !== op.expectedVersionId ||
+          (expected && (item.title !== expected.title ||
+            Object.keys({ ...item.properties, ...expected.properties }).some(
+              (key) => item.properties[key] !== expected.properties[key],
+            )))) {
+          throw new OpValidationError("edit-conflict", `“${item.title}” changed while editing. Reload it before saving; your draft has not been applied.`);
+        }
+      }
       if (item.versions.some((v) => v.id === op.version.id)) {
         throw new OpValidationError("duplicate-id", `version id already exists: ${op.version.id}`);
       }
       return putItem({
         ...item,
+        ...(op.type === "item.edit" ? applyMetaPatch(item, op.patch) : {}),
         versions: [...item.versions, toItemVersion(op.version, actor, ts)],
         currentVersionId: op.version.id,
         ...stamp,
@@ -236,6 +374,14 @@ export function applyOperation(
       const item = getItem(op.itemId);
       requireVersion(item, op.versionId);
       return putItem({ ...item, currentVersionId: op.versionId, ...stamp });
+    }
+
+    case "item.pruneVersions": {
+      const item = getItem(op.itemId);
+      if (!Number.isInteger(op.keep) || op.keep < 1) {
+        throw new OpValidationError("bad-op", `keep must be a whole number of at least 1: ${op.keep}`);
+      }
+      return putItem({ ...item, versions: pruneVersions(item, op.keep), ...stamp });
     }
 
     case "item.removeVersion": {
@@ -251,7 +397,7 @@ export function applyOperation(
           `prevCurrentVersionId not among remaining versions: ${op.prevCurrentVersionId}`,
         );
       }
-      return putItem({ ...item, versions, currentVersionId: op.prevCurrentVersionId, ...stamp });
+      return putItem({ ...item, ...(op.patch ? applyMetaPatch(item, op.patch) : {}), versions, currentVersionId: op.prevCurrentVersionId, ...stamp });
     }
 
     case "item.restoreVersion": {
@@ -261,6 +407,7 @@ export function applyOperation(
       }
       return putItem({
         ...item,
+        ...(op.patch ? applyMetaPatch(item, op.patch) : {}),
         versions: [...item.versions, op.version],
         currentVersionId: op.version.id,
         ...stamp,
@@ -336,8 +483,12 @@ export function applyOperation(
       });
     }
 
-    case "trash.empty":
-      return withCanvas({ ...canvas, trash: [] });
+    case "trash.empty": {
+      // The capture describes restorable trash, never a second archive after
+      // the person has explicitly emptied it. Historical area shapes stay put.
+      const { groupCohorts: _dropCohorts, ...remaining } = canvas;
+      return withCanvas({ ...remaining, trash: [] });
+    }
 
     case "thread.create": {
       if (canvas.threads[op.threadId]) {
@@ -346,6 +497,7 @@ export function applyOperation(
       requireBody(op.comment.body);
       requireFinite({ x: op.x, y: op.y }, "thread.create");
       if (op.anchorItemId !== null) getItem(op.anchorItemId);
+      const textAnchor = validateTextAnchor(op.textAnchor, op.anchorItemId ? canvas.items[op.anchorItemId] : undefined);
       // Strict, not takeover: a race between two clients birthing a main
       // thread must not leave one silently demoted — the loser errors and
       // replies to the winner's thread instead. Keeps undo exact, too.
@@ -357,6 +509,7 @@ export function applyOperation(
         x: op.x,
         y: op.y,
         anchorItemId: op.anchorItemId,
+        ...(textAnchor ? { textAnchor } : {}),
         comments: [toComment(op.comment, actor, ts)],
         ...(op.main ? { main: true } : {}),
         createdAt: ts,
@@ -365,6 +518,22 @@ export function applyOperation(
       return withCanvas({ ...canvas, threads: { ...canvas.threads, [thread.id]: thread } });
     }
 
+    case "questionnaire.ask":
+    case "questionnaire.answer": {
+      const thread = getThread(op.threadId);
+      if (thread.comments.some((c) => c.id === op.commentId)) throw new OpValidationError("duplicate-id", `comment id already exists: ${op.commentId}`);
+      const design = op.type === "questionnaire.ask" ? parseDesignQuestionSet(op.questions) : parseDesignResponse(op.response);
+      let body: string;
+      if (design.kind === "questions") body = questionnaireQuestionMarkdown(design, op.type === "questionnaire.ask" && !!op.legacySource);
+      else {
+        const source = questionnaireStates(state!.canvas).find((q) => q.source.threadId === design.question.threadId && q.source.commentId === design.question.commentId && q.source.payloadId === design.question.payloadId && q.source.revision === design.question.revision);
+        if (!source || source.questions.requestId !== design.requestId || source.questions.epoch !== design.epoch) throw new OpValidationError("bad-op", "questionnaire response source association disagrees");
+        body = designResponseMarkdown(design, source.questions);
+      }
+      const comment: Comment = { id: op.commentId, author: actor, body, createdAt: ts, design, designReferences: structuredClone(op.retainedReferences ?? []), ...(op.context ? { context: structuredClone(op.context) } : {}), ...(op.type === "questionnaire.ask" && op.legacySource ? { designLegacySource: structuredClone(op.legacySource) } : {}) };
+      validateQuestionnaireComment(comment, state!.project.id);
+      return withCanvas({ ...canvas, threads: { ...canvas.threads, [thread.id]: { ...thread, comments: [...thread.comments, comment] } } });
+    }
     case "thread.reply": {
       const thread = getThread(op.threadId);
       requireBody(op.comment.body);
@@ -401,7 +570,10 @@ export function applyOperation(
       ) {
         throw new OpValidationError("unknown-item", `unknown item: ${op.anchorItemId}`);
       }
+      const anchorItem = op.anchorItemId ? canvas.items[op.anchorItemId] ?? canvas.trash.find(t => t.item.id === op.anchorItemId)?.item : undefined;
+      const textAnchor = validateTextAnchor(op.textAnchor, anchorItem);
       const next = { ...thread, anchorItemId: op.anchorItemId, x: op.x, y: op.y };
+      if (textAnchor) next.textAnchor = textAnchor; else delete next.textAnchor;
       return withCanvas({ ...canvas, threads: { ...canvas.threads, [next.id]: next } });
     }
 
@@ -429,6 +601,11 @@ export function applyOperation(
         ...(op.items ? { items: op.items } : {}),
         editedAt: ts,
       };
+      if (op.context === null) delete edited.context;
+      else if (op.context !== undefined) {
+        validateContextManifest(op.context, state.project.id);
+        edited.context = structuredClone(op.context);
+      }
       const next = {
         ...thread,
         comments: thread.comments.map((c) => (c.id === op.commentId ? edited : c)),
@@ -453,7 +630,9 @@ export function applyOperation(
       if (thread.comments.some((c) => c.id === op.comment.id)) {
         throw new OpValidationError("duplicate-id", `comment id already exists: ${op.comment.id}`);
       }
-      const next = { ...thread, comments: [...thread.comments, op.comment] };
+      const comments = [...thread.comments];
+      comments.splice(op.index === undefined ? comments.length : Math.max(0, Math.min(op.index, comments.length)), 0, op.comment);
+      const next = { ...thread, comments };
       return withCanvas({ ...canvas, threads: { ...canvas.threads, [next.id]: next } });
     }
 
@@ -480,13 +659,54 @@ export function applyOperation(
 
     case "agent.enroll": {
       // Re-enrolling updates the record in place: the standing was already
-      // there, the rules (or the name) changed. `rules` is stored verbatim
-      // and interpreted by nobody until phase 4 defines the vocabulary.
-      const row = { actor: op.agent, ...(op.rules !== undefined ? { rules: op.rules } : {}) };
+      // there, the rules (or the name) changed. `rules` is stored verbatim;
+      // omitting it on re-enrolment leaves whatever rules stood untouched,
+      // so `rc add <name> --harness pi` (or any other re-enrolment that
+      // names no rules) never silently wipes an existing `listen` grant.
+      // `writtenBy` is the envelope's author, so the rc can tell its owner's
+      // gate from anybody else's (`EnrolledAgent.writtenBy`).
+      const standing = canvas.agents?.[op.agent.id];
+      const rules = op.rules !== undefined ? op.rules : standing?.rules;
+      // A ceiling outlives a re-enrolment (critique phase 2): `rc add` of a
+      // capped critic's name must not quietly lift what `critic release`
+      // and `agent.withdraw` are the only ways to lift.
+      const row = {
+        actor: op.agent,
+        ...(rules !== undefined ? { rules } : {}),
+        writtenBy: actor,
+        ...(standing?.ceiling ? { ceiling: standing.ceiling, ...(standing.ceilingBy ? { ceilingBy: standing.ceilingBy } : {}) } : {}),
+      };
       return withCanvas({
         ...canvas,
         agents: { ...(canvas.agents ?? {}), [op.agent.id]: row },
       });
+    }
+
+    case "agent.invite": {
+      // **Standing here, and not one thing more** (the bench, journey 2).
+      //
+      // Joining is the act of naming an agent you already have on a canvas it
+      // has never worked on, so the ONLY thing it may add is the row. Three
+      // deliberate preservations, each of them a way the rule "a bench row
+      // confers nothing" would otherwise erode:
+      //
+      //   `rules` is carried across untouched — an invite never spells one,
+      //   so a re-invite of an already-enrolled agent cannot widen (or
+      //   narrow) who may summon it. A fresh row carries none, which the rc
+      //   reads as owner-only.
+      //
+      //   `writtenBy` is stamped only on a row this op CREATES. Re-stamping
+      //   an existing row would hand the inviter authorship of a gate
+      //   somebody else wrote, which is the widening above by another door.
+      //
+      //   The recorded `actor` wins over the one carried, so an invitation
+      //   cannot rename an agent the canvas already knows.
+      const agents = { ...(canvas.agents ?? {}) };
+      const standing = agents[op.agent.id];
+      const row = standing
+        ? { ...standing, invitedFrom: op.from }
+        : { actor: op.agent, writtenBy: actor, invitedFrom: op.from };
+      return withCanvas({ ...canvas, agents: { ...agents, [op.agent.id]: row } });
     }
 
     case "agent.withdraw": {
@@ -495,7 +715,32 @@ export function applyOperation(
         throw new OpValidationError("unknown-actor", `no standing agent: ${op.actorId}`);
       }
       delete agents[op.actorId];
-      return withCanvas({ ...canvas, agents });
+      // The room's word, kept: a pet reads it and does not come back
+      // (`CanvasContents.withdrawn`, pets phase 2). Spread from a
+      // possibly-absent record on purpose — `{...undefined}` is `{}`, and the
+      // entry chunk has no bytes for a `?? {}`.
+      return withCanvas({ ...canvas, agents, withdrawn: { ...canvas.withdrawn, [op.actorId]: actor } });
+    }
+
+    case "agent.ceiling": {
+      // Set by a person, about an agent: never by the agent itself, and
+      // lifted only by whoever set it (or by withdrawing the agent). The
+      // door has already refused anything a capped actor sends that is not
+      // a note, this op included (`ceilingRefusal`); these are the rules
+      // for everybody else.
+      const standing = canvas.agents?.[op.actorId];
+      if (!standing) throw new OpValidationError("unknown-actor", `no standing agent: ${op.actorId}`);
+      if (op.actorId === actor.id) throw new OpValidationError(BEYOND_CEILING, "an agent cannot set or lift its own ceiling — the person who enrolled it does");
+      if (op.ceiling !== null && op.ceiling !== "note") throw new OpValidationError("bad-op", `not a ceiling: ${String(op.ceiling)} (the one there is is "note")`);
+      if (op.ceiling === null) {
+        if (!standing.ceiling) return state;
+        if (standing.ceilingBy && standing.ceilingBy.id !== actor.id) {
+          throw new OpValidationError(BEYOND_CEILING, `${standing.actor.name}'s ceiling was set by ${standing.ceilingBy.name}, who lifts it — or withdraw the agent`);
+        }
+        const { ceiling: _c, ceilingBy: _b, ...rest } = standing;
+        return withCanvas({ ...canvas, agents: { ...canvas.agents, [op.actorId]: rest } });
+      }
+      return withCanvas({ ...canvas, agents: { ...canvas.agents, [op.actorId]: { ...standing, ceiling: op.ceiling, ceilingBy: actor } } });
     }
 
     default:
@@ -522,8 +767,53 @@ function toItemVersion(v: NewVersion, actor: Actor, ts: string): ItemVersion {
 
 function toComment(c: NewComment, actor: Actor, ts: string): Comment {
   const comment: Comment = { id: c.id, author: actor, body: c.body, createdAt: ts };
-  if (c.mentions && c.mentions.length > 0) comment.mentions = [...c.mentions];
-  if (c.items && c.items.length > 0) comment.items = [...c.items];
+  if (c.mentions?.length) comment.mentions = [...c.mentions];
+  if (c.record) comment.record = c.record;
+  if (c.click) comment.click = validateClick(c.click);
+  if (c.deleted !== undefined) {
+    if (typeof c.deleted !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(c.deleted)) {
+      throw new OpValidationError("bad-op", "a delete note names the proposal it deleted by its item id");
+    }
+    comment.deleted = c.deleted;
+  }
+  if (c.persona !== undefined) {
+    // A critic worn by the lead (proactive-agent phase 8): the card's name, a slug.
+    if (typeof c.persona !== "string" || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(c.persona)) {
+      throw new OpValidationError("bad-op", "a critic's note names the critic it is worn as by its card's name, a lowercase slug");
+    }
+    comment.persona = c.persona;
+  }
+  if (c.goodnight !== undefined) {
+    // A goodnight turn (proactive-agent phase 2): a plan, or a brief naming its note.
+    const { step, note } = (c.goodnight ?? {}) as { step?: unknown; note?: unknown };
+    if (step === "plan" && note === undefined) comment.goodnight = { step };
+    else if (step === "brief" && typeof note === "string" && /^[\w-]{1,64}$/.test(note)) comment.goodnight = { step, note };
+    else throw new OpValidationError("bad-op", "a goodnight turn is a plan, or a brief naming its note");
+  }
+  if (c.readings !== undefined) {
+    // Picked readings of vague words (proactive-agent phase 10): a few word → reading pairs.
+    const ok = /^[a-z][a-z ]{0,31}$/;
+    if (!Array.isArray(c.readings) || c.readings.length > 8 || !c.readings.every((r) => ok.test(r?.word) && ok.test(r?.reading))) {
+      throw new OpValidationError("bad-op", "readings are up to eight lowercase word → reading pairs");
+    }
+    comment.readings = c.readings.map(({ word, reading }) => ({ word, reading }));
+  }
+  // A moment in the item (motion phase 2): seconds, at most a day, kept to the
+  // millisecond. A string is not refused but dropped, as every `at` was before:
+  // the talk module's voice posts sent a timestamp there, which nothing kept,
+  // and a released client still may.
+  if (c.at !== undefined && typeof c.at !== "string") {
+    if (typeof c.at !== "number" || !Number.isFinite(c.at) || c.at < 0 || c.at > 86_400) {
+      throw new OpValidationError("bad-op", "a comment's time is seconds into the item, from 0 to 86400");
+    }
+    comment.at = Math.round(c.at * 1000) / 1000;
+  }
+  if (c.items?.length) comment.items = [...c.items];
+  const context = c.context;
+  if (context) {
+    validateContextManifest(context, context.canvasId);
+    comment.context = structuredClone(context);
+  }
   return comment;
 }
 
@@ -564,6 +854,25 @@ function requireUniqueIds(ids: string[]): void {
   if (new Set(ids).size !== ids.length) {
     throw new OpValidationError("duplicate-id", "batch op lists an item twice");
   }
+}
+
+/**
+ * **The stack `item.pruneVersions` leaves behind** — exported so a surface
+ * can say what a prune WOULD drop before anybody confirms it, from the same
+ * rule the reducer applies (lessons.md #5: a rule with one home).
+ *
+ * The newest `keep` by stack order, plus the current version wherever it
+ * sits. Order is preserved, so `v3` still means the third that was made.
+ */
+export function pruneVersions(item: Item, keep: number): ItemVersion[] {
+  const cut = Math.max(0, item.versions.length - Math.max(1, Math.floor(keep)));
+  return item.versions.filter((v, index) => index >= cut || v.id === item.currentVersionId);
+}
+
+/** What `item.pruneVersions` would remove, in stack order. */
+export function prunedVersions(item: Item, keep: number): ItemVersion[] {
+  const kept = new Set(pruneVersions(item, keep).map((v) => v.id));
+  return item.versions.filter((v) => !kept.has(v.id));
 }
 
 function requireVersion(item: Item, versionId: string): void {

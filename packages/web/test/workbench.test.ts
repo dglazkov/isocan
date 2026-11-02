@@ -145,9 +145,10 @@ describe("the editor's bar earns its buttons", () => {
   it("offers Save and Revert only over a dirty buffer", () => {
     // A Save button over a clean buffer is a question with no answer — and
     // the habitual ⌘S must not mint an identical version either, so the
-    // guard is in save() as well as in the render.
+    // guard is in save() as well as in the render. The keymap is created
+    // once, so the live writing ref also excludes pending saves and repairs.
     expect(editor).toMatch(/\{dirty && \(/);
-    expect(editor).toMatch(/saving \|\| !dirtyRef\.current\) return;/);
+    expect(editor).toMatch(/writing\.current \|\| !dirtyRef\.current\) return;/);
   });
 });
 
@@ -181,10 +182,15 @@ describe("edit-text-in-place", () => {
   });
 
   it("saves through the unique-match rule and the ordinary version path", () => {
-    expect(frame).toContain("applyEdits(");
-    expect(frame).toContain("addVersionFromFile(");
+    // The save half is fetched on Save (`lib/inlineSave.ts`); plain HTML is
+    // still spliced by position and lands as an ordinary version there, and a
+    // wireframe's words go to its module's writer (`inlinesave.test.ts`).
+    const save = read("../src/lib/inlineSave.ts");
+    expect(frame).toContain('import("../lib/inlineSave.ts")');
+    expect(save).toContain("applyEdits(");
+    expect(save).toContain("addVersionFromFile(");
     // Refusals surface as a sentence, never as a silent partial save.
-    expect(frame).toContain("setRefusal(outcome.reason)");
+    expect(frame).toContain("if (no) setRefusal(no)");
   });
 
   it("opens what each COVER is for, and remembers them apart", () => {

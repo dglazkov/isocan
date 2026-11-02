@@ -1,22 +1,19 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { deck, deckStep, isDesignSystem, isTextItem, itemPath, isFramedItem, visualFaceOf } from "@isocan/core";
+import { deckTransitionOf, sourceOf, deck, deckStep, isDesignSystem, isTextItem, itemPath, isFramedItem, visualFaceOf } from "@isocan/core";
 import { connectToCanvas, disconnect, useCanvasStore } from "../stores/canvasStore.ts";
 import { VersionContent } from "./ItemView.tsx";
 import { KindIcon } from "./KindIcon.tsx";
+import { MorphStage } from "./MorphStage.tsx";
 import { iconKindFor } from "../lib/kinds.ts";
 import { isTyping } from "../lib/keys.ts";
-import { flipTo } from "../lib/deckflip.ts";
+import { FLIP_NEXT, FLIP_PREV, REST_AFTER_MS, flipTo, framingOf } from "../lib/deckflip.ts";
 
-/** The deck keys, exactly `FullScreen`'s (#87): a presenter's clicker sends
- * Page Up/Down, and both axes flip because the deck is linear. */
-const FLIP_NEXT = new Set<string>(["ArrowRight", "ArrowDown", "PageDown"]);
-const FLIP_PREV = new Set<string>(["ArrowLeft", "ArrowUp", "PageUp"]);
-
-/** FullScreen's resting rhythm, kept in step with it: long enough that
- * reading a slide does not dismiss the chrome by accident, short enough to be
- * gone by the second slide of a talk. */
-const REST_AFTER_MS = 2500;
+import { usePhone } from "../lib/phone.ts";
+import { useTouchNavigation } from "../lib/touchnavigation.ts";
+import "./presentation.css";
+import "./mobile-navigation.css";
+const PhonePresenting = lazy(() => import("./PhonePresenting.tsx").then((m) => ({ default: m.PhonePresenting })));
 
 /**
  * **The viewer face** (#88): what a view-only admission gets instead of the
@@ -45,9 +42,21 @@ const REST_AFTER_MS = 2500;
  */
 export function Viewer({ canvasId, itemId }: { canvasId: string; itemId: string | null }) {
   const navigate = useNavigate();
+  const phone = usePhone();
+  const gestures = useTouchNavigation((direction) => {
+    const canvas = useCanvasStore.getState().canvas;
+    if (!canvas || !itemId) return;
+    const next = deckStep(canvas, itemId, direction === "ArrowRight" ? 1 : -1);
+    if (next) navigate(itemPath(canvasId, next.id));
+  }, undefined, true);
+
   const canvas = useCanvasStore((s) => s.canvas);
-  const title = useCanvasStore((s) => s.project?.title ?? null);
+  const title = useCanvasStore((s) => s.record?.title ?? null);
   const connection = useCanvasStore((s) => s.connection);
+  // The home's own sentence about a canvas it took down (operator phase 2).
+  const takenDown = useCanvasStore((s) => s.takenDown);
+  const ended = useCanvasStore((s) => s.ended);
+  const refusedHere = useCanvasStore((s) => s.refusedHere);
 
   // The stranger path connects here (no actor — nobody to announce); the
   // CanvasPage path arrives already connected, and reconnecting would drop a
@@ -78,14 +87,16 @@ export function Viewer({ canvasId, itemId }: { canvasId: string; itemId: string 
       const forward = FLIP_NEXT.has(e.key);
       const next = deckStep(now, itemId, forward ? 1 : -1);
       if (!next) return; // the deck's edge: stay put rather than wrap
-      // A screen or a site is an iframe, and an iframe photographs blank, so
-      // animating one is a white flash on every flip. See `flipTo`.
+      // The canvas's transition (`deckTransitionOf`). A screen or a site is
+      // an iframe, which photographs blank, so two frames are animated live
+      // and a frame beside anything else cuts. See `flipTo`.
       const here = now.items[itemId];
       flipTo(
         navigate,
         itemPath(canvasId, next.id),
         forward ? "next" : "prev",
-        isFramedItem(next) || (here !== undefined && isFramedItem(here)),
+        framingOf(here !== undefined && isFramedItem(here), isFramedItem(next)),
+        deckTransitionOf(useCanvasStore.getState().record ?? {}),
       );
     }
     window.addEventListener("keydown", onKey, true);
@@ -114,15 +125,39 @@ export function Viewer({ canvasId, itemId }: { canvasId: string; itemId: string 
     connection === "refused" ||
     connection === "withdrawn" ||
     connection === "gone" ||
+    connection === "taken-down" ||
+    connection === "ended" ||
+    connection === "refused-here" ||
+    connection === "upgrade-required" ||
     connection === "absent"
   ) {
     return (
       <div className="page-note">
-        {connection === "gone"
+        {connection === "upgrade-required"
+          ? "This canvas needs an updated isocan app. Reload to continue."
+          : connection === "gone"
           ? "This canvas was deleted."
           : connection === "withdrawn"
             ? "Your access to this canvas was withdrawn."
-            : "This canvas will not have you."}
+            : // The home's own sentence, with the date, the reason and the
+              // address to write to (operator phase 2). The viewer is where a
+              // stranger with a view link lands, so this is the surface on
+              // which *this was removed, and here is who to ask* is most often
+              // read by the person who needs it.
+              connection === "taken-down"
+              ? (takenDown?.sentence ??
+                "This canvas was taken down by the operator of this home.")
+              : // This badge was ended (operator phase 4): the tombstone's
+                // own sentence, off the 401, or the short version.
+                connection === "ended"
+                ? (ended?.sentence ?? "This surface was ended.")
+                : // The operator refuses the address this badge proved
+                  // (operator phase 6): the home's sentence, off the 403.
+                  connection === "refused-here"
+                  ? (refusedHere?.sentence ??
+                    "This home will not admit the address this browser proved.")
+                  : "This canvas will not have you."}
+        {connection === "upgrade-required" && <button className="btn" onClick={() => window.location.reload()}>Reload app</button>}
       </div>
     );
   }
@@ -134,7 +169,8 @@ export function Viewer({ canvasId, itemId }: { canvasId: string; itemId: string 
   const at = item ? slides.findIndex((s) => s.id === item.id) : -1;
 
   return (
-    <div className={`fullscreen${resting ? " resting" : ""}`}>
+    <div data-presented-item={itemId ?? undefined} className={`fullscreen${phone ? " touch-presenting" : ""}${resting ? " resting" : ""}`}>
+      {phone ? <Suspense><PhonePresenting canvasId={canvasId} itemId={itemId} title={item?.title ?? "Presentation"} onExit={() => navigate("/")} /></Suspense> : <>
       <div className="fs-bar">
         <div className="floats fs-cluster">
           {title && <span className="fullscreen-title"><b>{title}</b></span>}
@@ -157,7 +193,11 @@ export function Viewer({ canvasId, itemId }: { canvasId: string; itemId: string 
           </div>
         )}
       </div>
-      <div className="fullscreen-stage">
+      </>}
+      {/* The morph's twins (MorphStage), before the stage so they paint
+          beneath the live slide until a morph raises them. */}
+      {!phone && itemId && <MorphStage canvasId={canvasId} itemId={itemId} />}
+      <div className="fullscreen-stage" {...gestures}>
         {!canvas ? (
           <div className="page-note">Finding the presentation…</div>
         ) : !item || !current ? (
@@ -165,9 +205,11 @@ export function Viewer({ canvasId, itemId }: { canvasId: string; itemId: string 
             {itemId ? "That item is not on this canvas any more." : "Nothing here yet."}
           </div>
         ) : (() => {
-          const visual = visualFaceOf(current);
+          const visual = visualFaceOf(current, item.properties.face);
           return (
             <VersionContent
+              canvasOf={item.properties.canvas ?? null}
+              canvasSource={sourceOf(item)}
               canvasId={canvasId}
               blobHash={visual.blobHash}
               mimeType={visual.mimeType}

@@ -1,8 +1,8 @@
 ---
-status: partial
+status: built
 since: 2026-08-30
 issue: 154
-note: export built; import deliberately not, and the edge question is answered
+note: export built 30 Aug (`isocan export --jsoncanvas`), and the edge question answered by the mind map's `mapParent`; residue — import is declined on purpose (the format has no room for history), and the recommended `json-canvas` skill import was never taken up and waits on somebody asking
 ---
 # JSON Canvas: what adopting it would mean
 

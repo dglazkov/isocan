@@ -1,4 +1,5 @@
 import type { CanvasContents, Item } from "./model.ts";
+import type { Operation } from "./ops.ts";
 
 /**
  * Reactions on an item: who wears what, and the two questions anybody asks.
@@ -8,6 +9,19 @@ import type { CanvasContents, Item } from "./model.ts";
  * operation, because a count that clients incremented would lose one of every
  * two simultaneous reactions.
  */
+
+/**
+ * A short, opinionated starter set: what the picker shows before anybody has
+ * a history, and the fallback when recents are empty.
+ *
+ * A canvas of screens gets asked the same handful of questions — is this the
+ * one, does it need work, is it funny, is it done — and these eight answer
+ * them. The rest of the set is one keystroke away for everything else.
+ *
+ * Here rather than beside the set in `emoji.ts` because the recents list reads
+ * it eagerly and the set is fetched only with the picker; see that file.
+ */
+export const QUICK_REACTIONS = ["👍", "🎉", "👀", "🤔", "❤️", "🔥", "🚧", "✅"] as const;
 
 /** One emoji as it renders: the mark, how many wear it, and whether you do. */
 interface Reaction {
@@ -63,6 +77,13 @@ export function hasReacted(item: Item, emoji: string, actorId: string): boolean 
   return (item.reactions?.[emoji] ?? []).includes(actorId);
 }
 
+/** **A chip click**: the op that toggles this actor's mark. It says what
+ * should be TRUE rather than "flip it", so a double click and a race land on
+ * the same answer. The chip sends it, and `isocan docket answer` is built
+ * from it, so a terminal's answer is the clicks a person would make. */
+export function reactOp(item: Item, emoji: string, actorId: string): Extract<Operation, { type: "item.react" }> {
+  return { type: "item.react", itemId: item.id, emoji, on: !hasReacted(item, emoji, actorId) };
+}
 
 /** One emoji's worth of the canvas: the mark, who is wearing it where, and
  * how many items carry it. */

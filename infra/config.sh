@@ -150,3 +150,21 @@ INGRESS="${ISOCAN_INGRESS:-all}"
 # distinct-key count sits at 1 is the whole-internet-in-one-bucket signature,
 # and it is logged with every refusal for exactly that reason.
 PROXY_HOPS="${ISOCAN_PROXY_HOPS:-}"
+
+# **Who runs this home** — `ISOCAN_OPERATORS` in the container, a comma list of
+# attributes in the shape grant subjects already use
+# (`email:someone@example.com`). Empty means this home has NO operator, which
+# is the default and is the honest answer for any home nobody has claimed.
+#
+# It is configuration and not a credential, and that difference is the whole
+# design (docs/projects/operator/design.md): there is no token to mint, rotate
+# or leak. What proves somebody is on this list is a fresh sign-in through the
+# home's own attester, so **who can set this variable is who decides who the
+# operator is** — which makes IAM on the Cloud Run service the real boundary,
+# and makes a list in configuration trustworthy in the same way the attester
+# project is.
+#
+# It does nothing without an attester: run 100-identity-platform.sh first, or a
+# home with this set still answers every operator route by saying it has
+# borrowed nowhere to verify a sign-in.
+OPERATORS="${ISOCAN_OPERATORS:-}"

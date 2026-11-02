@@ -8,24 +8,33 @@ const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.met
  * **The two halves of one rule, on the two sides that have to agree.**
  *
  * Every write to grants is an owner's (roles phase 2): inviting, revoking,
- * the link and its rung. The daemon is what ENFORCES that — a client-side
+ * the link and its rung, and publication in the home's catalogue. The daemon
+ * is what ENFORCES that — a client-side
  * check is a habit — but the app must not offer a control that is going to
  * refuse, and it must say whose canvas it is, or "why can I not press this"
  * has no answer on screen.
  */
-describe("only an owner may change who may enter", () => {
+describe("only an owner may change sharing or publication", () => {
   const dialog = read("../src/components/ShareDialog.tsx");
   const http = read("../../server/src/http.ts");
+  const ownerCheck = /atLeast\(await heldRung\(desk, snapshot\.project, req\.badge!, actorId \?\? null, await engine\.actorJoins\(\)\), "own"\)/g;
 
   it("is refused by the daemon, not merely hidden by the app", () => {
     // Both writes — the POST that invites or sets the link, and the DELETE
     // that revokes — ask the same question of the same function; and, since
     // roles phase 4, so does putting a canvas into a space (`own` on both).
-    const asks = http.match(
-      /atLeast\(await heldRung\(desk, snapshot\.project, req\.badge!, actorId \?\? null, await engine\.actorJoins\(\)\), "own"\)/g,
-    );
-    expect(asks).toHaveLength(3);
+    // Public adds the fourth: an explicit publication decision on a link.
+    const asks = http.match(ownerCheck);
+    expect(asks).toHaveLength(4);
     expect(http).toContain("code: NOT_OWNER");
+  });
+
+  it("checks ownership on the concrete publication PUT before changing its desk row", () => {
+    const publication = http.match(/app\.put\("\/api\/projects\/:id\/grants\/:grantId\/listing",[\s\S]*?^  \}\);/m)?.[0];
+    expect(publication, "the owner-only publication route must exist").toBeDefined();
+    expect(publication!.match(ownerCheck)).toHaveLength(1);
+    expect(publication).toContain('reply.status(403).send({ error: notOwnerMessage(await ownerName(snapshot.project)), code: NOT_OWNER })');
+    expect(publication!.indexOf("code: NOT_OWNER")).toBeLessThan(publication!.indexOf("await desk.setPublicListing("));
   });
 
   it("names the owner in the refusal, resolved through the registry", () => {
@@ -62,21 +71,28 @@ describe("a slide that cannot be photographed is not animated", () => {
   const full = read("../src/components/FullScreen.tsx");
   const viewer = read("../src/components/Viewer.tsx");
 
-  it("cuts when either side of the flip is a frame", () => {
+  it("never puts a frame in a view transition", () => {
     /**
      * A view transition animates a SNAPSHOT, and a sandboxed cross-origin
      * iframe captures as a blank rectangle — so the push was a white flash
      * across the screen on every flip. Caching never touched it: the frame
-     * was loaded the whole time, it just cannot be photographed.
+     * was loaded the whole time, it just cannot be photographed. So a flip
+     * with a frame on ONE side cuts, and a flip with frames on BOTH sides is
+     * handed to the frame pool (a live note) and returns before any view
+     * transition starts.
      */
-    expect(flip).toMatch(/framed = false/);
-    expect(flip).toMatch(/if \(\s*framed \|\|/);
+    expect(flip).toMatch(/framed: Framing = "none"/);
+    expect(flip).toMatch(/if \(\s*framed === "one" \|\|/);
+    const live = flip.indexOf('if (framed === "both")');
+    expect(live).toBeGreaterThan(-1);
+    expect(live).toBeLessThan(flip.indexOf("document.startViewTransition("));
   });
 
   it("is asked on both faces of the deck, which flip the same way", () => {
     for (const [name, src] of [["full screen", full], ["the viewer", viewer]] as const) {
       expect(src, `${name} does not pass framed`).toContain("isFramedItem(next)");
       expect(src, `${name} ignores the slide being left`).toContain("isFramedItem(here)");
+      expect(src, `${name} ignores the canvas's transition`).toContain("deckTransitionOf(");
     }
   });
 });

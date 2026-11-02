@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Paper and Ink — Specimen</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #fffbfe;
+      color: #1c1b1f;
+      font-family: "Roboto Flex", Roboto, system-ui, sans-serif;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+    .device {
+      width: 100%;
+      max-width: 412px;
+      background: #fffbfe;
+      border: 1px solid #79747e;
+      border-radius: 28px;
+      overflow: hidden;
+      position: relative;
+      padding-bottom: 88px;
+      box-shadow: 0 4px 12px rgb(0 0 0 / 0.12);
+    }
+    .app-bar {
+      height: 64px;
+      background: #6750a4;
+      color: #ffffff;
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      font-size: 22px;
+      font-weight: 400;
+      box-shadow: 0 2px 4px rgb(0 0 0 / 0.2), 0 4px 8px 3px rgb(0 0 0 / 0.12);
+    }
+    .body-stack { padding: 16px; display: grid; gap: 16px; }
+    .card-filled {
+      background: #f3edf7;
+      color: #1c1b1f;
+      border-radius: 12px;
+      padding: 16px;
+      display: grid;
+      gap: 8px;
+    }
+    .headline { font-size: 28px; line-height: 36px; }
+    .sub { color: #49454f; font-size: 14px; line-height: 20px; }
+    .list-item {
+      height: 56px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid #e7e0ec;
+      font-size: 16px;
+    }
+    .fab {
+      position: absolute;
+      right: 16px;
+      bottom: 16px;
+      height: 56px;
+      padding: 0 20px;
+      border-radius: 16px;
+      border: 0;
+      background: #eaddff;
+      color: #21005d;
+      font-size: 14px;
+      font-weight: 500;
+      letter-spacing: 0.1px;
+      cursor: pointer;
+      box-shadow: 0 3px 5px rgb(0 0 0 / 0.2), 0 6px 10px 4px rgb(0 0 0 / 0.14);
+      transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .fab:active { transform: scale(0.97); }
+  </style>
+</head>
+<body>
+  <section class="device" aria-label="Plant Order Sheet">
+    <header class="app-bar">Greenhouse delivery</header>
+    <div class="body-stack">
+      <div class="card-filled">
+        <div class="headline">Calathea Orbifolia</div>
+        <div class="sub">Wide striped foliage · Indirect shade · 20 cm nursery pot</div>
+      </div>
+      <div>
+        <div class="list-item"><span>Ceramic cylinder</span><span>Included</span></div>
+        <div class="list-item"><span>Courier window</span><span>Thu 14:00–17:00</span></div>
+        <div class="list-item"><span>Order total</span><strong>$62.00</strong></div>
+      </div>
+    </div>
+    <button class="fab" type="button">+ Confirm delivery</button>
+  </section>
+</body>
+</html>

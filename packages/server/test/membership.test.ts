@@ -5,7 +5,7 @@ import path from "node:path";
 import { WebSocket } from "ws";
 import type { ServerMessage } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
-import { mintTestBadge, type TestBadge } from "./badge.ts";
+import { currentSocketUrl, mintTestBadge, type TestBadge } from "./badge.ts";
 
 /**
  * Actor binding and registry scope — the identity desk's mechanisms 5 and 10.
@@ -89,7 +89,7 @@ async function room(
   badge: TestBadge,
   canvasId: string,
 ): Promise<{ socket: WebSocket; messages: ServerMessage[] }> {
-  const socket = new WebSocket(`${base.replace("http", "ws")}/ws?canvasId=${canvasId}`, {
+  const socket = new WebSocket(currentSocketUrl(`${base.replace("http", "ws")}/ws?canvasId=${canvasId}`), {
     headers: badge.headers,
   });
   const messages: ServerMessage[] = [];
@@ -384,7 +384,7 @@ describe("two tenants, one home", () => {
     // has been". A holder standing in Priya's room may not import a stranger
     // wearing a name somebody there already answers to — `@Isaac` would
     // reach both of them.
-    const { priya } = await tenants();
+    await tenants();
     const visitor = await mintTestBadge(base);
     expect(
       (await fetch(`${base}/api/projects/prj_priya/canvas`, { headers: visitor.headers })).status,

@@ -1,15 +1,35 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_COMMANDS,
+  EXTENSION_ACTOR_PREFIX,
+  EXTENSION_COLORS,
   EXTENSION_ICONS,
+  IDENTITY_COLORS,
   LABEL_LIMIT,
+  PANEL_ROLE,
+  PANEL_SIDES,
+  TITLE_LIMIT,
   TOOL_ROLE,
+  actorColor,
+  extensionColor,
+  isExtensionActor,
+  isPanelExtension,
   isToolExtension,
+  panelActor,
+  panelActorId,
+  panelActorRoute,
+  panelActorsIn,
+  panelCapabilities,
+  panelExtensionItems,
+  panelProperties,
+  readPanelExtension,
   readToolExtension,
   toolCapabilities,
   toolExtensionItems,
   toolProperties,
+  type CanvasContents,
   type Item,
+  type PanelBytes,
   type SlashCommand,
 } from "../src/index.ts";
 
@@ -103,11 +123,13 @@ describe("what a tool may not be", () => {
     expect(read({ ...tidy, label: 12 }).tool).toBeUndefined();
   });
 
-  it("refuses a panel, because panels are stage 3 and not built", () => {
+  it("refuses a panel, and says which verb reads one", () => {
     // Named rather than ignored: a manifest that quietly does nothing is worse
-    // than one that says which stage it is waiting for.
+    // than one that says where it should have been taken. Phase 3 built the
+    // panel reader, so this sentence names it — it used to say "stage 3", and
+    // a refusal that points at an unbuilt stage ages into a lie.
     const { problem } = read({ ...tidy, kind: "panel" });
-    expect(problem).toContain("stage 3");
+    expect(problem).toContain("isocan panel add");
   });
 
   it("says which line to fix rather than 'invalid manifest'", () => {
@@ -170,3 +192,215 @@ function item(id: string, properties: Record<string, string>): Item {
     updatedAt: "2026-09-06T00:00:00Z",
   } as Item;
 }
+
+/**
+ * **Phase 3: the panel manifest, and one reader.** The same sentence again —
+ * *an extension may only ask for what a person could ask for* — plus the one
+ * the hosted tier turns on: **no reading past the canvas it is on.** `src`
+ * names an item HERE, and every refusal below is one of those two rules
+ * applied and written against the RULE rather than the wording.
+ */
+
+const review = { kind: "panel", title: "Acme Review", side: "left", src: "review.html" };
+
+/** A canvas holding one HTML page called `review.html`, which is what a
+ * person does first: `isocan add review.html`, then the manifest naming it. */
+function canvasWith(...items: Item[]): CanvasContents {
+  return { items: Object.fromEntries(items.map((i) => [i.id, i])), threads: {}, trash: [] };
+}
+
+function page(id: string, title: string, mimeType = "text/html", opts: { versions?: boolean } = {}): Item {
+  const version = { id: `ver_${id}`, blobHash: `hash-${id}`, mimeType, filename: title, size: 12 };
+  return {
+    ...item(id, {}),
+    title,
+    versions: opts.versions === false ? [] : [version],
+    currentVersionId: opts.versions === false ? undefined : version.id,
+  } as unknown as Item;
+}
+
+const here = canvasWith(page("itm_page", "review.html"));
+const readPanel = (o: unknown, canvas: CanvasContents = here) => readPanelExtension(JSON.stringify(o), canvas);
+
+describe("a declarative panel", () => {
+  it("reads, and says where its bytes actually are", () => {
+    const { panel, problem } = readPanel(review);
+    expect(problem).toBeUndefined();
+    expect(panel?.title).toBe("Acme Review");
+    expect(panel?.side).toBe("left");
+    expect(panel?.src).toBe("review.html");
+    // Resolved, not declared: the frame phase 4 builds needs a blob hash to
+    // put after the content base, and a manifest that carried one would be a
+    // manifest that could name bytes this canvas does not have. Written as a
+    // typed expectation so that a field appearing or changing shape is a
+    // compile error here rather than a surprise there.
+    const bytes: PanelBytes = { itemId: "itm_page", blobHash: "hash-itm_page", filename: "review.html", mimeType: "text/html" };
+    expect(panel?.bytes).toEqual(bytes);
+  });
+
+  it("follows the item, so editing the page is what changes the panel", () => {
+    // The whole argument for naming an ITEM rather than a hash: a new version
+    // of the page is a new panel, and a bad one rolls back with the item.
+    const edited = page("itm_page", "review.html");
+    (edited as { versions: { blobHash: string }[] }).versions[0]!.blobHash = "hash-second-draft";
+    expect(readPanel(review, canvasWith(edited)).panel?.bytes.blobHash).toBe("hash-second-draft");
+  });
+
+  it("is an item, found by one property", () => {
+    expect(panelProperties()).toEqual({ role: PANEL_ROLE });
+    expect(isPanelExtension(item("a", { role: "panel" }))).toBe(true);
+    expect(isPanelExtension(item("b", { role: "tool" }))).toBe(false);
+    expect(isPanelExtension(item("c", {}))).toBe(false);
+  });
+
+  it("lists oldest first, so the dock does not reshuffle when one is edited", () => {
+    const canvas = {
+      items: {
+        b: { ...item("b", { role: "panel" }), createdAt: "2026-09-02T00:00:00Z" },
+        a: { ...item("a", { role: "panel" }), createdAt: "2026-09-01T00:00:00Z" },
+        tool: item("tool", { role: "tool" }),
+      },
+    };
+    expect(panelExtensionItems(canvas as never).map((i) => i.id)).toEqual(["a", "b"]);
+  });
+});
+
+describe("what a panel may not be", () => {
+  it("refuses a src that is not on this canvas — the rule, stated", () => {
+    // *No reading past the canvas it is on.* A panel naming a page nobody put
+    // here is asking for bytes no person on this canvas could show either.
+    const { panel, problem } = readPanel({ ...review, src: "elsewhere.html" });
+    expect(panel).toBeUndefined();
+    expect(problem).toContain("src");
+    expect(problem).toContain("elsewhere.html");
+  });
+
+  it("refuses a src with a host of its own, however it is spelled", () => {
+    // The failure the rule exists for: a panel whose page comes from a server
+    // the author controls is a panel nobody on this canvas can see or version.
+    for (const src of ["https://acme.example/panel.html", "//acme.example/panel.html", "/review.html", "data:text/html,<b>hi", "javascript:alert(1)"]) {
+      const { panel, problem } = readPanel({ ...review, src });
+      expect(panel, `src ${src} was accepted`).toBeUndefined();
+      expect(problem).toContain("src");
+    }
+  });
+
+  it("refuses a src two items answer to", () => {
+    // A panel that could mean either is a panel whose bytes nobody can name —
+    // and picking one would be picking silently.
+    const twice = canvasWith(page("itm_one", "review.html"), page("itm_two", "review.html"));
+    expect(readPanel(review, twice).panel).toBeUndefined();
+    expect(readPanel(review, twice).problem).toContain("src");
+  });
+
+  it("refuses a src with no bytes, and one that is not a page", () => {
+    expect(readPanel(review, canvasWith(page("itm_page", "review.html", "text/html", { versions: false }))).problem).toContain("src");
+    expect(readPanel(review, canvasWith(page("itm_page", "review.html", "image/png"))).problem).toContain("src");
+    expect(readPanel(review, canvasWith(page("itm_page", "review.html", "image/png"))).problem).toContain("image/png");
+  });
+
+  it("refuses to wear the app's own name, however it is spelled", () => {
+    /**
+     * The tool's reserved labels, pointed at the dock: a panel that looks
+     * exactly like isocan is a place to put a convincing "sign in to
+     * continue". "I S O C A N" and "isocan" are ONE attempt, so the
+     * comparison flattens case and punctuation — a check that only catches
+     * the exact string catches nobody who is actually trying.
+     */
+    for (const title of ["isocan", "I S O C A N", "IsoCan", "-isocan-", "Chat", "chat", "Files", "f i l e s", "Agents", "Context", "Personas", "Main"]) {
+      expect(readPanel({ ...review, title }).panel, `title "${title}" was accepted`).toBeUndefined();
+    }
+    // And does not over-reach: a name that merely contains one is fine.
+    expect(readPanel({ ...review, title: "Acme Context Notes" }).panel).toBeDefined();
+  });
+
+  it("refuses a title too long for a dock header, and one with no words at all", () => {
+    expect(readPanel({ ...review, title: "x".repeat(TITLE_LIMIT) }).panel).toBeDefined();
+    expect(readPanel({ ...review, title: "x".repeat(TITLE_LIMIT + 1) }).panel).toBeUndefined();
+    expect(readPanel({ ...review, title: "   " }).panel).toBeUndefined();
+    expect(readPanel({ ...review, title: 12 }).panel).toBeUndefined();
+  });
+
+  it("refuses a slot the app does not have", () => {
+    // isocan draws the slot, so a panel may only name one that exists — the
+    // closed-set argument the icons make, about geometry instead of pixels.
+    for (const side of PANEL_SIDES) expect(readPanel({ ...review, side }).panel).toBeDefined();
+    for (const side of ["right", "floating", "over the canvas", 1]) {
+      expect(readPanel({ ...review, side }).panel, `side ${side} was accepted`).toBeUndefined();
+    }
+  });
+
+  it("says which line to fix rather than 'invalid manifest'", () => {
+    expect(readPanelExtension("{", here).problem).toContain("JSON");
+    expect(readPanelExtension("[]", here).problem).toContain("list");
+    expect(readPanel({ title: "Acme Review", side: "left", src: "review.html" }).problem).toContain("kind");
+    expect(readPanel({ ...review, kind: "tool" }).problem).toContain("isocan tool add");
+    expect(readPanel({ kind: "panel", side: "left", src: "review.html" }).problem).toContain("title");
+    expect(readPanel({ kind: "panel", title: "Acme Review", src: "review.html" }).problem).toContain("side");
+    expect(readPanel({ kind: "panel", title: "Acme Review", side: "left" }).problem).toContain("src");
+  });
+});
+
+describe("what a panel may do, before you keep it", () => {
+  it("is derived, and names where its bytes come from", () => {
+    const { panel } = readPanel(review);
+    const said = panelCapabilities(panel!).join("\n");
+    expect(said).toContain("review.html");
+    expect(said).toContain("itm_page");
+    expect(said, "a panel's bytes are on this canvas and nowhere else").toContain("on this canvas");
+  });
+
+  it("names the capability a manifest would never declare about itself", () => {
+    // It is not the manifest that decides what this panel shows — it is
+    // whoever may edit the page. A declared list would leave that out, which
+    // is the whole reason the list is derived.
+    const said = panelCapabilities(readPanel(review).panel!).join("\n");
+    expect(said).toContain("edit review.html");
+  });
+
+  it("does not claim powers this phase has not built", () => {
+    /**
+     * The honest half, and the one worth a test: phase 4 builds the frame on
+     * the content origin, while the selection feed (phase 5) and the op door
+     * (phase 6) are not built yet. A capability list that overstated would be
+     * worse than none — somebody reads it before pressing --yes.
+     */
+    const said = panelCapabilities(readPanel(review).panel!).join("\n");
+    expect(said).toContain("cannot read what is selected yet");
+    expect(said).toContain("cannot send an operation");
+    expect(said, "the frame is the content origin's, never the app's").toContain("content origin");
+    expect(said, "it paints in its slot and nowhere else").toContain("left dock");
+  });
+
+  it("wears an extension colour that never collides with a person's IDENTITY_COLORS", () => {
+    const personHexes = new Set(IDENTITY_COLORS.map((c) => c.value.toLowerCase()));
+    const personNames = new Set(IDENTITY_COLORS.map((c) => c.name.toLowerCase()));
+    expect(EXTENSION_COLORS.length).toBeGreaterThan(0);
+    for (const ext of EXTENSION_COLORS) {
+      expect(personHexes.has(ext.value.toLowerCase()), `${ext.value} collides with IDENTITY_COLORS`).toBe(false);
+      expect(personNames.has(ext.name.toLowerCase()), `${ext.name} collides with IDENTITY_COLORS`).toBe(false);
+    }
+    for (const id of ["itm_a", "itm_b", "itm_panel_1", "itm_panel_2", "itm_review"]) {
+      expect(personHexes.has(extensionColor(id).toLowerCase())).toBe(false);
+      // And `actorColor` gives the panel's actor the exact same mineral colour
+      // its item wears, never a person's IDENTITY_COLORS — even if a registry
+      // map happened to carry an override.
+      const actor = panelActor(id, "Acme Review");
+      expect(actor.id.startsWith(EXTENSION_ACTOR_PREFIX)).toBe(true);
+      expect(isExtensionActor(actor.id)).toBe(true);
+      expect(isExtensionActor("usr_nico")).toBe(false);
+      expect(actorColor(actor.id, { [actor.id]: IDENTITY_COLORS[0]!.value })).toBe(extensionColor(id));
+      expect(personHexes.has(actorColor(actor.id).toLowerCase())).toBe(false);
+    }
+    expect(panelActorId("itm_review")).toBe("ext_review");
+    expect(panelActorRoute("prj_1", "itm_review")).toBe("/api/projects/prj_1/panels/itm_review/actor");
+    const withPanel: CanvasContents = {
+      ...here,
+      items: {
+        ...here.items,
+        itm_review: { ...page("itm_review", "Acme Review"), properties: panelProperties() },
+      },
+    };
+    expect(panelActorsIn(withPanel)).toEqual([{ id: "ext_review", name: "Acme Review" }]);
+  });
+});

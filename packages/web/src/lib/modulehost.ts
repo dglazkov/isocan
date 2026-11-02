@@ -1,7 +1,17 @@
-import type { Actor, Operation, WebHost } from "@isocan/core";
-import { uploadBlob } from "./api.ts";
-import { canEditNow } from "./capability.ts";
-import { sendEchoed, setNotice } from "../stores/canvasStore.ts";
+import { useMemo } from "react";
+import { useUiStore } from "../stores/uiStore.ts";
+import type { Actor, EnrolAsk, Operation, WebHost } from "@isocan/core";
+import { editableText } from "@isocan/core";
+import type { StagedBlob } from "./replica.ts";
+import { uploadOrStageTextBlob } from "./upload.ts";
+import { askEnrolAgent, undo, uploadBlob } from "./api.ts";
+import { canEditNow, useCanEdit } from "./capability.ts";
+import { creationDestination, QueuedItemError, sendCreatedItem } from "./groupplacement.ts";
+import { sendEchoedResult, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
+import { glideToBox } from "./zoomactions.ts";
+import { currentCommands } from "./commands.ts";
+import { runLocalCommand } from "./localcommands.ts";
+import { postToMain } from "./mainthread.ts";
 
 /**
  * **The web half's host object** (#156, 9 Sep 2026).
@@ -30,21 +40,32 @@ import { sendEchoed, setNotice } from "../stores/canvasStore.ts";
  * moves before the round trip. A component's write must feel the same or the
  * tray will seem slower than the menu that does the same thing.
  */
-export function webHostFor(canvasId: string, actor: Actor): WebHost {
+export function webHostFor(canvasId: string, actor: Actor, destination = creationDestination(), couldEdit = canEditNow()): WebHost {
+  // Bridge putBlob to send on this host. The durable owner is the existing
+  // operation outbox; keep bytes here too so one hash can feed several ops.
+  const staged = new Map<string, StagedBlob>();
   return {
     async send(ops: readonly Operation[], group?: string): Promise<void> {
-      if (!canEditNow()) {
+      if (!couldEdit || (useCanvasStore.getState().canvasId === canvasId && !canEditNow())) {
         setNotice("You are reading this canvas — that change was not sent.");
-        return;
+        throw new Error("You are reading this canvas — that change was not sent.");
       }
       /* `sendEchoed`, not `sendOp` plus an echo of our own: there is one door
          for a write to the open canvas and `writes.test.ts` holds every caller
          to it. Echoing by hand here would have been a second door that looked
          right and skipped the offline queue, the inflight fold and the
          scrubber's refusal. Caught by that guard on the first run. */
-      for (const op of ops) await sendEchoed(canvasId, actor, op, group);
+      for (const op of ops) {
+        const stagedBlob = op.type === "item.add" || op.type === "item.addVersion" ? staged.get(op.version.blobHash) : undefined;
+        if (op.type === "item.add") await sendCreatedItem(canvasId, actor, { ...op, ...(op.containerId === undefined ? destination : {}), originGroupMode: destination.originGroupMode }, group, { allowQueued: !!stagedBlob, ...(stagedBlob ? { stagedBlob } : {}) });
+        else {
+          const result = await sendEchoedResult(canvasId, actor, op, group, destination.originGroupMode, stagedBlob);
+          if (result.status === "refused") throw new Error(result.message || "This change could not be made.");
+          if (result.status === "queued" && !stagedBlob) throw new QueuedItemError();
+        }
+      }
     },
-    async putBlob(bytes: Blob, filename: string): Promise<{ blobHash: string; size: number }> {
+    async putBlob(bytes: Blob, filename: string, options?: { stageOffline?: boolean }): Promise<{ blobHash: string; size: number }> {
       /**
        * No permission test, deliberately, and it is worth saying why rather
        * than looking like an omission: a blob nothing names is invisible and
@@ -53,8 +74,117 @@ export function webHostFor(canvasId: string, actor: Actor): WebHost {
        * would refuse a reader twice for one gesture and say the wrong thing
        * the first time.
        */
+      if (options?.stageOffline && editableText(bytes.type)) {
+        const { upload, stagedBlob } = await uploadOrStageTextBlob(canvasId, await bytes.text(), bytes.type, filename);
+        if (stagedBlob) staged.set(upload.blobHash, stagedBlob);
+        else staged.delete(upload.blobHash);
+        return upload;
+      }
       const upload = await uploadBlob(canvasId, bytes, filename);
       return { blobHash: upload.blobHash, size: upload.size };
     },
+    /**
+     * **The parked rc enrols; this asks** (proposed: `templates`). The same
+     * doorbell `AddAgent` rings — never an `agent.enroll` of our own, because
+     * the actor is born first-claim on the machine that answers for it — and
+     * it resolves the way that dialog does: when the enrol op for the name
+     * lands in the replica. A refusal on the rc (a name already worn, a
+     * template that machine does not have) is narrated there and arrives here
+     * as the patience running out, said in words.
+     */
+    async enrol(ask: EnrolAsk): Promise<{ actorId: string }> {
+      if (!canEditNow()) throw new Error("You are reading this canvas — nobody can be enrolled from here.");
+      const standing = () =>
+        Object.values(useCanvasStore.getState().canvas?.agents ?? {}).find(
+          (a) => a.actor.name.toLowerCase() === ask.name.toLowerCase(),
+        );
+      const already = standing();
+      if (already && !(ask.reuse && ask.template)) return { actorId: already.actor.id };
+      await askEnrolAgent(canvasId, {
+        name: ask.name,
+        from: actor,
+        ...(ask.template ? { template: ask.template } : {}),
+        ...(ask.args ? { args: { ...ask.args } } : {}),
+      });
+      // `reuse` (module API 0.2.10): the rc rewrites a standing agent's
+      // directory and sends no op, so the delivered ask is the whole answer.
+      if (already) return { actorId: already.actor.id };
+      const until = Date.now() + ENROL_PATIENCE_MS;
+      while (Date.now() < until) {
+        const row = standing();
+        if (row) return { actorId: row.actor.id };
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      throw new Error(`the rc did not enrol ${ask.name} — its terminal says why`);
+    },
+    viewer: { id: actor.id, name: actor.name },
+    /** The shell's own selection action, handed to modules unchanged — so a
+     *  module's "select these" and a person's click land in exactly the same
+     *  state, side effects and all. Unknown ids are dropped rather than
+     *  stored: a selection naming something that is not there is a selection
+     *  no gesture could have made. */
+    select(itemIds: readonly string[]): void {
+      const items = useCanvasStore.getState().canvas?.items ?? {};
+      useUiStore.getState().setSelection(itemIds.filter((id) => items[id]));
+    },
+    commands: currentCommands,
+    /**
+     * **The composer's send, not a copy of it** — `MainThreadPanel` answers a
+     * local command first (a module's dialog opens; `/wire` composes in the
+     * browser) and posts everything else with the selection attached, and
+     * this is those two calls in that order. A voice session that posted
+     * `/wire` straight to the Chat would have skipped the first one: no
+     * dialog, and with nobody parked, nothing at all.
+     */
+    /** Who leads here — the night watch's own reading (`goodnight.ts`), loaded when asked. */
+    async lead() {
+      const { goodnightLead } = await import("./goodnight.ts");
+      const found = await goodnightLead(canvasId, actor.id);
+      return { lead: found.lead ? { id: found.lead.id, name: found.lead.name } : null, cannot: found.cannot };
+    },
+    async runCommand(text: string): Promise<"local" | "posted"> {
+      if (runLocalCommand(text, currentCommands())) return "local";
+      if (!canEditNow()) throw new Error("You are reading this canvas — nothing can be posted from here.");
+      await postToMain(canvasId, actor, text, [...useUiStore.getState().selectedItemIds]);
+      return "posted";
+    },
+    /**
+     * **⌘Z, handed over** — the same `undo` the canvas's own key calls
+     * (`CanvasPage`, `ModuleWorkspace`): the home walks this actor's stack, so
+     * nothing here chooses what to take back. The door test is `send`'s,
+     * because a reader's undo would be a write.
+     */
+    async retract(): Promise<void> {
+      if (!couldEdit || (useCanvasStore.getState().canvasId === canvasId && !canEditNow())) {
+        throw new Error("You are reading this canvas — nothing can be undone from here.");
+      }
+      await undo(canvasId, actor);
+    },
+    reveal(itemIds: readonly string[]): void {
+      const items = itemIds
+        .map((id) => useCanvasStore.getState().canvas?.items[id])
+        .filter((item): item is NonNullable<typeof item> => item !== undefined);
+      if (items.length === 0) return;
+      glideToBox({
+        minX: Math.min(...items.map((i) => i.x)),
+        minY: Math.min(...items.map((i) => i.y)),
+        maxX: Math.max(...items.map((i) => i.x + i.width)),
+        maxY: Math.max(...items.map((i) => i.y + i.height)),
+      });
+    },
   };
+}
+
+/** How long an enrol waits for the op to land — `AddAgent`'s own patience. */
+const ENROL_PATIENCE_MS = 25_000;
+
+/** Refresh mount-time hosts when the snapshot, admission or active scope arrives.
+ * An ongoing handler retains its original host and captured destination. */
+export function useWebHost(canvasId: string, actor: Actor): WebHost {
+  const mode = useCanvasStore((state) => state.record?.groupMode ?? "legacy");
+  const parent = useUiStore((state) => state.activeGroupId);
+  const canEdit = useCanEdit();
+  return useMemo(() => webHostFor(canvasId, actor, {
+    originGroupMode: mode, ...(mode === "groups" ? { containerId: parent, groupPlacement: "auto" as const } : {}),
+  }, canEdit), [canvasId, actor, mode, parent, canEdit]);
 }

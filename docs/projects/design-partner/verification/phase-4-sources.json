@@ -1,0 +1,317 @@
+{
+  "recordedAt": "2026-09-15T08:35:45.889Z",
+  "base": "d8e76a718253e712a94574dc8edc0ed780d6839d",
+  "files": [
+    {
+      "path": "index.mjs",
+      "sha256": "1885ae9c7dcf2704ce46322fda8022ef0dc7276743e7b9b42cf1e6f3bf597b84",
+      "size": 4123
+    },
+    {
+      "path": "packages/api/package.json",
+      "sha256": "4d6565132d3adef9aaf74fc41bf54f23b92080df23222f8e89d4fbf9d24183c1",
+      "size": 760
+    },
+    {
+      "path": "packages/api/src/connect.ts",
+      "sha256": "faf9000c8e723c06b02726fabcdb080e4a9b48d13c398d44d465486e79766f3c",
+      "size": 45977
+    },
+    {
+      "path": "packages/api/src/design-decision-reader.ts",
+      "sha256": "76a20678fa489da7f81ca880b1e150b928979726139c7dbb379523ac50ab85ed",
+      "size": 21246
+    },
+    {
+      "path": "packages/api/src/design-decision.ts",
+      "sha256": "8eedea44b778c89f4313c5259131fb162ad317d3639e53ba03e316f309a6ecde",
+      "size": 999
+    },
+    {
+      "path": "packages/api/src/design-request-reader.ts",
+      "sha256": "5631fa584e40c10197f85f4d9c8c32cc785c269915c0632fbbd7bbab86ac7c22",
+      "size": 27705
+    },
+    {
+      "path": "packages/api/src/design-request.ts",
+      "sha256": "18c74eb63bedca08f457960d37dc64d4d60cfd253b0c32fa772cf13e02083294",
+      "size": 1628
+    },
+    {
+      "path": "packages/api/src/design-workflow.ts",
+      "sha256": "5648c156d5e475fac40ae20f2cd05e4214523b4101ba9b5830851de5e51a3f1b",
+      "size": 8287
+    },
+    {
+      "path": "packages/api/src/index.ts",
+      "sha256": "47fc12f9f05d9041bcba57837917a134c8d7ecafaaa72f2f4e3aac45e9ff74aa",
+      "size": 2257
+    },
+    {
+      "path": "packages/api/src/routes.ts",
+      "sha256": "4db1fe614c8f35c23a81968440b737603e6492adbb519d8251338eb9db5150a1",
+      "size": 62975
+    },
+    {
+      "path": "packages/api/test/design-decision-fixture.ts",
+      "sha256": "15b985aa0d178c2dcb7bc5acabe24ce2fe3dad15579a47b1eceae9e7f621a0a7",
+      "size": 4510
+    },
+    {
+      "path": "packages/api/test/design-decision.test.ts",
+      "sha256": "2227c95695bad2f2e617fc05e87ac480c36d393dfb1e8a51f569f09fc12d0faf",
+      "size": 14781
+    },
+    {
+      "path": "packages/cli/bin/workspace-loader.mjs",
+      "sha256": "65979ca81dba041159d6cb8ade2a601fe078475f1ad50e6b3563ba8572a518d8",
+      "size": 4099
+    },
+    {
+      "path": "packages/cli/src/agent-guide.md",
+      "sha256": "4a7667e75a9ab5aabb54ef6262f85143efe4c69999093c312841b4a6d265da11",
+      "size": 179379
+    },
+    {
+      "path": "packages/cli/src/design-decision.ts",
+      "sha256": "ad04ed3519cd4c7cfdafbeb6ac4bea811b1747137a5a6e02e52a320515d4c81b",
+      "size": 13615
+    },
+    {
+      "path": "packages/cli/src/design-request.ts",
+      "sha256": "869e7f1465ec39aa5cf3a9cc7cd5e09bb6154e227e7b70304e1469ba975677a7",
+      "size": 16109
+    },
+    {
+      "path": "packages/cli/src/main.ts",
+      "sha256": "84a6de623b1ab2dcba5b8b123408c37d2f32f1d40d84a357b5a39041a4fe0bd7",
+      "size": 702273
+    },
+    {
+      "path": "packages/cli/test/design-decision.test.ts",
+      "sha256": "e9f3231170765a3796f119171e10cf032b3ea597b42d3906c8bb62f5b55905dd",
+      "size": 8555
+    },
+    {
+      "path": "packages/core/package.json",
+      "sha256": "72d9c33f66077b9df6997fe14d81f5d2e3d3c8ed9dfe2499f57c6cd452bc5b2e",
+      "size": 1093
+    },
+    {
+      "path": "packages/core/src/design-decision-parse.ts",
+      "sha256": "750b5cef105d810c77077a129c6d1dec8961a0b0eae36b2fcac101dac28f1505",
+      "size": 11089
+    },
+    {
+      "path": "packages/core/src/design-decision-state.ts",
+      "sha256": "0e90b25a591c46d0e2ede4fd78aea75c0657b54849a3790f02dd0e5541862ad6",
+      "size": 11368
+    },
+    {
+      "path": "packages/core/src/design-decision.ts",
+      "sha256": "b81374b51a8a7f6ea225046799706171c071c87f619739334a09a495c868387d",
+      "size": 9507
+    },
+    {
+      "path": "packages/core/src/design-retention.ts",
+      "sha256": "1a3d526ffe18e6c46d1a85d30d925a460c77331bf594adda20f853cd9d2b51bd",
+      "size": 2619
+    },
+    {
+      "path": "packages/core/src/errors.ts",
+      "sha256": "a8070bff3330b1d9318cc09fce2b88c5e749adf388b37aef29d20b5c82b0a84e",
+      "size": 6252
+    },
+    {
+      "path": "packages/core/src/invert.ts",
+      "sha256": "84942ebe1a8649c28f7df21b7feb9eb552ac5589be039237c058a8fde0774cab",
+      "size": 11820
+    },
+    {
+      "path": "packages/core/src/model.ts",
+      "sha256": "47b91e0a99659ee13bf8d96b1f41ad6c4f9bb36d60b0dca1dfb0e69f27074334",
+      "size": 13892
+    },
+    {
+      "path": "packages/core/src/ops.ts",
+      "sha256": "c6b021634b04dfb2db3c7f6414a134b72f7c1d45c83791f7a406476ff3a15ac8",
+      "size": 23420
+    },
+    {
+      "path": "packages/core/src/opwords.ts",
+      "sha256": "19550fe75cf562e477a36421c4e61a421c8ea124b4d80e29909622884a8693be",
+      "size": 4500
+    },
+    {
+      "path": "packages/core/src/protocol.ts",
+      "sha256": "ad34aafbb57417fd8c82a15d4e67bcbad25d33db39afb9ab21fd551fac5bb48a",
+      "size": 80255
+    },
+    {
+      "path": "packages/core/src/questionnaire.ts",
+      "sha256": "d755b488ccefa9dbec0af03bfd5522f75105764590efdeb853a92a6087a7d67c",
+      "size": 13488
+    },
+    {
+      "path": "packages/core/src/reducer.ts",
+      "sha256": "711bf3d1cc40da4bf94d55227a198d2c866424f12901ad2523a5d93eb495a3be",
+      "size": 36854
+    },
+    {
+      "path": "packages/core/src/touches.ts",
+      "sha256": "7cf1adecab4fe8b09b810f84d765f750bc7665fcd94cf82ee746f0b05401646c",
+      "size": 5798
+    },
+    {
+      "path": "packages/server/src/design-decision-capability.ts",
+      "sha256": "e468c9c610c95e7814ca2aa2390fd60836b70fa115a27ed7541948329563e882",
+      "size": 1391
+    },
+    {
+      "path": "packages/server/src/design-decision.ts",
+      "sha256": "04d743fbba84e9d8f96dd2aa0873fd4b37710ed0add8bae8da24023214d45cd1",
+      "size": 22301
+    },
+    {
+      "path": "packages/server/src/design-request.ts",
+      "sha256": "b3641db8931cf97ca8cbb19d14af634c8d43bdc834f4f31697d51cb0b031ce3e",
+      "size": 36415
+    },
+    {
+      "path": "packages/server/src/engine.ts",
+      "sha256": "cb8d0b03861c04c7f4f59ba24eb81cc66f22f5ec584a2d34a1c7fe7c33ce2603",
+      "size": 155483
+    },
+    {
+      "path": "packages/server/src/http.ts",
+      "sha256": "83f4ee4eb6a656db62808e76dcd1fb00037632bb224bc154ae02d10f9fd4f091",
+      "size": 355464
+    },
+    {
+      "path": "packages/server/src/questionnaire-capability.ts",
+      "sha256": "d2157c1966e8a22cabab076a0b659976261c889ac6cf9baedb60da316ff7783a",
+      "size": 1773
+    },
+    {
+      "path": "packages/server/src/questionnaire.ts",
+      "sha256": "dae00597e6dfb67e42ea16f4bfba13e7df7012a8c944b451c6dfda954e5468d7",
+      "size": 16567
+    },
+    {
+      "path": "packages/server/src/ws.ts",
+      "sha256": "5cee2c20f1a3e455bd1393005a772c6c18abecbfc3ddd01d525f6acabe6a6d70",
+      "size": 46851
+    },
+    {
+      "path": "packages/server/test/design-decision.test.ts",
+      "sha256": "fcb5ad915e7c15a19dc2e6647ca74211e896b4899fbab2fb58f4c64da0dfcc87",
+      "size": 27315
+    },
+    {
+      "path": "packages/web/src/components/CommentLayer.tsx",
+      "sha256": "d141f89494222e868d000d830963136ebacded395dc2f581e4082974a8fa667e",
+      "size": 26120
+    },
+    {
+      "path": "packages/web/src/components/DesignComparisonActions.tsx",
+      "sha256": "4d0c3bf94c9b37c2253554a699e03eb82597439667fda25d0052694428972770",
+      "size": 17838
+    },
+    {
+      "path": "packages/web/src/components/DesignComparisonButton.tsx",
+      "sha256": "1de5f585aa6b6bbd111117bc22bfad828706c627f5686f9c2ea7e884b8f13f64",
+      "size": 2840
+    },
+    {
+      "path": "packages/web/src/components/DesignComparisonComment.tsx",
+      "sha256": "87a3d273e657740984f5ca4d9cd48f1d952821d3e2d86d1ea2af7f7dbb294e4d",
+      "size": 3470
+    },
+    {
+      "path": "packages/web/src/components/DesignComparisonDialog.tsx",
+      "sha256": "61aa80a03e80c21f9efdc1661531612c3e80faf7d81829f498593ae4161ab604",
+      "size": 13493
+    },
+    {
+      "path": "packages/web/src/components/DesignComparisonPreview.tsx",
+      "sha256": "275a2a9a73046b1cf08c0e66764a54c2695f18fca747e998ce424ed5a3a33959",
+      "size": 2668
+    },
+    {
+      "path": "packages/web/src/components/DesignComparisonRecovery.tsx",
+      "sha256": "f250d3dd938a9de5dac4d4b3a3cd4bbb0d5f178d1b5d47a8e54075b407641719",
+      "size": 6839
+    },
+    {
+      "path": "packages/web/src/components/DesignTaskCard.tsx",
+      "sha256": "ef7be68199a99974840990df9be8a13a1b6c054100c06f81aa4d345898ff1a12",
+      "size": 15000
+    },
+    {
+      "path": "packages/web/src/components/MainThreadPanel.tsx",
+      "sha256": "4f6f9ce7cd8f676d6c64c3e96f28d2b4abb1fc44aa4ae54f6a29cc0744029618",
+      "size": 33299
+    },
+    {
+      "path": "packages/web/src/components/design-comparison.css",
+      "sha256": "d16d1b2da7c129cc7afaaaa5a34caf5f6ccbd99a9d28a195e0ca8a1c81ba56b4",
+      "size": 3761
+    },
+    {
+      "path": "packages/web/src/lib/design-comparison-draft.ts",
+      "sha256": "2afc74c33880509f5705d455bc1e2ec22bb3aaec462e6a2c62b302667725073b",
+      "size": 7698
+    },
+    {
+      "path": "packages/web/src/lib/design-decision.ts",
+      "sha256": "652a3d4e8438ea058b51b23a3b9d907804fc5a2c722edc11b566bfb7a64982b6",
+      "size": 1502
+    },
+    {
+      "path": "packages/web/src/lib/design-request.ts",
+      "sha256": "8f6712b55aa11880711941457f817e62e448baff8c44758b8c39388152ad6f91",
+      "size": 2254
+    },
+    {
+      "path": "packages/web/src/pages/CanvasPage.tsx",
+      "sha256": "cc66e1d452d0f9b48b4dd0c8efa4f6207597f85382678683196637404a69428c",
+      "size": 59805
+    },
+    {
+      "path": "packages/web/test/designcomparisondraft.test.ts",
+      "sha256": "480d0f3e6b8dcda4b25fb169bb601dd59c0f89c95784c5636e1dbb4d4d651928",
+      "size": 5574
+    },
+    {
+      "path": "scripts/journey-design-comparisons.mjs",
+      "sha256": "1706fabcacc458f60a415a7f3dd07cac5181f4d362f34f98dbf3b3d5eea40a19",
+      "size": 30270
+    },
+    {
+      "path": "scripts/lib/design-comparison-browser.mjs",
+      "sha256": "73ceeb3cc7c0353c56a48c9f740a20bceadd201ef03445ce32f320224706b5f7",
+      "size": 7007
+    },
+    {
+      "path": "scripts/lib/design-comparison-scenarios.mjs",
+      "sha256": "661e41ecc9610e39f11d8c11363ac8ffb8876d9d9441db3d46b3452e2dba60f8",
+      "size": 24851
+    },
+    {
+      "path": "test/deep.ts",
+      "sha256": "daeca211f6c028555b048fd07d80e0445d053b135a3e5310e5bbe6d022e1978d",
+      "size": 16827
+    },
+    {
+      "path": "test/isomorphism.test.ts",
+      "sha256": "1c9e1b0318b78835ba4d5c9fe829ca8d63c5382e3bc4af4b39323a14ae62c6e3",
+      "size": 10639
+    }
+  ],
+  "entry": {
+    "path": "packages/web/dist/assets/index-DxZeQHrj.js",
+    "sha256": "f3bc87d798f97250f0b79b4a511dc88f282b688dae3fc7b654825a47fe70c647",
+    "size": 740427
+  },
+  "entryCeiling": 743900
+}

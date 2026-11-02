@@ -5,6 +5,7 @@ import {
   CANVAS_KIND,
   CANVAS_PROP,
   SOURCE_PROP,
+  automaticCanvasTarget,
   canvasIdFromBlob,
   canvasIdOf,
   canvasItemOf,
@@ -60,5 +61,46 @@ describe("what a canvas item is", () => {
     expect(canvasIdFromBlob("https://isocan.io/p/prj_abc\n")).toBe("prj_abc");
     expect(canvasIdFromBlob("# nothing\n")).toBeNull();
     expect(canvasIdFromBlob("https://isocan.io/p/prj_abc/i/itm_1\n")).toBeNull();
+  });
+});
+
+describe("automatic preview targets", () => {
+  it("keeps a declared source behind classification when kind is missing or changed", () => {
+    for (const kind of [undefined, "site", "document", "image"]) {
+      const card = item({ ...(kind ? { kind } : {}), source: "https://acme.invalid/p/prj_private" });
+      expect(canvasIdOf(card)).toBeNull(); // Ordinary item-kind semantics stay intact.
+      expect(automaticCanvasTarget(card.properties.canvas ?? null, sourceOf(card))).toEqual({
+        kind: "canvas", canvasId: "prj_private", source: "https://acme.invalid/p/prj_private",
+      });
+    }
+    expect(automaticCanvasTarget("prj_private", null)).toMatchObject({ kind: "canvas", canvasId: "prj_private" });
+  });
+
+  it("refuses malformed declarations and mismatched addresses instead of a renderer fallback", () => {
+    for (const [id, source] of [
+      ["", null], [" prj_private", null], ["prj_bad/id", null],
+      ["prj_public", "https://acme.invalid/p/prj_private"],
+      ["prj_private", "https://example.test/article"],
+      [null, "https://acme.invalid/p/%FF"], [null, "https://acme.invalid/p/"],
+      [null, "/p/prj_private"], [null, "https://acme.invalid/p/prj_bad%2Fother"],
+    ] as const) expect(automaticCanvasTarget(id, source)).toMatchObject({ kind: "unavailable" });
+  });
+
+  it("recognizes item, deck and workbench addresses without widening the setup parser", () => {
+    for (const suffix of ["/i/itm_card", "/deck", "/w/itm_card", "/?thread=thr_acme#reply"]) {
+      expect(automaticCanvasTarget(null, `https://acme.invalid/p/prj_private${suffix}`)).toEqual({
+        kind: "canvas", canvasId: "prj_private", source: "https://acme.invalid/p/prj_private",
+      });
+    }
+    expect(automaticCanvasTarget(null, "localhost:4441/p/prj_private")).toEqual({
+      kind: "canvas", canvasId: "prj_private", source: "http://localhost:4441/p/prj_private",
+    });
+    expect(canvasIdFromBlob("https://acme.invalid/p/prj_private/i/itm_card")).toBeNull();
+  });
+
+  it("leaves ordinary website and document sources in their existing renderers", () => {
+    for (const source of [null, "", "https://example.test", "http://localhost:5173/app", "https://docs.google.com/document/d/acme/edit", "https://example.test/article?next=/p/prj_private"]) {
+      expect(automaticCanvasTarget(null, source)).toEqual({ kind: "none" });
+    }
   });
 });

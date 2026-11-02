@@ -1,15 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
-import { spawn, type ChildProcess } from "node:child_process";
+import { type ChildProcess } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { startDaemon, type Daemon } from "@isocan/server";
-import { harnessVars } from "@isocan/api";
+import { type Daemon } from "@isocan/server";
+import { startDaemon } from "@isocan/server/daemon";
+import { readKeyFile, writeKey } from "@isocan/core/keystore";
+import { agentKeyEnv } from "@isocan/core/keys";
 import { AcpAgentProcess, adapterEnv } from "../src/acp.ts";
 import { adapterFor } from "../src/harnesses.ts";
+import { agentSessionOf, machineAgentKey } from "../src/agent-key.ts";
 import { rcAgentsFile, type RcAgentRow } from "../src/rc.ts";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
+import { cliEnv, collect, spawnCli as startCli } from "./cli.ts";
 
 /**
  * **The ACP client in the rc** (agents-on-demand phase 3), driven end to end
@@ -35,7 +39,6 @@ import { mintTestBadge, type TestBadge } from "./badge.ts";
  * ISOCAN_REAL_ACP=pi|codex, which runs one true turn in that harness.
  */
 
-const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 const fakeAcp = fileURLToPath(new URL("./fake-acp.mjs", import.meta.url));
 const nico = { id: "usr_nico", name: "Nico" };
 const dimitri = { id: "usr_dimitri", name: "Dimitri" };
@@ -83,32 +86,8 @@ async function post(url: string, body: unknown): Promise<any> {
   return res.json().catch(() => null);
 }
 
-interface Run {
-  code: number;
-  stdout: string;
-  stderr: string;
-}
-
 function spawnCli(args: string[], extraEnv: Record<string, string> = {}): ChildProcess {
-  const env = { ...process.env };
-  for (const name of harnessVars) delete env[name];
-  return spawn(process.execPath, [cliBin, ...args], {
-    env: { ...env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(base).port, ...extraEnv },
-    cwd: home,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-}
-
-function collect(child: ChildProcess): Promise<Run> {
-  let stdout = "";
-  let stderr = "";
-  child.stdout!.setEncoding("utf8");
-  child.stdout!.on("data", (chunk) => (stdout += chunk));
-  child.stderr!.setEncoding("utf8");
-  child.stderr!.on("data", (chunk) => (stderr += chunk));
-  return new Promise((resolve) =>
-    child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })),
-  );
+  return startCli(args, { cwd: home, env: cliEnv({ ISOCAN_HOME: home, ISOCAN_PORT: new URL(base).port, ...extraEnv }) });
 }
 
 const isocan = (...args: string[]) => collect(spawnCli(args));
@@ -128,8 +107,11 @@ describe("a turn in a named agent (phase 3)", () => {
     expect(run.code).toBe(0);
     expect(run.stderr).toContain("turn ended — end_turn");
     // The scripted agent echoes its environment: the harness/session pair
-    // the CLI inside would present — exactly the mint claim's key.
-    expect(run.stdout).toContain("env:agent:Sian");
+    // the CLI inside would present — exactly the mint claim's key, which
+    // this machine's agent secret derives and the name alone does not.
+    const key = await machineAgentKey(home, "Sian");
+    expect(run.stdout).toContain(`env:${key} `);
+    expect(run.stdout).not.toContain("env:agent:Sian");
     expect(run.stdout).toContain("echo:say hello");
     // The permission flow ran, and the client chose the allow option.
     expect(run.stdout).toContain("permission:yes");
@@ -137,7 +119,7 @@ describe("a turn in a named agent (phase 3)", () => {
     // agent's session runs it — the injected environment, nothing else —
     // resolves as the enrolled Sian.
     const inside = await collect(
-      spawnCli(["whoami"], { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: "Sian" }),
+      spawnCli(["whoami"], { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: agentSessionOf(key) }),
     );
     expect(inside.stdout).toContain("Sian");
   }, 30_000);
@@ -158,6 +140,42 @@ describe("a turn in a named agent (phase 3)", () => {
     const plain = await isocan("rc", "turn", "Sian", "again");
     expect(plain.stdout).toContain("permission:yes");
   }, 40_000);
+
+  it("a native Codex fence refuses even allow-once escalation", async () => {
+    const agent = await AcpAgentProcess.spawn({ harness: "codex", command: process.execPath, args: [fakeAcp], nativeCodexSandbox: true, sessionDirectories: [home] }, { cwd: home, env: { ...process.env, FAKE_ACP_VERSION: "1.11.0", FAKE_ACP_EXPECT_ROOT: home } });
+    try {
+      const session = await agent.ensureSession(home, null);
+      await agent.ensureSession(home, session.sessionId);
+      const events: string[] = [];
+      const answer = await agent.prompt(session.sessionId, "hello", (event) => events.push(event.detail ?? ""));
+      expect(events.join("\n")).toContain("sandbox cannot be escalated");
+      expect(answer.text).toContain("permission:deny");
+    } finally { agent.close(); }
+  });
+
+  it("reads a turn's dollars from usage_update, and cancel stops the running prompt (critique phase 1)", async () => {
+    const agent = await AcpAgentProcess.spawn({ harness: "claude-code", command: process.execPath, args: [fakeAcp] }, { cwd: home, env: { ...process.env, FAKE_ACP_USAGE: "0.42", FAKE_ACP_SLOW_MS: "300" } });
+    try {
+      const session = await agent.ensureSession(home, null);
+      const usage: (number | undefined)[] = [];
+      const answer = await agent.prompt(session.sessionId, "hello", (event) => {
+        if (event.kind !== "usage") return;
+        usage.push(event.usd);
+        agent.cancel(session.sessionId);
+      });
+      expect(usage).toEqual([0.42]);
+      expect(answer.stopReason).toBe("cancelled");
+    } finally { agent.close(); }
+    const tokensOnly = await AcpAgentProcess.spawn({ harness: "codex", command: process.execPath, args: [fakeAcp] }, { cwd: home, env: { ...process.env, FAKE_ACP_USAGE: "tokens" } });
+    try {
+      const session = await tokensOnly.ensureSession(home, null);
+      const events: { kind: string; usd?: number }[] = [];
+      const answer = await tokensOnly.prompt(session.sessionId, "hello", (event) => { if (event.kind === "usage") events.push(event); });
+      // A usage beat with no cost is a beat with no dollars, not zero dollars.
+      expect(events).toEqual([{ kind: "usage" }]);
+      expect(answer.stopReason).toBe("end_turn");
+    } finally { tokensOnly.close(); }
+  });
 
   it("the adapter's environment is a list, not the shell: needs pass, accidents do not, the hook adds", () => {
     const shell: NodeJS.ProcessEnv = {
@@ -265,7 +283,7 @@ describe("a turn in a named agent (phase 3)", () => {
         expect(run.stderr).toContain("turn ended — end_turn");
         // Reachable: the adapter ran and the injected identity arrived, so
         // the fence did not break the one connection the agent needs.
-        expect(run.stdout).toContain("env:agent:Sian");
+        expect(run.stdout).toContain(`env:${await machineAgentKey(home, "Sian")} `);
         // Fenced: the person's own file is not readable from inside, and
         // the refusal is the filesystem's, not a guess.
         expect(run.stdout).toMatch(/probe:refused:ENOENT|probe:refused:EACCES/);
@@ -329,6 +347,60 @@ describe("a turn in a named agent (phase 3)", () => {
     expect(again.stderr).toContain("resumed");
   }, 40_000);
 
+  it("a summoned agent is handed this machine's stored keys only once the owner opts in, the environment's winning, and nothing prints one", async () => {
+    // Keys phase 4. Synthetic keys, each with distinct last four.
+    const gemini = "fake-gemini-acme-STORED-DO-NOT-PRINT-g3m1";
+    const anthropic = "sk-ant-fake-STORED-DO-NOT-PRINT-an7h";
+    const envAnthropic = "sk-ant-fake-ENV-DO-NOT-PRINT-3nvk";
+    await writeKey(home, "gemini", gemini);
+    await writeKey(home, "anthropic", anthropic);
+    await isocan("rc", "add", "Sian", "--harness", "fake");
+    const shell = { FAKE_ACP_KEYS: "GEMINI_API_KEY,ANTHROPIC_API_KEY,OPENAI_API_KEY", GEMINI_API_KEY: "", ANTHROPIC_API_KEY: "", OPENAI_API_KEY: "" };
+    // Off by default: a harness handed a key may bill it instead of the
+    // person's login, so nothing is handed over until they ask.
+    const off = await collect(spawnCli(["rc", "turn", "Sian", "first"], shell));
+    expect(off.code, off.stderr).toBe(0);
+    expect(off.stdout).toContain("keys:GEMINI_API_KEY=-,ANTHROPIC_API_KEY=-,OPENAI_API_KEY=- ");
+    const turnedOn = await isocan("keys", "agents", "on");
+    expect(turnedOn.code, turnedOn.stderr).toBe(0);
+    expect(turnedOn.stdout).toContain("billed per call");
+    // The keys are kept beside the switch.
+    expect(await readKeyFile(home)).toMatchObject({ agents: true, share: false, keys: { gemini: { key: gemini } } });
+    // Now the adapter that wants GEMINI_API_KEY to log in, with none in the
+    // rc's env: the stored key is what lets the turn start at all.
+    const run = await collect(spawnCli(["rc", "turn", "Sian", "hello"], { ...shell, FAKE_ACP_AUTH: "gemini-api-key" }));
+    expect(run.code, run.stderr).toBe(0);
+    expect(run.stdout).toContain("keys:GEMINI_API_KEY=g3m1,ANTHROPIC_API_KEY=an7h,OPENAI_API_KEY=- ");
+    // The environment wins where it sets the variable.
+    const again = await collect(spawnCli(["rc", "turn", "Sian", "again"], { ...shell, FAKE_ACP_AUTH: "gemini-api-key", ANTHROPIC_API_KEY: envAnthropic }));
+    expect(again.code, again.stderr).toBe(0);
+    expect(again.stdout).toContain("keys:GEMINI_API_KEY=g3m1,ANTHROPIC_API_KEY=3nvk,OPENAI_API_KEY=- ");
+    // A key set after the switch keeps it on; `ls --json` says so.
+    await writeKey(home, "openai", "sk-acme-STORED-DO-NOT-PRINT-0pen");
+    const listed = await isocan("keys", "ls", "--json");
+    expect(JSON.parse(listed.stdout)).toMatchObject({ agents: true, share: false });
+    for (const out of [off.stdout, off.stderr, run.stdout, run.stderr, again.stdout, again.stderr, listed.stdout, listed.stderr]) {
+      for (const secret of [gemini, anthropic, envAnthropic]) expect(out).not.toContain(secret);
+    }
+  }, 40_000);
+
+  it("adapterEnv adds a stored key only under its harness's variable, and only where the environment has none", () => {
+    const stored = {
+      anthropic: { key: "sk-ant-stored", addedAt: "" },
+      openai: { key: "sk-oai-stored", addedAt: "" },
+      gemini: { key: "g-stored", addedAt: "" },
+      typesafe: { key: "tsk-stored", addedAt: "" },
+    };
+    const env = adapterEnv("prj_1", "Sian", { source: { PATH: "/usr/bin", OPENAI_API_KEY: "sk-oai-env", GEMINI_API_KEY: "  " }, keys: (passed) => agentKeyEnv(stored, passed) });
+    expect(env.ANTHROPIC_API_KEY).toBe("sk-ant-stored");
+    expect(env.OPENAI_API_KEY).toBe("sk-oai-env");
+    // A blank variable is no key: the stored one fills it.
+    expect(env.GEMINI_API_KEY).toBe("g-stored");
+    // The judge's key is isocan's, never an agent's.
+    expect(Object.values(env)).not.toContain("tsk-stored");
+    expect(adapterEnv("prj_1", "Sian", { source: { PATH: "/usr/bin" } })).not.toHaveProperty("ANTHROPIC_API_KEY");
+  });
+
   it("an adapter's stderr reaches ours, minus absl's INFO and WARNING chatter", async () => {
     await isocan("rc", "add", "Sian", "--harness", "fake");
     const run = await collect(spawnCli(["rc", "turn", "Sian", "hello"], { FAKE_ACP_STDERR: "absl" }));
@@ -348,7 +420,7 @@ describe("a turn in a named agent (phase 3)", () => {
     // injection — the shape the 2026-09-04 spike measured. Reads pick the
     // bound key; a claim must pick the deliberate one, or the guide's first
     // step (`identity --session`) mints a stranger on pi's key.
-    const piShell = { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: "Sian", PI_SESSION_ID: "0199-uuid" };
+    const piShell = { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: agentSessionOf(await machineAgentKey(home, "Sian")), PI_SESSION_ID: "0199-uuid" };
     const who = await collect(spawnCli(["whoami"], piShell));
     expect(who.stdout).toContain("Sian");
     const claim = await collect(spawnCli(["identity", "--session"], piShell));
@@ -399,17 +471,42 @@ describe("a turn in a named agent (phase 3)", () => {
     );
     const run = await isocan("rc", "turn", "Percy", "hi");
     expect(run.code).toBe(0);
-    expect(run.stdout).toContain("env:agent:Percy");
+    const key = await machineAgentKey(home, "Percy");
+    expect(run.stdout).toContain(`env:${key} `);
     const rows = await rcRows();
     expect(rows[0]).toMatchObject({ actorId: "usr_percy", sessionId: rows[0]!.sessionId });
     // The machine badge now answers for Percy under the injected key: a
     // CLI run the way the agent's shells run it speaks as Percy — the one
     // rebinding a web-enrolled agent needed, made by the turn.
     const inside = await collect(
-      spawnCli(["whoami"], { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: "Percy" }),
+      spawnCli(["whoami"], { ISOCAN_HARNESS: "agent", ISOCAN_SESSION_ID: agentSessionOf(key) }),
     );
     expect(inside.stdout).toContain("Percy");
   }, 30_000);
+
+  it("a model pinned at enrolment rides the row into the adapter, and an unpinned one gets no template (antigravity phase 1)", async () => {
+    await fs.writeFile(
+      path.join(home, "config.json"),
+      JSON.stringify({ adapterEnv: ["FAKE_ACP_*"], acpAdapters: { fake: [process.execPath, fakeAcp, "--model", "{model}"] } }),
+    );
+    const add = await isocan("--json", "rc", "add", "Sian", "--harness", "fake", "--model", "acme-pro");
+    expect(add.code, add.stderr).toBe(0);
+    expect(JSON.parse(add.stdout)).toMatchObject({ model: "acme-pro" });
+    expect((await rcRows()).find((row) => row.name === "Sian")?.model).toBe("acme-pro");
+    // A person's own ISOCAN_MODEL is blanked so only the pin can speak.
+    const pinned = await collect(spawnCli(["rc", "turn", "Sian", "which", "model"], { ISOCAN_MODEL: "" }));
+    expect(pinned.code, pinned.stderr).toBe(0);
+    expect(pinned.stdout).toContain("model:acme-pro:acme-pro ");
+
+    // The same declaration, nothing pinned: the flag goes with its template,
+    // so the harness is never handed the literal text `{model}`.
+    expect((await isocan("rc", "add", "Rowan", "--harness", "fake")).code).toBe(0);
+    expect((await rcRows()).find((row) => row.name === "Rowan")?.model ?? null).toBeNull();
+    const plain = await collect(spawnCli(["rc", "turn", "Rowan", "hello"], { ISOCAN_MODEL: "" }));
+    expect(plain.code, plain.stderr).toBe(0);
+    expect(plain.stdout).toContain("echo:hello");
+    expect(plain.stdout).not.toContain("model:");
+  }, 40_000);
 
   it("`rc turn` is a person's verb — a harness session is refused", async () => {
     await isocan("rc", "add", "Sian", "--harness", "fake");

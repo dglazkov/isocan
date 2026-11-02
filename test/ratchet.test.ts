@@ -56,7 +56,11 @@ describe("the ratchet script", () => {
   it("reads goals through the CLI, not with a parser of its own", () => {
     // A second reader is how the check comes to disagree with the personas it
     // is checking.
-    expect(script).toContain('"--json", "persona", "ls"');
+    // The arguments between `persona` and `ls` are free: `--root` joined them
+    // on 14 Sep so the ratchet reads the checkout it runs in rather than the
+    // one this directory is bound to. What must not change is that the goals
+    // arrive from the CLI, as JSON, through its own parser.
+    expect(script).toMatch(/"--json",\s*"persona",[^\]]*"ls"/);
     expect(script).not.toContain("splitFrontMatter");
   });
 

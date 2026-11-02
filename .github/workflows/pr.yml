@@ -28,10 +28,10 @@ on:
 
 # **Cancel, do not queue — the opposite of `release.yml`, on purpose.**
 #
-# There, every commit gets its release in order, so runs queue. Here only the
-# newest commit on a branch is interesting: a run against a commit somebody has
-# already pushed past is spending eight minutes to answer a question nobody is
-# asking any more.
+# There, every commit is tested and only publishers queue, with stale builds
+# skipped. Here only the newest commit on a branch is interesting: a run
+# against a commit somebody has already pushed past answers a question nobody
+# is asking any more.
 concurrency:
   group: pr-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
@@ -40,9 +40,37 @@ permissions:
   contents: read # it reads the tree and writes nothing — no branch, no tag
 
 jobs:
+  # ---- the suite, in four pieces, the way `release.yml` runs it ----
+  #
+  # **This job was one runner carrying the whole of `test:ci` under a 20-minute
+  # timeout, and it stopped being able to finish.** The last pull request run
+  # that passed took 19m43s; the ones after it were cancelled at about 20m20s,
+  # which is the timeout, not a verdict. `release.yml` split its suite four
+  # ways on 13 September because the suite was 82% of a release run, and this
+  # file did not follow — the guard that holds the shard count to the matrix
+  # read only `release.yml`, so nothing noticed the one that was still whole.
+  # Renovate's automerge waits on this check, so a check that times out is not
+  # advisory, it is a queue that never drains.
+  #
+  # Same denominator as `release.yml`, on purpose: the two files are meant to
+  # test the same thing the same way, and a PR split some other way is a
+  # second set of shard boundaries for a file-order bug to hide behind. The
+  # slowest release shard takes about eight to ten minutes, so the timeout
+  # below is headroom again rather than a coin toss.
+  #
+  # `test/workflows.test.ts` now holds EVERY workflow that runs `test:ci` to
+  # the sharded shape, found by reading this directory — so a third one, or
+  # this one un-split, fails the suite instead of timing out a month later.
+  #
+  # `fail-fast: false` for the reason `release.yml` gives: one red shard should
+  # not hide the other three.
   suite:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v5
         with:
@@ -67,20 +95,49 @@ jobs:
       # one, which would leave pull requests green while main went red, and a
       # comment asking two files to stay in step is not a guard.
       - uses: ./.github/actions/suite-setup
+        with:
+          stage: suite-${{ matrix.shard }}
 
-      # ISOCAN_REQUIRE_EMULATOR is the anti-skip switch, and it is set here for
-      # the same reason `release.yml` sets it: locally the cloud suites skip
-      # loudly and say what they did not check, but a green CI run that quietly
-      # skipped Firestore launders an unknown into a checkmark. A PR check that
-      # can pass without testing the cloud backing is a PR check that will
-      # eventually wave through the one change that breaks it.
-      - run: npm test
-        env:
-          ISOCAN_REQUIRE_EMULATOR: "1"
-          # The bundle budget measures packages/web/dist, which `npm ci`
-          # built through `prepare`. If it is missing here, that did not
-          # happen — and a silent skip would let the entry chunk drift again.
-          ISOCAN_REQUIRE_BUNDLE: "1"
+      # `test:ci` — the same command `release.yml` runs, with every anti-skip
+      # switch on, and for the same reason. A pull-request check that can pass
+      # without testing the cloud backing, or without the deep lane's CLI
+      # walks, is a check that will eventually wave through the one change
+      # that breaks them, and it would do it while main went red. The list of
+      # switches and the argument for each is `scripts/switches.mjs`; the
+      # point of running one named command is that this file and `release.yml`
+      # cannot come to disagree about what CI tests.
+      - run: npm run test:ci -- --shard=${{ matrix.shard }}/4
 
+      - name: Keep test timings
+        if: always()
+        continue-on-error: true # Telemetry availability does not change the test verdict.
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-profile-${{ matrix.shard }}
+          path: .isocan/test-profile.json
+          include-hidden-files: true
+          retention-days: 14
+          if-no-files-found: warn
+
+  # Everything that is not the suite, on its own runner and at the same time —
+  # `release.yml`'s `checks` job, minus the steps that only matter to a
+  # release. Typecheck and lint used to run AFTER the suite on the same
+  # runner, which put them inside its 20 minutes and behind its verdict: a
+  # type error was reported only once a quarter of an hour of tests had
+  # passed, and not at all when they timed out.
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # The default shallow checkout: neither step below reads history, and
+      # `fetch-depth: 0` is the suite's need, not this job's.
+      - uses: actions/checkout@v5
+
+      # Node, Java, the Firestore emulator and `npm ci`. More than typecheck
+      # and lint need, but the same setup the suite gets, and one setup is
+      # the point of the action.
+      - uses: ./.github/actions/suite-setup
+        with:
+          stage: checks
       - run: npm run typecheck
       - run: npm run lint

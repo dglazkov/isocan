@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { defaultSize, mimeFromName } from "../src/index.ts";
+import { defaultSize, extensionFor, itemKind, mimeFromName, type Item } from "../src/index.ts";
 
 const repo = fileURLToPath(new URL("../../..", import.meta.url));
 const read = (rel: string) => readFileSync(`${repo}${rel}`, "utf8");
@@ -23,6 +23,42 @@ describe("what a file is", () => {
     // browser still has file.type, so the last resort belongs to the caller.
     expect(mimeFromName("mystery.zzz")).toBeUndefined();
     expect(mimeFromName("Makefile")).toBeUndefined();
+  });
+
+  it("makes the same kind of a file on both surfaces", () => {
+    // Cleanup DU-4, 27 Sep 2026: the table had no `pdf` or `csv`, so
+    // `isocan add report.pdf` filed `application/octet-stream` — "other" —
+    // while the same file dropped on the canvas came with the browser's
+    // `application/pdf` and was a "document". The CLI has only the table;
+    // the browser has its own answer. Each row is what a browser says.
+    const kindOf = (mimeType: string) =>
+      itemKind({ id: "itm_acme", properties: {}, currentVersionId: "ver_1", versions: [{ id: "ver_1", mimeType }] } as unknown as Item);
+    const browser: [string, string][] = [
+      ["report.pdf", "application/pdf"],
+      ["Acme Q3.csv", "text/csv"],
+      ["notes.md", "text/markdown"],
+      ["shot.png", "image/png"],
+      ["clip.mp4", "video/mp4"],
+    ];
+    for (const [name, said] of browser) {
+      expect(kindOf(mimeFromName(name) ?? "application/octet-stream"), name).toBe(kindOf(said));
+    }
+  });
+
+  it("files a blob under the extension the same table names, read backwards", () => {
+    // Cleanup DU-4: `extensionFor` kept its own mime → extension map beside
+    // this table, and it had no `pdf` either, so a nameless PDF filed as
+    // `.bin`. Every mime the table answers must come back to an extension
+    // that answers the same mime.
+    for (const ext of ["md", "html", "txt", "png", "jpg", "gif", "svg", "webp", "mp4", "webm", "mov", "pdf", "csv"]) {
+      const mime = mimeFromName(`acme.${ext}`)!;
+      expect(mimeFromName(`acme.${extensionFor("", mime)}`), ext).toBe(mime);
+    }
+    expect(extensionFor("", "application/pdf")).toBe("pdf");
+    // The name wins when it has one, and a site's mime keeps its own word.
+    expect(extensionFor("Acme.Markdown", "text/plain")).toBe("markdown");
+    expect(extensionFor("", "text/uri-list")).toBe("uri");
+    expect(extensionFor("", "application/x-acme")).toBe("bin");
   });
 
   it("gives both surfaces the same size for the same file", () => {

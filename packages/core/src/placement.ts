@@ -55,6 +55,38 @@ export function anchorOffset(item: { width: number; height: number }): {
   return { x: item.width, y: 0 };
 }
 
+/**
+ * **A thread anchored at a point ON an item**, from fractions of its size —
+ * `{0.62, 0.81}` is 62% across and 81% down. The model stores an offset from
+ * the item's origin (`CommentThread`), and this is the one conversion: a
+ * critic's note (`isocan critique note --at`) and `isocan comment add --item
+ * --at` both call it, so a pin placed at a point means the same place from
+ * both. Fractions rather than pixels because an agent reads HTML, not a
+ * rendering, and "the bottom third" is what it can honestly say. Outside
+ * 0–1 is refused: a point off the item is not a point on it.
+ */
+export function anchorAtFraction(
+  item: { width: number; height: number },
+  at: { x: number; y: number },
+): { x: number; y: number } {
+  for (const v of [at.x, at.y]) {
+    if (!Number.isFinite(v) || v < 0 || v > 1) {
+      throw new RangeError(`--at takes fractions of the item's size, each 0 to 1 (0,0 is its top-left, 1,1 its bottom-right) — not ${at.x},${at.y}`);
+    }
+  }
+  return { x: Math.round(at.x * item.width), y: Math.round(at.y * item.height) };
+}
+
+/** And back: where an anchored thread sits on its item, as fractions of the
+ *  item's size, rounded to two places — what a note is read back as. */
+export function fractionOfAnchor(
+  item: { width: number; height: number },
+  offset: { x: number; y: number },
+): { x: number; y: number } {
+  const of = (v: number, size: number) => (size > 0 ? Math.round((v / size) * 100) / 100 : 0);
+  return { x: of(offset.x, item.width), y: of(offset.y, item.height) };
+}
+
 /** Anything already taking up room — an item, or one just placed this pass. */
 export type Placed = Box;
 
@@ -206,4 +238,62 @@ export function positionIsMeaningful(op: Extract<Operation, { type: "item.add" }
   if (op.properties?.[ANNOTATES_PROP] !== undefined) return true;
   if (!("x" in op.placement)) return false;
   return op.placement.chosen === true || op.properties?.kind === TEXT_KIND;
+}
+
+/** The four sides a thing can be put on, in the words a person says. */
+export type BesideSide = "left" | "right" | "above" | "below";
+
+/**
+ * **"Next to", as arithmetic** — where a box goes so that it sits beside
+ * another one, clear of it by the gap, with the other axis centred.
+ *
+ * In core because BOTH clients have to reach the same spot. The browser's
+ * voice dialog resolves a tool call against the canvas it is showing
+ * (`runTool` in the talk module) and the standing harness resolves the same
+ * call against a listing (`resolveLivePlans` in the voice harness); two
+ * implementations of "next to" is two canvases, which is the house rule this
+ * function exists to obey.
+ * It is also what lets a spoken *"put the note next to the checkout screen"*
+ * and any future typed form land on the same pixel.
+ *
+ * `PLACEMENT_GAP` is the default and is the gap everything else already
+ * leaves — a second, differently sized "next to" would look like a bug to
+ * anybody who arranged two items by hand.
+ *
+ * **The cross axis is CENTRED, not aligned to the near edge.** Side by side,
+ * two items of different heights read as a pair when their middles line up
+ * and as a mistake when their tops do — which is why `isocan align` offers
+ * `hcenter`/`vcenter` at all. Top-alignment is what `resolvePlacement` does for a
+ * brand-new item, and that is a different question — nothing is being related
+ * to anything there, the anchor is just where the person came from.
+ *
+ * Returns raw coordinates and does NOT dodge whatever is already there:
+ * "next to that one" names a place, and quietly landing somewhere else
+ * because the spot was busy is how a voice command stops being trustworthy.
+ * A caller that wants tidying has `nearestFreeSpot` and can say so.
+ */
+export function besideBox(
+  moving: { width: number; height: number },
+  anchor: Box,
+  side: BesideSide,
+  gap: number = PLACEMENT_GAP,
+): { x: number; y: number } {
+  const middleY = anchor.y + anchor.height / 2 - moving.height / 2;
+  const middleX = anchor.x + anchor.width / 2 - moving.width / 2;
+  switch (side) {
+    case "left":
+      return { x: anchor.x - gap - moving.width, y: middleY };
+    case "right":
+      return { x: anchor.x + anchor.width + gap, y: middleY };
+    case "above":
+      return { x: middleX, y: anchor.y - gap - moving.height };
+    case "below":
+      return { x: middleX, y: anchor.y + anchor.height + gap };
+  }
+}
+
+/** Is this one of the four sides, said out loud? The guard a tool call's
+ *  free-text argument has to pass before it means anything. */
+export function isBesideSide(value: unknown): value is BesideSide {
+  return value === "left" || value === "right" || value === "above" || value === "below";
 }

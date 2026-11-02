@@ -1,0 +1,3750 @@
+{
+  "fixtureVersion": 1,
+  "measuredTools": {
+    "@shadcn/lint": "0.1.0",
+    "eslint": "10.9.1",
+    "tailwindcss": "4.3.3",
+    "@typescript-eslint/parser": "8.68.0"
+  },
+  "elapsedMs": 2707.99925,
+  "results": [
+    {
+      "name": "repository config, custom components, monorepo barrel and controls",
+      "report": {
+        "adapter": "isocan-tailwind-repository",
+        "version": 1,
+        "repo": "/private/tmp/isocan-phase4-conductor-tailwind-isolated",
+        "node": "v24.13.0",
+        "tools": {
+          "@shadcn/lint": {
+            "version": "0.1.0",
+            "file": "node_modules/@shadcn/lint/package.json",
+            "measured": "0.1.0",
+            "matchesMeasured": true
+          },
+          "eslint": {
+            "version": "10.9.1",
+            "file": "node_modules/eslint/package.json",
+            "measured": "10.9.1",
+            "matchesMeasured": true
+          },
+          "tailwindcss": {
+            "version": "4.3.3",
+            "file": "node_modules/tailwindcss/package.json",
+            "measured": "4.3.3",
+            "matchesMeasured": true
+          },
+          "@typescript-eslint/parser": {
+            "version": "8.68.0",
+            "file": "node_modules/@typescript-eslint/parser/package.json",
+            "measured": "8.68.0",
+            "matchesMeasured": true
+          }
+        },
+        "files": [
+          {
+            "path": "apps/web/src/bad.tsx",
+            "status": "audited",
+            "input": {
+              "path": "apps/web/src/bad.tsx",
+              "sha256": "e9797af9023997d5d0e55fbdc106bcee33605a7617203c751d5e10f584eee8c7",
+              "size": 141
+            },
+            "diagnostics": [
+              {
+                "code": "shadcn/no-restyle",
+                "ruleId": "shadcn/no-restyle",
+                "severity": "error",
+                "path": "apps/web/src/bad.tsx",
+                "range": {
+                  "start": {
+                    "offset": 92,
+                    "line": 2,
+                    "column": 45
+                  },
+                  "end": {
+                    "offset": 125,
+                    "line": 2,
+                    "column": 78
+                  }
+                },
+                "actual": "\"p-[13px] bg-[#ff0000] hovr:flex\"",
+                "explanation": "\"p-[13px]\" is not allowed on <Button>: <Button> owns its spacing. Use a size (sm, lg), or margin here or gap on the parent for space around it. Add a size in packages/design/controls/button.tsx only if the design explicitly calls for one. Acme uses the existing component variants.",
+                "suggestions": []
+              },
+              {
+                "code": "shadcn/no-restyle",
+                "ruleId": "shadcn/no-restyle",
+                "severity": "error",
+                "path": "apps/web/src/bad.tsx",
+                "range": {
+                  "start": {
+                    "offset": 92,
+                    "line": 2,
+                    "column": 45
+                  },
+                  "end": {
+                    "offset": 125,
+                    "line": 2,
+                    "column": 78
+                  }
+                },
+                "actual": "\"p-[13px] bg-[#ff0000] hovr:flex\"",
+                "explanation": "\"bg-[#ff0000]\" is not allowed on <Button>: <Button> owns its color. Use a variant: primary, muted. Add a new variant in packages/design/controls/button.tsx only if the design explicitly calls for a treatment none of these provides. Acme uses the existing component variants.",
+                "suggestions": []
+              },
+              {
+                "code": "shadcn/no-arbitrary-values",
+                "ruleId": "shadcn/no-arbitrary-values",
+                "severity": "error",
+                "path": "apps/web/src/bad.tsx",
+                "range": {
+                  "start": {
+                    "offset": 92,
+                    "line": 2,
+                    "column": 45
+                  },
+                  "end": {
+                    "offset": 125,
+                    "line": 2,
+                    "column": 78
+                  }
+                },
+                "actual": "\"p-[13px] bg-[#ff0000] hovr:flex\"",
+                "explanation": "\"p-[13px]\" hardcodes an off-token value. Use \"p-3.25\" instead (same value, on the scale). Acme uses the existing component variants.",
+                "suggestions": [
+                  {
+                    "description": "Replace with \"p-3.25\" (same value, on the scale).",
+                    "edit": {
+                      "range": [
+                        92,
+                        125
+                      ],
+                      "text": "\"p-3.25 bg-[#ff0000] hovr:flex\""
+                    }
+                  }
+                ]
+              },
+              {
+                "code": "shadcn/no-arbitrary-values",
+                "ruleId": "shadcn/no-arbitrary-values",
+                "severity": "error",
+                "path": "apps/web/src/bad.tsx",
+                "range": {
+                  "start": {
+                    "offset": 92,
+                    "line": 2,
+                    "column": 45
+                  },
+                  "end": {
+                    "offset": 125,
+                    "line": 2,
+                    "column": 78
+                  }
+                },
+                "actual": "\"p-[13px] bg-[#ff0000] hovr:flex\"",
+                "explanation": "\"bg-[#ff0000]\" hardcodes a color and no declared theme color is close to it. Use one of: acme, acme-muted, or declare --color-<name> in apps/web/src/theme.css. Acme uses the existing component variants.",
+                "suggestions": []
+              },
+              {
+                "code": "shadcn/no-unknown-classes",
+                "ruleId": "shadcn/no-unknown-classes",
+                "severity": "error",
+                "path": "apps/web/src/bad.tsx",
+                "range": {
+                  "start": {
+                    "offset": 92,
+                    "line": 2,
+                    "column": 45
+                  },
+                  "end": {
+                    "offset": 125,
+                    "line": 2,
+                    "column": 78
+                  }
+                },
+                "actual": "\"p-[13px] bg-[#ff0000] hovr:flex\"",
+                "explanation": "\"hovr:flex\" is not a class this project's Tailwind knows, so no CSS is generated for it. Did you mean \"hover:flex\"? Acme uses the existing component variants.",
+                "suggestions": [
+                  {
+                    "description": "Replace with \"hover:flex\".",
+                    "edit": {
+                      "range": [
+                        92,
+                        125
+                      ],
+                      "text": "\"p-[13px] bg-[#ff0000] hover:flex\""
+                    }
+                  }
+                ]
+              }
+            ],
+            "config": {
+              "namedFiles": [
+                {
+                  "path": "eslint.config.mjs",
+                  "sha256": "7e569a0dd1bd512a2e5e7c06662fa8ec7498f07a0393ec2bc9070b0efb6107c6",
+                  "size": 843
+                },
+                {
+                  "path": "apps/web/components.json",
+                  "sha256": "474f5bbde0fca233ffd0daca88199a39c0ba9d2982d156f03078492c346d7802",
+                  "size": 166
+                },
+                {
+                  "path": "apps/web/src/theme.css",
+                  "sha256": "0726332963af4610b98eb10a8502fec176815660662b479784d1d41564dfc33a",
+                  "size": 115
+                },
+                {
+                  "path": "package.json",
+                  "sha256": "bb9477175dfb870fa0a0d921a796f613591254537e40a4f0b465e64dd7ace5d9",
+                  "size": 350
+                },
+                {
+                  "path": "package-lock.json",
+                  "sha256": "539a6153b4ec75f213a8612dd40c7001a699d3f264ee2f65cf08bc9dfa25ce17",
+                  "size": 56091
+                },
+                {
+                  "path": "apps/web/tsconfig.json",
+                  "sha256": "9707732fdfa0b10bce9fab6ec906692aa4e07dda787c189ecf49520eb2536c34",
+                  "size": 211
+                },
+                {
+                  "path": "apps/web/package.json",
+                  "sha256": "c8af074c5eafb8ff84427972ba09af6f14c39c93283202664fcb3589522efcf3",
+                  "size": 88
+                },
+                {
+                  "path": "packages/design/controls/button.tsx",
+                  "sha256": "684ccad8c1ee99afbdbc14528c713f93fe90721893613fe85f0dd725d3ab85df",
+                  "size": 531
+                }
+              ],
+              "effectiveRules": {
+                "shadcn/no-restyle": [
+                  2,
+                  {
+                    "allow": [
+                      "layout"
+                    ]
+                  }
+                ],
+                "shadcn/no-raw-colors": [
+                  2
+                ],
+                "shadcn/no-arbitrary-values": [
+                  2
+                ],
+                "shadcn/no-inline-styles": [
+                  1
+                ],
+                "shadcn/no-unknown-classes": [
+                  2
+                ],
+                "shadcn/require-static-classes": [
+                  2
+                ]
+              },
+              "settings": {
+                "shadcn": {
+                  "note": "Acme uses the existing component variants."
+                }
+              },
+              "parser": {
+                "name": "typescript-eslint/parser",
+                "version": "8.68.0"
+              }
+            },
+            "project": {
+              "api": "experimental @shadcn/lint 0.1.0 project API",
+              "root": "apps/web",
+              "theme": "apps/web/src/theme.css",
+              "componentsDir": "packages/design/controls",
+              "components": [
+                {
+                  "name": "Button",
+                  "path": "packages/design/controls/button.tsx",
+                  "variants": [
+                    {
+                      "name": "buttonVariants",
+                      "axes": {
+                        "size": [
+                          "sm",
+                          "lg"
+                        ],
+                        "variant": [
+                          "primary",
+                          "muted"
+                        ]
+                      },
+                      "source": "factory"
+                    },
+                    {
+                      "name": "Button",
+                      "axes": {
+                        "size": [
+                          "sm",
+                          "lg"
+                        ],
+                        "variant": [
+                          "primary",
+                          "muted"
+                        ]
+                      },
+                      "source": "props"
+                    }
+                  ]
+                }
+              ]
+            },
+            "coverage": {
+              "complete": false,
+              "executed": true,
+              "enabledRules": [
+                "no-restyle",
+                "no-raw-colors",
+                "no-arbitrary-values",
+                "no-inline-styles",
+                "no-unknown-classes",
+                "require-static-classes"
+              ],
+              "unexamined": [
+                {
+                  "code": "upstream-analysis-boundary",
+                  "explanation": "The public plugin cannot enumerate every styling path: parent selectors, unreadable props spreads, imported dynamic values and plain CSS remain outside its ownership analysis. Zero findings is not complete design coverage."
+                }
+              ]
+            },
+            "suppressedDiagnostics": []
+          },
+          {
+            "path": "apps/web/src/good.tsx",
+            "status": "audited",
+            "input": {
+              "path": "apps/web/src/good.tsx",
+              "sha256": "1bbe6d6ded08a74b5524668f1bc5500d97904d4521400037ee8c5054b885c2b0",
+              "size": 201
+            },
+            "diagnostics": [],
+            "config": {
+              "namedFiles": [
+                {
+                  "path": "eslint.config.mjs",
+                  "sha256": "7e569a0dd1bd512a2e5e7c06662fa8ec7498f07a0393ec2bc9070b0efb6107c6",
+                  "size": 843
+                },
+                {
+                  "path": "apps/web/components.json",
+                  "sha256": "474f5bbde0fca233ffd0daca88199a39c0ba9d2982d156f03078492c346d7802",
+                  "size": 166
+                },
+                {
+                  "path": "apps/web/src/theme.css",
+                  "sha256": "0726332963af4610b98eb10a8502fec176815660662b479784d1d41564dfc33a",
+                  "size": 115
+                },
+                {
+                  "path": "package.json",
+                  "sha256": "bb9477175dfb870fa0a0d921a796f613591254537e40a4f0b465e64dd7ace5d9",
+                  "size": 350
+                },
+                {
+                  "path": "package-lock.json",
+                  "sha256": "539a6153b4ec75f213a8612dd40c7001a699d3f264ee2f65cf08bc9dfa25ce17",
+                  "size": 56091
+                },
+                {
+                  "path": "apps/web/tsconfig.json",
+                  "sha256": "9707732fdfa0b10bce9fab6ec906692aa4e07dda787c189ecf49520eb2536c34",
+                  "size": 211
+                },
+                {
+                  "path": "apps/web/package.json",
+                  "sha256": "c8af074c5eafb8ff84427972ba09af6f14c39c93283202664fcb3589522efcf3",
+                  "size": 88
+                },
+                {
+                  "path": "packages/design/controls/button.tsx",
+                  "sha256": "684ccad8c1ee99afbdbc14528c713f93fe90721893613fe85f0dd725d3ab85df",
+                  "size": 531
+                }
+              ],
+              "effectiveRules": {
+                "shadcn/no-restyle": [
+                  2,
+                  {
+                    "allow": [
+                      "layout"
+                    ]
+                  }
+                ],
+                "shadcn/no-raw-colors": [
+                  2
+                ],
+                "shadcn/no-arbitrary-values": [
+                  2
+                ],
+                "shadcn/no-inline-styles": [
+                  1
+                ],
+                "shadcn/no-unknown-classes": [
+                  2
+                ],
+                "shadcn/require-static-classes": [
+                  2
+                ]
+              },
+              "settings": {
+                "shadcn": {
+                  "note": "Acme uses the existing component variants."
+                }
+              },
+              "parser": {
+                "name": "typescript-eslint/parser",
+                "version": "8.68.0"
+              }
+            },
+            "project": {
+              "api": "experimental @shadcn/lint 0.1.0 project API",
+              "root": "apps/web",
+              "theme": "apps/web/src/theme.css",
+              "componentsDir": "packages/design/controls",
+              "components": [
+                {
+                  "name": "Button",
+                  "path": "packages/design/controls/button.tsx",
+                  "variants": [
+                    {
+                      "name": "buttonVariants",
+                      "axes": {
+                        "size": [
+                          "sm",
+                          "lg"
+                        ],
+                        "variant": [
+                          "primary",
+                          "muted"
+                        ]
+                      },
+                      "source": "factory"
+                    },
+                    {
+                      "name": "Button",
+                      "axes": {
+                        "size": [
+                          "sm",
+                          "lg"
+                        ],
+                        "variant": [
+                          "primary",
+                          "muted"
+                        ]
+                      },
+                      "source": "props"
+                    }
+                  ]
+                }
+              ]
+            },
+            "coverage": {
+              "complete": false,
+              "executed": true,
+              "enabledRules": [
+                "no-restyle",
+                "no-raw-colors",
+                "no-arbitrary-values",
+                "no-inline-styles",
+                "no-unknown-classes",
+                "require-static-classes"
+              ],
+              "unexamined": [
+                {
+                  "code": "upstream-analysis-boundary",
+                  "explanation": "The public plugin cannot enumerate every styling path: parent selectors, unreadable props spreads, imported dynamic values and plain CSS remain outside its ownership analysis. Zero findings is not complete design coverage."
+                }
+              ]
+            },
+            "suppressedDiagnostics": []
+          },
+          {
+            "path": "apps/web/src/fractional.tsx",
+            "status": "audited",
+            "input": {
+              "path": "apps/web/src/fractional.tsx",
+              "sha256": "1acab94b6ff12c5c2649cfa64e0c5d542fa90a97302078f18bcd915fc51fd6ad",
+              "size": 62
+            },
+            "diagnostics": [],
+            "config": {
+              "namedFiles": [
+                {
+                  "path": "eslint.config.mjs",
+                  "sha256": "7e569a0dd1bd512a2e5e7c06662fa8ec7498f07a0393ec2bc9070b0efb6107c6",
+                  "size": 843
+                },
+                {
+                  "path": "apps/web/components.json",
+                  "sha256": "474f5bbde0fca233ffd0daca88199a39c0ba9d2982d156f03078492c346d7802",
+                  "size": 166
+                },
+                {
+                  "path": "apps/web/src/theme.css",
+                  "sha256": "0726332963af4610b98eb10a8502fec176815660662b479784d1d41564dfc33a",
+                  "size": 115
+                },
+                {
+                  "path": "package.json",
+                  "sha256": "bb9477175dfb870fa0a0d921a796f613591254537e40a4f0b465e64dd7ace5d9",
+                  "size": 350
+                },
+                {
+                  "path": "package-lock.json",
+                  "sha256": "539a6153b4ec75f213a8612dd40c7001a699d3f264ee2f65cf08bc9dfa25ce17",
+                  "size": 56091
+                },
+                {
+                  "path": "apps/web/tsconfig.json",
+                  "sha256": "9707732fdfa0b10bce9fab6ec906692aa4e07dda787c189ecf49520eb2536c34",
+                  "size": 211
+                },
+                {
+                  "path": "apps/web/package.json",
+                  "sha256": "c8af074c5eafb8ff84427972ba09af6f14c39c93283202664fcb3589522efcf3",
+                  "size": 88
+                },
+                {
+                  "path": "packages/design/controls/button.tsx",
+                  "sha256": "684ccad8c1ee99afbdbc14528c713f93fe90721893613fe85f0dd725d3ab85df",
+                  "size": 531
+                }
+              ],
+              "effectiveRules": {
+                "shadcn/no-restyle": [
+                  2,
+                  {
+                    "allow": [
+                      "layout"
+                    ]
+                  }
+                ],
+                "shadcn/no-raw-colors": [
+                  2
+                ],
+                "shadcn/no-arbitrary-values": [
+                  2
+                ],
+                "shadcn/no-inline-styles": [
+                  1
+                ],
+                "shadcn/no-unknown-classes": [
+                  2
+                ],
+                "shadcn/require-static-classes": [
+                  2
+                ]
+              },
+              "settings": {
+                "shadcn": {
+                  "note": "Acme uses the existing component variants."
+                }
+              },
+              "parser": {
+                "name": "typescript-eslint/parser",
+                "version": "8.68.0"
+              }
+            },
+            "project": {
+              "api": "experimental @shadcn/lint 0.1.0 project API",
+              "root": "apps/web",
+              "theme": "apps/web/src/theme.css",
+              "componentsDir": "packages/design/controls",
+              "components": [
+                {
+                  "name": "Button",
+                  "path": "packages/design/controls/button.tsx",
+                  "variants": [
+                    {
+                      "name": "buttonVariants",
+                      "axes": {
+                        "size": [
+                          "sm",
+                          "lg"
+                        ],
+                        "variant": [
+                          "primary",
+                          "muted"
+                        ]
+                      },
+                      "source": "factory"
+                    },
+                    {
+                      "name": "Button",
+                      "axes": {
+                        "size": [
+                          "sm",
+                          "lg"
+                        ],
+                        "variant": [
+                          "primary",
+                          "muted"
+                        ]
+                      },
+                      "source": "props"
+                    }
+                  ]
+                }
+              ]
+            },
+            "coverage": {
+              "complete": false,
+              "executed": true,
+              "enabledRules": [
+                "no-restyle",
+                "no-raw-colors",
+                "no-arbitrary-values",
+                "no-inline-styles",
+                "no-unknown-classes",
+                "require-static-classes"
+              ],
+              "unexamined": [
+                {
+                  "code": "upstream-analysis-boundary",
+                  "explanation": "The public plugin cannot enumerate every styling path: parent selectors, unreadable props spreads, imported dynamic values and plain CSS remain outside its ownership analysis. Zero findings is not complete design coverage."
+                }
+              ]
+            },
+            "suppressedDiagnostics": []
+          },
+          {
+            "path": "apps/web/src/unicode.tsx",
+            "status": "audited",
+            "input": {
+              "path": "apps/web/src/unicode.tsx",
+              "sha256": "58b8c7c61de471ef6ab6e03d12423568b178fd595db376016fa31b770739cc30",
+              "size": 169
+            },
+            "diagnostics": [
+              {
+                "code": "shadcn/no-restyle",
+                "ruleId": "shadcn/no-restyle",
+                "severity": "error",
+                "path": "apps/web/src/unicode.tsx",
+                "range": {
+                  "start": {
+                    "offset": 126,
+                    "line": 4,
+                    "column": 23
+                  },
+                  "end": {
+                    "offset": 136,
+                    "line": 4,
+                    "column": 33
+                  }
+                },
+                "actual": "\"p-[13px]\"",
+                "explanation": "\"p-[13px]\" is not allowed on <Button>: <Button> owns its spacing. Use a size (sm, lg), or margin here or gap on the parent for space around it. Add a size in packages/design/controls/button.tsx only if the design explicitly calls for one. Acme uses the existing component variants.",
+                "suggestions": []
+              },
+              {
+                "code": "shadcn/no-arbitrary-values",
+                "ruleId": "shadcn/no-arbitrary-values",
+                "severity": "error",
+                "path": "apps/web/src/unicode.tsx",
+                "range": {
+                  "start": {
+                    "offset": 126,
+                    "line": 4,
+                    "column": 23
+                  },
+                  "end": {
+                    "offset": 136,
+                    "line": 4,
+                    "column": 33
+                  }
+                },
+                "actual": "\"p-[13px]\"",
+                "explanation": "\"p-[13px]\" hardcodes an off-token value. Use \"p-3.25\" instead (same value, on the scale). Acme uses the existing component variants.",
+                "suggestions": [
+                  {
+                    "description": "Replace with \"p-3.25\" (same value, on the scale).",
+                    "edit": {
+                      "range": [
+                        126,
+                        136
+                      ],
+                      "text": "\"p-3.25\""
+                    }
+                  }
+                ]
+              }
+            ],
+            "config": {
+              "namedFiles": [
+                {
+                  "path": "eslint.config.mjs",
+                  "sha256": "7e569a0dd1bd512a2e5e7c06662fa8ec7498f07a0393ec2bc9070b0efb6107c6",
+                  "size": 843
+                },
+                {
+                  "path": "apps/web/components.json",
+                  "sha256": "474f5bbde0fca233ffd0daca88199a39c0ba9d2982d156f03078492c346d7802",
+                  "size": 166
+                },
+                {
+                  "path": "apps/web/src/theme.css",
+                  "sha256": "0726332963af4610b98eb10a8502fec176815660662b479784d1d41564dfc33a",
+                  "size": 115
+                },
+                {
+                  "path": "package.json",
+                  "sha256": "bb9477175dfb870fa0a0d921a796f613591254537e40a4f0b465e64dd7ace5d9",
+                  "size": 350
+                },
+                {
+                  "path": "package-lock.json",
+                  "sha256": "539a6153b4ec75f213a8612dd40c7001a699d3f264ee2f65cf08bc9dfa25ce17",
+                  "size": 56091
+                },
+                {
+                  "path": "apps/web/tsconfig.json",
+                  "sha256": "9707732fdfa0b10bce9fab6ec906692aa4e07dda787c189ecf49520eb2536c34",
+                  "size": 211
+                },
+                {
+                  "path": "apps/web/package.json",
+                  "sha256": "c8af074c5eafb8ff84427972ba09af6f14c39c93283202664fcb3589522efcf3",
+                  "size": 88
+                },
+                {
+                  "path": "packages/design/controls/button.tsx",
+                  "sha256": "684ccad8c1ee99afbdbc14528c713f93fe90721893613fe85f0dd725d3ab85df",
+                  "size": 531
+                }
+              ],
+              "effectiveRules": {
+                "shadcn/no-restyle": [
+                  2,
+                  {
+                    "allow": [
+                      "layout"
+                    ]
+                  }
+                ],
+                "shadcn/no-raw-colors": [
+                  2
+                ],
+                "shadcn/no-arbitrary-values": [
+                  2
+                ],
+                "shadcn/no-inline-styles": [
+                  1
+                ],
+                "shadcn/no-unknown-classes": [
+                  2
+                ],
+                "shadcn/require-static-classes": [
+                  2
+                ]
+              },
+              "settings": {
+                "shadcn": {
+                  "note": "Acme uses the existing component variants."
+                }
+              },
+              "parser": {
+                "name": "typescript-eslint/parser",
+                "version": "8.68.0"
+              }
+            },
+            "project": {
+              "api": "experimental @shadcn/lint 0.1.0 project API",
+              "root": "apps/web",
+              "theme": "apps/web/src/theme.css",
+              "componentsDir": "packages/design/controls",
+              "components": [
+                {
+                  "name": "Button",
+                  "path": "packages/design/controls/button.tsx",
+                  "variants": [
+                    {
+                      "name": "buttonVariants",
+                      "axes": {
+                        "size": [
+                          "sm",
+                          "lg"
+                        ],
+                        "variant": [
+                          "primary",
+                          "muted"
+                        ]
+                      },
+                      "source": "factory"
+                    },
+                    {
+                      "name": "Button",
+                      "axes": {
+                        "size": [
+                          "sm",
+                          "lg"
+                        ],
+                        "variant": [
+                          "primary",
+                          "muted"
+                        ]
+                      },
+                      "source": "props"
+                    }
+                  ]
+                }
+              ]
+            },
+            "coverage": {
+              "complete": false,
+              "executed": true,
+              "enabledRules": [
+                "no-restyle",
+                "no-raw-colors",
+                "no-arbitrary-values",
+                "no-inline-styles",
+                "no-unknown-classes",
+                "require-static-classes"
+              ],
+              "unexamined": [
+                {
+                  "code": "upstream-analysis-boundary",
+                  "explanation": "The public plugin cannot enumerate every styling path: parent selectors, unreadable props spreads, imported dynamic values and plain CSS remain outside its ownership analysis. Zero findings is not complete design coverage."
+                }
+              ]
+            },
+            "suppressedDiagnostics": []
+          },
+          {
+            "path": "apps/web/src/bom.tsx",
+            "status": "audited",
+            "input": {
+              "path": "apps/web/src/bom.tsx",
+              "sha256": "52f905f24d4a3d2f2c39126de30310e70b36cdad07d9b0744401f35812ccb6be",
+              "size": 145
+            },
+            "diagnostics": [
+              {
+                "code": "shadcn/no-arbitrary-values",
+                "ruleId": "shadcn/no-arbitrary-values",
+                "severity": "error",
+                "path": "apps/web/src/bom.tsx",
+                "range": {
+                  "start": {
+                    "offset": 43,
+                    "line": 1,
+                    "column": 44
+                  },
+                  "end": {
+                    "offset": 53,
+                    "line": 1,
+                    "column": 54
+                  }
+                },
+                "actual": "\"p-[13px]\"",
+                "explanation": "\"p-[13px]\" hardcodes an off-token value. Use \"p-3.25\" instead (same value, on the scale). Acme uses the existing component variants.",
+                "suggestions": [
+                  {
+                    "description": "Replace with \"p-3.25\" (same value, on the scale).",
+                    "edit": {
+                      "range": [
+                        43,
+                        53
+                      ],
+                      "text": "\"p-3.25\""
+                    }
+                  }
+                ]
+              },
+              {
+                "code": "shadcn/no-arbitrary-values",
+                "ruleId": "shadcn/no-arbitrary-values",
+                "severity": "error",
+                "path": "apps/web/src/bom.tsx",
+                "range": {
+                  "start": {
+                    "offset": 113,
+                    "line": 3,
+                    "column": 18
+                  },
+                  "end": {
+                    "offset": 123,
+                    "line": 3,
+                    "column": 28
+                  }
+                },
+                "actual": "\"p-[13px]\"",
+                "explanation": "\"p-[13px]\" hardcodes an off-token value. Use \"p-3.25\" instead (same value, on the scale). Acme uses the existing component variants.",
+                "suggestions": [
+                  {
+                    "description": "Replace with \"p-3.25\" (same value, on the scale).",
+                    "edit": {
+                      "range": [
+                        113,
+                        123
+                      ],
+                      "text": "\"p-3.25\""
+                    }
+                  }
+                ]
+              }
+            ],
+            "config": {
+              "namedFiles": [
+                {
+                  "path": "eslint.config.mjs",
+                  "sha256": "7e569a0dd1bd512a2e5e7c06662fa8ec7498f07a0393ec2bc9070b0efb6107c6",
+                  "size": 843
+                },
+                {
+                  "path": "apps/web/components.json",
+                  "sha256": "474f5bbde0fca233ffd0daca88199a39c0ba9d2982d156f03078492c346d7802",
+                  "size": 166
+                },
+                {
+                  "path": "apps/web/src/theme.css",
+                  "sha256": "0726332963af4610b98eb10a8502fec176815660662b479784d1d41564dfc33a",
+                  "size": 115
+                },
+                {
+                  "path": "package.json",
+                  "sha256": "bb9477175dfb870fa0a0d921a796f613591254537e40a4f0b465e64dd7ace5d9",
+                  "size": 350
+                },
+                {
+                  "path": "package-lock.json",
+                  "sha256": "539a6153b4ec75f213a8612dd40c7001a699d3f264ee2f65cf08bc9dfa25ce17",
+                  "size": 56091
+                },
+                {
+                  "path": "apps/web/tsconfig.json",
+                  "sha256": "9707732fdfa0b10bce9fab6ec906692aa4e07dda787c189ecf49520eb2536c34",
+                  "size": 211
+                },
+                {
+                  "path": "apps/web/package.json",
+                  "sha256": "c8af074c5eafb8ff84427972ba09af6f14c39c93283202664fcb3589522efcf3",
+                  "size": 88
+                },
+                {
+                  "path": "packages/design/controls/button.tsx",
+                  "sha256": "684ccad8c1ee99afbdbc14528c713f93fe90721893613fe85f0dd725d3ab85df",
+                  "size": 531
+                }
+              ],
+              "effectiveRules": {
+                "shadcn/no-restyle": [
+                  2,
+                  {
+                    "allow": [
+                      "layout"
+                    ]
+                  }
+                ],
+                "shadcn/no-raw-colors": [
+                  2
+                ],
+                "shadcn/no-arbitrary-values": [
+                  2
+                ],
+                "shadcn/no-inline-styles": [
+                  1
+                ],
+                "shadcn/no-unknown-classes": [
+                  2
+                ],
+                "shadcn/require-static-classes": [
+                  2
+                ]
+              },
+              "settings": {
+                "shadcn": {
+                  "note": "Acme uses the existing component variants."
+                }
+              },
+              "parser": {
+                "name": "typescript-eslint/parser",
+                "version": "8.68.0"
+              }
+            },
+            "project": {
+              "api": "experimental @shadcn/lint 0.1.0 project API",
+              "root": "apps/web",
+              "theme": "apps/web/src/theme.css",
+              "componentsDir": "packages/design/controls",
+              "components": [
+                {
+                  "name": "Button",
+                  "path": "packages/design/controls/button.tsx",
+                  "variants": [
+                    {
+                      "name": "buttonVariants",
+                      "axes": {
+                        "size": [
+                          "sm",
+                          "lg"
+                        ],
+                        "variant": [
+                          "primary",
+                          "muted"
+                        ]
+                      },
+                      "source": "factory"
+                    },
+                    {
+                      "name": "Button",
+                      "axes": {
+                        "size": [
+                          "sm",
+                          "lg"
+                        ],
+                        "variant": [
+                          "primary",
+                          "muted"
+                        ]
+                      },
+                      "source": "props"
+                    }
+                  ]
+                }
+              ]
+            },
+            "coverage": {
+              "complete": false,
+              "executed": true,
+              "enabledRules": [
+                "no-restyle",
+                "no-raw-colors",
+                "no-arbitrary-values",
+                "no-inline-styles",
+                "no-unknown-classes",
+                "require-static-classes"
+              ],
+              "unexamined": [
+                {
+                  "code": "upstream-analysis-boundary",
+                  "explanation": "The public plugin cannot enumerate every styling path: parent selectors, unreadable props spreads, imported dynamic values and plain CSS remain outside its ownership analysis. Zero findings is not complete design coverage."
+                }
+              ]
+            },
+            "suppressedDiagnostics": []
+          },
+          {
+            "path": "apps/web/src/line-terminators.tsx",
+            "status": "audited",
+            "input": {
+              "path": "apps/web/src/line-terminators.tsx",
+              "sha256": "df25e73488a54fe8f33c08443c0124b96ae2131294019d115d0a5efc46f478b4",
+              "size": 362
+            },
+            "diagnostics": [
+              {
+                "code": "shadcn/no-arbitrary-values",
+                "ruleId": "shadcn/no-arbitrary-values",
+                "severity": "error",
+                "path": "apps/web/src/line-terminators.tsx",
+                "range": {
+                  "start": {
+                    "offset": 65,
+                    "line": 2,
+                    "column": 40
+                  },
+                  "end": {
+                    "offset": 75,
+                    "line": 2,
+                    "column": 50
+                  }
+                },
+                "actual": "\"p-[13px]\"",
+                "explanation": "\"p-[13px]\" hardcodes an off-token value. Use \"p-3.25\" instead (same value, on the scale). Acme uses the existing component variants.",
+                "suggestions": [
+                  {
+                    "description": "Replace with \"p-3.25\" (same value, on the scale).",
+                    "edit": {
+                      "range": [
+                        65,
+                        75
+                      ],
+                      "text": "\"p-3.25\""
+                    }
+                  }
+                ]
+              },
+              {
+                "code": "shadcn/no-arbitrary-values",
+                "ruleId": "shadcn/no-arbitrary-values",
+                "severity": "error",
+                "path": "apps/web/src/line-terminators.tsx",
+                "range": {
+                  "start": {
+                    "offset": 133,
+                    "line": 3,
+                    "column": 42
+                  },
+                  "end": {
+                    "offset": 143,
+                    "line": 3,
+                    "column": 52
+                  }
+                },
+                "actual": "\"p-[13px]\"",
+                "explanation": "\"p-[13px]\" hardcodes an off-token value. Use \"p-3.25\" instead (same value, on the scale). Acme uses the existing component variants.",
+                "suggestions": [
+                  {
+                    "description": "Replace with \"p-3.25\" (same value, on the scale).",
+                    "edit": {
+                      "range": [
+                        133,
+                        143
+                      ],
+                      "text": "\"p-3.25\""
+                    }
+                  }
+                ]
+              },
+              {
+                "code": "shadcn/no-arbitrary-values",
+                "ruleId": "shadcn/no-arbitrary-values",
+                "severity": "error",
+                "path": "apps/web/src/line-terminators.tsx",
+                "range": {
+                  "start": {
+                    "offset": 198,
+                    "line": 4,
+                    "column": 40
+                  },
+                  "end": {
+                    "offset": 208,
+                    "line": 4,
+                    "column": 50
+                  }
+                },
+                "actual": "\"p-[13px]\"",
+                "explanation": "\"p-[13px]\" hardcodes an off-token value. Use \"p-3.25\" instead (same value, on the scale). Acme uses the existing component variants.",
+                "suggestions": [
+                  {
+                    "description": "Replace with \"p-3.25\" (same value, on the scale).",
+                    "edit": {
+                      "range": [
+                        198,
+                        208
+                      ],
+                      "text": "\"p-3.25\""
+                    }
+                  }
+                ]
+              },
+              {
+                "code": "shadcn/no-arbitrary-values",
+                "ruleId": "shadcn/no-arbitrary-values",
+                "severity": "error",
+                "path": "apps/web/src/line-terminators.tsx",
+                "range": {
+                  "start": {
+                    "offset": 263,
+                    "line": 5,
+                    "column": 40
+                  },
+                  "end": {
+                    "offset": 273,
+                    "line": 5,
+                    "column": 50
+                  }
+                },
+                "actual": "\"p-[13px]\"",
+                "explanation": "\"p-[13px]\" hardcodes an off-token value. Use \"p-3.25\" instead (same value, on the scale). Acme uses the existing component variants.",
+                "suggestions": [
+                  {
+                    "description": "Replace with \"p-3.25\" (same value, on the scale).",
+                    "edit": {
+                      "range": [
+                        263,
+                        273
+                      ],
+                      "text": "\"p-3.25\""
+                    }
+                  }
+                ]
+              },
+              {
+                "code": "shadcn/no-arbitrary-values",
+                "ruleId": "shadcn/no-arbitrary-values",
+                "severity": "error",
+                "path": "apps/web/src/line-terminators.tsx",
+                "range": {
+                  "start": {
+                    "offset": 328,
+                    "line": 6,
+                    "column": 40
+                  },
+                  "end": {
+                    "offset": 338,
+                    "line": 6,
+                    "column": 50
+                  }
+                },
+                "actual": "\"p-[13px]\"",
+                "explanation": "\"p-[13px]\" hardcodes an off-token value. Use \"p-3.25\" instead (same value, on the scale). Acme uses the existing component variants.",
+                "suggestions": [
+                  {
+                    "description": "Replace with \"p-3.25\" (same value, on the scale).",
+                    "edit": {
+                      "range": [
+                        328,
+                        338
+                      ],
+                      "text": "\"p-3.25\""
+                    }
+                  }
+                ]
+              }
+            ],
+            "config": {
+              "namedFiles": [
+                {
+                  "path": "eslint.config.mjs",
+                  "sha256": "7e569a0dd1bd512a2e5e7c06662fa8ec7498f07a0393ec2bc9070b0efb6107c6",
+                  "size": 843
+                },
+                {
+                  "path": "apps/web/components.json",
+                  "sha256": "474f5bbde0fca233ffd0daca88199a39c0ba9d2982d156f03078492c346d7802",
+                  "size": 166
+                },
+                {
+                  "path": "apps/web/src/theme.css",
+                  "sha256": "0726332963af4610b98eb10a8502fec176815660662b479784d1d41564dfc33a",
+                  "size": 115
+                },
+                {
+                  "path": "package.json",
+                  "sha256": "bb9477175dfb870fa0a0d921a796f613591254537e40a4f0b465e64dd7ace5d9",
+                  "size": 350
+                },
+                {
+                  "path": "package-lock.json",
+                  "sha256": "539a6153b4ec75f213a8612dd40c7001a699d3f264ee2f65cf08bc9dfa25ce17",
+                  "size": 56091
+                },
+                {
+                  "path": "apps/web/tsconfig.json",
+                  "sha256": "9707732fdfa0b10bce9fab6ec906692aa4e07dda787c189ecf49520eb2536c34",
+                  "size": 211
+                },
+                {
+                  "path": "apps/web/package.json",
+                  "sha256": "c8af074c5eafb8ff84427972ba09af6f14c39c93283202664fcb3589522efcf3",
+                  "size": 88
+                },
+                {
+                  "path": "packages/design/controls/button.tsx",
+                  "sha256": "684ccad8c1ee99afbdbc14528c713f93fe90721893613fe85f0dd725d3ab85df",
+                  "size": 531
+                }
+              ],
+              "effectiveRules": {
+                "shadcn/no-restyle": [
+                  2,
+                  {
+                    "allow": [
+                      "layout"
+                    ]
+                  }
+                ],
+                "shadcn/no-raw-colors": [
+                  2
+                ],
+                "shadcn/no-arbitrary-values": [
+                  2
+                ],
+                "shadcn/no-inline-styles": [
+                  1
+                ],
+                "shadcn/no-unknown-classes": [
+                  2
+                ],
+                "shadcn/require-static-classes": [
+                  2
+                ]
+              },
+              "settings": {
+                "shadcn": {
+                  "note": "Acme uses the existing component variants."
+                }
+              },
+              "parser": {
+                "name": "typescript-eslint/parser",
+                "version": "8.68.0"
+              }
+            },
+            "project": {
+              "api": "experimental @shadcn/lint 0.1.0 project API",
+              "root": "apps/web",
+              "theme": "apps/web/src/theme.css",
+              "componentsDir": "packages/design/controls",
+              "components": [
+                {
+                  "name": "Button",
+                  "path": "packages/design/controls/button.tsx",
+                  "variants": [
+                    {
+                      "name": "buttonVariants",
+                      "axes": {
+                        "size": [
+                          "sm",
+                          "lg"
+                        ],
+                        "variant": [
+                          "primary",
+                          "muted"
+                        ]
+                      },
+                      "source": "factory"
+                    },
+                    {
+                      "name": "Button",
+                      "axes": {
+                        "size": [
+                          "sm",
+                          "lg"
+                        ],
+                        "variant": [
+                          "primary",
+                          "muted"
+                        ]
+                      },
+                      "source": "props"
+                    }
+                  ]
+                }
+              ]
+            },
+            "coverage": {
+              "complete": false,
+              "executed": true,
+              "enabledRules": [
+                "no-restyle",
+                "no-raw-colors",
+                "no-arbitrary-values",
+                "no-inline-styles",
+                "no-unknown-classes",
+                "require-static-classes"
+              ],
+              "unexamined": [
+                {
+                  "code": "upstream-analysis-boundary",
+                  "explanation": "The public plugin cannot enumerate every styling path: parent selectors, unreadable props spreads, imported dynamic values and plain CSS remain outside its ownership analysis. Zero findings is not complete design coverage."
+                }
+              ]
+            },
+            "suppressedDiagnostics": []
+          },
+          {
+            "path": "apps/web/src/inline.tsx",
+            "status": "audited",
+            "input": {
+              "path": "apps/web/src/inline.tsx",
+              "sha256": "17e096386ef14871423a0c5562ca049c826db322dd8be45017ec3252548d27bc",
+              "size": 121
+            },
+            "diagnostics": [
+              {
+                "code": "shadcn/no-inline-styles",
+                "ruleId": "shadcn/no-inline-styles",
+                "severity": "warning",
+                "path": "apps/web/src/inline.tsx",
+                "range": {
+                  "start": {
+                    "offset": 100,
+                    "line": 2,
+                    "column": 53
+                  },
+                  "end": {
+                    "offset": 102,
+                    "line": 2,
+                    "column": 55
+                  }
+                },
+                "actual": "13",
+                "explanation": "Inline style sets padding. Style through classes; use CSS custom properties for dynamic values. Acme uses the existing component variants.",
+                "suggestions": []
+              }
+            ],
+            "config": {
+              "namedFiles": [
+                {
+                  "path": "eslint.config.mjs",
+                  "sha256": "7e569a0dd1bd512a2e5e7c06662fa8ec7498f07a0393ec2bc9070b0efb6107c6",
+                  "size": 843
+                },
+                {
+                  "path": "apps/web/components.json",
+                  "sha256": "474f5bbde0fca233ffd0daca88199a39c0ba9d2982d156f03078492c346d7802",
+                  "size": 166
+                },
+                {
+                  "path": "apps/web/src/theme.css",
+                  "sha256": "0726332963af4610b98eb10a8502fec176815660662b479784d1d41564dfc33a",
+                  "size": 115
+                },
+                {
+                  "path": "package.json",
+                  "sha256": "bb9477175dfb870fa0a0d921a796f613591254537e40a4f0b465e64dd7ace5d9",
+                  "size": 350
+                },
+                {
+                  "path": "package-lock.json",
+                  "sha256": "539a6153b4ec75f213a8612dd40c7001a699d3f264ee2f65cf08bc9dfa25ce17",
+                  "size": 56091
+                },
+                {
+                  "path": "apps/web/tsconfig.json",
+                  "sha256": "9707732fdfa0b10bce9fab6ec906692aa4e07dda787c189ecf49520eb2536c34",
+                  "size": 211
+                },
+                {
+                  "path": "apps/web/package.json",
+                  "sha256": "c8af074c5eafb8ff84427972ba09af6f14c39c93283202664fcb3589522efcf3",
+                  "size": 88
+                },
+                {
+                  "path": "packages/design/controls/button.tsx",
+                  "sha256": "684ccad8c1ee99afbdbc14528c713f93fe90721893613fe85f0dd725d3ab85df",
+                  "size": 531
+                }
+              ],
+              "effectiveRules": {
+                "shadcn/no-restyle": [
+                  2,
+                  {
+                    "allow": [
+                      "layout"
+                    ]
+                  }
+                ],
+                "shadcn/no-raw-colors": [
+                  2
+                ],
+                "shadcn/no-arbitrary-values": [
+                  2
+                ],
+                "shadcn/no-inline-styles": [
+                  1
+                ],
+                "shadcn/no-unknown-classes": [
+                  2
+                ],
+                "shadcn/require-static-classes": [
+                  2
+                ]
+              },
+              "settings": {
+                "shadcn": {
+                  "note": "Acme uses the existing component variants."
+                }
+              },
+              "parser": {
+                "name": "typescript-eslint/parser",
+                "version": "8.68.0"
+              }
+            },
+            "project": {
+              "api": "experimental @shadcn/lint 0.1.0 project API",
+              "root": "apps/web",
+              "theme": "apps/web/src/theme.css",
+              "componentsDir": "packages/design/controls",
+              "components": [
+                {
+                  "name": "Button",
+                  "path": "packages/design/controls/button.tsx",
+                  "variants": [
+                    {
+                      "name": "buttonVariants",
+                      "axes": {
+                        "size": [
+                          "sm",
+                          "lg"
+                        ],
+                        "variant": [
+                          "primary",
+                          "muted"
+                        ]
+                      },
+                      "source": "factory"
+                    },
+                    {
+                      "name": "Button",
+                      "axes": {
+                        "size": [
+                          "sm",
+                          "lg"
+                        ],
+                        "variant": [
+                          "primary",
+                          "muted"
+                        ]
+                      },
+                      "source": "props"
+                    }
+                  ]
+                }
+              ]
+            },
+            "coverage": {
+              "complete": false,
+              "executed": true,
+              "enabledRules": [
+                "no-restyle",
+                "no-raw-colors",
+                "no-arbitrary-values",
+                "no-inline-styles",
+                "no-unknown-classes",
+                "require-static-classes"
+              ],
+              "unexamined": [
+                {
+                  "code": "upstream-analysis-boundary",
+                  "explanation": "The public plugin cannot enumerate every styling path: parent selectors, unreadable props spreads, imported dynamic values and plain CSS remain outside its ownership analysis. Zero findings is not complete design coverage."
+                }
+              ]
+            },
+            "suppressedDiagnostics": []
+          },
+          {
+            "path": "apps/web/src/dynamic.tsx",
+            "status": "audited",
+            "input": {
+              "path": "apps/web/src/dynamic.tsx",
+              "sha256": "5e67cff22b115d3c9990084935a08b809fb81bc4ef64df635701faad204aabae",
+              "size": 149
+            },
+            "diagnostics": [
+              {
+                "code": "shadcn/require-static-classes",
+                "ruleId": "shadcn/require-static-classes",
+                "severity": "error",
+                "path": "apps/web/src/dynamic.tsx",
+                "range": {
+                  "start": {
+                    "offset": 125,
+                    "line": 2,
+                    "column": 78
+                  },
+                  "end": {
+                    "offset": 132,
+                    "line": 2,
+                    "column": 85
+                  }
+                },
+                "actual": "unknown",
+                "explanation": "Dynamically built className on <Button> cannot be checked. Use static class strings. Acme uses the existing component variants.",
+                "suggestions": []
+              }
+            ],
+            "config": {
+              "namedFiles": [
+                {
+                  "path": "eslint.config.mjs",
+                  "sha256": "7e569a0dd1bd512a2e5e7c06662fa8ec7498f07a0393ec2bc9070b0efb6107c6",
+                  "size": 843
+                },
+                {
+                  "path": "apps/web/components.json",
+                  "sha256": "474f5bbde0fca233ffd0daca88199a39c0ba9d2982d156f03078492c346d7802",
+                  "size": 166
+                },
+                {
+                  "path": "apps/web/src/theme.css",
+                  "sha256": "0726332963af4610b98eb10a8502fec176815660662b479784d1d41564dfc33a",
+                  "size": 115
+                },
+                {
+                  "path": "package.json",
+                  "sha256": "bb9477175dfb870fa0a0d921a796f613591254537e40a4f0b465e64dd7ace5d9",
+                  "size": 350
+                },
+                {
+                  "path": "package-lock.json",
+                  "sha256": "539a6153b4ec75f213a8612dd40c7001a699d3f264ee2f65cf08bc9dfa25ce17",
+                  "size": 56091
+                },
+                {
+                  "path": "apps/web/tsconfig.json",
+                  "sha256": "9707732fdfa0b10bce9fab6ec906692aa4e07dda787c189ecf49520eb2536c34",
+                  "size": 211
+                },
+                {
+                  "path": "apps/web/package.json",
+                  "sha256": "c8af074c5eafb8ff84427972ba09af6f14c39c93283202664fcb3589522efcf3",
+                  "size": 88
+                },
+                {
+                  "path": "packages/design/controls/button.tsx",
+                  "sha256": "684ccad8c1ee99afbdbc14528c713f93fe90721893613fe85f0dd725d3ab85df",
+                  "size": 531
+                }
+              ],
+              "effectiveRules": {
+                "shadcn/no-restyle": [
+                  2,
+                  {
+                    "allow": [
+                      "layout"
+                    ]
+                  }
+                ],
+                "shadcn/no-raw-colors": [
+                  2
+                ],
+                "shadcn/no-arbitrary-values": [
+                  2
+                ],
+                "shadcn/no-inline-styles": [
+                  1
+                ],
+                "shadcn/no-unknown-classes": [
+                  2
+                ],
+                "shadcn/require-static-classes": [
+                  2
+                ]
+              },
+              "settings": {
+                "shadcn": {
+                  "note": "Acme uses the existing component variants."
+                }
+              },
+              "parser": {
+                "name": "typescript-eslint/parser",
+                "version": "8.68.0"
+              }
+            },
+            "project": {
+              "api": "experimental @shadcn/lint 0.1.0 project API",
+              "root": "apps/web",
+              "theme": "apps/web/src/theme.css",
+              "componentsDir": "packages/design/controls",
+              "components": [
+                {
+                  "name": "Button",
+                  "path": "packages/design/controls/button.tsx",
+                  "variants": [
+                    {
+                      "name": "buttonVariants",
+                      "axes": {
+                        "size": [
+                          "sm",
+                          "lg"
+                        ],
+                        "variant": [
+                          "primary",
+                          "muted"
+                        ]
+                      },
+                      "source": "factory"
+                    },
+                    {
+                      "name": "Button",
+                      "axes": {
+                        "size": [
+                          "sm",
+                          "lg"
+                        ],
+                        "variant": [
+                          "primary",
+                          "muted"
+                        ]
+                      },
+                      "source": "props"
+                    }
+                  ]
+                }
+              ]
+            },
+            "coverage": {
+              "complete": false,
+              "executed": false,
+              "enabledRules": [
+                "no-restyle",
+                "no-raw-colors",
+                "no-arbitrary-values",
+                "no-inline-styles",
+                "no-unknown-classes",
+                "require-static-classes"
+              ],
+              "unexamined": [
+                {
+                  "code": "dynamic-classes",
+                  "explanation": "The upstream rule identified class values it cannot evaluate statically."
+                },
+                {
+                  "code": "upstream-analysis-boundary",
+                  "explanation": "The public plugin cannot enumerate every styling path: parent selectors, unreadable props spreads, imported dynamic values and plain CSS remain outside its ownership analysis. Zero findings is not complete design coverage."
+                }
+              ]
+            },
+            "suppressedDiagnostics": []
+          },
+          {
+            "path": "apps/web/src/blind-spot.tsx",
+            "status": "audited",
+            "input": {
+              "path": "apps/web/src/blind-spot.tsx",
+              "sha256": "6d56216dbe0deb4308712303e6dc33c71ba9ccb8eb14a60cf841f8430f4d7641",
+              "size": 199
+            },
+            "diagnostics": [],
+            "config": {
+              "namedFiles": [
+                {
+                  "path": "eslint.config.mjs",
+                  "sha256": "7e569a0dd1bd512a2e5e7c06662fa8ec7498f07a0393ec2bc9070b0efb6107c6",
+                  "size": 843
+                },
+                {
+                  "path": "apps/web/components.json",
+                  "sha256": "474f5bbde0fca233ffd0daca88199a39c0ba9d2982d156f03078492c346d7802",
+                  "size": 166
+                },
+                {
+                  "path": "apps/web/src/theme.css",
+                  "sha256": "0726332963af4610b98eb10a8502fec176815660662b479784d1d41564dfc33a",
+                  "size": 115
+                },
+                {
+                  "path": "package.json",
+                  "sha256": "bb9477175dfb870fa0a0d921a796f613591254537e40a4f0b465e64dd7ace5d9",
+                  "size": 350
+                },
+                {
+                  "path": "package-lock.json",
+                  "sha256": "539a6153b4ec75f213a8612dd40c7001a699d3f264ee2f65cf08bc9dfa25ce17",
+                  "size": 56091
+                },
+                {
+                  "path": "apps/web/tsconfig.json",
+                  "sha256": "9707732fdfa0b10bce9fab6ec906692aa4e07dda787c189ecf49520eb2536c34",
+                  "size": 211
+                },
+                {
+                  "path": "apps/web/package.json",
+                  "sha256": "c8af074c5eafb8ff84427972ba09af6f14c39c93283202664fcb3589522efcf3",
+                  "size": 88
+                },
+                {
+                  "path": "packages/design/controls/button.tsx",
+                  "sha256": "684ccad8c1ee99afbdbc14528c713f93fe90721893613fe85f0dd725d3ab85df",
+                  "size": 531
+                }
+              ],
+              "effectiveRules": {
+                "shadcn/no-restyle": [
+                  2,
+                  {
+                    "allow": [
+                      "layout"
+                    ]
+                  }
+                ],
+                "shadcn/no-raw-colors": [
+                  2
+                ],
+                "shadcn/no-arbitrary-values": [
+                  2
+                ],
+                "shadcn/no-inline-styles": [
+                  1
+                ],
+                "shadcn/no-unknown-classes": [
+                  2
+                ],
+                "shadcn/require-static-classes": [
+                  2
+                ]
+              },
+              "settings": {
+                "shadcn": {
+                  "note": "Acme uses the existing component variants."
+                }
+              },
+              "parser": {
+                "name": "typescript-eslint/parser",
+                "version": "8.68.0"
+              }
+            },
+            "project": {
+              "api": "experimental @shadcn/lint 0.1.0 project API",
+              "root": "apps/web",
+              "theme": "apps/web/src/theme.css",
+              "componentsDir": "packages/design/controls",
+              "components": [
+                {
+                  "name": "Button",
+                  "path": "packages/design/controls/button.tsx",
+                  "variants": [
+                    {
+                      "name": "buttonVariants",
+                      "axes": {
+                        "size": [
+                          "sm",
+                          "lg"
+                        ],
+                        "variant": [
+                          "primary",
+                          "muted"
+                        ]
+                      },
+                      "source": "factory"
+                    },
+                    {
+                      "name": "Button",
+                      "axes": {
+                        "size": [
+                          "sm",
+                          "lg"
+                        ],
+                        "variant": [
+                          "primary",
+                          "muted"
+                        ]
+                      },
+                      "source": "props"
+                    }
+                  ]
+                }
+              ]
+            },
+            "coverage": {
+              "complete": false,
+              "executed": true,
+              "enabledRules": [
+                "no-restyle",
+                "no-raw-colors",
+                "no-arbitrary-values",
+                "no-inline-styles",
+                "no-unknown-classes",
+                "require-static-classes"
+              ],
+              "unexamined": [
+                {
+                  "code": "upstream-analysis-boundary",
+                  "explanation": "The public plugin cannot enumerate every styling path: parent selectors, unreadable props spreads, imported dynamic values and plain CSS remain outside its ownership analysis. Zero findings is not complete design coverage."
+                }
+              ]
+            },
+            "suppressedDiagnostics": []
+          },
+          {
+            "path": "apps/web/src/disabled.tsx",
+            "status": "audited",
+            "input": {
+              "path": "apps/web/src/disabled.tsx",
+              "sha256": "5b123a2e652619b3d76f0b94a12405a27ce6f339a514d3bc14f440a1fed0ff74",
+              "size": 64
+            },
+            "diagnostics": [],
+            "config": {
+              "namedFiles": [
+                {
+                  "path": "eslint.config.mjs",
+                  "sha256": "7e569a0dd1bd512a2e5e7c06662fa8ec7498f07a0393ec2bc9070b0efb6107c6",
+                  "size": 843
+                },
+                {
+                  "path": "apps/web/components.json",
+                  "sha256": "474f5bbde0fca233ffd0daca88199a39c0ba9d2982d156f03078492c346d7802",
+                  "size": 166
+                },
+                {
+                  "path": "apps/web/src/theme.css",
+                  "sha256": "0726332963af4610b98eb10a8502fec176815660662b479784d1d41564dfc33a",
+                  "size": 115
+                },
+                {
+                  "path": "package.json",
+                  "sha256": "bb9477175dfb870fa0a0d921a796f613591254537e40a4f0b465e64dd7ace5d9",
+                  "size": 350
+                },
+                {
+                  "path": "package-lock.json",
+                  "sha256": "539a6153b4ec75f213a8612dd40c7001a699d3f264ee2f65cf08bc9dfa25ce17",
+                  "size": 56091
+                },
+                {
+                  "path": "apps/web/tsconfig.json",
+                  "sha256": "9707732fdfa0b10bce9fab6ec906692aa4e07dda787c189ecf49520eb2536c34",
+                  "size": 211
+                },
+                {
+                  "path": "apps/web/package.json",
+                  "sha256": "c8af074c5eafb8ff84427972ba09af6f14c39c93283202664fcb3589522efcf3",
+                  "size": 88
+                },
+                {
+                  "path": "packages/design/controls/button.tsx",
+                  "sha256": "684ccad8c1ee99afbdbc14528c713f93fe90721893613fe85f0dd725d3ab85df",
+                  "size": 531
+                }
+              ],
+              "effectiveRules": {
+                "shadcn/no-restyle": [
+                  2,
+                  {
+                    "allow": [
+                      "layout"
+                    ]
+                  }
+                ],
+                "shadcn/no-raw-colors": [
+                  2
+                ],
+                "shadcn/no-arbitrary-values": [
+                  0
+                ],
+                "shadcn/no-inline-styles": [
+                  1
+                ],
+                "shadcn/no-unknown-classes": [
+                  2
+                ],
+                "shadcn/require-static-classes": [
+                  2
+                ]
+              },
+              "settings": {
+                "shadcn": {
+                  "note": "Acme uses the existing component variants."
+                }
+              },
+              "parser": {
+                "name": "typescript-eslint/parser",
+                "version": "8.68.0"
+              }
+            },
+            "project": {
+              "api": "experimental @shadcn/lint 0.1.0 project API",
+              "root": "apps/web",
+              "theme": "apps/web/src/theme.css",
+              "componentsDir": "packages/design/controls",
+              "components": [
+                {
+                  "name": "Button",
+                  "path": "packages/design/controls/button.tsx",
+                  "variants": [
+                    {
+                      "name": "buttonVariants",
+                      "axes": {
+                        "size": [
+                          "sm",
+                          "lg"
+                        ],
+                        "variant": [
+                          "primary",
+                          "muted"
+                        ]
+                      },
+                      "source": "factory"
+                    },
+                    {
+                      "name": "Button",
+                      "axes": {
+                        "size": [
+                          "sm",
+                          "lg"
+                        ],
+                        "variant": [
+                          "primary",
+                          "muted"
+                        ]
+                      },
+                      "source": "props"
+                    }
+                  ]
+                }
+              ]
+            },
+            "coverage": {
+              "complete": false,
+              "executed": false,
+              "enabledRules": [
+                "no-restyle",
+                "no-raw-colors",
+                "no-inline-styles",
+                "no-unknown-classes",
+                "require-static-classes"
+              ],
+              "unexamined": [
+                {
+                  "code": "disabled-rules",
+                  "explanation": "Required measured rules are not enabled: no-arbitrary-values. Existing project settings were preserved."
+                },
+                {
+                  "code": "upstream-analysis-boundary",
+                  "explanation": "The public plugin cannot enumerate every styling path: parent selectors, unreadable props spreads, imported dynamic values and plain CSS remain outside its ownership analysis. Zero findings is not complete design coverage."
+                }
+              ]
+            },
+            "suppressedDiagnostics": []
+          },
+          {
+            "path": "apps/web/src/suppressed.tsx",
+            "status": "audited",
+            "input": {
+              "path": "apps/web/src/suppressed.tsx",
+              "sha256": "b3f4c0418e315790312d117460857c135dec1fc488b600b72d0babeb8ac519a0",
+              "size": 159
+            },
+            "diagnostics": [],
+            "config": {
+              "namedFiles": [
+                {
+                  "path": "eslint.config.mjs",
+                  "sha256": "7e569a0dd1bd512a2e5e7c06662fa8ec7498f07a0393ec2bc9070b0efb6107c6",
+                  "size": 843
+                },
+                {
+                  "path": "apps/web/components.json",
+                  "sha256": "474f5bbde0fca233ffd0daca88199a39c0ba9d2982d156f03078492c346d7802",
+                  "size": 166
+                },
+                {
+                  "path": "apps/web/src/theme.css",
+                  "sha256": "0726332963af4610b98eb10a8502fec176815660662b479784d1d41564dfc33a",
+                  "size": 115
+                },
+                {
+                  "path": "package.json",
+                  "sha256": "bb9477175dfb870fa0a0d921a796f613591254537e40a4f0b465e64dd7ace5d9",
+                  "size": 350
+                },
+                {
+                  "path": "package-lock.json",
+                  "sha256": "539a6153b4ec75f213a8612dd40c7001a699d3f264ee2f65cf08bc9dfa25ce17",
+                  "size": 56091
+                },
+                {
+                  "path": "apps/web/tsconfig.json",
+                  "sha256": "9707732fdfa0b10bce9fab6ec906692aa4e07dda787c189ecf49520eb2536c34",
+                  "size": 211
+                },
+                {
+                  "path": "apps/web/package.json",
+                  "sha256": "c8af074c5eafb8ff84427972ba09af6f14c39c93283202664fcb3589522efcf3",
+                  "size": 88
+                },
+                {
+                  "path": "packages/design/controls/button.tsx",
+                  "sha256": "684ccad8c1ee99afbdbc14528c713f93fe90721893613fe85f0dd725d3ab85df",
+                  "size": 531
+                }
+              ],
+              "effectiveRules": {
+                "shadcn/no-restyle": [
+                  2,
+                  {
+                    "allow": [
+                      "layout"
+                    ]
+                  }
+                ],
+                "shadcn/no-raw-colors": [
+                  2
+                ],
+                "shadcn/no-arbitrary-values": [
+                  2
+                ],
+                "shadcn/no-inline-styles": [
+                  1
+                ],
+                "shadcn/no-unknown-classes": [
+                  2
+                ],
+                "shadcn/require-static-classes": [
+                  2
+                ]
+              },
+              "settings": {
+                "shadcn": {
+                  "note": "Acme uses the existing component variants."
+                }
+              },
+              "parser": {
+                "name": "typescript-eslint/parser",
+                "version": "8.68.0"
+              }
+            },
+            "project": {
+              "api": "experimental @shadcn/lint 0.1.0 project API",
+              "root": "apps/web",
+              "theme": "apps/web/src/theme.css",
+              "componentsDir": "packages/design/controls",
+              "components": [
+                {
+                  "name": "Button",
+                  "path": "packages/design/controls/button.tsx",
+                  "variants": [
+                    {
+                      "name": "buttonVariants",
+                      "axes": {
+                        "size": [
+                          "sm",
+                          "lg"
+                        ],
+                        "variant": [
+                          "primary",
+                          "muted"
+                        ]
+                      },
+                      "source": "factory"
+                    },
+                    {
+                      "name": "Button",
+                      "axes": {
+                        "size": [
+                          "sm",
+                          "lg"
+                        ],
+                        "variant": [
+                          "primary",
+                          "muted"
+                        ]
+                      },
+                      "source": "props"
+                    }
+                  ]
+                }
+              ]
+            },
+            "coverage": {
+              "complete": false,
+              "executed": false,
+              "enabledRules": [
+                "no-restyle",
+                "no-raw-colors",
+                "no-arbitrary-values",
+                "no-inline-styles",
+                "no-unknown-classes",
+                "require-static-classes"
+              ],
+              "unexamined": [
+                {
+                  "code": "suppressed-findings",
+                  "explanation": "1 findings were suppressed by repository directives."
+                },
+                {
+                  "code": "inline-rule-directive",
+                  "explanation": "This source contains an ESLint disable directive; configured rule coverage may be narrower."
+                },
+                {
+                  "code": "upstream-analysis-boundary",
+                  "explanation": "The public plugin cannot enumerate every styling path: parent selectors, unreadable props spreads, imported dynamic values and plain CSS remain outside its ownership analysis. Zero findings is not complete design coverage."
+                }
+              ]
+            },
+            "suppressedDiagnostics": [
+              {
+                "code": "shadcn/no-arbitrary-values",
+                "ruleId": "shadcn/no-arbitrary-values",
+                "severity": "error",
+                "path": "apps/web/src/suppressed.tsx",
+                "range": {
+                  "start": {
+                    "offset": 136,
+                    "line": 2,
+                    "column": 42
+                  },
+                  "end": {
+                    "offset": 146,
+                    "line": 2,
+                    "column": 52
+                  }
+                },
+                "actual": "\"p-[13px]\"",
+                "explanation": "\"p-[13px]\" hardcodes an off-token value. Use \"p-3.25\" instead (same value, on the scale). Acme uses the existing component variants.",
+                "suggestions": [
+                  {
+                    "description": "Replace with \"p-3.25\" (same value, on the scale).",
+                    "edit": {
+                      "range": [
+                        136,
+                        146
+                      ],
+                      "text": "\"p-3.25\""
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "path": "apps/web/src/ignored.tsx",
+            "status": "ignored",
+            "input": {
+              "path": "apps/web/src/ignored.tsx",
+              "sha256": "5b123a2e652619b3d76f0b94a12405a27ce6f339a514d3bc14f440a1fed0ff74",
+              "size": 64
+            },
+            "diagnostics": [],
+            "config": {
+              "namedFiles": [
+                {
+                  "path": "eslint.config.mjs",
+                  "sha256": "7e569a0dd1bd512a2e5e7c06662fa8ec7498f07a0393ec2bc9070b0efb6107c6",
+                  "size": 843
+                }
+              ],
+              "effectiveRules": {}
+            },
+            "project": null,
+            "coverage": {
+              "complete": false,
+              "executed": false,
+              "enabledRules": [],
+              "unexamined": [
+                {
+                  "code": "ignored-input",
+                  "explanation": "The repository's ESLint configuration ignores this file; no rules were evaluated."
+                }
+              ]
+            }
+          },
+          {
+            "path": "apps/web/src/malformed.tsx",
+            "status": "unavailable",
+            "input": {
+              "path": "apps/web/src/malformed.tsx",
+              "sha256": "cb1b1b995d872ceb39f42dc082371d21ed7aaaf0d0ed331969f9cfe5029aa509",
+              "size": 42
+            },
+            "diagnostics": [
+              {
+                "code": "eslint/parser-error",
+                "ruleId": null,
+                "severity": "error",
+                "path": "apps/web/src/malformed.tsx",
+                "range": {
+                  "start": {
+                    "offset": 42,
+                    "line": 2,
+                    "column": 1
+                  },
+                  "end": {
+                    "offset": 42,
+                    "line": 2,
+                    "column": 1
+                  }
+                },
+                "actual": "",
+                "explanation": "Parsing error: '{' or JSX element expected.",
+                "suggestions": []
+              }
+            ],
+            "config": {
+              "namedFiles": [
+                {
+                  "path": "eslint.config.mjs",
+                  "sha256": "7e569a0dd1bd512a2e5e7c06662fa8ec7498f07a0393ec2bc9070b0efb6107c6",
+                  "size": 843
+                },
+                {
+                  "path": "apps/web/components.json",
+                  "sha256": "474f5bbde0fca233ffd0daca88199a39c0ba9d2982d156f03078492c346d7802",
+                  "size": 166
+                },
+                {
+                  "path": "apps/web/src/theme.css",
+                  "sha256": "0726332963af4610b98eb10a8502fec176815660662b479784d1d41564dfc33a",
+                  "size": 115
+                },
+                {
+                  "path": "package.json",
+                  "sha256": "bb9477175dfb870fa0a0d921a796f613591254537e40a4f0b465e64dd7ace5d9",
+                  "size": 350
+                },
+                {
+                  "path": "package-lock.json",
+                  "sha256": "539a6153b4ec75f213a8612dd40c7001a699d3f264ee2f65cf08bc9dfa25ce17",
+                  "size": 56091
+                },
+                {
+                  "path": "apps/web/tsconfig.json",
+                  "sha256": "9707732fdfa0b10bce9fab6ec906692aa4e07dda787c189ecf49520eb2536c34",
+                  "size": 211
+                },
+                {
+                  "path": "apps/web/package.json",
+                  "sha256": "c8af074c5eafb8ff84427972ba09af6f14c39c93283202664fcb3589522efcf3",
+                  "size": 88
+                },
+                {
+                  "path": "packages/design/controls/button.tsx",
+                  "sha256": "684ccad8c1ee99afbdbc14528c713f93fe90721893613fe85f0dd725d3ab85df",
+                  "size": 531
+                }
+              ],
+              "effectiveRules": {
+                "shadcn/no-restyle": [
+                  2,
+                  {
+                    "allow": [
+                      "layout"
+                    ]
+                  }
+                ],
+                "shadcn/no-raw-colors": [
+                  2
+                ],
+                "shadcn/no-arbitrary-values": [
+                  2
+                ],
+                "shadcn/no-inline-styles": [
+                  1
+                ],
+                "shadcn/no-unknown-classes": [
+                  2
+                ],
+                "shadcn/require-static-classes": [
+                  2
+                ]
+              },
+              "settings": {
+                "shadcn": {
+                  "note": "Acme uses the existing component variants."
+                }
+              },
+              "parser": {
+                "name": "typescript-eslint/parser",
+                "version": "8.68.0"
+              }
+            },
+            "project": {
+              "api": "experimental @shadcn/lint 0.1.0 project API",
+              "root": "apps/web",
+              "theme": "apps/web/src/theme.css",
+              "componentsDir": "packages/design/controls",
+              "components": [
+                {
+                  "name": "Button",
+                  "path": "packages/design/controls/button.tsx",
+                  "variants": [
+                    {
+                      "name": "buttonVariants",
+                      "axes": {
+                        "size": [
+                          "sm",
+                          "lg"
+                        ],
+                        "variant": [
+                          "primary",
+                          "muted"
+                        ]
+                      },
+                      "source": "factory"
+                    },
+                    {
+                      "name": "Button",
+                      "axes": {
+                        "size": [
+                          "sm",
+                          "lg"
+                        ],
+                        "variant": [
+                          "primary",
+                          "muted"
+                        ]
+                      },
+                      "source": "props"
+                    }
+                  ]
+                }
+              ]
+            },
+            "coverage": {
+              "complete": false,
+              "executed": false,
+              "enabledRules": [
+                "no-restyle",
+                "no-raw-colors",
+                "no-arbitrary-values",
+                "no-inline-styles",
+                "no-unknown-classes",
+                "require-static-classes"
+              ],
+              "unexamined": [
+                {
+                  "code": "parser-failure",
+                  "explanation": "ESLint could not parse this source; findings are not a completed design audit."
+                },
+                {
+                  "code": "upstream-analysis-boundary",
+                  "explanation": "The public plugin cannot enumerate every styling path: parent selectors, unreadable props spreads, imported dynamic values and plain CSS remain outside its ownership analysis. Zero findings is not complete design coverage."
+                }
+              ]
+            },
+            "suppressedDiagnostics": []
+          },
+          {
+            "path": "apps/web/src/screen.html",
+            "status": "unsupported",
+            "input": {
+              "path": "apps/web/src/screen.html",
+              "sha256": "627756fbc9605ffccb013b6ca1589de65c320bcd48238702711cb00011209966",
+              "size": 90
+            },
+            "diagnostics": [],
+            "config": {
+              "namedFiles": [],
+              "effectiveRules": {}
+            },
+            "project": null,
+            "coverage": {
+              "complete": false,
+              "executed": false,
+              "enabledRules": [],
+              "unexamined": [
+                {
+                  "code": "unsupported-input",
+                  "explanation": "This measured adapter accepts JavaScript/TypeScript source. HTML and CSS require their own analyzers."
+                }
+              ]
+            }
+          },
+          {
+            "path": "apps/web/src/screen.css",
+            "status": "unsupported",
+            "input": {
+              "path": "apps/web/src/screen.css",
+              "sha256": "f7bb31b07546c9d8a1a1dbc9e63cc34cba0149f082b32b8a8fa93c02351237d9",
+              "size": 37
+            },
+            "diagnostics": [],
+            "config": {
+              "namedFiles": [],
+              "effectiveRules": {}
+            },
+            "project": null,
+            "coverage": {
+              "complete": false,
+              "executed": false,
+              "enabledRules": [],
+              "unexamined": [
+                {
+                  "code": "unsupported-input",
+                  "explanation": "This measured adapter accepts JavaScript/TypeScript source. HTML and CSS require their own analyzers."
+                }
+              ]
+            }
+          },
+          {
+            "path": "apps/web/src/theme-change.tsx",
+            "status": "audited",
+            "input": {
+              "path": "apps/web/src/theme-change.tsx",
+              "sha256": "f3eefd997fc1c3a813bfb1f26481ad5ee6801d80b10817b77bea8ecf0baa755b",
+              "size": 67
+            },
+            "diagnostics": [
+              {
+                "code": "shadcn/no-raw-colors",
+                "ruleId": "shadcn/no-raw-colors",
+                "severity": "error",
+                "path": "apps/web/src/theme-change.tsx",
+                "range": {
+                  "start": {
+                    "offset": 41,
+                    "line": 1,
+                    "column": 42
+                  },
+                  "end": {
+                    "offset": 54,
+                    "line": 1,
+                    "column": 55
+                  }
+                },
+                "actual": "\"bg-acme-new\"",
+                "explanation": "\"bg-acme-new\" is not a declared theme color. Use one of: acme, acme-muted. To add a color, declare --color-<name> in apps/web/src/theme.css first. Acme uses the existing component variants.",
+                "suggestions": []
+              }
+            ],
+            "config": {
+              "namedFiles": [
+                {
+                  "path": "eslint.config.mjs",
+                  "sha256": "7e569a0dd1bd512a2e5e7c06662fa8ec7498f07a0393ec2bc9070b0efb6107c6",
+                  "size": 843
+                },
+                {
+                  "path": "apps/web/components.json",
+                  "sha256": "474f5bbde0fca233ffd0daca88199a39c0ba9d2982d156f03078492c346d7802",
+                  "size": 166
+                },
+                {
+                  "path": "apps/web/src/theme.css",
+                  "sha256": "0726332963af4610b98eb10a8502fec176815660662b479784d1d41564dfc33a",
+                  "size": 115
+                },
+                {
+                  "path": "package.json",
+                  "sha256": "bb9477175dfb870fa0a0d921a796f613591254537e40a4f0b465e64dd7ace5d9",
+                  "size": 350
+                },
+                {
+                  "path": "package-lock.json",
+                  "sha256": "539a6153b4ec75f213a8612dd40c7001a699d3f264ee2f65cf08bc9dfa25ce17",
+                  "size": 56091
+                },
+                {
+                  "path": "apps/web/tsconfig.json",
+                  "sha256": "9707732fdfa0b10bce9fab6ec906692aa4e07dda787c189ecf49520eb2536c34",
+                  "size": 211
+                },
+                {
+                  "path": "apps/web/package.json",
+                  "sha256": "c8af074c5eafb8ff84427972ba09af6f14c39c93283202664fcb3589522efcf3",
+                  "size": 88
+                },
+                {
+                  "path": "packages/design/controls/button.tsx",
+                  "sha256": "684ccad8c1ee99afbdbc14528c713f93fe90721893613fe85f0dd725d3ab85df",
+                  "size": 531
+                }
+              ],
+              "effectiveRules": {
+                "shadcn/no-restyle": [
+                  2,
+                  {
+                    "allow": [
+                      "layout"
+                    ]
+                  }
+                ],
+                "shadcn/no-raw-colors": [
+                  2
+                ],
+                "shadcn/no-arbitrary-values": [
+                  2
+                ],
+                "shadcn/no-inline-styles": [
+                  1
+                ],
+                "shadcn/no-unknown-classes": [
+                  2
+                ],
+                "shadcn/require-static-classes": [
+                  2
+                ]
+              },
+              "settings": {
+                "shadcn": {
+                  "note": "Acme uses the existing component variants."
+                }
+              },
+              "parser": {
+                "name": "typescript-eslint/parser",
+                "version": "8.68.0"
+              }
+            },
+            "project": {
+              "api": "experimental @shadcn/lint 0.1.0 project API",
+              "root": "apps/web",
+              "theme": "apps/web/src/theme.css",
+              "componentsDir": "packages/design/controls",
+              "components": [
+                {
+                  "name": "Button",
+                  "path": "packages/design/controls/button.tsx",
+                  "variants": [
+                    {
+                      "name": "buttonVariants",
+                      "axes": {
+                        "size": [
+                          "sm",
+                          "lg"
+                        ],
+                        "variant": [
+                          "primary",
+                          "muted"
+                        ]
+                      },
+                      "source": "factory"
+                    },
+                    {
+                      "name": "Button",
+                      "axes": {
+                        "size": [
+                          "sm",
+                          "lg"
+                        ],
+                        "variant": [
+                          "primary",
+                          "muted"
+                        ]
+                      },
+                      "source": "props"
+                    }
+                  ]
+                }
+              ]
+            },
+            "coverage": {
+              "complete": false,
+              "executed": true,
+              "enabledRules": [
+                "no-restyle",
+                "no-raw-colors",
+                "no-arbitrary-values",
+                "no-inline-styles",
+                "no-unknown-classes",
+                "require-static-classes"
+              ],
+              "unexamined": [
+                {
+                  "code": "upstream-analysis-boundary",
+                  "explanation": "The public plugin cannot enumerate every styling path: parent selectors, unreadable props spreads, imported dynamic values and plain CSS remain outside its ownership analysis. Zero findings is not complete design coverage."
+                }
+              ]
+            },
+            "suppressedDiagnostics": []
+          }
+        ],
+        "warnings": [],
+        "elapsedMs": 582.2657499999999,
+        "coverage": {
+          "complete": false,
+          "executed": false,
+          "executionMeaning": "All six configured rules completed without an observed unmet precondition. This does not assert a compiler invocation for every file or complete source/design coverage.",
+          "boundary": "The public plugin cannot enumerate every styling path: parent selectors, unreadable props spreads, imported dynamic values and plain CSS remain outside its ownership analysis. Zero findings is not complete design coverage.",
+          "unexamined": []
+        },
+        "configFingerprint": {
+          "transitive": false,
+          "explanation": "Hashes identify only the named files read for this report; arbitrary config imports, theme imports and environment inputs are not a transitive fingerprint."
+        }
+      }
+    },
+    {
+      "name": "absent theme is not compiler coverage",
+      "report": {
+        "adapter": "isocan-tailwind-repository",
+        "version": 1,
+        "repo": "/private/tmp/isocan-phase4-conductor-tailwind-isolated",
+        "node": "v24.13.0",
+        "tools": {
+          "@shadcn/lint": {
+            "version": "0.1.0",
+            "file": "node_modules/@shadcn/lint/package.json",
+            "measured": "0.1.0",
+            "matchesMeasured": true
+          },
+          "eslint": {
+            "version": "10.9.1",
+            "file": "node_modules/eslint/package.json",
+            "measured": "10.9.1",
+            "matchesMeasured": true
+          },
+          "tailwindcss": {
+            "version": "4.3.3",
+            "file": "node_modules/tailwindcss/package.json",
+            "measured": "4.3.3",
+            "matchesMeasured": true
+          },
+          "@typescript-eslint/parser": {
+            "version": "8.68.0",
+            "file": "node_modules/@typescript-eslint/parser/package.json",
+            "measured": "8.68.0",
+            "matchesMeasured": true
+          }
+        },
+        "files": [
+          {
+            "path": "apps/web/src/good.tsx",
+            "status": "audited",
+            "input": {
+              "path": "apps/web/src/good.tsx",
+              "sha256": "1bbe6d6ded08a74b5524668f1bc5500d97904d4521400037ee8c5054b885c2b0",
+              "size": 201
+            },
+            "diagnostics": [
+              {
+                "code": "shadcn/no-unknown-classes",
+                "ruleId": "shadcn/no-unknown-classes",
+                "severity": "error",
+                "path": "apps/web/src/good.tsx",
+                "range": {
+                  "start": {
+                    "offset": 157,
+                    "line": 2,
+                    "column": 110
+                  },
+                  "end": {
+                    "offset": 179,
+                    "line": 2,
+                    "column": 132
+                  }
+                },
+                "actual": "\"bg-acme rounded-acme\"",
+                "explanation": "\"rounded-acme\" is not a class this project's Tailwind knows, so no CSS is generated for it. Fix the spelling, or declare it with @utility in your theme CSS. Acme uses the existing component variants.",
+                "suggestions": []
+              }
+            ],
+            "config": {
+              "namedFiles": [
+                {
+                  "path": "eslint.config.mjs",
+                  "sha256": "7e569a0dd1bd512a2e5e7c06662fa8ec7498f07a0393ec2bc9070b0efb6107c6",
+                  "size": 843
+                },
+                {
+                  "path": "apps/web/components.json",
+                  "sha256": "474f5bbde0fca233ffd0daca88199a39c0ba9d2982d156f03078492c346d7802",
+                  "size": 166
+                },
+                {
+                  "path": "package.json",
+                  "sha256": "bb9477175dfb870fa0a0d921a796f613591254537e40a4f0b465e64dd7ace5d9",
+                  "size": 350
+                },
+                {
+                  "path": "package-lock.json",
+                  "sha256": "539a6153b4ec75f213a8612dd40c7001a699d3f264ee2f65cf08bc9dfa25ce17",
+                  "size": 56091
+                },
+                {
+                  "path": "apps/web/tsconfig.json",
+                  "sha256": "9707732fdfa0b10bce9fab6ec906692aa4e07dda787c189ecf49520eb2536c34",
+                  "size": 211
+                },
+                {
+                  "path": "apps/web/package.json",
+                  "sha256": "c8af074c5eafb8ff84427972ba09af6f14c39c93283202664fcb3589522efcf3",
+                  "size": 88
+                },
+                {
+                  "path": "packages/design/controls/button.tsx",
+                  "sha256": "684ccad8c1ee99afbdbc14528c713f93fe90721893613fe85f0dd725d3ab85df",
+                  "size": 531
+                }
+              ],
+              "effectiveRules": {
+                "shadcn/no-restyle": [
+                  2,
+                  {
+                    "allow": [
+                      "layout"
+                    ]
+                  }
+                ],
+                "shadcn/no-raw-colors": [
+                  2
+                ],
+                "shadcn/no-arbitrary-values": [
+                  2
+                ],
+                "shadcn/no-inline-styles": [
+                  1
+                ],
+                "shadcn/no-unknown-classes": [
+                  2
+                ],
+                "shadcn/require-static-classes": [
+                  2
+                ]
+              },
+              "settings": {
+                "shadcn": {
+                  "note": "Acme uses the existing component variants."
+                }
+              },
+              "parser": {
+                "name": "typescript-eslint/parser",
+                "version": "8.68.0"
+              }
+            },
+            "project": {
+              "api": "experimental @shadcn/lint 0.1.0 project API",
+              "root": "apps/web",
+              "theme": null,
+              "componentsDir": "packages/design/controls",
+              "components": [
+                {
+                  "name": "Button",
+                  "path": "packages/design/controls/button.tsx",
+                  "variants": [
+                    {
+                      "name": "buttonVariants",
+                      "axes": {
+                        "size": [
+                          "sm",
+                          "lg"
+                        ],
+                        "variant": [
+                          "primary",
+                          "muted"
+                        ]
+                      },
+                      "source": "factory"
+                    },
+                    {
+                      "name": "Button",
+                      "axes": {
+                        "size": [
+                          "sm",
+                          "lg"
+                        ],
+                        "variant": [
+                          "primary",
+                          "muted"
+                        ]
+                      },
+                      "source": "props"
+                    }
+                  ]
+                }
+              ]
+            },
+            "coverage": {
+              "complete": false,
+              "executed": false,
+              "enabledRules": [
+                "no-restyle",
+                "no-raw-colors",
+                "no-arbitrary-values",
+                "no-inline-styles",
+                "no-unknown-classes",
+                "require-static-classes"
+              ],
+              "unexamined": [
+                {
+                  "code": "theme-unavailable",
+                  "explanation": "A readable project theme was not discovered; Tailwind fallback cannot establish theme coverage."
+                },
+                {
+                  "code": "upstream-analysis-boundary",
+                  "explanation": "The public plugin cannot enumerate every styling path: parent selectors, unreadable props spreads, imported dynamic values and plain CSS remain outside its ownership analysis. Zero findings is not complete design coverage."
+                },
+                {
+                  "code": "upstream-warning",
+                  "explanation": "The project config/plugin emitted output; inspect report.warnings for compiler fallback or discovery warnings."
+                }
+              ]
+            },
+            "suppressedDiagnostics": []
+          }
+        ],
+        "warnings": [
+          "[@shadcn/lint] components.json sets tailwind.css to src/theme.css, which does not exist. No stylesheet importing Tailwind was found under the project, so no-raw-colors cannot check declared tokens until the path is fixed."
+        ],
+        "elapsedMs": 800.4956249999999,
+        "coverage": {
+          "complete": false,
+          "executed": false,
+          "executionMeaning": "All six configured rules completed without an observed unmet precondition. This does not assert a compiler invocation for every file or complete source/design coverage.",
+          "boundary": "The public plugin cannot enumerate every styling path: parent selectors, unreadable props spreads, imported dynamic values and plain CSS remain outside its ownership analysis. Zero findings is not complete design coverage.",
+          "unexamined": []
+        },
+        "configFingerprint": {
+          "transitive": false,
+          "explanation": "Hashes identify only the named files read for this report; arbitrary config imports, theme imports and environment inputs are not a transitive fingerprint."
+        }
+      }
+    },
+    {
+      "name": "readable theme with broken import exposes real compiler fallback",
+      "report": {
+        "adapter": "isocan-tailwind-repository",
+        "version": 1,
+        "repo": "/private/tmp/isocan-phase4-conductor-tailwind-isolated",
+        "node": "v24.13.0",
+        "tools": {
+          "@shadcn/lint": {
+            "version": "0.1.0",
+            "file": "node_modules/@shadcn/lint/package.json",
+            "measured": "0.1.0",
+            "matchesMeasured": true
+          },
+          "eslint": {
+            "version": "10.9.1",
+            "file": "node_modules/eslint/package.json",
+            "measured": "10.9.1",
+            "matchesMeasured": true
+          },
+          "tailwindcss": {
+            "version": "4.3.3",
+            "file": "node_modules/tailwindcss/package.json",
+            "measured": "4.3.3",
+            "matchesMeasured": true
+          },
+          "@typescript-eslint/parser": {
+            "version": "8.68.0",
+            "file": "node_modules/@typescript-eslint/parser/package.json",
+            "measured": "8.68.0",
+            "matchesMeasured": true
+          }
+        },
+        "files": [
+          {
+            "path": "apps/web/src/good.tsx",
+            "status": "audited",
+            "input": {
+              "path": "apps/web/src/good.tsx",
+              "sha256": "1bbe6d6ded08a74b5524668f1bc5500d97904d4521400037ee8c5054b885c2b0",
+              "size": 201
+            },
+            "diagnostics": [
+              {
+                "code": "shadcn/no-unknown-classes",
+                "ruleId": "shadcn/no-unknown-classes",
+                "severity": "error",
+                "path": "apps/web/src/good.tsx",
+                "range": {
+                  "start": {
+                    "offset": 157,
+                    "line": 2,
+                    "column": 110
+                  },
+                  "end": {
+                    "offset": 179,
+                    "line": 2,
+                    "column": 132
+                  }
+                },
+                "actual": "\"bg-acme rounded-acme\"",
+                "explanation": "\"rounded-acme\" is not a class this project's Tailwind knows, so no CSS is generated for it. Fix the spelling, or declare it with @utility in apps/web/src/theme.css. Acme uses the existing component variants.",
+                "suggestions": []
+              }
+            ],
+            "config": {
+              "namedFiles": [
+                {
+                  "path": "eslint.config.mjs",
+                  "sha256": "7e569a0dd1bd512a2e5e7c06662fa8ec7498f07a0393ec2bc9070b0efb6107c6",
+                  "size": 843
+                },
+                {
+                  "path": "apps/web/components.json",
+                  "sha256": "474f5bbde0fca233ffd0daca88199a39c0ba9d2982d156f03078492c346d7802",
+                  "size": 166
+                },
+                {
+                  "path": "apps/web/src/theme.css",
+                  "sha256": "7266b5f99def50dca6598f44d8f69e9e277dea577976671e795f9deb420f53c7",
+                  "size": 145
+                },
+                {
+                  "path": "package.json",
+                  "sha256": "bb9477175dfb870fa0a0d921a796f613591254537e40a4f0b465e64dd7ace5d9",
+                  "size": 350
+                },
+                {
+                  "path": "package-lock.json",
+                  "sha256": "539a6153b4ec75f213a8612dd40c7001a699d3f264ee2f65cf08bc9dfa25ce17",
+                  "size": 56091
+                },
+                {
+                  "path": "apps/web/tsconfig.json",
+                  "sha256": "9707732fdfa0b10bce9fab6ec906692aa4e07dda787c189ecf49520eb2536c34",
+                  "size": 211
+                },
+                {
+                  "path": "apps/web/package.json",
+                  "sha256": "c8af074c5eafb8ff84427972ba09af6f14c39c93283202664fcb3589522efcf3",
+                  "size": 88
+                },
+                {
+                  "path": "packages/design/controls/button.tsx",
+                  "sha256": "684ccad8c1ee99afbdbc14528c713f93fe90721893613fe85f0dd725d3ab85df",
+                  "size": 531
+                }
+              ],
+              "effectiveRules": {
+                "shadcn/no-restyle": [
+                  2,
+                  {
+                    "allow": [
+                      "layout"
+                    ]
+                  }
+                ],
+                "shadcn/no-raw-colors": [
+                  2
+                ],
+                "shadcn/no-arbitrary-values": [
+                  2
+                ],
+                "shadcn/no-inline-styles": [
+                  1
+                ],
+                "shadcn/no-unknown-classes": [
+                  2
+                ],
+                "shadcn/require-static-classes": [
+                  2
+                ]
+              },
+              "settings": {
+                "shadcn": {
+                  "note": "Acme uses the existing component variants."
+                }
+              },
+              "parser": {
+                "name": "typescript-eslint/parser",
+                "version": "8.68.0"
+              }
+            },
+            "project": {
+              "api": "experimental @shadcn/lint 0.1.0 project API",
+              "root": "apps/web",
+              "theme": "apps/web/src/theme.css",
+              "componentsDir": "packages/design/controls",
+              "components": [
+                {
+                  "name": "Button",
+                  "path": "packages/design/controls/button.tsx",
+                  "variants": [
+                    {
+                      "name": "buttonVariants",
+                      "axes": {
+                        "size": [
+                          "sm",
+                          "lg"
+                        ],
+                        "variant": [
+                          "primary",
+                          "muted"
+                        ]
+                      },
+                      "source": "factory"
+                    },
+                    {
+                      "name": "Button",
+                      "axes": {
+                        "size": [
+                          "sm",
+                          "lg"
+                        ],
+                        "variant": [
+                          "primary",
+                          "muted"
+                        ]
+                      },
+                      "source": "props"
+                    }
+                  ]
+                }
+              ]
+            },
+            "coverage": {
+              "complete": false,
+              "executed": false,
+              "enabledRules": [
+                "no-restyle",
+                "no-raw-colors",
+                "no-arbitrary-values",
+                "no-inline-styles",
+                "no-unknown-classes",
+                "require-static-classes"
+              ],
+              "unexamined": [
+                {
+                  "code": "upstream-analysis-boundary",
+                  "explanation": "The public plugin cannot enumerate every styling path: parent selectors, unreadable props spreads, imported dynamic values and plain CSS remain outside its ownership analysis. Zero findings is not complete design coverage."
+                },
+                {
+                  "code": "upstream-warning",
+                  "explanation": "The project config/plugin emitted output; inspect report.warnings for compiler fallback or discovery warnings."
+                }
+              ]
+            },
+            "suppressedDiagnostics": []
+          }
+        ],
+        "warnings": [
+          "[@shadcn/lint] The Tailwind theme at ./apps/web/src/theme.css could not be built (@import \"acme-missing-theme\" could not be resolved from ./apps/web/src); no-unknown-classes is using the grammar bundled with @shadcn/lint there until it can."
+        ],
+        "elapsedMs": 280.28666599999997,
+        "coverage": {
+          "complete": false,
+          "executed": false,
+          "executionMeaning": "All six configured rules completed without an observed unmet precondition. This does not assert a compiler invocation for every file or complete source/design coverage.",
+          "boundary": "The public plugin cannot enumerate every styling path: parent selectors, unreadable props spreads, imported dynamic values and plain CSS remain outside its ownership analysis. Zero findings is not complete design coverage.",
+          "unexamined": []
+        },
+        "configFingerprint": {
+          "transitive": false,
+          "explanation": "Hashes identify only the named files read for this report; arbitrary config imports, theme imports and environment inputs are not a transitive fingerprint."
+        }
+      }
+    },
+    {
+      "name": "fresh invocation observes a changed theme",
+      "report": {
+        "adapter": "isocan-tailwind-repository",
+        "version": 1,
+        "repo": "/private/tmp/isocan-phase4-conductor-tailwind-isolated",
+        "node": "v24.13.0",
+        "tools": {
+          "@shadcn/lint": {
+            "version": "0.1.0",
+            "file": "node_modules/@shadcn/lint/package.json",
+            "measured": "0.1.0",
+            "matchesMeasured": true
+          },
+          "eslint": {
+            "version": "10.9.1",
+            "file": "node_modules/eslint/package.json",
+            "measured": "10.9.1",
+            "matchesMeasured": true
+          },
+          "tailwindcss": {
+            "version": "4.3.3",
+            "file": "node_modules/tailwindcss/package.json",
+            "measured": "4.3.3",
+            "matchesMeasured": true
+          },
+          "@typescript-eslint/parser": {
+            "version": "8.68.0",
+            "file": "node_modules/@typescript-eslint/parser/package.json",
+            "measured": "8.68.0",
+            "matchesMeasured": true
+          }
+        },
+        "files": [
+          {
+            "path": "apps/web/src/theme-change.tsx",
+            "status": "audited",
+            "input": {
+              "path": "apps/web/src/theme-change.tsx",
+              "sha256": "f3eefd997fc1c3a813bfb1f26481ad5ee6801d80b10817b77bea8ecf0baa755b",
+              "size": 67
+            },
+            "diagnostics": [],
+            "config": {
+              "namedFiles": [
+                {
+                  "path": "eslint.config.mjs",
+                  "sha256": "7e569a0dd1bd512a2e5e7c06662fa8ec7498f07a0393ec2bc9070b0efb6107c6",
+                  "size": 843
+                },
+                {
+                  "path": "apps/web/components.json",
+                  "sha256": "474f5bbde0fca233ffd0daca88199a39c0ba9d2982d156f03078492c346d7802",
+                  "size": 166
+                },
+                {
+                  "path": "apps/web/src/theme.css",
+                  "sha256": "333ac2ab18b564d33b158ee08b761f89c3052e70f253d9b820996633b071fa5f",
+                  "size": 154
+                },
+                {
+                  "path": "package.json",
+                  "sha256": "bb9477175dfb870fa0a0d921a796f613591254537e40a4f0b465e64dd7ace5d9",
+                  "size": 350
+                },
+                {
+                  "path": "package-lock.json",
+                  "sha256": "539a6153b4ec75f213a8612dd40c7001a699d3f264ee2f65cf08bc9dfa25ce17",
+                  "size": 56091
+                },
+                {
+                  "path": "apps/web/tsconfig.json",
+                  "sha256": "9707732fdfa0b10bce9fab6ec906692aa4e07dda787c189ecf49520eb2536c34",
+                  "size": 211
+                },
+                {
+                  "path": "apps/web/package.json",
+                  "sha256": "c8af074c5eafb8ff84427972ba09af6f14c39c93283202664fcb3589522efcf3",
+                  "size": 88
+                },
+                {
+                  "path": "packages/design/controls/button.tsx",
+                  "sha256": "684ccad8c1ee99afbdbc14528c713f93fe90721893613fe85f0dd725d3ab85df",
+                  "size": 531
+                }
+              ],
+              "effectiveRules": {
+                "shadcn/no-restyle": [
+                  2,
+                  {
+                    "allow": [
+                      "layout"
+                    ]
+                  }
+                ],
+                "shadcn/no-raw-colors": [
+                  2
+                ],
+                "shadcn/no-arbitrary-values": [
+                  2
+                ],
+                "shadcn/no-inline-styles": [
+                  1
+                ],
+                "shadcn/no-unknown-classes": [
+                  2
+                ],
+                "shadcn/require-static-classes": [
+                  2
+                ]
+              },
+              "settings": {
+                "shadcn": {
+                  "note": "Acme uses the existing component variants."
+                }
+              },
+              "parser": {
+                "name": "typescript-eslint/parser",
+                "version": "8.68.0"
+              }
+            },
+            "project": {
+              "api": "experimental @shadcn/lint 0.1.0 project API",
+              "root": "apps/web",
+              "theme": "apps/web/src/theme.css",
+              "componentsDir": "packages/design/controls",
+              "components": [
+                {
+                  "name": "Button",
+                  "path": "packages/design/controls/button.tsx",
+                  "variants": [
+                    {
+                      "name": "buttonVariants",
+                      "axes": {
+                        "size": [
+                          "sm",
+                          "lg"
+                        ],
+                        "variant": [
+                          "primary",
+                          "muted"
+                        ]
+                      },
+                      "source": "factory"
+                    },
+                    {
+                      "name": "Button",
+                      "axes": {
+                        "size": [
+                          "sm",
+                          "lg"
+                        ],
+                        "variant": [
+                          "primary",
+                          "muted"
+                        ]
+                      },
+                      "source": "props"
+                    }
+                  ]
+                }
+              ]
+            },
+            "coverage": {
+              "complete": false,
+              "executed": true,
+              "enabledRules": [
+                "no-restyle",
+                "no-raw-colors",
+                "no-arbitrary-values",
+                "no-inline-styles",
+                "no-unknown-classes",
+                "require-static-classes"
+              ],
+              "unexamined": [
+                {
+                  "code": "upstream-analysis-boundary",
+                  "explanation": "The public plugin cannot enumerate every styling path: parent selectors, unreadable props spreads, imported dynamic values and plain CSS remain outside its ownership analysis. Zero findings is not complete design coverage."
+                }
+              ]
+            },
+            "suppressedDiagnostics": []
+          }
+        ],
+        "warnings": [],
+        "elapsedMs": 278.489833,
+        "coverage": {
+          "complete": false,
+          "executed": true,
+          "executionMeaning": "All six configured rules completed without an observed unmet precondition. This does not assert a compiler invocation for every file or complete source/design coverage.",
+          "boundary": "The public plugin cannot enumerate every styling path: parent selectors, unreadable props spreads, imported dynamic values and plain CSS remain outside its ownership analysis. Zero findings is not complete design coverage.",
+          "unexamined": []
+        },
+        "configFingerprint": {
+          "transitive": false,
+          "explanation": "Hashes identify only the named files read for this report; arbitrary config imports, theme imports and environment inputs are not a transitive fingerprint."
+        }
+      }
+    },
+    {
+      "name": "missing config cannot become clean",
+      "report": {
+        "adapter": "isocan-tailwind-repository",
+        "version": 1,
+        "repo": "/private/tmp/isocan-phase4-conductor-tailwind-isolated",
+        "node": "v24.13.0",
+        "tools": {
+          "@shadcn/lint": {
+            "version": "0.1.0",
+            "file": "node_modules/@shadcn/lint/package.json",
+            "measured": "0.1.0",
+            "matchesMeasured": true
+          },
+          "eslint": {
+            "version": "10.9.1",
+            "file": "node_modules/eslint/package.json",
+            "measured": "10.9.1",
+            "matchesMeasured": true
+          },
+          "tailwindcss": {
+            "version": "4.3.3",
+            "file": "node_modules/tailwindcss/package.json",
+            "measured": "4.3.3",
+            "matchesMeasured": true
+          },
+          "@typescript-eslint/parser": {
+            "version": "8.68.0",
+            "file": "node_modules/@typescript-eslint/parser/package.json",
+            "measured": "8.68.0",
+            "matchesMeasured": true
+          }
+        },
+        "files": [
+          {
+            "path": "apps/web/src/good.tsx",
+            "status": "unavailable",
+            "input": {
+              "path": "apps/web/src/good.tsx",
+              "sha256": "1bbe6d6ded08a74b5524668f1bc5500d97904d4521400037ee8c5054b885c2b0",
+              "size": 201
+            },
+            "diagnostics": [],
+            "config": {
+              "namedFiles": [],
+              "effectiveRules": {}
+            },
+            "project": null,
+            "coverage": {
+              "complete": false,
+              "executed": false,
+              "enabledRules": [],
+              "unexamined": [
+                {
+                  "code": "config-unavailable",
+                  "explanation": "No repository ESLint configuration was found."
+                }
+              ]
+            }
+          }
+        ],
+        "warnings": [],
+        "elapsedMs": 70.8515,
+        "coverage": {
+          "complete": false,
+          "executed": false,
+          "executionMeaning": "All six configured rules completed without an observed unmet precondition. This does not assert a compiler invocation for every file or complete source/design coverage.",
+          "boundary": "The public plugin cannot enumerate every styling path: parent selectors, unreadable props spreads, imported dynamic values and plain CSS remain outside its ownership analysis. Zero findings is not complete design coverage.",
+          "unexamined": []
+        },
+        "configFingerprint": {
+          "transitive": false,
+          "explanation": "Hashes identify only the named files read for this report; arbitrary config imports, theme imports and environment inputs are not a transitive fingerprint."
+        }
+      }
+    },
+    {
+      "name": "fresh invocation preserves a changed project rule override",
+      "report": {
+        "adapter": "isocan-tailwind-repository",
+        "version": 1,
+        "repo": "/private/tmp/isocan-phase4-conductor-tailwind-isolated",
+        "node": "v24.13.0",
+        "tools": {
+          "@shadcn/lint": {
+            "version": "0.1.0",
+            "file": "node_modules/@shadcn/lint/package.json",
+            "measured": "0.1.0",
+            "matchesMeasured": true
+          },
+          "eslint": {
+            "version": "10.9.1",
+            "file": "node_modules/eslint/package.json",
+            "measured": "10.9.1",
+            "matchesMeasured": true
+          },
+          "tailwindcss": {
+            "version": "4.3.3",
+            "file": "node_modules/tailwindcss/package.json",
+            "measured": "4.3.3",
+            "matchesMeasured": true
+          },
+          "@typescript-eslint/parser": {
+            "version": "8.68.0",
+            "file": "node_modules/@typescript-eslint/parser/package.json",
+            "measured": "8.68.0",
+            "matchesMeasured": true
+          }
+        },
+        "files": [
+          {
+            "path": "apps/web/src/inline.tsx",
+            "status": "audited",
+            "input": {
+              "path": "apps/web/src/inline.tsx",
+              "sha256": "17e096386ef14871423a0c5562ca049c826db322dd8be45017ec3252548d27bc",
+              "size": 121
+            },
+            "diagnostics": [],
+            "config": {
+              "namedFiles": [
+                {
+                  "path": "eslint.config.mjs",
+                  "sha256": "afd7afbabafa1eace114d08d1bb86889ef820e209683f0d1e6a6bafa003e51bc",
+                  "size": 842
+                },
+                {
+                  "path": "apps/web/components.json",
+                  "sha256": "474f5bbde0fca233ffd0daca88199a39c0ba9d2982d156f03078492c346d7802",
+                  "size": 166
+                },
+                {
+                  "path": "apps/web/src/theme.css",
+                  "sha256": "0726332963af4610b98eb10a8502fec176815660662b479784d1d41564dfc33a",
+                  "size": 115
+                },
+                {
+                  "path": "package.json",
+                  "sha256": "bb9477175dfb870fa0a0d921a796f613591254537e40a4f0b465e64dd7ace5d9",
+                  "size": 350
+                },
+                {
+                  "path": "package-lock.json",
+                  "sha256": "539a6153b4ec75f213a8612dd40c7001a699d3f264ee2f65cf08bc9dfa25ce17",
+                  "size": 56091
+                },
+                {
+                  "path": "apps/web/tsconfig.json",
+                  "sha256": "9707732fdfa0b10bce9fab6ec906692aa4e07dda787c189ecf49520eb2536c34",
+                  "size": 211
+                },
+                {
+                  "path": "apps/web/package.json",
+                  "sha256": "c8af074c5eafb8ff84427972ba09af6f14c39c93283202664fcb3589522efcf3",
+                  "size": 88
+                },
+                {
+                  "path": "packages/design/controls/button.tsx",
+                  "sha256": "684ccad8c1ee99afbdbc14528c713f93fe90721893613fe85f0dd725d3ab85df",
+                  "size": 531
+                }
+              ],
+              "effectiveRules": {
+                "shadcn/no-restyle": [
+                  2,
+                  {
+                    "allow": [
+                      "layout"
+                    ]
+                  }
+                ],
+                "shadcn/no-raw-colors": [
+                  2
+                ],
+                "shadcn/no-arbitrary-values": [
+                  2
+                ],
+                "shadcn/no-inline-styles": [
+                  0
+                ],
+                "shadcn/no-unknown-classes": [
+                  2
+                ],
+                "shadcn/require-static-classes": [
+                  2
+                ]
+              },
+              "settings": {
+                "shadcn": {
+                  "note": "Acme uses the existing component variants."
+                }
+              },
+              "parser": {
+                "name": "typescript-eslint/parser",
+                "version": "8.68.0"
+              }
+            },
+            "project": {
+              "api": "experimental @shadcn/lint 0.1.0 project API",
+              "root": "apps/web",
+              "theme": "apps/web/src/theme.css",
+              "componentsDir": "packages/design/controls",
+              "components": [
+                {
+                  "name": "Button",
+                  "path": "packages/design/controls/button.tsx",
+                  "variants": [
+                    {
+                      "name": "buttonVariants",
+                      "axes": {
+                        "size": [
+                          "sm",
+                          "lg"
+                        ],
+                        "variant": [
+                          "primary",
+                          "muted"
+                        ]
+                      },
+                      "source": "factory"
+                    },
+                    {
+                      "name": "Button",
+                      "axes": {
+                        "size": [
+                          "sm",
+                          "lg"
+                        ],
+                        "variant": [
+                          "primary",
+                          "muted"
+                        ]
+                      },
+                      "source": "props"
+                    }
+                  ]
+                }
+              ]
+            },
+            "coverage": {
+              "complete": false,
+              "executed": false,
+              "enabledRules": [
+                "no-restyle",
+                "no-raw-colors",
+                "no-arbitrary-values",
+                "no-unknown-classes",
+                "require-static-classes"
+              ],
+              "unexamined": [
+                {
+                  "code": "disabled-rules",
+                  "explanation": "Required measured rules are not enabled: no-inline-styles. Existing project settings were preserved."
+                },
+                {
+                  "code": "upstream-analysis-boundary",
+                  "explanation": "The public plugin cannot enumerate every styling path: parent selectors, unreadable props spreads, imported dynamic values and plain CSS remain outside its ownership analysis. Zero findings is not complete design coverage."
+                }
+              ]
+            },
+            "suppressedDiagnostics": []
+          }
+        ],
+        "warnings": [],
+        "elapsedMs": 234.661083,
+        "coverage": {
+          "complete": false,
+          "executed": false,
+          "executionMeaning": "All six configured rules completed without an observed unmet precondition. This does not assert a compiler invocation for every file or complete source/design coverage.",
+          "boundary": "The public plugin cannot enumerate every styling path: parent selectors, unreadable props spreads, imported dynamic values and plain CSS remain outside its ownership analysis. Zero findings is not complete design coverage.",
+          "unexamined": []
+        },
+        "configFingerprint": {
+          "transitive": false,
+          "explanation": "Hashes identify only the named files read for this report; arbitrary config imports, theme imports and environment inputs are not a transitive fingerprint."
+        }
+      }
+    },
+    {
+      "name": "missing Tailwind dependency is unavailable",
+      "report": {
+        "adapter": "isocan-tailwind-repository",
+        "version": 1,
+        "repo": "/private/tmp/isocan-phase4-conductor-tailwind-isolated",
+        "node": "v24.13.0",
+        "tools": {
+          "@shadcn/lint": {
+            "version": "0.1.0",
+            "file": "node_modules/@shadcn/lint/package.json",
+            "measured": "0.1.0",
+            "matchesMeasured": true
+          },
+          "eslint": {
+            "version": "10.9.1",
+            "file": "node_modules/eslint/package.json",
+            "measured": "10.9.1",
+            "matchesMeasured": true
+          }
+        },
+        "files": [
+          {
+            "path": "apps/web/src/good.tsx",
+            "status": "unavailable",
+            "input": null,
+            "diagnostics": [],
+            "config": {
+              "namedFiles": [],
+              "effectiveRules": {}
+            },
+            "project": null,
+            "coverage": {
+              "complete": false,
+              "executed": false,
+              "enabledRules": [],
+              "unexamined": [
+                {
+                  "code": "dependencies-unavailable",
+                  "explanation": "Missing repository dependency tailwindcss: Cannot find module 'tailwindcss'\nRequire stack:\n- /private/tmp/isocan-phase4-conductor-tailwind-isolated/package.json"
+                }
+              ]
+            }
+          }
+        ],
+        "warnings": [],
+        "elapsedMs": 2.383375000000001,
+        "coverage": {
+          "complete": false,
+          "executed": false,
+          "executionMeaning": "All six configured rules completed without an observed unmet precondition. This does not assert a compiler invocation for every file or complete source/design coverage.",
+          "boundary": "The public plugin cannot enumerate every styling path: parent selectors, unreadable props spreads, imported dynamic values and plain CSS remain outside its ownership analysis. Zero findings is not complete design coverage.",
+          "unexamined": []
+        },
+        "configFingerprint": {
+          "transitive": false,
+          "explanation": "Hashes identify only the named files read for this report; arbitrary config imports, theme imports and environment inputs are not a transitive fingerprint."
+        }
+      }
+    },
+    {
+      "name": "no installed tooling is unavailable",
+      "report": {
+        "adapter": "isocan-tailwind-repository",
+        "version": 1,
+        "repo": "/private/tmp/isocan-phase4-conductor-tailwind-isolated-missing-dependencies",
+        "node": "v24.13.0",
+        "tools": {},
+        "files": [
+          {
+            "path": "acme.tsx",
+            "status": "unavailable",
+            "input": null,
+            "diagnostics": [],
+            "config": {
+              "namedFiles": [],
+              "effectiveRules": {}
+            },
+            "project": null,
+            "coverage": {
+              "complete": false,
+              "executed": false,
+              "enabledRules": [],
+              "unexamined": [
+                {
+                  "code": "dependencies-unavailable",
+                  "explanation": "Missing repository dependency @shadcn/lint: Cannot find module '@shadcn/lint'\nRequire stack:\n- /private/tmp/isocan-phase4-conductor-tailwind-isolated-missing-dependencies/package.json"
+                }
+              ]
+            }
+          }
+        ],
+        "warnings": [],
+        "elapsedMs": 0.49808399999999864,
+        "coverage": {
+          "complete": false,
+          "executed": false,
+          "executionMeaning": "All six configured rules completed without an observed unmet precondition. This does not assert a compiler invocation for every file or complete source/design coverage.",
+          "boundary": "The public plugin cannot enumerate every styling path: parent selectors, unreadable props spreads, imported dynamic values and plain CSS remain outside its ownership analysis. Zero findings is not complete design coverage.",
+          "unexamined": []
+        },
+        "configFingerprint": {
+          "transitive": false,
+          "explanation": "Hashes identify only the named files read for this report; arbitrary config imports, theme imports and environment inputs are not a transitive fingerprint."
+        }
+      }
+    }
+  ],
+  "scaleBoundary": {
+    "tailwindFindings": 0,
+    "generatedCss": "/*! tailwindcss v4.3.3 | MIT License | https://tailwindcss.com */\n:root, :host {\n  --spacing: 0.25rem;\n}\n.p-3\\.25 {\n  padding: calc(var(--spacing) * 3.25);\n}\n",
+    "rootFontSizeAssumptionPx": 16,
+    "computedPaddingPx": 13,
+    "independentDiscreteAudit": {
+      "ruleVersion": "1.1.0",
+      "diagnostics": [
+        {
+          "code": "design/off-scale-spacing",
+          "severity": "warning",
+          "range": {
+            "start": {
+              "offset": 18,
+              "line": 1,
+              "column": 19
+            },
+            "end": {
+              "offset": 22,
+              "line": 1,
+              "column": 23
+            }
+          },
+          "actual": "13px",
+          "kind": "spacing",
+          "property": "padding",
+          "explanation": "13px is outside the governing system's declared spacing values.",
+          "candidates": [
+            {
+              "value": "var(--space-md)",
+              "token": "--space-md",
+              "explanation": "16px is a declared spacing; confirm its intended role before replacing.",
+              "prerequisites": [
+                "Include the governing CSS export (isocan design --css); --space-md is not declared here."
+              ],
+              "requiresReview": true
+            }
+          ]
+        }
+      ],
+      "policy": {
+        "status": "default",
+        "original": null,
+        "effective": {
+          "version": 1,
+          "literals": "allow",
+          "recipes": {},
+          "exceptions": {}
+        },
+        "problems": [],
+        "boundary": "Version 1 checks inline declarations and direct static type, class, ID and exact attribute selectors. Padding, physical radius corners, font size and weight are supported; external, dynamic and unresolved cascade paths remain unexamined.",
+        "appliedTreatments": [],
+        "appliedExceptions": []
+      },
+      "coverage": {
+        "complete": true,
+        "declarations": 1,
+        "checkedValues": 1,
+        "omittedCategories": [
+          "colour",
+          "type size",
+          "radius"
+        ],
+        "unexamined": []
+      },
+      "offSystem": [
+        {
+          "value": "13px",
+          "kind": "spacing",
+          "count": 1,
+          "line": 1
+        }
+      ],
+      "onSystem": 0
+    }
+  },
+  "verdict": {
+    "advisory": "go for the pinned JSX fixture using its own config",
+    "strictDesignGate": "no-go: the public plugin cannot enumerate all styling paths",
+    "knownUnreadableZero": "apps/web/src/blind-spot.tsx",
+    "reference": "https://github.com/shadcn-ui/lint/blob/53de86f0e7dcc341a9cb45c383a9f2c454d1e958/docs/how-it-works.md#what-it-cannot-see"
+  }
+}

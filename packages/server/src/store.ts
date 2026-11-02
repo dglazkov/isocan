@@ -3,9 +3,12 @@ import type {
   LogEntry,
   Canvas,
   CanvasState,
+  PurgeCounts,
+  PurgeHorizon,
   SlashCommand,
   UploadTicket,
 } from "@isocan/core";
+import type { SummaryEntry } from "@isocan/core/semantic-zoom";
 import type { Readable } from "node:stream";
 
 export interface BlobMeta {
@@ -36,6 +39,21 @@ export interface BlobUploadRequest {
   size: number;
 }
 
+/**
+ * **What a purge did, and what it could not do** — the answer to the one hard
+ * delete on the seam (operator phase 3).
+ *
+ * The counts are what the backing actually removed. `keeps` is the backing's
+ * own statement of where a copy still exists and for how long — a bucket's
+ * soft-delete window, a database's rewind, an export's age — and it is the
+ * backing's to state because only the backing knows what stands behind it. A
+ * file home has nothing behind it and says so with an empty list; the route
+ * adds the one horizon every home shares, the members' replicas.
+ */
+export interface PurgeReport extends PurgeCounts {
+  keeps: PurgeHorizon[];
+}
+
 export interface LoadedCanvas {
   state: CanvasState;
   lastSeq: number;
@@ -44,6 +62,9 @@ export interface LoadedCanvas {
   /** Seqs replayed on load because the snapshot lagged the oplog. */
   recoveredSeqs: number[];
 }
+
+/** Metadata-only lifecycle distinguishes an interrupted reserved birth from a tombstone. */
+export type CanvasLifecycle = "absent" | "incomplete" | "live" | "deleted" | "taken-down" | "purged";
 
 /**
  * Persistence for one isocan home — the seam the engine mutates through, and
@@ -83,6 +104,14 @@ export interface Store {
   close(): Promise<void>;
 
   listCanvases(): Promise<Canvas[]>;
+
+  /** Current metadata only, with no logs or snapshots read. Null for absent,
+   * deleted, taken-down or purged canvases, including retained tombstones. */
+  canvasRecord(id: string): Promise<Canvas | null>;
+  /** Never loads a canvas snapshot or content. */
+  canvasLifecycle(id: string): Promise<CanvasLifecycle>;
+  /** Only authorized reserved-birth recovery reads this exact original log. */
+  readBirthLog(id: string): Promise<LogEntry[]>;
 
   createCanvasDir(id: string): Promise<void>;
 
@@ -138,7 +167,64 @@ export interface Store {
   tipSeq(id: string): Promise<number | null>;
 
   /** project.delete is soft: the state is moved aside, recoverable by hand. */
-  softDeleteCanvas(id: string): Promise<void>;
+  /** Where the canvas was kept and where it lived, when the backing has paths. */
+  softDeleteCanvas(id: string): Promise<{ keptAt: string; restoreTo: string } | void>;
+
+  // ---- taken down: the home stops serving it (operator phase 2) ----
+  //
+  // **A flag beside `deleted`, and emphatically not `deleted`.** A delete is
+  // the owner's and erases the copy on every linked daemon and tab; a takedown
+  // is the home's, it stops THIS home serving the canvas, and every replica's
+  // copy stays exactly where it is (design, "Take a canvas down"). So the flag
+  // lives here, on the backing, where `load` can refuse on it — and nowhere on
+  // the `Canvas` record, because that record IS the replicated state: a field
+  // on it would travel to every replica and stop each of them opening their
+  // own copy, which is the operator reaching a laptop by accident.
+  //
+  // The reason and the note are NOT here. They are a desk row, beside grants,
+  // because they are the home's private record of why and the loader has no
+  // business carrying a sentence about a person.
+
+  /** When this canvas was taken down, or null — the one question `load` asks
+   * before it answers. */
+  takenDownAt(id: string): Promise<string | null>;
+
+  /**
+   * Set the flag, or clear it with `null` — which is the whole of `--lift`.
+   *
+   * **Lifting is clearing a flag** because no op was ever appended: the log
+   * never recorded the takedown, so it replays exactly as it was and the
+   * canvas comes back the canvas it was (design, "Mechanism"). That is what
+   * makes "nothing is irreversible until purge" true rather than aspirational.
+   */
+  setTakenDown(id: string, at: string | null): Promise<void>;
+
+  // ---- purged: the bytes are gone, the id stays taken (operator phase 3) ----
+  //
+  // **The seam's first and only hard delete**, and it is shaped so that it
+  // cannot be the first act on a canvas. A purge erases everything the home
+  // holds under the id EXCEPT the canvas record, which stays as the tombstone:
+  // `canvasExists` goes on answering true, so the id can never be adopted,
+  // teleported into, or created again, and `listCanvases` goes on listing it,
+  // so the surfaces that carry the sentence keep carrying it. The purge mark
+  // is a second flag beside the takedown's, and `load` refuses on it whatever
+  // the takedown flag says — a lift after a purge must never serve an empty
+  // canvas under a taken name.
+
+  /**
+   * **Erase the bytes.** The blobs, the log (live and archived), the snapshot
+   * and the trash; on a bucket, everything under the canvas's prefix; on
+   * Firestore, the `ops` and `blobmeta` subcollections. **Refused unless the
+   * canvas is taken down** — the backing throws — so that nothing above the
+   * seam, however it is wired, can purge a canvas that was not first taken
+   * down. The route says the same thing with better words; this is the line
+   * that holds if the route is wrong.
+   */
+  purgeCanvas(id: string): Promise<PurgeReport>;
+
+  /** When it was purged, or null. Durable, so a restart and a lift both read
+   * the same answer. */
+  purgedAt(id: string): Promise<string | null>;
 
   // ---- slash commands ----
 
@@ -163,6 +249,17 @@ export interface Store {
 
   appendActorsLog(entry: LogEntry): Promise<void>;
 
+  /**
+   * **How far the actor registry has got on the backing, never from a cache.**
+   *
+   * On a file home one process owns the directory, so its in-memory registry is
+   * never behind and this method is absent. On the cloud backing, two instances
+   * share one Firestore: an `actor.setMark`, `actor.setColor`, `actor.join` or
+   * `actor.claim` on one instance leaves the other instance's cached registry
+   * behind until it checks this tip and reloads.
+   */
+  tipActorsSeq?(): Promise<number>;
+
   // ---- blobs ----
 
   putBlob(
@@ -175,6 +272,11 @@ export interface Store {
    * it. Separate from `openBlob` because a `HEAD`, a Range check and a 404
    * all want the metadata and none of them want the bytes. */
   blobMeta(id: string, blobHash: string): Promise<BlobMeta | null>;
+
+  /** Which of these hashes this canvas holds — `blobMeta` for many at once,
+   * behind `BLOBS_PRESENT_ROUTE`. One index read on a disk, batched gets on
+   * Firestore, instead of one read per hash. */
+  heldBlobs(id: string, blobHashes: readonly string[]): Promise<Set<string>>;
 
   /**
    * The bytes, as a stream, optionally a byte range (inclusive on both ends,
@@ -251,4 +353,23 @@ export interface Store {
    * §2). Compaction and introspection operate on the same record.
    */
   readArchivedLog(id: string): Promise<LogEntry[]>;
+
+  // ---- semantic zoom summaries (derived cache, per canvas) ----
+
+  /**
+   * Every cached summary entry for this canvas, with when its backing object
+   * was last written — what `SummaryCache` loads its in-memory index from on
+   * first touch. Derived and regenerable: never replicated, and erased by
+   * `purgeCanvas`.
+   */
+  listSummaries(id: string): Promise<Array<{ entry: SummaryEntry; touched: number }>>;
+
+  /** One cached summary entry by its 64-hex key, or null. */
+  getSummary(id: string, key: string): Promise<SummaryEntry | null>;
+
+  /** Write one summary entry into this canvas's cache. */
+  putSummary(id: string, entry: SummaryEntry): Promise<void>;
+
+  /** Remove one summary entry from this canvas's cache. */
+  deleteSummary(id: string, key: string): Promise<void>;
 }

@@ -5,7 +5,7 @@ import path from "node:path";
 import { WebSocket } from "ws";
 import type { LogEntry, Operation, ServerMessage } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
-import { mintTestBadge, type TestBadge } from "./badge.ts";
+import { currentSocketUrl, mintTestBadge, type TestBadge } from "./badge.ts";
 
 const alice = { id: "usr_alice", name: "Alice" };
 const bob = { id: "usr_bob", name: "Bob" };
@@ -113,10 +113,11 @@ describe("daemon HTTP", () => {
       height: 40,
       placement: { anchorItemId: "itm_1" },
     });
-    expect(json.envelope.op.placement).toEqual({ x: 5 - 40 - 60, y: 6 });
+    expect(json.envelope.op).toMatchObject({ type: "group.change", action: { kind: "apply", change: { intent: "insert", writes: [{ kind: "create", item: { id: "itm_2", x: 5 - 40 - 60, y: 6 } }] } } });
     const log: LogEntry[] = await get("/api/projects/prj_1/oplog?since=2");
     expect(log).toHaveLength(1);
-    expect((log[0]!.envelope.op as any).placement).toEqual({ x: -95, y: 6 });
+    expect(log[0]!.envelope.op).toEqual(json.envelope.op);
+    expect((await get("/api/projects/prj_1/canvas")).canvas.items.itm_2).toMatchObject({ x: -95, y: 6 });
   });
 
   it("rejects invalid ops with 400 and typed codes", async () => {
@@ -125,10 +126,13 @@ describe("daemon HTTP", () => {
     expect(bad.status).toBe(400);
     expect(bad.json.code).toBe("unknown-item");
 
+    // `comment.restore`, not `comment.remove`: removing a message became a
+    // public op on 24 Sep 2026 (the Chat's clean-up); restoring one is still
+    // only ever undo's inverse.
     const internal = await op({
-      type: "comment.remove",
+      type: "comment.restore",
       threadId: "thr_x",
-      commentId: "cmt_x",
+      comment: { id: "cmt_x", author: { id: "usr_acme", name: "Acme" }, body: "x", createdAt: "2026-01-01T00:00:00.000Z" },
     } as Operation);
     expect(internal.status).toBe(400);
     expect(internal.json.code).toBe("internal-op");
@@ -629,7 +633,7 @@ describe("daemon HTTP", () => {
 describe("daemon WS", () => {
   function connect(canvasId: string): Promise<{ ws: WebSocket; messages: ServerMessage[] }> {
     return new Promise((resolve, reject) => {
-      const ws = new WebSocket(`${base.replace("http", "ws")}/ws?canvasId=${canvasId}`, {
+      const ws = new WebSocket(currentSocketUrl(`${base.replace("http", "ws")}/ws?canvasId=${canvasId}`), {
         headers: badge.headers,
       });
       const messages: ServerMessage[] = [];
@@ -706,10 +710,8 @@ describe("placement is decided once, before it is logged", () => {
     expect(second.x, "the second item should have been moved clear").not.toBe(0);
 
     const log: LogEntry[] = await get("/api/projects/prj_p/oplog?since=0");
-    const adds = log.filter((e) => e.envelope.op.type === "item.add");
-    const last = adds.at(-1)!.envelope.op as Extract<Operation, { type: "item.add" }>;
-    const logged = last.placement;
-    expect(logged, "the log must carry the resolved position").toEqual({ x: second.x, y: second.y });
+    const last = log.at(-1)!.envelope.op;
+    expect(last).toMatchObject({ type: "group.change", action: { kind: "apply", change: { intent: "insert", writes: [{ kind: "create", item: { id: "itm_second", x: second.x, y: second.y } }] } } });
   });
 
   it("puts the same canvas back when the log is replayed", async () => {

@@ -1,13 +1,15 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { DEFAULT_COMMANDS, findCommand } from "@isocan/core";
 
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
 const chip = read("../src/components/SprintChip.tsx");
 const lib = read("../src/lib/sprint.ts");
 const menu = read("../src/lib/menuentries.tsx");
 const css = read("../src/styles.css");
-const skill = read("../../core/src/commands.ts");
+// Read the actual instructions an agent receives, independent of their source-file layout.
+const skill = findCommand(DEFAULT_COMMANDS, "sprint")?.body;
 
 /**
  * **The walk** (sprint phase 2, journey Scene 1): a phase call presents its

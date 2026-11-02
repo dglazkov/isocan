@@ -16,7 +16,7 @@ const kinds = read("../src/lib/kinds.ts");
  */
 describe("a canvas on a canvas is a picture of a place", () => {
   it("is drawn from the other canvas's snapshot, pulled while on screen, never framed", () => {
-    expect(card).toContain("getSnapshot(canvasId)");
+    expect(card).toContain("sourceSnapshot({ canvasId, expectedHome: home }, controller.signal)");
     // Through `everyWhileVisible`: a card for a canvas you cannot see is a
     // card nobody is reading, and it was pulling every 30s regardless.
     expect(card).toContain("everyWhileVisible(() => void pull(), PULL_MS)");
@@ -95,7 +95,8 @@ describe("the picture that survives, and a canvas at another home", () => {
 
   it("is drawn as its miniature wherever thumbnails are", () => {
     const thumb = read("../src/components/ItemThumb.tsx");
-    expect(thumb).toContain("canvasOf={canvasIdOf(item)}");
+    expect(thumb).toContain("canvasOf={item.properties.canvas ?? null}");
+    expect(thumb).toContain('automaticCanvasTarget(item.properties.canvas ?? null, sourceOf(item)).kind === "none"');
   });
 
   it("has a screenshot verb that lands a version, through the graders' browser", () => {

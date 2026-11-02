@@ -1,4 +1,5 @@
 import type { OperationType } from "./ops.ts";
+export * from "./activity-op.ts";
 
 /**
  * **What an operation is called, in words, in one place.**
@@ -19,18 +20,33 @@ import type { OperationType } from "./ops.ts";
  * is what makes them composable into a sentence by callers that resolve names
  * differently — the web through an actor map, the CLI through its own.
  */
-const OP_WORDS: Partial<Record<OperationType, string>> = {
+const OP_WORDS: Record<OperationType, string> = {
+  "actor.claim": "named themselves",
+  "actor.setColor": "changed their colour",
+  "actor.setMark": "changed their mark",
+  "actor.join": "joined two identities",
+  "design.repair": "repaired a design",
+  "design.compare": "published design alternatives",
+  "design.respond": "responded to design alternatives",
+  "design.decide": "adopted a design direction",
+  "design.restore": "restored a design decision",
+  "design.request": "updated a design task",
+  "design.receipt": "published design evidence",
+  "group.change": "changed a canvas group",
   "project.create": "made the canvas",
   "project.update": "renamed the canvas",
+  "project.delete": "deleted the canvas",
   "item.add": "added something",
   "item.delete": "deleted something",
   "items.delete": "deleted several things",
   "item.restore": "restored something",
   "items.restore": "restored several things",
   "item.addVersion": "made a new version",
+  "item.edit": "edited",
   "item.setCurrentVersion": "switched version",
   "item.removeVersion": "removed a version",
   "item.restoreVersion": "restored a version",
+  "item.pruneVersions": "pruned old versions",
   "item.move": "moved something",
   "items.move": "moved several things",
   "item.resize": "resized something",
@@ -38,6 +54,8 @@ const OP_WORDS: Partial<Record<OperationType, string>> = {
   "item.react": "left a mark",
   "thread.create": "started a conversation",
   "thread.reply": "replied",
+  "questionnaire.ask": "asked design questions",
+  "questionnaire.answer": "answered design questions",
   "thread.delete": "removed a conversation",
   "thread.restore": "restored a conversation",
   "thread.setAnchor": "moved a conversation",
@@ -47,7 +65,9 @@ const OP_WORDS: Partial<Record<OperationType, string>> = {
   "comment.restore": "restored a comment",
   "trash.empty": "emptied the trash",
   "agent.enroll": "enrolled an agent",
+  "agent.invite": "brought an agent from their bench",
   "agent.withdraw": "dismissed an agent",
+  "agent.ceiling": "changed what an agent may do",
 };
 
 /**
@@ -62,8 +82,11 @@ const OP_WORDS: Partial<Record<OperationType, string>> = {
  * something" instead.
  *
  * That is not two surfaces disagreeing. Every op the system HAS is in the
- * table and both read the same words from it; they differ only on an op that
- * does not exist yet, where their audiences genuinely want different things.
+ * table — the table is a full `Record<OperationType, string>`, so a new op
+ * without a phrase is a compile error rather than a silent gap — and both
+ * read the same words from it; they differ only on a type string that is not
+ * an op at all (an old log line, a future op read by an older client), where
+ * their audiences genuinely want different things.
  */
 export function opWords(type: string | undefined): string | undefined {
   if (!type) return undefined;

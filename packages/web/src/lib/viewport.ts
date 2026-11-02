@@ -36,6 +36,24 @@ export function zoomAt(vp: Viewport, cx: number, cy: number, factor: number): Vi
   };
 }
 
+const PINCH_ZOOM_SENSITIVITY = 0.011;
+const PINCH_STEP_CAP = 40;
+/**
+ * **How much one pinch event zooms** (a Chrome/Firefox trackpad pinch is a
+ * ctrlKey wheel). The exponent on deltaY: 0.0022 felt sluggish next to Figma,
+ * 0.0055 still did — Dion, 8 Oct 2026: "part of it is how MUCH it zooms" —
+ * so 0.011, the rate tldraw and Excalidraw use, which is what Figma feels like.
+ * A pinch sends deltas under about 10 an event; a mouse wheel held with ⌃
+ * sends about 100 a notch, which at this rate would triple or third the zoom
+ * in one click, so one event's step is capped. Firefox can report lines
+ * (deltaMode 1) instead of pixels; a line is taken as 16 px.
+ */
+export function pinchFactor(deltaY: number, deltaMode = 0): number {
+  const px = deltaMode === 1 ? deltaY * 16 : deltaY;
+  const capped = Math.max(-PINCH_STEP_CAP, Math.min(PINCH_STEP_CAP, px));
+  return Math.exp(-capped * PINCH_ZOOM_SENSITIVITY);
+}
+
 /** Move the viewport by a screen-space delta. Scale is untouched — panning
  *  is the one canvas gesture that does not change how big anything is. */
 export function pan(vp: Viewport, dx: number, dy: number): Viewport {

@@ -2,11 +2,21 @@ import { useEffect, useRef, useState } from "react";
 import { useCanvasCursor } from "../lib/wearscursor.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
-import { worldToScreen, threadWorldPos } from "../lib/viewport.ts";
+import { worldToScreen } from "../lib/viewport.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
-import { markOf } from "@isocan/core";
+import { cursorChipLabel, pointerMark, type Actor } from "@isocan/core";
 import { useActorMarks } from "../lib/marks.ts";
-import { quietFor, spreadOverlaps, statusLine } from "../lib/presence.ts";
+import { isAgentActor, useActorKinds } from "../lib/actorkinds.ts";
+import { sessionName, useActorNames } from "../lib/names.ts";
+import {
+  nextWorkingWaypoint,
+  otherTabSessionIds,
+  quietFor,
+  sessionWorkingBounds,
+  spreadOverlaps,
+  statusLine,
+} from "../lib/presence.ts";
+import { groundCursors, realMove } from "../lib/groundcursors.ts";
 
 const LERP_HUMAN = 0.22; // real cursors track tightly
 const LERP_AGENT = 0.11; // CLI hops glide slower so they read as deliberate motion
@@ -20,6 +30,9 @@ interface Anim {
   ty: number;
   /** Next waypoint decision, ms timestamp (wander only). */
   nextAt: number;
+  /** The last real position a living ground was given while working. */
+  fx?: number;
+  fy?: number;
 }
 
 /**
@@ -31,9 +44,12 @@ interface Anim {
  * thinking pauses, and micro-stutter. The daemon only stores the fact of
  * working — every client animates it locally at 60fps with zero traffic.
  */
-export function CursorLayer() {
+export function CursorLayer({ actor = null }: { actor?: Actor | null } = {}) {
   const colors = useActorColors();
   const marks = useActorMarks();
+  const kinds = useActorKinds();
+  const names = useActorNames();
+  const joined = useCanvasStore((s) => s.actorJoins);
   const sessions = useCanvasStore((s) => s.sessions);
   // The ground everybody on this canvas is standing on decides the shape
   // (#195). A selector rather than the whole canvas: this re-renders on every
@@ -46,6 +62,7 @@ export function CursorLayer() {
   const visible = sessions.filter(
     (session) => session.cursor !== null || session.activity !== null,
   );
+  const otherTabs = otherTabSessionIds(visible, actor, names, joined);
 
   useEffect(() => {
     if (visible.length === 0) return;
@@ -68,26 +85,10 @@ export function CursorLayer() {
       const spread = spreadOverlaps(stillTargets);
 
       for (const session of current) {
-        // Wander area: the anchored item's bounds, or a synthetic patch
-        // around a freestanding work point.
-        let workingBounds: { x: number; y: number; width: number; height: number } | undefined;
-        if (session.activity?.kind === "working") {
-          if ("itemId" in session.activity) {
-            workingBounds = canvas?.items[session.activity.itemId];
-          } else if ("threadId" in session.activity) {
-            // Around the pin: the thread is what they are working ON.
-            const thread = canvas?.threads[session.activity.threadId];
-            const at = thread && canvas ? threadWorldPos(canvas, thread) : null;
-            if (at) workingBounds = { x: at.x - 90, y: at.y - 60, width: 180, height: 120 };
-          } else {
-            workingBounds = {
-              x: session.activity.x - 110,
-              y: session.activity.y - 75,
-              width: 220,
-              height: 150,
-            };
-          }
-        }
+        // Wander area: the targeted item's bounds (including a thread's
+        // anchored or referenced item), or a synthetic patch around a
+        // freestanding work point.
+        const workingBounds = sessionWorkingBounds(session, canvas);
         if (!session.cursor && !workingBounds) continue;
         live.add(session.sessionId);
 
@@ -104,35 +105,18 @@ export function CursorLayer() {
 
         if (workingBounds) {
           if (now >= rec.nextAt) {
-            if (Math.random() < 0.22) {
-              // thinking pause — hold position a beat
-              rec.nextAt = now + 500 + Math.random() * 900;
-            } else {
-              // next waypoint: biased toward the item's edges and corners
-              const pad = 12;
-              const t = Math.random();
-              const along = Math.random();
-              const w = workingBounds.width + pad * 2;
-              const h = workingBounds.height + pad * 2;
-              const ox = workingBounds.x - pad;
-              const oy = workingBounds.y - pad;
-              if (t < 0.7) {
-                // edge band
-                const edge = Math.floor(Math.random() * 4);
-                rec.tx = edge < 2 ? ox + along * w : edge === 2 ? ox : ox + w;
-                rec.ty = edge === 0 ? oy : edge === 1 ? oy + h : oy + along * h;
-              } else {
-                // interior point
-                rec.tx = ox + 0.15 * w + Math.random() * 0.7 * w;
-                rec.ty = oy + 0.15 * h + Math.random() * 0.7 * h;
-              }
-              rec.nextAt = now + 350 + Math.random() * 900;
-            }
+            const next = nextWorkingWaypoint(workingBounds, rec);
+            rec.tx = next.tx;
+            rec.ty = next.ty;
+            rec.nextAt = now + next.dwellMs;
           }
         } else {
           rec.tx = home.x;
           rec.ty = home.y;
         }
+
+        const real = workingBounds && groundCursors.feed && realMove(rec, session.cursor);
+        if (real) groundCursors.feed!(session.sessionId, real);
 
         const rate = workingBounds ? WANDER_LERP : session.kind === "web" ? LERP_HUMAN : LERP_AGENT;
         const dx = rec.tx - rec.x;
@@ -145,6 +129,9 @@ export function CursorLayer() {
             rec.x += (Math.random() - 0.5) * 0.9;
             rec.y += (Math.random() - 0.5) * 0.9;
           }
+          // A living ground feels the cursor you see — but not the wander,
+          // which nobody sent (living grounds phase 2, groundcursors.ts).
+          if (!workingBounds) groundCursors.feed?.(session.sessionId, rec);
           moving = true;
         } else if (workingBounds) {
           moving = true; // keep the loop alive through pauses
@@ -152,7 +139,10 @@ export function CursorLayer() {
       }
 
       for (const key of animated.current.keys()) {
-        if (!live.has(key)) animated.current.delete(key);
+        if (!live.has(key)) {
+          animated.current.delete(key);
+          groundCursors.feed?.(key, null);
+        }
       }
       if (moving) force((n) => n + 1);
       raf = requestAnimationFrame(step);
@@ -169,6 +159,16 @@ export function CursorLayer() {
     return () => clearInterval(timer);
   }, [visible.length]);
 
+  const nextSignalExpiry = visible.reduce((min, s) => {
+    const exp = s.signal?.expiresAt;
+    return exp && exp > Date.now() && (min === 0 || exp < min) ? exp : min;
+  }, 0);
+  useEffect(() => {
+    if (!nextSignalExpiry) return;
+    const timer = setTimeout(() => force((n) => n + 1), Math.max(0, nextSignalExpiry - Date.now()) + 20);
+    return () => clearTimeout(timer);
+  }, [nextSignalExpiry]);
+
   return (
     <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 25 }}>
       {visible.map((session) => {
@@ -178,32 +178,49 @@ export function CursorLayer() {
         const pos = rec ?? fallback!;
         const screen = worldToScreen(viewport, pos.x, pos.y);
         const color = actorColorIn(colors, session.actor.id);
-        const name = session.label ?? session.actor.name;
+        const name = cursorChipLabel(session.signal, sessionName(names, session));
         /**
-         * **The mark, in front of the name.**
+         * **The mark IS the pointer** (agent pointers, 30 Sep 2026: *"instead
+         * of the arrow… a dog emoji for"* an agent).
          *
          * A cursor is where you identify somebody at a glance, and it is the
          * one that MOVES — a glyph is easier to follow across a canvas than a
-         * word is to read. The chip's colour already says who, but colours
-         * run out (there are seven) and two people can share one; a mark is
-         * chosen and distinct, which is the whole reason it exists.
+         * word is to read. Colours run out (there are seven) and two people
+         * can share one; a mark is chosen and distinct. So whoever wears one —
+         * an agent its owner dressed, or a person who chose it for their own
+         * face — moves across the canvas as it, not as an arrow with the
+         * emoji in the chip. One place for the glyph, not two.
          *
-         * The raw mark, not `faceMark`: that falls back to an initial, and
-         * the name is right there — "D Dion" would be the letter twice.
+         * **The hotspot does not move.** The arrow stays, shrunk to its tip
+         * in the actor's colour (the ownership signal, and the ground's shape
+         * still), with its point at this div's origin exactly as before, and
+         * the emoji sits where the arrow's body was. This layer is screen
+         * space, so neither changes size with zoom. `cursorhotspot.test.ts`
+         * holds both.
+         *
+         * The raw mark, not `faceMark`: that falls back to an initial, and an
+         * initial is not a pointer. An agent nobody dressed is 🤖 — decided
+         * by `pointerMark` at render time, never stored (the same "is this an
+         * agent" the facepile asks, `useActorKinds`).
          */
-        const mark = markOf(marks, session.actor);
-        // Say only what we know: the session's status if it has one, and
-        // for how long it has been quiet once it goes silent — a thinking
-        // agent must not look frozen, but we never invent a verb for it.
+        const mark = pointerMark(marks, session.actor, isAgentActor(kinds, session.actor.id));
+        const otherTab = otherTabs.has(session.sessionId);
+        // Say only what we know: when another cursor shares your name (or a
+        // collaborator has a second tab open), say it is in another tab so it
+        // never reads as a stuck copy of the pointer in this viewport.
         const quiet = quietFor(session);
-        const line = [statusLine(session), quiet && `quiet ${quiet}`]
+        const line = [
+          otherTab && (session.kind === "web" ? "another tab" : "another session"),
+          statusLine(session),
+          quiet && `quiet ${quiet}`,
+        ]
           .filter(Boolean)
           .join(" · ");
         return (
           <div
             key={session.sessionId}
-            className={`remote-cursor${quiet ? " quiet" : ""}`}
-            style={{ left: screen.x, top: screen.y }}
+            className={`remote-cursor${quiet ? " quiet" : ""}${otherTab ? " other-tab" : ""}${mark ? " marked" : ""}`}
+            style={{ left: screen.x, top: screen.y, color }}
           >
             {/* The ground gives everybody the same shape and takes nobody's
                 colour (#195): `fill` is still the actor's, because that is the
@@ -211,9 +228,9 @@ export function CursorLayer() {
             <svg width="18" height="20" viewBox="0 0 18 20">
               <path d={cursorPath} fill={color} strokeWidth="1" />
             </svg>
+            {mark && <b className="cursor-glyph">{mark}</b>}
             <span className="cursor-chip" style={{ background: color }}>
-              {mark && <b className="cursor-mark">{mark}</b>}
-              {name}
+              <span>{name}</span>
               {line && <em>{line}</em>}
             </span>
           </div>

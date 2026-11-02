@@ -95,14 +95,434 @@
  * asked, this is the sentence, and the half of the raise that was avoidable
  * was avoided before it was written down.
  *
+ * **641,100 → 653,500 on 11 Sep, and this one arrived the way the soft gate
+ * was built to let things arrive: as a question, answered late.** The
+ * performance persona asked on 8 Sep ("bytes past the last size somebody
+ * agreed to") and four nights running; nobody answered, and the queue was one
+ * day from reddening `main` over it. Dion's call: raise it, with the reason.
+ *
+ * Measured at `1e846a1f`: **653,406**. Rebuilt commit by commit on a machine
+ * whose build reproduces the nightly's own readings exactly (645,806 at
+ * `86cc4cb`, 646,899 at `a2deb19`), the 12,306 bytes are:
+ *
+ *   1,305  already there at 4caba2f2, the commit that wrote 641,100
+ *   2,263  whose word wakes an agent — the gate in core's routing, and its
+ *          words in the agent tray (#221)
+ *   1,053  an artifact's two faces, visual and source (#215)
+ *     888  a Site address that stays editable and says why it is not one yet
+ *          (#231, and the follow-up)
+ *     798  reading Markdown together — shared text selections
+ *   1,303  the guide canvases, listed in the Help panel
+ *   3,373  durable quoted comments — a thread anchored to a passage of text
+ *   1,033  the switcher's scope toggle, and the minimap folding below 460px
+ *          (#265 — it landed while this was being measured, which is the
+ *          creep in miniature)
+ *     290  smaller: the embed badge (#222), rail tooltips (#234), a held Z
+ *          (#233), the overlay slot
+ *
+ * Every one is a feature somebody asked for, in core or in the canvas shell,
+ * and the largest single step is 3,373 bytes — a sixth of `JUMP`, so none of
+ * this is the eager-import accident the hard gate exists for. Accepted for
+ * that reason. The margin is 94 bytes, the round-up to the hundred every
+ * ceiling here has used: a comment's worth, not a feature's, so the next
+ * feature asks.
+ *
+ * **What it did not buy, written down so it is not forgotten:** the goal is
+ * now 13,406 bytes away, the furthest since the namespace import came out on
+ * 8 Sep. The first place to look is the Help panel — `CanvasPage` imports it
+ * statically and renders it on every visit, so the guide catalog's 1,303
+ * bytes are paid by everyone before anyone presses `?`; that is the `lazy()`
+ * shape the 6 Sep list took seventy-nine kilobytes out with.
+ *
  * The second gate only works because the queue reaches `main` now and an
  * answer covers the nights that repeat it. Before 7 Sep it would have been a
  * warning into a void.
+ *
+ * **653,500 → 658,000 the same evening, and almost all of it is a debt from
+ * earlier in the day.** Two creeps, one raise, both said out loud:
+ *
+ *   3,943  owner-only summons (#238/#269, the same afternoon), which measured
+ *          itself at 657,446 and deliberately did NOT raise the ceiling —
+ *          "it moves in the answer to the performance persona's finding, and
+ *          this is the sentence that answer can quote." Quoted, and paid: a
+ *          second unremarked creep stacked on the first is exactly the shape
+ *          this file exists to stop, and it is a worse shape than a raise.
+ *     473  granting an agent access from the UI (#272) — the grant control
+ *          under a refusal, the tray's who-panel, and the timed gate. NET,
+ *          and the two lines below are why the gross was 5,914.
+ *  −2,702  the Help panel, behind `lazy()`. Named in this file's own "what it
+ *          did not buy" three paragraphs up: `CanvasPage` imported it
+ *          statically and rendered it on every visit, so the shortcut tables
+ *          and the command registry were paid by everybody before anybody
+ *          pressed `?`. That is the whole point of writing the next place to
+ *          look down — the next feature read it and took it.
+ *  −2,739  #272's own two controls, behind the same boundary. Both are
+ *          owner-only and occasional — a grant appears under a message an
+ *          agent turned away, the who-panel when its owner opens a tray row
+ *          — but all three of their hosts (the comment popover, the Chat,
+ *          the tray) are eager, so the controls were too. Behind `lazy()`
+ *          they take `withListener`, `listenUntil`, `listenGrants` and
+ *          `readsAsTurnedAway` with them, since no eager reader wants those:
+ *          two chunks of 1,804 and 1,589 bytes, fetched by the people who
+ *          actually grant something. What stays eager is what a first visit
+ *          genuinely reads — the words on a tray row and under a comment.
+ *
+ * 657,916 measured, and the margin is 84 bytes. The goal is 17,916 away,
+ * and the shape is the one worth copying rather than the number: a feature
+ * that measured 5,914 bytes cost 473, because the parts of it a first visit
+ * never reaches were put where a first visit does not go.
+ *
+ * **658,000 → 660,100 on 12 Sep, for a whole module's registry weight.**
+ * Modules phase 5 added `@isocan/sandbox` — a program that lives on the
+ * canvas as a file and runs fenced on the machine that typed the verb. The
+ * margin was 84 bytes, so it could not have been anything but a raise; this
+ * is the sentence, written with the feature rather than left for the fourth
+ * night of a persona finding, which is the mistake the paragraph above this
+ * one is an apology for.
+ *
+ * Measured: **660,000**, up 2,084. All of it is the module's CORE record,
+ * because that is the half of a module a first visit registers:
+ *
+ *   ~900  the `/run` command's body, which is the skill an agent reads in
+ *         the composer's menu — the one place a browser-side agent learns
+ *         that running a canvas's program spends its own machine, and that
+ *         a refused fence is not to be worked around. The obvious trim, and
+ *         refused: the CLI surface has `--agent-help` to say this and the
+ *         web has only the body.
+ *   ~700  the record, the context row and the page route's wiring
+ *   ~480  the lazy boundary and the module's entry in the shell's list
+ *
+ * **What it did not cost, which is the part worth copying.** The page
+ * component is behind `lazy()`, so the list, the dates and the links are a
+ * chunk nobody fetches until they open Sandboxes. And the whole terminal
+ * half — the argv split, the transcript writer, the fence request — is
+ * `cli.ts`, which the web never imports.
+ *
+ * The one measurement worth writing down because it was wrong: the CLI-only
+ * readers in `core.ts` (`argvOf`, `transcriptOf`, `statusLine`) were split
+ * into a `run.ts` on the theory they were riding into the entry chunk on the
+ * web half's eager import of the record. Measured, the split changed the
+ * chunk's content hash not at all — vite had already shaken them out, since
+ * nothing in `web.tsx` or `page.tsx` names them. The split was reverted.
+ * **A barrel a module imports eagerly is not automatically a cost**; the
+ * cost is what something eager actually references, and the way to know is
+ * to grep the built chunk for a string only that code has.
+ * **660,100 → 661,500 the same day, for seen-marks (#147, #134)** — and it
+ * stacks on the raise above rather than replacing it, because the two landed
+ * within an hour of each other on separate branches. The arithmetic, both
+ * ends measured on one machine so the delta is a subtraction and not a
+ * comparison of two people's laptops: **660,076 on `main` at `4b62212a`,
+ * 661,329 with this branch rebased onto it.**
+ *
+ *   1,367  gross: `lib/seen.ts` (the mark cache, `loadSeen`, `noteVisit`),
+ *          `fetchSeen`/`putSeen` in `lib/api.ts`, the route spellings out of
+ *          core, the visit effect on `CanvasPage`, and the switcher's
+ *          "lately" merge
+ *    −114  `latelyIds` and core's `latelyOrder` moved to `lib/lately.ts`,
+ *          which only `CommandPalette` imports — and the palette is already
+ *          behind `lazy()`. Small, and the right shape: the merge is read
+ *          when somebody opens ⌘O, not when a canvas loads.
+ *   1,253  NET
+ *
+ * **What is left is genuinely eager, and this is the sentence for it.**
+ * Opening a canvas IS the act that writes the mark, so the write cannot be
+ * deferred behind a boundary without either delaying it or paying a second
+ * chunk fetch on every canvas open — which is worse for the person than a
+ * kilobyte. The `arrow.ts` lesson three paragraphs up is why the split that
+ * WAS available was taken first rather than the ceiling being raised for the
+ * gross.
+ *
+ * 661,329 measured, rounded to 661,500 so the margin is 171 bytes — a
+ * comment's worth and not a feature's, which is the whole point of the
+ * round-up: the next feature asks. The goal is 21,329 away, and the first
+ * place to look is still a `lazy()` boundary rather than a smaller feature.
+ *
+ * **The delta survived a rebase unchanged, which is the check worth naming.**
+ * This branch measured 1,253 bytes against `657,915` before modules phase 5
+ * landed, and 1,253 against `660,076` after. A feature whose cost moves when
+ * somebody else's lands is a feature sharing code with it by accident; this
+ * one does not, and re-measuring both ends after the rebase is how you know
+ * rather than assume. (This machine also reads ~76 bytes above the one that
+ * wrote 660,000 above, which is why the number here comes from subtracting
+ * two readings taken on the SAME machine.)
+ *
+ * Two late movements, both worth naming because they pull opposite ways. **+32
+ * for lessons.md #54's fix** — the mark's write sequenced after its read so
+ * the two cannot race the claim recovery; a bug a real browser found and three
+ * green test files did not, paid for in a sentence of bytes. **−44 for
+ * deleting `hasNew` from core**, an export whose only caller was its own test:
+ * the clock-free "has anything happened" comparison belongs to #147 step 3's
+ * panel, and a function shipped ahead of its caller is bytes every first visit
+ * downloads to reach nothing.
+ *
+ * **661,500 → 702,400 on 12 Sep, after measuring both canvas-group phases.**
+ * The jump stopped the suite and prompted a dependency investigation before
+ * this number moved. Same-machine Vite builds, kept in memory so the active
+ * browser walkthrough's dist stayed untouched, separated three costs:
+ *
+ *   6,192  already above the agreed ceiling before groups: the phase-1 parent
+ *          69211254 builds to 667,692 bytes, including intervening operator work
+ *  23,617  phase 1's shared group reducer, geometry, structural validation and
+ *          protocol: dec07903 builds to 691,309 bytes
+ *  10,712  phase 2's membership/navigation surfaces and helpers, after the
+ *          menu deferral below: the measured entry is 702,021 bytes
+ *
+ * No new third-party module entered the entry chunk. The large core step is
+ * shared synchronous behavior: queued public intents need the same resolver
+ * for optimistic rendering that the writer uses, and replay must validate the
+ * canonical effects. Removing that dependency would change offline recovery
+ * and optimism, not merely postpone an unused page. That measured cost was
+ * accepted explicitly after the investigation, rather than hidden by a test
+ * skip or a larger JUMP.
+ *
+ * **What was avoidable was deferred first.** Toolbar eagerly imported every
+ * group-menu row for a button whose handler runs only on click. It now loads
+ * those rows on that click, matching the existing lazy item-menu boundary.
+ * Building the same captured source tree with that import eager and lazy
+ * measured 703,746 → 702,021: **1,725 bytes removed from first paint**, with a
+ * 2,090-byte menu chunk fetched on demand. The group dialog was already lazy.
+ *
+ * The final keyboard walkthrough added 328 bytes to focus a submenu after
+ * React commits its contents; focusing before commit left keyboard navigation
+ * behind the visible menu. The conductor's fresh entry is 702,349 bytes.
+ * This final fix is separate from the captured 1,725-byte deferral comparison
+ * above, and makes phase 2's net contribution 11,040 bytes.
+ *
+ * Rounded to the next hundred, the margin is 51 bytes. GOAL remains 640,000;
+ * JUMP remains 20,000. The next change still has to account for its own bytes.
+ *
+ * **702,400 → 719,900 on 12 Sep, after measuring and trimming group phase 3.**
+ * Captured source initially added 24,374 bytes, chiefly the v2 bounded effects,
+ * shared placement/replay, and gesture previews. No new third-party eager
+ * dependency was added. The same-source comparison deferred AddPopover until
+ * Add opens and content fitting until Shift+F: together they removed 11,474
+ * entry bytes. Final nudge timer ownership and cross-canvas upload correctness
+ * add 683 bytes to the preceding 718,468-byte build. Final queue ownership,
+ * preview and idle-clock gates add 724 more. The conductor's fresh
+ * 719,875-byte entry is a net 17,526 over phase 2. This explicitly reviewed
+ * cost leaves 25 bytes of margin; GOAL 640,000 and JUMP 20,000 stay unchanged.
+ *
+ * **719,900 → 721,200 on 13 Sep, after measuring the upstream operator merge.**
+ * The original phase-3 entry was 719,875 bytes. Upstream refusal handling added
+ * 5,367 and preserving terminal decisions during delayed writes added 125.
+ * Moving the shared REFUSED constant to the eager errors leaf, while keeping
+ * its public re-export, deferred the operator's CIDR and refusal helpers and
+ * removed 4,195 entry bytes. The measured result is 721,172: a net 1,297 over
+ * the original build, with no new eager dependency. The approved ceiling has
+ * 28 bytes of margin; GOAL 640,000 and JUMP 20,000 remain unchanged.
+ *
+ * **721,200 → 734,200 on 13 Sep, for canvas groups phase 4 after deferral.**
+ * The fresh production entry is 734,159 bytes, a net 12,987 over 721,172.
+ * Lazy context and Trash panels, plus separating writer-only context
+ * resolution from shared validation, removed 11,339 bytes from the initial
+ * 745,498-byte entry. The remaining cost serves synchronous context validation
+ * and ambient membership, atomic copy resolution, and operation-owned form
+ * completion. No new eager dependency was added. The reviewed ceiling leaves
+ * 41 bytes of margin; GOAL 640,000 and JUMP 20,000 remain unchanged.
+ *
+ * **734,200 -> 743,700 on 13 Sep, for anatomy, after deferral.**
+ * The fresh production entry is 743,652 bytes, a net 9,493 over the 734,159
+ * canvas-groups build, and the number this was asked for was 748,100 before
+ * the deferral below. Measured in halves rather than asserted: taking the
+ * module out of the shell registry and rebuilding gives 741,024, so **2,628
+ * bytes are Anatomy's own** and **6,865 are the shared presentation change**
+ * in `lib/presentation.ts`, `lib/presentationStore.ts`, `CanvasViewport`,
+ * `ItemView` and `CanvasPage` — which every canvas renders through whether or
+ * not a project is on it, and which cannot be deferred because layout is
+ * synchronous.
+ *
+ * **Anatomy is for a subset of canvases and now costs like one.** It was a
+ * build-time entry in `LIST` at 7,039 bytes; it arrives through
+ * `deferredModule` instead, the path `design-competition` already uses, so the
+ * web half is fetched the first time something asks it to draw and never on a
+ * canvas with no Anatomy items. Two things had to be true for that to save
+ * anything. The underlay, which every canvas asks to draw, carries a predicate
+ * (`projectsOn`) rather than a `lazy()` — a lazy underlay downloads the module
+ * everywhere and defeats the deferral. And the light facts moved to their own
+ * module, `facts.ts`: while the mimes and the core record shared a file, the
+ * eager and lazy chunks both reached into it and rollup hoisted what they
+ * share into the entry, so the first attempt at this saved exactly 0 bytes.
+ * The 2,329-byte agent prompt is no longer in the entry at all.
+ *
+ * 9,493 is inside JUMP's 20,000.
+ *
+ * **Re-measured at landing: 743,799, and 671 of the move is not Anatomy's.**
+ * `room` phases 3 and 4 landed between the measurement above and this commit;
+ * rebuilt on that base with Anatomy's registration removed, the entry is
+ * 741,695, so the room work is inside this ceiling too and did not raise it
+ * when it landed. Said rather than absorbed: whoever owns room should see
+ * their own 671 bytes rather than find them inside a number labelled anatomy.
+ *
+ * The margin here is 101 bytes rather than the 25-48 the entries above chose.
+ * A margin thinner than one ordinary commit means the next unrelated change
+ * lands red, which is what just happened; on a main that takes a commit every
+ * twenty-five minutes, a tight ceiling is a tax on whoever pushes next rather
+ * than a discipline on whoever grew the bundle. GOAL 640,000 and JUMP 20,000
+ * remain unchanged, and they are what actually hold the line.
+ *
+ * **743,900 → 745,000 on 15 Sep 2026, for joining an agent from chat** (the
+ * bench, phase 2). Agreed by Dion, asked with the arithmetic rather than after
+ * the fact.
+ *
+ * The composer's `@Name join` chip and the `@` menu's bench rows are EAGER, and
+ * deliberately: a composer paints while you type, so code that decides what a
+ * line looks like cannot arrive after the line is typed. Everything else is
+ * behind two `import()` boundaries — the act itself, both sentences, and the
+ * bench reader — and core's chat vocabulary went into its own module so that
+ * `benchRows()` and `roster()` stay out of first paint.
+ *
+ * The first draft cost **3,936** bytes because those four functions sat at the
+ * bottom of `bench.ts` and dragged that whole module out of its lazy chunk.
+ * Splitting them into `benchjoin.ts` took 1,573 back and deferring the act took
+ * 310 more: **2,070 net**, of which 1,016 is past the old line. That is the
+ * same lesson `arrow.ts` taught this file, arriving a second time — **the eager
+ * half of a feature has to be a separate file from the lazy half**, because an
+ * import is all it takes to undo the split.
+ *
+ * The margin is 84 bytes, which is thinner than the paragraph above argues for.
+ * It is deliberate and it is not a claim that 745,000 is roomy: the next change
+ * to the composer should expect to raise this again and say why, rather than
+ * inheriting headroom nobody agreed to.
+ *
+ * **745,000 → 745,900 on 17 Sep 2026, after moving Anatomy behind `modules.anatomy`.**
+ * Moving Anatomy from an eager `deferredModule` in `LIST` to an experiment
+ * (`modules.anatomy`) removed `anatomyActivation` (~2,628 bytes) from first
+ * paint completely when the experiment is off. That offset the growth from
+ * `#309` (facepile lightness and ring-thickness ladders) and `#320` (the talk
+ * module experiment entry in Settings), leaving the fresh entry at 745,811
+ * bytes with 89 bytes of margin.
+ *
+ * **745,900 → 747,000 on 18 Sep 2026, for pin-from-source** (memory phase 6):
+ * local Context now says where a copied piece came from. The fresh entry is
+ * 746,891, a net **1,080** over 745,811, and it is the READING half only —
+ * `contextPieces` runs on every canvas, so the provenance a copy carries has
+ * to be parseable in first paint.
+ *
+ * **The eager/lazy split was measured, not assumed, and it cost three builds.**
+ * The first attempt put the whole feature in one core module, `context-pin.ts`,
+ * and the entry went to 748,687 — because the Context panel's lazy chunk and
+ * the eager `contextPieces` both reached into it, so rollup hoisted the shared
+ * module into the entry, eligibility rules and all. That is the `arrow.ts` and
+ * `facts.ts` lesson a third time: **the eager half of a feature has to be a
+ * separate file from the lazy half.** Splitting the record into
+ * `core/context-source.ts` took 1,627 bytes back; moving `formatContextSource`
+ * into `context-report.ts` (which exists to keep terminal formatting out of
+ * eager assembly) took 114 more; moving `contextSourceProperty` beside the act
+ * that writes it took 55. The remaining 1,080 is the reader: `parseContextSource`,
+ * `copiedContextItems` and the row they produce. The picker, the eligibility
+ * rules, the copy act and its transport are all behind `import()` and cost the
+ * first paint nothing.
+ *
+ * The margin is 109 bytes, in line with the argument three entries up: a margin
+ * thinner than one ordinary commit is a tax on whoever pushes next. GOAL 640,000
+ * and JUMP 20,000 remain unchanged, and 1,080 is well inside JUMP.
+ *
+ * **747,000 → 727,500 on 22 Sep 2026, and it went DOWN** after the nightly read
+ * 756,004 (findings of 21 and 22 Sep). The emoji picker's set (`emoji.ts`,
+ * ~23.5KB) and the picker itself now arrive on the `+`, and the Pen's colour
+ * names (`colour.ts` + `contrast.ts`, ~2.2KB) on the Pen's release: an A/B in
+ * one worktree read 756,060 → 726,962, **−29,098**. The lesson worth keeping is
+ * why the picker alone was not enough: one `flatMap` at the top of `emoji.ts`
+ * made the module effectful, and rollup keeps an effectful module wherever
+ * core's `export *` barrel reaches it — every first visit. `@__PURE__` on that
+ * one call is what let it go. The margin is ~540 bytes over the fresh read.
+ *
+ * **727,500 → 727,800, the same evening, landed together.** The summons
+ * receipt (#197) went in beside it and costs 771 bytes — `summonsState`, which
+ * the web had never imported, so rollup had been dropping it. Measured
+ * combined: 727,733. Still 19,200 under the 747,000 the reclaim started from;
+ * the margin is 67 bytes, thin on purpose, so the next eager byte is asked
+ * about.
+ *
+ * **727,800 → 730,100 on 23 Sep 2026, raised at Dion's call** ("raise the
+ * limit"). The day's features had already taken main from 727,733 to 729,180
+ * — the `/wire` door in the Chat (+582: the composer has to know the verb
+ * before the module's chunk arrives), the voice fast path's shadow chunk
+ * names (+79), and the rest in small change. Wireframes phase 8 added 827:
+ * "just the screen" (+167, the minimap's prototype spotlight and the ⌘K
+ * "show prototypes" action) and the arrows (+648, the lazily loaded host an
+ * underlay reaches write access through — loading it eagerly cost 1,969, so
+ * the lazy host is what kept this to a creep). Measured combined on the
+ * landing tree: 730,007. Still 16,993 under the 747,000 the 22 Sep reclaim
+ * started from; the margin is 93 bytes, thin on purpose, as above.
+ *
+ * **730,100 → 701,300 on 26 Sep 2026, and it went DOWN** in the answer to that
+ * night's finding (731,446, 1,346 past). Four surfaces that mount behind a
+ * condition were in every first visit, and now arrive when they are asked for:
+ *
+ *   ContextMenu   `openContextMenu` lived beside the component, so the three
+ *                 eager callers that only OPEN a menu pinned the whole menu,
+ *                 submenu and all. It moved to `lib/contextmenu.ts`; the
+ *                 component's import starts beside `menuentries.tsx`'s on the
+ *                 same gesture, so a right-click waits one round trip, not two.
+ *   Viewer        the `view` face, rendered only after the home has answered.
+ *   AgentTray     both panels return null until opened; they mount on first
+ *   FilesPanel    opening and stay mounted, as `LazyTrashPanel` always has.
+ *
+ * An A/B in one worktree read 731,300 → 701,021, **−30,279**, and the menu alone
+ * was 11,549 of it — twice the component's own size, because what the menu
+ * imports came with it. That is the `arrow.ts` lesson from the other side: a
+ * value export sitting beside a component makes the component eager for anyone
+ * who only needs the value.
+ *
+ * The new number is the nightly's 731,446 less the A/B, 701,167, rounded up
+ * to the hundred. It therefore also carries the 1,346 bytes that night found
+ * past 730,100, which nobody has itemised. They are paid for by a reclaim
+ * twenty-two times their size rather than accepted as a raise, and are named
+ * here so that "somebody agreed to them" is not claimed for them.
+ *
+ * **701,300 → 706,300 on 5 Oct 2026: room, raised by Dion's decision.** The
+ * entry sat at 701,285 for a week, 15 bytes under. Every web change in that
+ * week turned into a byte hunt, even when it added nothing to the first
+ * paint:
+ *
+ * - keys phase 4 moved a route string out of a shared import to save 30 bytes;
+ * - copy-edit phase 4's builder rebuilt with its own changes reverted to
+ *   prove another builder's bytes were not its own.
+ *
+ * The practice audit (`docs/projects/practice/design.md`, "Bundle headroom")
+ * put the decision to Dion: real room, or a reduction project first. He chose
+ * room: "raise the ceiling". The new number is the measured entry, 701,285,
+ * plus 5,000 of headroom, rounded to the hundred. Nothing grew to fill it.
+ * GOAL still says where this should go, and JUMP still catches a single
+ * change that spends the room at once.
+ *
+ * **706,300 → 734,500 on 15 Oct 2026: ten days of deliberate core and canvas
+ * shell features.** Over the ten days since 5 Oct, six bodies of work landed
+ * on `main` without any new eager third-party dependency:
+ *
+ * - `node-focus` phases 1–5 (`[ View | Edit ]` card focus strip, capabilities)
+ * - `extensions` phases 1–5 (extension actor, grants, panel registration)
+ * - `@isocan/lottie` (kind registration in `core/kinds.ts`, deferred module)
+ * - `proxy-identity` (`proxyTunnel` and identity headers)
+ * - `multi-face-nodes` (#479: named fidelity faces on item versions in `core`
+ *   and `ItemView`, +3,445 bytes, which crossed the cumulative 20,000 jump
+ *   threshold from the 5 Oct baseline)
+ * - `cursors` (resolving marks and colours through folded actors, +93 bytes)
+ *
+ * CI measured the combined entry at 729,497 bytes. Following the 5 Oct rule
+ * (measured entry + 5,000 headroom, rounded to the hundred), CEILING moves to
+ * 734,500; GOAL 640,000 and JUMP 20,000 stay unchanged.
  */
 
 /** The last number somebody agreed to. Raised in the ANSWER to a finding, with
  *  the reason in that answer — not quietly in a diff. */
-export const CEILING = 641_100;
+export const CEILING = 734_500;
+
+/**
+ * **Run as a program it prints that number**, so the performance persona's
+ * `against:` can name it (`.agents/personas/performance.md`) and every nightly
+ * finding can say which ceiling it is 0-past.
+ *
+ * A command rather than a copy: the debt goal's bound is 0 by construction, so
+ * the only thing that distinguishes one night's overshoot from another's is
+ * the number it was measured against, and a second spelling of that number
+ * anywhere is the drift `docs/reviews/lessons.md` #5 is about. This file owns
+ * it; this is the file saying it out loud.
+ */
+if (process.argv[1] && process.argv[1].endsWith("bundle-ceiling.mjs")) {
+  console.log(CEILING);
+}
 
 /** The performance persona's declared goal (`.agents/personas/performance.md`)
  *  — restated here only so the failure message can say how far there is to go.

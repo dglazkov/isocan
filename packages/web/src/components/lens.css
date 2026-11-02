@@ -1,0 +1,159 @@
+/* ---------- the Lens ----------
+   Loaded with LensPage, never on a first visit: moved out of `styles.css` on
+   27 Sep 2026 (the lazy-only queue, cleanup phase 6). It sits in
+   `components/` rather than beside the page because that is where the
+   stylesheet guards look. */
+
+/**
+ * **The lens** — what somebody has made, across every canvas.
+ *
+ * The first cut was rows of titles, and titles are the one view that tells you
+ * least about visual work: "Sketch, Sketch, Sketch" is three names and no
+ * information, where three thumbnails are three different drawings. So the
+ * work is the interface, and the words are the caption.
+ *
+ * Still deliberately NOT a canvas (`core/lens.ts`). Tiles in a wrapping grid,
+ * each a link to where the thing actually lives — nothing here is positioned,
+ * so there is no drag to get wrong and no coordinate to store.
+ */
+.lens-note { margin: 0 0 14px; color: var(--ink-muted); font-size: 13.5px; }
+/* ---- who there is to look at ---- */
+.lens-subjects {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+}
+/* Stacked, not side by side. Squeezing a name and four thumbnails onto one
+   line meant one of them lost, and the first attempt truncated the NAME —
+   "Admira…" beside four legible thumbnails is the wrong trade. Two rows gives
+   each the whole width. */
+.lens-subject {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+  color: inherit;
+  text-decoration: none;
+}
+.lens-subject:hover { border-color: var(--accent); }
+.lens-face {
+  width: 30px; height: 30px; flex: none;
+  border-radius: 999px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--accent-ink); font-size: 13px; font-weight: 600;
+}
+.lens-face-big { width: 26px; height: 26px; font-size: 12px; }
+.lens-subject-who { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.lens-subject-who b {
+  font-size: 14px; letter-spacing: -0.012em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* One line, always. "10 things · 1 canvas" wrapping onto two made the cards
+   different heights and the column ragged — and the count is the least of
+   what this card says, so it should be the first thing to give way. */
+.lens-subject-count {
+  color: var(--ink-soft); font-size: 11.5px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Their four most recent, at a glance, in a slot the same size on every card
+   so the names line up down the column. The strip is the flourish; it gives
+   way before the name does. */
+.lens-subject-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+/* Their four most recent, full width beneath the name. */
+.lens-strip { display: flex; gap: 4px; overflow: hidden; }
+.lens-strip .item-thumb { border-radius: 5px; flex: none; }
+/* ---- one subject's work ---- */
+.lens-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; }
+.lens-group h2 {
+  margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  display: flex; align-items: center; gap: 7px;
+}
+.lens-group-name {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  min-width: 0; max-width: 48ch;
+}
+.lens-count {
+  padding: 0 6px; border-radius: 999px; background: var(--chip);
+  color: var(--ink-muted); font-size: 10.5px; line-height: 16px; font-weight: 500;
+}
+.lens-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px;
+}
+.lens-tile {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  color: inherit; text-decoration: none;
+  box-shadow: var(--shadow-card);
+}
+.lens-tile:hover { border-color: var(--accent); }
+/* The work itself, cropped to a consistent window so a wall of tiles reads as
+   a wall rather than a ragged edge. The thumbnail keeps its own aspect and is
+   cropped at the bottom, the way a screenshot of a long page is: the top of a
+   thing is the part you recognise it by. */
+.lens-shot {
+  display: block; overflow: hidden;
+  height: 128px;
+  border-radius: 7px;
+  background: var(--chip);
+}
+.lens-name {
+  font-size: 13px; font-weight: 500; letter-spacing: -0.01em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.lens-meta {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  color: var(--ink-soft); font-size: 11px;
+}
+.lens-where { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 12ch; }
+.lens-touched { color: var(--ink-muted); }
+.lens-when { margin-left: auto; font-variant-numeric: tabular-nums; }
+/* The lens's narrowing chips — kinds, windows, and "untouched since". */
+.lens-narrow { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 10px; }
+/* The count earns the click: "screen 41" is a choice, a bare "screen" is a
+   guess. Dimmer than the kind, because the kind is what is being chosen. */
+.lens-tally { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+/* An act: what they did, where, and when. Rows because a history is read
+   downward, and because nothing here is a thing you could look at. */
+.lens-act {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 7px 12px; border-top: 1px solid var(--line-soft);
+  font-size: 13px;
+}
+.lens-act:first-child { border-top: none; }
+.lens-act-what { flex: 1; min-width: 0; }
+.lens-act-where {
+  color: var(--ink-soft); font-size: 11.5px; text-decoration: none;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 18ch;
+}
+.lens-act-where:hover { color: var(--accent-text); }
+/* **Here, and standing by, must not read alike.** A facepile showing six
+   faces on a canvas nobody is working on has stopped meaning anything, and
+   the same is true of a dot. Filled is somebody there; a ring is a process
+   that could be woken — present as a possibility, absent as a person. */
+.lens-live-dot {
+  display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--good); flex: none;
+}
+.lens-live-dot.standby { background: transparent; box-shadow: inset 0 0 0 1.5px var(--good); }
+/* Where a subject stands — enrolled canvases with what they did there. The
+   same quiet italic as the live line, one step softer, because it is a record
+   rather than a moment. */
+.lens-standing { font-style: normal; font-size: 12px; color: var(--ink-muted); }
+.lens-standing-note { color: var(--ink-soft); }
+.lens-live-said {
+  display: inline-flex; align-items: center; gap: 5px;
+  color: var(--good); font-size: 11.5px; font-style: normal;
+}
+.lens-group h2 .lens-live-dot { margin-right: 6px; }
+.lens-live-at { color: inherit; text-decoration: none; }
+.lens-live-at:hover { text-decoration: underline; }

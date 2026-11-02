@@ -15,7 +15,7 @@ import type {
 } from "@isocan/core";
 import { grantsRoute, VIEW_ONLY } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
-import { mintTestBadge, type TestBadge } from "./badge.ts";
+import { currentSocketUrl, mintTestBadge, type TestBadge } from "./badge.ts";
 
 /**
  * **Look, don't touch** (#88) — the roles question `identity-desk.md` left
@@ -173,7 +173,7 @@ describe("a view link grant", () => {
     await shareLink(owner, "view");
     const jordan = await stranger();
     const hello = await new Promise<{ type: string; capability?: string }>((resolve, reject) => {
-      const ws = new WebSocket(`${base.replace("http:", "ws:")}/ws?canvasId=${CANVAS}`, {
+      const ws = new WebSocket(currentSocketUrl(`${base.replace("http:", "ws:")}/ws?canvasId=${CANVAS}`), {
         headers: jordan.headers,
       });
       ws.on("error", reject);
@@ -259,7 +259,7 @@ describe("a read link grant", () => {
     await shareLink(owner, "read");
     const jordan = await stranger();
     await jordan.speakAs(spectator);
-    const ws = new WebSocket(`${base.replace("http:", "ws:")}/ws?canvasId=${CANVAS}`, {
+    const ws = new WebSocket(currentSocketUrl(`${base.replace("http:", "ws:")}/ws?canvasId=${CANVAS}`), {
       headers: jordan.headers,
     });
     const hello = await new Promise<ServerMessage>((resolve, reject) => {
@@ -295,7 +295,7 @@ describe("a read link grant", () => {
     await shareLink(owner, "view");
     const jordan = await stranger();
     await jordan.speakAs(spectator);
-    const ws = new WebSocket(`${base.replace("http:", "ws:")}/ws?canvasId=${CANVAS}`, {
+    const ws = new WebSocket(currentSocketUrl(`${base.replace("http:", "ws:")}/ws?canvasId=${CANVAS}`), {
       headers: jordan.headers,
     });
     await new Promise<void>((resolve, reject) => {

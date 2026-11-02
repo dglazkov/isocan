@@ -38,8 +38,15 @@ const SYNC_EXEC = /\b(execFileSync|execSync)\s*\(/g;
  * bound anyway. */
 const WINDOW = 12;
 
+/**
+ * Tracked and untracked both: `--others` was added on 13 September because a
+ * new guard's two unbounded `execFileSync` calls were invisible to this one
+ * while its file was still uncommitted — the violation only appeared on the
+ * run after it landed. A deadline rule that cannot see the file being written
+ * is a rule that arrives a commit late.
+ */
 function testFiles(): string[] {
-  return execFileSync("git", ["ls-files", "test", "packages/*/test"], {
+  return execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "test", "packages/*/test"], {
     cwd: repo,
     encoding: "utf8",
     timeout: 30_000,

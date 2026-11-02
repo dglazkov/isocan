@@ -1,26 +1,71 @@
-import { Suspense, lazy, useEffect, useRef, useState } from "react";
+import { groupAncestors, groupDropPolicy, groupDropTarget, groupScopedRoot, groupScopeRoots, groupUnderStack, isGroupItem } from "@isocan/core";
+import { frameGap, groupsEnabled, leaveGroupAtPoint, scopedHit } from "../lib/canvasgroups.ts";
+/** The hover outline's module (`lib/aim.ts`), fetched on the first pointer move
+ * over the canvas and kept: hover may arrive a frame late; a press never waits. */
+let aimModule: typeof import("../lib/aim.ts") | null = null;
+let aimLoading = false;
+let aimPending: ((aim: typeof import("../lib/aim.ts")) => void) | null = null;
+function withAim(then: (aim: typeof import("../lib/aim.ts")) => void): void {
+  if (aimModule) { then(aimModule); return; }
+  // The latest ask waits for the module and runs when it lands, so the very
+  // first hover still gets its outline without another move.
+  aimPending = then;
+  if (aimLoading) return;
+  aimLoading = true;
+  void import("../lib/aim.ts").then((loaded) => { aimModule = loaded; aimPending?.(loaded); aimPending = null; }, () => { aimLoading = false; });
+}
+import { Suspense, forwardRef, lazy, useEffect, useMemo, useRef, useState, type CSSProperties, type HTMLAttributes } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Actor } from "@isocan/core";
-import { groundIsPlace, hasGround, isArea, parseUriList } from "@isocan/core";
+import { groundIsPlace, hasGround, isArea, parseUriList, reachHeld } from "@isocan/core";
 import { actorColor } from "../lib/colors.ts";
 import { publishCursor, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { useSettling } from "../lib/settling.ts";
+import { useViewportLookahead } from "../lib/lookahead.ts";
 import { type Tool, useUiStore } from "../stores/uiStore.ts";
-import { pan, pinch, screenToWorld, worldToScreen, zoomAt, type TwoPoints } from "../lib/viewport.ts";
+import { pan, pinch, pinchFactor, screenToWorld, worldToScreen, zoomAt, type TwoPoints, type Viewport } from "../lib/viewport.ts";
 import { moduleDropFor } from "../modules.ts";
-import { webHostFor } from "../lib/modulehost.ts";
+import { creationDestination, selectCreatedItems } from "../lib/groupplacement.ts";
 import { newGroupId } from "@isocan/core";
 import { type Sample, coastFrame, flickVelocity } from "../lib/inertia.ts";
 import { zoomToBox, zoomToItem } from "../lib/zoomactions.ts";
-import { addFailure, addFiles } from "../lib/upload.ts";
+/* Static, all four. The link and version drops below each said
+   `await import("../lib/upload.ts")`, which split nothing: this file and five
+   others import it statically, so Vite warned "dynamic import will not move
+   module into another chunk" on every build and paid for the gesture anyway
+   — two async wrappers and a frozen namespace object of all ten exports, about
+   470 bytes of the entry chunk (measured 27 Sep 2026, cleanup RP-5, which
+   spent them on the per-item error boundary). */
+import { addBrowserItem, addFailure, addFiles, addVersionFromFile } from "../lib/upload.ts";
 import { placeSketch } from "../lib/sketch.ts";
 import { placeableArea, revealIfOffscreen } from "../lib/spot.ts";
 import { glideToBox } from "../lib/zoomactions.ts";
 import { settleDelay, wasHeld } from "../lib/pensession.ts";
+import { longPress } from "../lib/longpress.ts";
 import { isTyping } from "../lib/keys.ts";
-import { TextComposer } from "./TextComposer.tsx";
 import { canEditNow, useCanEdit } from "../lib/capability.ts";
-import { ContextMenu, openContextMenu } from "./ContextMenu.tsx";
+/**
+ * **The composer arrives with the first composer** (30 Sep 2026).
+ *
+ * It was in every first visit's bytes, and it only ever draws while somebody
+ * is typing onto the canvas — a deliberate gesture with a frame to spare,
+ * the argument the menus and the fan make above and below. Moving it out is
+ * what paid for text colour and named fonts in the first paint: the pickers
+ * live here, and ItemView's share of them is a few hundred bytes.
+ *
+ * Mounted only while a composer is open. Its state is per-composer already
+ * (keyed on which node, where), so remounting between two loses nothing.
+ */
+const TextComposer = lazy(() => import("./TextComposer.tsx").then((m) => ({ default: m.TextComposer })));
+function TextComposerWhenOpen(props: { canvasId: string; actor: Actor }) {
+  const open = useUiStore((s) => s.pendingText !== null);
+  return open ? (
+    <Suspense fallback={null}>
+      <TextComposer {...props} />
+    </Suspense>
+  ) : null;
+}
+import { openContextMenu } from "../lib/contextmenu.ts";
 /**
  * **The menus arrive when a menu is asked for** (#195's budget, not its
  * feature). `menuentries.tsx` is twenty-four kilobytes of every row the
@@ -31,8 +76,17 @@ import { ContextMenu, openContextMenu } from "./ContextMenu.tsx";
  * The screen point and the world point are read BEFORE the await: the event
  * is gone by the time the module lands, and reading `e.clientX` off a pooled
  * event later is the kind of bug that only shows up under a slow network.
+ *
+ * The menu that draws the rows rides the same gesture: its import starts
+ * beside the rows' rather than after them, so the first right-click waits on
+ * one round trip, not two.
  */
-const menus = () => import("../lib/menuentries.tsx");
+const menuView = () => import("./ContextMenu.tsx");
+const menus = () => {
+  void menuView();
+  return import("../lib/menuentries.tsx");
+};
+const ContextMenu = lazy(() => menuView().then((m) => ({ default: m.ContextMenu })));
 import { ItemView } from "./ItemView.tsx";
 /**
  * **The fan is rare, so it is not in the bytes a first visit downloads.**
@@ -48,6 +102,17 @@ const VersionFanOut = lazy(() =>
 );
 import { CommentLayer } from "./CommentLayer.tsx";
 import { ModuleUnderlays } from "./ModuleUnderlays.tsx";
+/**
+ * **A canvas with no proposal downloads no proposal marks** (proactive-agent
+ * phase 1): first paint carries one scan of the items for the `proposal`
+ * property (or a goodnight note's `handoff`, phase 2), and the marks, their
+ * sheet and their keys arrive only where it finds one.
+ */
+const ProposalMarks = lazy(() => import("./ProposalMarks.tsx"));
+function ProposalsWhenAny({ canvasId, actor }: { canvasId: string; actor: Actor }) {
+  const any = useCanvasStore((s) => Object.values((s.past?.canvas ?? s.canvas)?.items ?? {}).some((i) => i.properties?.proposal || i.properties?.handoff));
+  return any ? <Suspense fallback={null}><ProposalMarks canvasId={canvasId} actor={actor} /></Suspense> : null;
+}
 import { CursorLayer } from "./CursorLayer.tsx";
 import { CursorGlow } from "./CursorGlow.tsx";
 /**
@@ -68,11 +133,6 @@ interface GestureEvent extends UIEvent {
   readonly clientY: number;
 }
 
-// How briskly a Chrome/Firefox trackpad pinch (a ctrlKey wheel) zooms: the
-// exponent on deltaY. Higher = snappier. 0.0022 felt sluggish next to Figma;
-// this is roughly 2.5× that. Safari's gesture path is already 1:1 with the
-// physical pinch (e.scale), so it needs no such constant.
-const PINCH_ZOOM_SENSITIVITY = 0.0055;
 
 // The Pen, in SCREEN pixels: how wide a stroke looks under the nib, and how
 // far the pointer must travel before another sample is kept. Both are divided
@@ -82,7 +142,12 @@ const INK_WIDTH = 3;
 const INK_MIN_STEP = 2;
 
 
-export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: Actor }) {
+import { usePresentation, currentPresentation, freezePresentation } from "../lib/canvasPresentation.ts";
+import { presentedCanvas, presentedItem } from "../lib/presentation.ts";
+import { stopGlide } from "../lib/zoomactions.ts";
+
+export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { canvasId: string; actor: Actor; onPlanItem?: (id: string) => void; currentNode?: string | undefined }) {
+  const presentation = usePresentation();
   /**
    * **The past wins when there is one.** The scrubber folds a moment with
    * core's `at` and parks it beside the live replica (`canvasStore.past`);
@@ -97,7 +162,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
   const inPast = useCanvasStore((s) => s.past !== null);
   /* The one comparison the entry chunk pays for: whether to ask for a ground
      at all. Everything that draws one is behind it. */
-  const themed = useCanvasStore((s) => (s.project ? hasGround(s.project) : false));
+  const themed = useCanvasStore((s) => (s.record ? hasGround(s.record) : false));
   /**
    * `themed` here turns the grid off in the STYLESHEET, and only for a ground
    * that travels with the canvas (#195). A pinned ground skips that rule and
@@ -106,11 +171,10 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
    * 7 Sep 2026, after the comment on `THEME_ANCHOR_PROP` had claimed for a day
    * that the grid came back — read that one before changing this line.
    */
-  const isPlace = useCanvasStore((s) => s.project !== null && groundIsPlace(s.project));
+  const isPlace = useCanvasStore((s) => s.record !== null && groundIsPlace(s.record));
   /* One timer for the whole canvas — see `useSettling`. The set is usually
      empty, and when it is, nothing is scheduled at all. */
   const settling = useSettling();
-  const viewport = useUiStore((s) => s.viewport);
   const commentMode = useUiStore((s) => s.commentMode);
   const activeTool = useUiStore((s) => s.activeTool);
   const stamp = useUiStore((s) => s.stamp);
@@ -120,7 +184,9 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
   const navigate = useNavigate();
   const fannedItemId = useUiStore((s) => s.fannedItemId);
   const ref = useRef<HTMLDivElement>(null);
+  const planPress = useRef<{ id: string; x: number; y: number } | null>(null);
   const [dropping, setDropping] = useState(false);
+  const [dropMessage, setDropMessage] = useState("Drop to add to the canvas");
   /**
    * The drop overlay dies of silence, never of bookkeeping.
    *
@@ -139,7 +205,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
   const dragAlive = () => {
     setDropping(true);
     if (droppingTimer.current) clearTimeout(droppingTimer.current);
-    droppingTimer.current = setTimeout(() => setDropping(false), 700);
+    droppingTimer.current = setTimeout(() => { setDropping(false); useUiStore.getState().setGroupDropTarget(null); }, 700);
   };
   // Mirrored into the store as well as kept locally: lane-follow stops
   // measuring while the canvas is moving, and only the store crosses
@@ -231,15 +297,42 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
       return true;
     }
 
+    const wheelPinch = { factor: 1, x: 0, y: 0, frame: 0 };
+    const wheelPan = { dx: 0, dy: 0, frame: 0 };
+    let wheelIdle: ReturnType<typeof setTimeout> | null = null;
+    function markWheelMoving() {
+      setPanning(true);
+      if (wheelIdle !== null) clearTimeout(wheelIdle);
+      wheelIdle = setTimeout(() => {
+        wheelIdle = null;
+        setPanning(false);
+      }, 160);
+    }
     function onWheel(e: WheelEvent) {
+      stopGlide();
+      freezePresentation();
       const target = e.target as HTMLElement;
       if (e.ctrlKey || e.metaKey) {
         // Pinch (or ctrl+wheel): always own it, wherever the cursor is, so the
         // browser never page-zooms. Zoom the canvas at the cursor instead.
         e.preventDefault();
-        const factor = Math.exp(-e.deltaY * PINCH_ZOOM_SENSITIVITY);
-        const ui = useUiStore.getState();
-        ui.setViewport(zoomAt(ui.viewport, e.clientX, e.clientY, factor));
+        markWheelMoving();
+        // A trackpad sends several of these a frame; each would be a whole
+        // render of everything that reads the viewport. Gather them and zoom
+        // once a frame, at the latest cursor — the same total, one render.
+        // (Safari's gesture path is already 1:1 with the pinch, via e.scale.)
+        wheelPinch.factor *= pinchFactor(e.deltaY, e.deltaMode);
+        wheelPinch.x = e.clientX;
+        wheelPinch.y = e.clientY;
+        if (wheelPinch.frame === 0) {
+          wheelPinch.frame = requestAnimationFrame(() => {
+            const { factor, x, y } = wheelPinch;
+            wheelPinch.frame = 0;
+            wheelPinch.factor = 1;
+            const ui = useUiStore.getState();
+            ui.setViewport(zoomAt(ui.viewport, x, y, factor));
+          });
+        }
         return;
       }
       // Plain two-finger scroll pans the canvas — but only over the canvas
@@ -267,8 +360,19 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
       e.preventDefault();
       // A wheel during a coast takes over from it.
       stopCoastRef.current();
-      const ui = useUiStore.getState();
-      ui.setViewport(pan(ui.viewport, -e.deltaX, -e.deltaY));
+      markWheelMoving();
+      wheelPan.dx += e.deltaX;
+      wheelPan.dy += e.deltaY;
+      if (wheelPan.frame === 0) {
+        wheelPan.frame = requestAnimationFrame(() => {
+          const { dx, dy } = wheelPan;
+          wheelPan.frame = 0;
+          wheelPan.dx = 0;
+          wheelPan.dy = 0;
+          const ui = useUiStore.getState();
+          ui.setViewport(pan(ui.viewport, -dx, -dy));
+        });
+      }
     }
     window.addEventListener("wheel", onWheel, { passive: false, capture: true });
 
@@ -280,9 +384,11 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     function onGestureStart(e: GestureEvent) {
       e.preventDefault();
       gestureScale = e.scale;
+      markWheelMoving();
     }
     function onGestureChange(e: GestureEvent) {
       e.preventDefault();
+      markWheelMoving();
       const factor = e.scale / gestureScale;
       gestureScale = e.scale;
       const ui = useUiStore.getState();
@@ -297,6 +403,9 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     window.addEventListener("gestureend", onGestureEnd as EventListener, opts);
 
     return () => {
+      if (wheelPinch.frame) cancelAnimationFrame(wheelPinch.frame);
+      if (wheelPan.frame) cancelAnimationFrame(wheelPan.frame);
+      if (wheelIdle !== null) clearTimeout(wheelIdle);
       window.removeEventListener("wheel", onWheel, true);
       window.removeEventListener("gesturestart", onGestureStart as EventListener, true);
       window.removeEventListener("gesturechange", onGestureChange as EventListener, true);
@@ -335,6 +444,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     }
 
     function down(e: KeyboardEvent) {
+      withAim((aim) => aim.aimKeys(e)); // ⌘ under a still pointer re-aims the hover
       if (isTyping(e.target)) return;
       if (e.code === "Space" && spacePrevTool.current === null) {
         const ui = useUiStore.getState();
@@ -381,6 +491,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
       }
     }
     function up(e: KeyboardEvent) {
+      withAim((aim) => aim.aimKeys(e));
       const held = holdTool.current;
       if (held && e.code === held.code) {
         const ui = useUiStore.getState();
@@ -493,13 +604,19 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
    * means the five you had.
    */
   function onContextMenu(e: React.MouseEvent) {
+    e.preventDefault();
+    // Native touch menus bypass the motion/second-finger cancellation below.
+    if ((e.nativeEvent as PointerEvent).pointerType === "touch") return;
+    showContextMenu(e.target, e.clientX, e.clientY);
+  }
+
+  function showContextMenu(origin: EventTarget | null, x: number, y: number, current = () => true) {
     const ui = useUiStore.getState();
     const canvas = useCanvasStore.getState().canvas;
     if (!canvas) return;
-    const target = (e.target as HTMLElement).closest?.("[data-item-id]");
-    const itemId = target?.getAttribute("data-item-id") ?? null;
-    e.preventDefault();
-
+    const target = (origin as HTMLElement)?.closest?.("[data-item-id]");
+    const rawItemId = target?.getAttribute("data-item-id") ?? null;
+    const itemId = rawItemId ? scopedHit(rawItemId) : null;
     if (itemId) {
       const within = ui.selectedItemIds.includes(itemId);
       const ids = within && ui.selectedItemIds.length > 1 ? ui.selectedItemIds : [itemId];
@@ -508,17 +625,17 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
         .map((id) => canvas.items[id])
         .filter((item): item is NonNullable<typeof item> => Boolean(item));
       if (items.length === 0) return;
-      const at = { x: e.clientX, y: e.clientY };
-      const world = screenToWorld(ui.viewport, e.clientX, e.clientY);
+      const at = { x: x, y: y };
+      const world = screenToWorld(ui.viewport, x, y);
       void menus().then(({ itemMenu }) =>
-        openContextMenu(at, itemMenu(items, { canvasId, actor, world, navigate })),
+        current() && openContextMenu(at, itemMenu(items, { canvasId, actor, world, navigate })),
       );
       return;
     }
-    const at = { x: e.clientX, y: e.clientY };
-    const world = screenToWorld(ui.viewport, e.clientX, e.clientY);
+    const at = { x: x, y: y };
+    const world = screenToWorld(ui.viewport, x, y);
     void menus().then(({ canvasMenu }) =>
-      openContextMenu(at, canvasMenu({ canvasId, actor, world, navigate })),
+      current() && openContextMenu(at, canvasMenu({ canvasId, actor, world, navigate })),
     );
   }
 
@@ -542,6 +659,16 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
    * pointer is treated as an addition.
    */
   const abandonGesture = useRef<(() => void) | null>(null);
+  const menuAction = useRef(showContextMenu);
+  menuAction.current = showContextMenu;
+  const hold = useRef<ReturnType<typeof longPress> | null>(null);
+  if (!hold.current) hold.current = longPress((point, current) => {
+    abandonGesture.current?.();
+    planPress.current = null;
+    menuAction.current(point.target, point.x, point.y, current);
+  });
+  useEffect(() => () => hold.current?.dispose(), []);
+
 
   /** The two fingers a pinch is about, oldest first so the pair is stable
    *  across a move — a third finger is ignored rather than joining. */
@@ -562,7 +689,11 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
   }
 
   function onPointerDown(e: React.PointerEvent) {
-    const isBackground = e.target === ref.current || (e.target as HTMLElement).classList.contains("world");
+    stopGlide();
+    // A frame's open space reaches here only when the item yielded it: ⌘ is
+    // held (a selection box among its members), or the tool is not Select.
+    const gapIn = frameGap(e.target);
+    const isBackground = Boolean(onPlanItem) || e.target === ref.current || (e.target as HTMLElement).classList.contains("world") || gapIn !== null;
     // Middle-drag or the Hand tool pan. (Space is momentary Hand, so it flows
     // through activeTool too.) The Hand tool pans from anywhere — an item
     // yields its pointer when it is active — so it is not gated on background.
@@ -589,6 +720,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
       if (fingers.current.size > 2) return;
     }
 
+    if (onPlanItem && (activeTool === "select" || activeTool === "hand")) { startPan(e); return; }
     const wantsPan = e.button === 1 || (activeTool === "hand" && e.button === 0);
 
     if (activeTool === "zoom" && e.button === 0) {
@@ -657,12 +789,15 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
         style: ui.lastTextStyle,
         face: ui.lastTextFace,
         paper: ui.lastPaper,
+        colour: ui.lastTextColour,
+        font: ui.lastTextFont,
         oneShot: !borrowing,
       });
       return;
     }
 
     if (isBackground && commentMode && e.button === 0 && !wantsPan) {
+      if (currentPresentation()?.isolate) { setNotice("Click a concept to pin a comment in this view."); return; }
       const ui = useUiStore.getState();
       const world = screenToWorld(ui.viewport, e.clientX, e.clientY);
       ui.setPendingComment({ x: world.x, y: world.y, anchorItemId: null });
@@ -857,7 +992,10 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
       // A press that never moved is a TAP, and on a coarse pointer this
       // gesture replaced the marquee — so it owes the marquee's answer to
       // "I pressed nothing".
-      if (!moved && opts.tapClears) clearBackgroundFocus();
+      if (!moved && opts.tapClears && ev.type !== "pointercancel") {
+        leaveGroupAtPoint(screenToWorld(useUiStore.getState().viewport, ev.clientX, ev.clientY));
+        clearBackgroundFocus();
+      }
       const v = moved ? flickVelocity(samples, performance.now()) : null;
       if (v) startCoast(v);
     }
@@ -923,8 +1061,15 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     el.setPointerCapture(e.pointerId);
     const ui = useUiStore.getState();
     const additive = e.shiftKey;
-    const baseSelection = additive ? ui.selectedItemIds : [];
     const startWorld = screenToWorld(ui.viewport, e.clientX, e.clientY);
+    // ⌘ over a frame's open space: a selection box among ITS members, so the
+    // scope steps into that frame first (groups-by-hand phase 2).
+    const into = reachHeld(e) && canvas && groupsEnabled() ? groupDropTarget(canvas, startWorld, []) : null;
+    if (into && into.id !== ui.activeGroupId) ui.setActiveGroup(into.id);
+    leaveGroupAtPoint(startWorld);
+    // Leaving scope clears its child selection before Shift captures a base.
+    const baseSelection = additive ? useUiStore.getState().selectedItemIds : [];
+
     let moved = false;
 
     function onMove(ev: PointerEvent) {
@@ -938,8 +1083,10 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
       const maxX = Math.max(startWorld.x, current.x);
       const minY = Math.min(startWorld.y, current.y);
       const maxY = Math.max(startWorld.y, current.y);
-      const items = useCanvasStore.getState().canvas?.items ?? {};
-      const hit = Object.values(items)
+      const snapshot = useCanvasStore.getState().canvas;
+      const currentCanvas = snapshot ? presentedCanvas(snapshot, currentPresentation()) : undefined;
+      const eligible = currentCanvas && groupsEnabled() ? groupScopeRoots(currentCanvas, state.activeGroupId) : Object.values(currentCanvas?.items ?? {});
+      const hit = eligible
         .filter(
           (item) =>
             item.x < maxX && item.x + item.width > minX && item.y < maxY && item.y + item.height > minY,
@@ -970,6 +1117,9 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     const files = Array.from(e.dataTransfer.files);
     const ui = useUiStore.getState();
     const world = screenToWorld(ui.viewport, e.clientX, e.clientY);
+    const target = !e.altKey && canvas && groupsEnabled() ? groupDropTarget(canvas, world, []) : null;
+    const destination = { ...creationDestination(target?.id ?? ui.activeGroupId), ...(target ? { groupPlacement: groupDropPolicy(target, world) } : {}) };
+    ui.setGroupDropTarget(null);
 
     /**
      * **A module's claim on a dragged mime, before the built-ins** (#156).
@@ -989,9 +1139,12 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
       if (claim) {
         const data = e.dataTransfer.getData(claim.mimeType);
         try {
-          const host = webHostFor(canvasId, actor);
+          const couldEdit = canEditNow();
+          const { webHostFor } = await import("../lib/modulehost.ts");
+          const host = webHostFor(canvasId, actor, destination, couldEdit);
           const ops = await claim.run({
             canvasId,
+            ...destination,
             data,
             mimeType: claim.mimeType,
             at: { x: Math.round(world.x), y: Math.round(world.y) },
@@ -1015,9 +1168,8 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
         // dragged onto the canvas is not a failure. Past that test, any
         // throw is the upload's own, and is said (#51).
         if (!/^https?:\/\//i.test(link)) return;
-        const { addBrowserItem } = await import("../lib/upload.ts");
         try {
-          ui.select(await addBrowserItem(canvasId, actor, link, world));
+          selectCreatedItems(canvasId, [await addBrowserItem(canvasId, actor, link, world, destination)]);
         } catch (err) {
           setNotice(err instanceof Error && err.message ? err.message : "That site could not be added.");
         }
@@ -1026,11 +1178,10 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     }
 
     // Dropping a single file onto an existing item = new version of that item.
-    const targetItem = (e.target as HTMLElement).closest?.("[data-item-id]");
-    if (targetItem && files.length === 1) {
-      const { addVersionFromFile } = await import("../lib/upload.ts");
+    const versionTarget = reachableVersionTarget(e.target as HTMLElement);
+    if (versionTarget && files.length === 1) {
       try {
-        await addVersionFromFile(canvasId, actor, targetItem.getAttribute("data-item-id")!, files[0]!);
+        await addVersionFromFile(canvasId, actor, versionTarget.id, files[0]!, destination.originGroupMode);
       } catch (err) {
         setNotice(
           `${files[0]!.name}: ${err instanceof Error && err.message ? err.message : "could not be added as a version"}`,
@@ -1043,7 +1194,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     // `uploadBlob` throws with the sentence that explains why.
     // Dropped AT the pointer: chosen, so the files stay where they were let
     // go rather than being tidied clear (`Placement.chosen`).
-    const ids = await addFiles(canvasId, actor, files, { ...world, chosen: true }).catch((err: unknown) => {
+    const ids = await addFiles(canvasId, actor, files, { ...world, chosen: true }, destination).catch((err: unknown) => {
       // "2 of 5 added — <why>", and the two are selected below (#51).
       const { landed, notice } = addFailure(err, files.length, "Those files could not be added.");
       setNotice(notice);
@@ -1051,8 +1202,7 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     });
     // The whole drop is selected, not just the last file — you dropped five
     // things and five things are what arrived.
-    if (ids.length > 0) {
-      useUiStore.getState().setSelection(ids);
+    if (ids.length > 0 && selectCreatedItems(canvasId, ids)) {
       const canvas = useCanvasStore.getState().canvas;
       const landed = canvas ? ids.map((id) => canvas.items[id]).filter(Boolean) : [];
       revealIfOffscreen(
@@ -1064,30 +1214,62 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
     }
   }
 
+  function reachableVersionTarget(element: HTMLElement) {
+    const id = element.closest?.("[data-item-id]")?.getAttribute("data-item-id");
+    const item = id ? canvas?.items[id] : undefined;
+    if (!item || isGroupItem(item)) return null;
+    return !groupsEnabled() || (canvas && groupScopedRoot(canvas, item.id, useUiStore.getState().activeGroupId) === item.id) ? item : null;
+  }
+
   // Areas first, so everything placed on a sheet paints over it: items are
   // siblings at one z-index, and DOM order is the only order there is. A
-  // stable sort keeps the rest as they were.
-  const items = canvas
-    ? Object.values(canvas.items).sort((a, b) => Number(isArea(b)) - Number(isArea(a)))
-    : [];
+  // stable sort keeps the rest as they were. Once per canvas (cleanup RP-9,
+  // 27 Sep 2026): it ran, `groupAncestors` and all, on every pan frame.
+  // A stacked group's members are drawn in its pile, not here — except one in
+  // the hand, being ⌘-dragged out of the opened stack (groups-by-hand phase 4).
+  const held = useUiStore((s) => s.groupPreview?.lift);
+  const items = useMemo(() => canvas
+    ? Object.values(canvas.items).filter((item) => (!presentation?.isolate || presentation.items[item.id]) && (!groupUnderStack(canvas, item.id) || held?.includes(item.id))).sort((a, b) => Number(isArea(b) || isGroupItem(b)) - Number(isArea(a) || isGroupItem(a)) || (isGroupItem(a) && isGroupItem(b) ? groupAncestors(canvas, a.id).length - groupAncestors(canvas, b.id).length : 0))
+    : [], [canvas, presentation, held]);
+  useViewportLookahead(canvasId, items, ref);
 
   return (
-    <div
+    <Follows
       ref={ref}
+      paint={grid}
+      data-current-node={currentNode}
       className={`canvas-viewport${isPlace ? " themed" : ""}${panning ? " panning" : ""}${commentMode ? " comment-mode" : ""}${stamp ? " stamping" : ""}${activeTool === "hand" ? " hand" : ""}${activeTool === "zoom" ? " zoom" : ""}${activeTool === "pen" ? " pen" : ""}${activeTool === "text" ? " text-tool" : ""}${
         activeTool === "select" && !commentMode ? " own-cursor-on" : ""
       }`}
-      style={{
-        backgroundSize: `${22 * viewport.scale}px ${22 * viewport.scale}px`,
-        backgroundPosition: `${viewport.tx}px ${viewport.ty}px`,
+      onPointerDownCapture={(e) => {
+        stopGlide(); freezePresentation();
+        if (onPlanItem) {
+          hold.current?.down(e);
+          const id = (e.target as HTMLElement).closest("[data-item-id]")?.getAttribute("data-item-id");
+          if (fingers.current.size) planPress.current = null;
+          else planPress.current = id ? { id, x: e.clientX, y: e.clientY } : null;
+          e.stopPropagation(); onPointerDown(e); return;
+        }
+        hold.current?.down(e);
+        if ((e.target as HTMLElement).closest("a, button, [role=button], input, textarea, select, [contenteditable=true]")) hold.current?.cancel();
       }}
+      onPointerMoveCapture={(e) => hold.current?.move(e)}
+      onPointerUpCapture={(e) => {
+        hold.current?.up(e.pointerId);
+        const pressed = planPress.current; planPress.current = null;
+        if (pressed && Math.hypot(e.clientX - pressed.x, e.clientY - pressed.y) < 8) onPlanItem?.(pressed.id);
+      }}
+      onPointerCancelCapture={(e) => { planPress.current = null; hold.current?.up(e.pointerId); }}
+      onClickCapture={(e) => { if (hold.current?.consumeClick()) { e.preventDefault(); e.stopPropagation(); } }}
       onPointerDown={onPointerDown}
       onContextMenu={onContextMenu}
       onPointerMove={(e) => {
         const ui = useUiStore.getState();
-        publishCursor(screenToWorld(ui.viewport, e.clientX, e.clientY));
+        publishCursor(currentPresentation() ? null : screenToWorld(ui.viewport, e.clientX, e.clientY));
+        const at = { clientX: e.clientX, clientY: e.clientY, target: e.target, buttons: e.buttons, pointerType: e.pointerType, metaKey: e.metaKey, ctrlKey: e.ctrlKey };
+        withAim((aim) => aim.aimPointer(at));
       }}
-      onPointerLeave={() => publishCursor(null)}
+      onPointerLeave={() => { publishCursor(null); withAim((aim) => aim.aimNowhere()); }}
       /**
        * **Every finger that goes down has to come back up** (#182 stage 0).
        *
@@ -1107,6 +1289,13 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
       onDragOver={(e) => {
         e.preventDefault();
         dragAlive();
+        const ui = useUiStore.getState();
+        const target = !e.altKey && canvas && groupsEnabled() ? groupDropTarget(canvas, screenToWorld(ui.viewport, e.clientX, e.clientY), []) : null;
+        const fileCount = e.dataTransfer.files.length || Array.from(e.dataTransfer.items ?? []).filter((item) => item.kind === "file").length;
+        const version = fileCount === 1 ? reachableVersionTarget(e.target as HTMLElement) : null;
+        const destination = target ?? (ui.activeGroupId ? canvas?.items[ui.activeGroupId] : null);
+        ui.setGroupDropTarget(version ? null : destination?.id ?? null);
+        setDropMessage(version ? `Drop to add a version of ${version.title}` : destination ? `Drop to add to ${destination.title}` : "Drop to add to the canvas");
       }}
       onDrop={onDrop}
     >
@@ -1118,23 +1307,14 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
         </Suspense>
       )}
       <CursorGlow />
-      <div
-        className={`world${railPanning ? " rail-panning" : ""}${inPast ? " in-past" : ""}`}
-        style={
-          {
-            transform: `translate(${viewport.tx}px, ${viewport.ty}px) scale(${viewport.scale})`,
-            // World-space chrome divides by this so a 2px outline is 2px on
-            // SCREEN at any zoom, the way the counter-scaled titlebar already
-            // is. Everything inside .world is measured in world units, so a
-            // literal `2px` here is 2 world px — 0.3 of a screen pixel at 16%.
-            "--scale": viewport.scale,
-          } as React.CSSProperties
-        }
-      >
+      <Follows paint={world} className={`world${railPanning ? " rail-panning" : ""}${inPast ? " in-past" : ""}`}>
         {/* Before the items, so a line passes UNDER the nodes it joins — a
             map node is chromeless text, and a line over it strikes through
             the words. */}
-        <ModuleUnderlays />
+        <ModuleUnderlays canvasId={canvasId} actor={actor} />
+        <ProposalsWhenAny canvasId={canvasId} actor={actor} />
+        {currentNode && canvas?.items[currentNode] && <div className="phone-current-node" aria-label="Current node" style={{ left: canvas.items[currentNode]!.x, top: canvas.items[currentNode]!.y, width: canvas.items[currentNode]!.width, height: canvas.items[currentNode]!.height }} />}
+
         {items.map((item) => (
           <ItemView
             key={item.id}
@@ -1146,29 +1326,64 @@ export function CanvasViewport({ canvasId, actor }: { canvasId: string; actor: A
         ))}
         {fannedItemId && canvas?.items[fannedItemId] && (
           <Suspense fallback={null}>
-            <VersionFanOut item={canvas.items[fannedItemId]!} canvasId={canvasId} actor={actor} />
+            <VersionFanOut item={presentedItem(canvas.items[fannedItemId]!, presentation)} canvasId={canvasId} actor={actor} />
           </Suspense>
         )}
         <InkLayer />
-        {canEdit && <TextComposer canvasId={canvasId} actor={actor} />}
-      </div>
+        {canEdit && <TextComposerWhenOpen canvasId={canvasId} actor={actor} />}
+      </Follows>
       <CommentLayer canvasId={canvasId} actor={actor} />
-      <CursorLayer />
+      {!presentation && <CursorLayer actor={actor} />}
       <MarqueeRect />
       <GuideLines />
-      <EdgeRadar canvasId={canvasId} />
+      {!presentation && <EdgeRadar canvasId={canvasId} />}
       <SketchBar canvasId={canvasId} actor={actor} />
-      {dropping && <div className="drop-overlay">Drop to add to the canvas</div>}
+      {dropping && <div className="drop-overlay">{dropMessage}</div>}
       {menu && (
-        <ContextMenu
-          at={menu.at}
-          entries={menu.entries}
-          onClose={() => useUiStore.getState().setContextMenu(null)}
-        />
+        <Suspense fallback={null}>
+          <ContextMenu
+            at={menu.at}
+            entries={menu.entries}
+            onClose={() => useUiStore.getState().setContextMenu(null)}
+          />
+        </Suspense>
       )}
-    </div>
+    </Follows>
   );
 }
+
+/**
+ * **What follows the camera, and nothing else** (cleanup RP-9, 27 Sep 2026).
+ *
+ * `CanvasViewport` read the viewport for two styles alone — the grid under
+ * everything and the world's transform — so every pan and zoom frame rendered
+ * the whole viewport again: every item re-sorted, every memoised `ItemView`
+ * compared, and every layer that reads no viewport (the ink, the text
+ * composer, the module underlays, the sketch bar) rendered for nothing. This
+ * takes what it wraps as `children`, made by a parent that did not re-render,
+ * so React hands the same elements back and stops at them. The layers that DO
+ * follow the camera (cursors, comments, guides, the radar) subscribe to it
+ * themselves, as they already did.
+ */
+const Follows = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement> & { paint: (viewport: Viewport) => CSSProperties; "data-current-node"?: string | undefined }>(function Follows({ paint, ...rest }, ref) {
+  const viewport = useUiStore((s) => s.viewport);
+  return <div ref={ref} {...rest} style={paint(viewport)} />;
+});
+
+const grid = (viewport: Viewport): CSSProperties => ({
+  backgroundSize: `${22 * viewport.scale}px ${22 * viewport.scale}px`,
+  backgroundPosition: `${viewport.tx}px ${viewport.ty}px`,
+});
+
+const world = (viewport: Viewport) =>
+  ({
+    transform: `translate(${viewport.tx}px, ${viewport.ty}px) scale(${viewport.scale})`,
+    // World-space chrome divides by this so a 2px outline is 2px on
+    // SCREEN at any zoom, the way the counter-scaled titlebar already
+    // is. Everything inside .world is measured in world units, so a
+    // literal `2px` here is 2 world px — 0.3 of a screen pixel at 16%.
+    "--scale": viewport.scale,
+  }) as CSSProperties;
 
 /**
  * Alignment guides: while an item is in your hand, a line for every edge or
@@ -1247,4 +1462,3 @@ function MarqueeRect() {
     />
   );
 }
-

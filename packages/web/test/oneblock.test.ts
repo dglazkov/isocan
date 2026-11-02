@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { rules, selectorsOf } from "./cssrules.ts";
+import { rules, selectorsOf, sheets } from "./cssrules.ts";
 
 /**
  * One canonical block per class.
@@ -26,6 +26,50 @@ import { rules, selectorsOf } from "./cssrules.ts";
  */
 
 const css = readFileSync(fileURLToPath(new URL("../src/styles.css", import.meta.url)), "utf8");
+/**
+ * Every sheet the page loads, not `styles.css` alone (BC-6/BC-4, 27 Sep 2026).
+ * One page means one cascade: a bare `.x` in `phone.css` or a module's sheet
+ * is a second canonical block for `.x` just as surely as one pasted twice in
+ * `styles.css`, and every guard here read only the one file.
+ */
+const every = sheets.map((s) => s.text);
+
+/**
+ * What reading every sheet found on its first day, 27 Sep 2026 — fourteen
+ * classes with a second bare block, most of them a component sheet restating a
+ * class `styles.css` or its own selector list already declares (`.q-dock-steps`
+ * in both `styles.css` and `questionnaire.css` is the split that left its
+ * original behind). Not fixed here: each is a cascade to read before one block
+ * can go. A ratchet like `accent.test.ts`'s — shrink it, never add to it.
+ *
+ * Fourteen became ten on 27 Sep 2026 (cleanup phase 6): `.q-dock-steps` met its
+ * original when the dock's rules moved into `questionnaire.css`,
+ * `.fullscreen-stage` took its `touch-action` home, and the talk module's
+ * `.talk-log-bar` halves merged and `.talk-field` became one shared string.
+ * Eight of the ten left are a list selector plus a block of the class's own
+ * (`.q-tools button, .q-resume` then `.q-resume`) — one block each only by
+ * repeating declarations — and two that are behaviour to decide rather than a
+ * duplicate to fold: `.anatomy-tree`, whose second block overrides the phone
+ * layout's `position: absolute`, and `.design-lint-heading`, whose `flex-wrap`
+ * rides in on `design-review.css` and so applies only once that panel loaded.
+ *
+ * Ten became nine the same day: `.design-lint-heading` took its `flex-wrap`
+ * into its own rule in `design-lint.css`, so the lint panel's heading wraps
+ * whether or not the review panel has ever been opened.
+ */
+const KNOWN_TWICE = [
+  ".design-record-face",
+  ".phone-node-bar",
+  ".q-resume",
+  ".anatomy-file-button",
+  ".anatomy-tree",
+  ".anatomy-eyebrow",
+  ".wire-arrows-over",
+  ".wire-arrows-handle",
+  ".wire-needs-label",
+];
+/** The same day's stranded modifiers, both in `chat-tidy.css`. Same ratchet. */
+const KNOWN_STRANDED = [".chat-tidy-open", ".chat-tidy-row"];
 
 /**
  * Every bare one-class selector at the TOP LEVEL of the sheet.
@@ -46,9 +90,9 @@ const css = readFileSync(fileURLToPath(new URL("../src/styles.css", import.meta.
  * So: `at.length === 0`, said out loud, rather than inherited from a regex
  * that happened to choke on `@`.
  */
-function bareClassSelectors(text: string = css): string[] {
+function bareClassSelectors(text: string | string[] = css): string[] {
   const found: string[] = [];
-  for (const rule of rules(text)) {
+  for (const rule of (Array.isArray(text) ? text : [text]).flatMap((t) => rules(t))) {
     if (rule.at.length > 0) continue;
     for (const selector of selectorsOf(rule)) {
       if (/^\.[A-Za-z0-9_-]+$/.test(selector)) found.push(selector);
@@ -59,7 +103,7 @@ function bareClassSelectors(text: string = css): string[] {
 
 describe("the stylesheet", () => {
   it("declares each class once, unscoped", () => {
-    const selectors = bareClassSelectors(css);
+    const selectors = bareClassSelectors(every);
     // The parser has to have found something. Everything below is "how many
     // times does each of these appear", and the answer for a list of nothing
     // is a clean bill of health — so a regex that stops matching turns this
@@ -73,7 +117,14 @@ describe("the stylesheet", () => {
       counts.set(selector, (counts.get(selector) ?? 0) + 1);
     }
     const twice = [...counts].filter(([, n]) => n > 1).map(([selector]) => selector);
-    expect(twice, "a lost scope or a section pasted twice").toEqual([]);
+    expect(
+      twice.filter((one) => !KNOWN_TWICE.includes(one)),
+      "a lost scope or a section pasted twice",
+    ).toEqual([]);
+    expect(
+      KNOWN_TWICE.filter((one) => !twice.includes(one)),
+      "these were fixed or renamed — delete them from KNOWN_TWICE",
+    ).toEqual([]);
   });
 
   it("dims a face only where a face is not fully here", () => {
@@ -126,11 +177,18 @@ function modifierClasses(text: string): Set<string> {
 
 describe("state classes", () => {
   it("never get a rule of their own", () => {
-    const modifiers = modifierClasses(css);
+    const modifiers = new Set(every.flatMap((t) => [...modifierClasses(t)]));
     expect(modifiers.size, "no chained modifiers found — the parser is wrong").toBeGreaterThan(10);
-    const bare = new Set(bareClassSelectors(css));
+    const bare = new Set(bareClassSelectors(every));
     const stranded = [...modifiers].filter((cls) => bare.has(cls));
-    expect(stranded, "a state class with an unscoped rule — a scope that fell off").toEqual([]);
+    expect(
+      stranded.filter((one) => !KNOWN_STRANDED.includes(one)),
+      "a state class with an unscoped rule — a scope that fell off",
+    ).toEqual([]);
+    expect(
+      KNOWN_STRANDED.filter((one) => !stranded.includes(one)),
+      "these were fixed or renamed — delete them from KNOWN_STRANDED",
+    ).toEqual([]);
   });
 });
 

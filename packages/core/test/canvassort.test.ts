@@ -112,6 +112,16 @@ describe("what a canvas last did, in words", () => {
     }
   });
 
+  it("has words for the identity and canvas-lifecycle ops too", () => {
+    /* These five were missing while the table was a Partial; it is a full
+       Record now, so the compiler holds the rest. Each completes "Di …". */
+    expect(opWords("actor.claim")).toBe("named themselves");
+    expect(opWords("actor.setColor")).toBe("changed their colour");
+    expect(opWords("actor.setMark")).toBe("changed their mark");
+    expect(opWords("actor.join")).toBe("joined two identities");
+    expect(opWords("project.delete")).toBe("deleted the canvas");
+  });
+
   it("has nothing to say about an op that does not exist", () => {
     /* And the CALLER decides what to do about that — the track names the raw
        type, a card says "did something". */

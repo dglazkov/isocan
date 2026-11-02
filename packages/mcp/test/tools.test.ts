@@ -4,7 +4,8 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { connect, DaemonClient, harnessVars, type Home } from "@isocan/api";
 import { newCanvasId } from "@isocan/core";
-import { startDaemon, stopDaemons, type Daemon } from "@isocan/server";
+import { type Daemon } from "@isocan/server";
+import { startDaemon, stopDaemons } from "@isocan/server/daemon";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { createServer } from "../src/server.ts";
@@ -112,11 +113,21 @@ describe("what a host can see", () => {
     const client = await host();
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
+      "claim_agent",
+      "create_item",
+      "edit_item",
       "list_canvases",
+      "post_comment",
       "read_activity",
       "read_canvas",
+      "read_context",
+      "read_context_content",
+      "read_context_summary",
       "read_item",
+      "read_personal_context",
       "read_threads",
+      "reply_comment",
+      "wait_for_feedback",
       "who",
     ]);
     // A tool with no description is a tool a model will not call, or will
@@ -127,18 +138,30 @@ describe("what a host can see", () => {
     }
   });
 
-  it("is read-only — phase 2 ships no verb that changes a canvas", async () => {
-    // The gate is deliberate and named in phases.md: an agent over MCP is the
-    // machine's PERSON by default, and writing as them would put a person's
-    // face on an agent's work. This holds the boundary until that is settled,
-    // so a write verb cannot arrive by extension without somebody deleting a
-    // test that says why.
+  it("keeps session selection per call and exposes no arbitrary operation tool", async () => {
     const { tools } = await host().then((c) => c.listTools());
-    for (const tool of tools) {
-      expect(tool.name, `${tool.name} sounds like a write`).not.toMatch(
-        /^(add|edit|remove|set|move|comment|reply|notify|create|delete|update)/,
-      );
-    }
+    for (const tool of tools) expect(tool.inputSchema.properties).toHaveProperty("session");
+    expect(tools.map((tool) => tool.name)).not.toContain("send_op");
+  });
+
+  it("requires a session and concrete personal link before opening a home", async () => {
+    let connections = 0;
+    const client = await host({ home: async () => { connections++; return connected; } });
+    try {
+      const tool = (await client.listTools()).tools.find((one) => one.name === "read_personal_context")!;
+      expect(tool.annotations?.readOnlyHint).toBe(true);
+      expect(tool.inputSchema.required).toEqual(["session", "item"]);
+      expect(tool.inputSchema.properties?.limit).toMatchObject({ type: "integer", minimum: 1, maximum: 64 });
+      for (const args of [
+        { item: "itm_link" }, { session: "t-1" },
+        { session: " ", item: "itm_link" }, { session: "t-1", item: " " },
+        ...[0, 65, 1.5].map((limit) => ({ session: "t-1", item: "itm_link", limit })),
+      ]) {
+        const result = await client.callTool({ name: "read_personal_context", arguments: args });
+        expect(result.isError, JSON.stringify(result)).toBe(true);
+      }
+      expect(connections).toBe(0);
+    } finally { await client.close(); }
   });
 });
 

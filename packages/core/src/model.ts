@@ -1,3 +1,5 @@
+import type { TextAnchor } from "./text-anchor.ts";
+import type { GroupLayout, GroupDeletionCohort, GroupCohortRecord, GroupMigrationBoundary } from "./canvas-group-types.ts";
 /**
  * The shared state model. Both the daemon (authoritative) and the web client
  * (live replica) hold this shape; the CLI reads it through queries.
@@ -7,6 +9,10 @@
  * an Actor is created, not this model.
  */
 
+/**
+ * Who did something: stamped onto every op, comment and version. The name is what they were
+ * called at the time — the registry (`claims.ts`) holds what they are called now.
+ */
 export interface Actor {
   id: string;
   name: string;
@@ -34,8 +40,22 @@ export function isSystemActor(actorId: string): boolean {
   return actorId.startsWith("sys_");
 }
 
+/**
+ * The canvas RECORD — title, description, properties, and who touched it last. What is ON
+ * the canvas is `CanvasContents`; `CanvasState` below explains why the two travel apart.
+ *
+ * Glossary (`docs/architecture.md`, "One word each"): a canvas is the surface, a
+ * project is the directory that holds canvases. Today a project holds exactly one,
+ * so this record is both; when a project holds several, it splits into `Project`
+ * (title, description, directory) and `Canvas` (the surface's own record), and the
+ * `project.*` ops move to the first unchanged.
+ */
 export interface Canvas {
   id: string;
+  /** Missing is historical area mode; the public writer defaults new canvases to groups. */
+  groupMode?: "groups" | "legacy";
+  /** An explicit conversion boundary, never inferred from the newest visible group. */
+  groupMigration?: GroupMigrationBoundary;
   title: string;
   description: string;
   properties: Record<string, string>;
@@ -57,7 +77,9 @@ export interface Canvas {
   updatedAt: string;
   updatedBy: Actor;
   /**
-   * The type of that last operation — `item.add`, `thread.create`, and so on.
+   * The semantic type of that last act — `item.add`, `thread.create`, and so
+   * on. An atomic group insertion still describes the item it added; its
+   * canonical log entry remains `group.change`.
    *
    * Stored rather than derived because the alternative is reading every
    * canvas's log to draw a list of canvases: one metadata file per canvas is
@@ -72,6 +94,10 @@ export interface Canvas {
   lastOp?: string;
 }
 
+/**
+ * A second rendering of a version, when the artifact has one distinct from its source —
+ * a rendered page beside the markdown that made it. `visualFaceOf` reads it with the fallback.
+ */
 export interface VisualFace {
   /** sha256 of visual content; stored at blobs/<hash>.<ext> */
   blobHash: string;
@@ -80,7 +106,49 @@ export interface VisualFace {
   size?: number;
 }
 
+/**
+ * The named fidelity and presentation faces an artifact version can carry
+ * alongside its source and default visual face, ordered from lowest to highest
+ * fidelity so a freshly published wireframe stays the default view until an
+ * explicit `properties.face` selection switches to a higher-fidelity face.
+ */
+export const NAMED_FACE_IDS = ["wireframe", "mid-fi", "hi-fi", "prototype"] as const;
+
+/** One of the named fidelity/presentation faces in `NAMED_FACE_IDS`. */
+export type NamedFaceId = (typeof NAMED_FACE_IDS)[number];
+
+/** Any selectable face of an item version: source, visual, or a named fidelity face. */
+export type ItemFaceId = "source" | "visual" | NamedFaceId;
+
+/** Property key on an item or containing group that selects which face to display. */
+export const FACE_PROP = "face";
+
+/** Is `value` one of the canonical named face identifiers? */
+export function isNamedFaceId(value: string): value is NamedFaceId {
+  return (NAMED_FACE_IDS as readonly string[]).includes(value);
+}
+
+const FACE_LABELS: Record<ItemFaceId, string> = {
+  wireframe: "Wireframe",
+  "mid-fi": "Mid-Fi",
+  "hi-fi": "Hi-Fi",
+  prototype: "Prototype",
+  visual: "Visual",
+  source: "Source",
+};
+
+/** Human-readable label for a face toggle button in the canvas card or workbench stage. */
+export function faceLabel(face: ItemFaceId): string {
+  return FACE_LABELS[face] ?? face;
+}
+
+/**
+ * One entry in an item's stack: a blob by content hash, and who made it when. Versions are
+ * appended, never edited — re-editing an item is `item.addVersion`, so every wording is kept.
+ */
 export interface ItemVersion {
+  /** Canonical design admission and flat retention; ordinary version input cannot supply this marker. */
+  designRecord?: import("./design-record.ts").DesignRecordMarker;
   id: string;
   /** sha256 of content; stored at blobs/<hash>.<ext>. The source face of the artifact. */
   blobHash: string;
@@ -93,28 +161,186 @@ export interface ItemVersion {
    * When absent, renderers fall back to the source face (blobHash).
    */
   visual?: VisualFace;
+  /**
+   * Optional named fidelity faces (`wireframe`, `mid-fi`, `hi-fi`, `prototype`)
+   * attached to this version so an item can progress from wireframe to hi-fi
+   * without minting extra version history entries and can flip between faces.
+   */
+  faces?: Partial<Record<NamedFaceId, VisualFace>>;
   createdAt: string;
   createdBy: Actor;
 }
 
-/**
- * The face to render visually on the canvas card, in full screen, and in the
- * workbench preview pane. Falls back to the source face (blobHash) when no
- * distinct visual face is defined.
- */
-export function visualFaceOf(version: ItemVersion): {
+function resolveVisualFace(
+  version: ItemVersion,
+  face: VisualFace,
+): {
   blobHash: string;
   mimeType: string;
   filename: string;
   size: number;
 } {
+  return {
+    blobHash: face.blobHash,
+    mimeType: face.mimeType,
+    filename: face.filename ?? version.filename,
+    size: face.size ?? version.size,
+  };
+}
+
+/**
+ * The face to render visually on the canvas card, in full screen, and in the
+ * workbench preview pane. Honors `preferredFace` when provided and available on
+ * the version; otherwise falls back to the first named face in `NAMED_FACE_IDS`,
+ * then `version.visual`, then the source face (`blobHash`).
+ */
+export function visualFaceOf(
+  version: ItemVersion | undefined,
+  preferredFace?: string | null,
+): {
+  blobHash: string;
+  mimeType: string;
+  filename: string;
+  size: number;
+} {
+  if (!version) {
+    return { blobHash: "", mimeType: "text/plain", filename: "", size: 0 };
+  }
+  if (preferredFace === "source") {
+    return sourceFaceOf(version);
+  }
+  if (preferredFace && isNamedFaceId(preferredFace)) {
+    const named = version.faces?.[preferredFace];
+    if (named) return resolveVisualFace(version, named);
+  }
+  if (preferredFace === "visual" && version.visual) {
+    return resolveVisualFace(version, version.visual);
+  }
+  if (version.faces) {
+    for (const id of NAMED_FACE_IDS) {
+      const named = version.faces[id];
+      if (named) return resolveVisualFace(version, named);
+    }
+  }
   if (version.visual) {
-    return {
-      blobHash: version.visual.blobHash,
-      mimeType: version.visual.mimeType,
-      filename: version.visual.filename ?? version.filename,
-      size: version.visual.size ?? version.size,
-    };
+    return resolveVisualFace(version, version.visual);
+  }
+  return sourceFaceOf(version);
+}
+
+/**
+ * Resolve which face ID is currently active for `item`, checking the item's own
+ * `properties.face` first, then walking ancestor groups via `containerId`, and
+ * finally falling back to the version's default visual/named face.
+ */
+export function activeFaceIdOf(
+  item: Pick<Item, "properties" | "containerId">,
+  version: ItemVersion | undefined,
+  canvas?: Pick<CanvasContents, "items"> | null,
+): ItemFaceId {
+  let requested: string | undefined = item.properties[FACE_PROP];
+  if (!requested && canvas && item.containerId) {
+    let cur: string | undefined = item.containerId;
+    const seen = new Set<string>();
+    while (cur && !seen.has(cur)) {
+      seen.add(cur);
+      const parent: Item | undefined = canvas.items[cur];
+      if (!parent) break;
+      if (parent.properties[FACE_PROP]) {
+        requested = parent.properties[FACE_PROP];
+        break;
+      }
+      cur = parent.containerId;
+    }
+  }
+  if (!version) return "source";
+  if (requested === "source") return "source";
+  if (requested === "visual" && version.visual) return "visual";
+  if (requested && isNamedFaceId(requested) && version.faces?.[requested]) {
+    return requested;
+  }
+  if (version.faces) {
+    for (const id of NAMED_FACE_IDS) {
+      if (version.faces[id]) return id;
+    }
+  }
+  if (version.visual) return "visual";
+  return "source";
+}
+
+/**
+ * All distinct faces available on `version` in display order, for the workbench
+ * stage toggle bar and canvas face controls.
+ */
+export function availableFacesOf(version: ItemVersion | undefined): ItemFaceId[] {
+  if (!version) return ["source"];
+  const result: ItemFaceId[] = [];
+  const namedHashes = new Set<string>();
+  if (version.faces) {
+    for (const id of NAMED_FACE_IDS) {
+      const face = version.faces[id];
+      if (face) {
+        result.push(id);
+        namedHashes.add(face.blobHash);
+      }
+    }
+  }
+  if (
+    version.visual &&
+    version.visual.blobHash !== version.blobHash &&
+    !namedHashes.has(version.visual.blobHash)
+  ) {
+    result.push("visual");
+  }
+  const hasDistinctFace =
+    result.length > 0 &&
+    (result.length > 1 ||
+      (version.visual !== undefined && version.visual.blobHash !== version.blobHash) ||
+      Object.values(version.faces ?? {}).some((f) => f !== undefined && f.blobHash !== version.blobHash));
+  if (hasDistinctFace) {
+    result.push("source");
+  }
+  return result.length > 0 ? result : ["source"];
+}
+
+/**
+ * Blob hashes of HTML faces on `version` other than `activeBlobHash`, so
+ * `HtmlItemView` can pre-warm their iframes in the background for a zero-flash
+ * toggle when switching between wireframe and hi-fi.
+ */
+export function warmFacesOf(version: ItemVersion | undefined, activeBlobHash: string): string[] {
+  if (!version) return [];
+  const hashes = new Set<string>();
+  if (version.faces) {
+    for (const id of NAMED_FACE_IDS) {
+      const face = version.faces[id];
+      if (face && face.mimeType === "text/html" && face.blobHash !== activeBlobHash) {
+        hashes.add(face.blobHash);
+      }
+    }
+  }
+  if (
+    version.visual &&
+    version.visual.mimeType === "text/html" &&
+    version.visual.blobHash !== activeBlobHash
+  ) {
+    hashes.add(version.visual.blobHash);
+  }
+  return [...hashes];
+}
+
+/**
+ * The source face of the artifact: shown in the workbench editor, inspected via
+ * `isocan get`, and synchronized with disk via `isocan save`.
+ */
+export function sourceFaceOf(version: ItemVersion | undefined): {
+  blobHash: string;
+  mimeType: string;
+  filename: string;
+  size: number;
+} {
+  if (!version) {
+    return { blobHash: "", mimeType: "text/plain", filename: "", size: 0 };
   }
   return {
     blobHash: version.blobHash,
@@ -124,31 +350,30 @@ export function visualFaceOf(version: ItemVersion): {
   };
 }
 
+/** Is a visual or named face distinct from the source face? */
+export function hasDistinctVisualFace(version: ItemVersion | undefined): boolean {
+  if (!version) return false;
+  if (version.visual !== undefined && version.visual.blobHash !== version.blobHash) {
+    return true;
+  }
+  if (version.faces) {
+    for (const id of NAMED_FACE_IDS) {
+      const face = version.faces[id];
+      if (face && face.blobHash !== version.blobHash) return true;
+    }
+  }
+  return false;
+}
+
 /**
- * The source face of the artifact: shown in the workbench editor, inspected via
- * `isocan get`, and synchronized with disk via `isocan save`.
+ * One thing on the canvas: a box in world coordinates, a stack of versions, and free-form
+ * `properties` — which is where every kind (text node, drawing, area) says what it is.
  */
-export function sourceFaceOf(version: ItemVersion): {
-  blobHash: string;
-  mimeType: string;
-  filename: string;
-  size: number;
-} {
-  return {
-    blobHash: version.blobHash,
-    mimeType: version.mimeType,
-    filename: version.filename,
-    size: version.size,
-  };
-}
-
-/** Is the visual face distinct from the source face? */
-export function hasDistinctVisualFace(version: ItemVersion): boolean {
-  return version.visual !== undefined && version.visual.blobHash !== version.blobHash;
-}
-
 export interface Item {
   id: string;
+  /** Explicit canvas membership; coordinates remain in world space. */
+  containerId?: string;
+  groupLayout?: GroupLayout;
   /** World coordinates, top-left corner. */
   x: number;
   y: number;
@@ -194,16 +419,79 @@ export interface Item {
   updatedBy: Actor;
 }
 
+/**
+ * One message in a thread. The `design*` fields are writer-minted facts that an ordinary
+ * comment write cannot supply; most comments carry none of them.
+ */
 export interface Comment {
   id: string;
   author: Actor;
   body: string;
+  /** Writer-owned comparisons and adoption facts; ordinary comment input cannot mint their authority. */
+  designDecision?: import("./design-decision.ts").DesignDecisionComment;
+  /** Immutable canonical questionnaire facts; ordinary comment writes cannot supply these. */
+  design?: import("./design-partner.ts").DesignQuestionSet | import("./design-partner.ts").DesignResponse;
+  designReferences?: import("./questionnaire.ts").QuestionnaireRetainedReference[];
+  designLegacySource?: import("./questionnaire.ts").LegacyQuestionSource;
   /** Actor ids @-mentioned in the body, resolved at authoring time against
    * the actors the author could see. Absent on older comments. */
   mentions?: string[];
+  /**
+   * **A record of something that already happened, which summons nobody.**
+   *
+   * See `reasonFor` in `inbox.ts` for the routing rule this sets. The short
+   * version: a voice session's transcript is not an ask, and posting one to
+   * the Chat woke every parked agent, each of which read somebody's spoken
+   * half of a conversation as a request addressed to it.
+   *
+   * Unlike the other typed fields here it is NOT writer-owned, and the
+   * asymmetry is the argument for letting ordinary comment input carry it:
+   * `designDecision` and `design` confer authority, so minting one has to be
+   * impossible. This takes authority AWAY. The worst an author can do with it
+   * is decline to page people they could simply not have named.
+   *
+   * **A roll-call line says which** (`roll.ts`): `"here"`, `"back"` or
+   * `"away"` in place of `true` — an agent saying it arrived, came back or
+   * stepped away. Still a record everywhere a record is read truthily, and
+   * the one value the next arrival reads to know what this agent last said.
+   */
+  record?: true | import("./roll.ts").RollKind;
+  /** A person pressed a control in a prototype; see `prototype-click.ts`. */
+  click?: import("./prototype-click.ts").PrototypeClick;
+  /** A person deleted this proposal (an item id); its author is asked what it taught — see `proposal.ts`. */
+  deleted?: string;
+  /**
+   * A critic's note worn by the lead (proactive-agent phase 8, design §9):
+   * the critic card's name (`critique.critic`), so one actor is accountable
+   * for the words and the canvas colours the pin in the critic's colour.
+   */
+  persona?: string;
+  /**
+   * A turn of a goodnight conversation that machinery reads (proactive-agent
+   * phase 2, `goodnight.ts`): `plan`, the person saying "That's the plan";
+   * `brief`, the agent's account of the night, a `record` naming its note —
+   * what the morning review finds it by.
+   */
+  goodnight?: GoodnightMark;
+  /**
+   * The readings a person picked for their own vague words (proactive-agent
+   * phase 10, `vague-words.ts`): "pop" read as `contrast`. The body is what
+   * they typed, untouched; this says which way they meant it, and an agent
+   * honours it rather than guessing.
+   */
+  readings?: Array<{ word: string; reading: string }>;
+  /**
+   * **A moment in the item, in seconds** (motion phase 2): a comment pinned
+   * to a motion at 1.2 s says *"wordmark overshoots here"* about that frame,
+   * and opening it scrubs the player there. A property on the comment, not
+   * an op (motion design §2); at most a day, to the millisecond.
+   */
+  at?: number;
   /** Item ids #-referenced in the body, resolved at authoring time against
    * the live items the author could see. Absent on older comments. */
   items?: string[];
+  /** Writer-resolved request scope, retained independently of live item versions. */
+  context?: import("./canvas-group-context.ts").ContextManifest;
   createdAt: string;
   /** When the author last rewrote it, if they did. This is what makes a
    * working note possible: one comment that says "on it", then what it found,
@@ -213,6 +501,17 @@ export interface Comment {
   editedAt?: string;
 }
 
+/** What a goodnight comment carries: which turn it is, and for a brief, the note it reports on. */
+export interface GoodnightMark {
+  step: "plan" | "brief";
+  /** The note's item id — a brief only. */
+  note?: string;
+}
+
+/**
+ * A conversation pinned to a point: freestanding in world space, or anchored to an item so
+ * the pin moves with it. The canvas's Chat is a thread too, marked `main`.
+ */
 export interface CommentThread {
   id: string;
   /** Freestanding: world coordinates of the pin. Anchored: offset from the
@@ -222,6 +521,8 @@ export interface CommentThread {
   /** null = freestanding. If the anchor item is in the trash or missing,
    * renderers fall back to treating (x, y) as world coordinates. */
   anchorItemId: string | null;
+  /** Optional saved text selection, with the original version as provenance. */
+  textAnchor?: TextAnchor | null;
   /** Always at least one comment. */
   comments: Comment[];
   /** At most one thread on a canvas is "main": the designated agent↔user
@@ -233,10 +534,18 @@ export interface CommentThread {
   createdBy: Actor;
 }
 
+/**
+ * A deleted item, whole, with who deleted it — deletion is a move to here, which is what
+ * makes it undoable.
+ */
 export interface TrashEntry {
   item: Item;
   deletedAt: string;
   deletedBy: Actor;
+  /** Captured deletion act; subtree restore never steals another act's trash. */
+  cohort?: GroupDeletionCohort;
+  /** Converted legacy trash has no historical subtree or deletion cohort to recover. */
+  legacyGroupRestore?: "frame-only" | "root";
 }
 
 /**
@@ -253,15 +562,78 @@ export interface EnrolledAgent {
   actor: Actor;
   /** Opaque until phase 4 defines the vocabulary; stored as handed over. */
   rules?: unknown;
+  /**
+   * **Who wrote the enrolment as it stands** — the author of the last
+   * `agent.enroll` for this actor, stamped by the reducer from the envelope
+   * the way an item's `updatedBy` is (owner-only summons, 11 Sep 2026).
+   *
+   * It exists because `rules.listen` is a consent fact written into a record
+   * every admitted member can write: without it, "answers only its owner" is
+   * one hand-made `agent.enroll` away from "answers everyone", and the rc
+   * could not tell the owner's widening from a stranger's. The rc that
+   * answers honours a stored gate only when this is its owner's word (or an
+   * actor speaking from the owner's machine); anyone else's write reads as
+   * owner-only there. Absent on rows written before the stamp, which the rc
+   * takes as they stand — until that day the only verbs that wrote a gate ran
+   * on the machine that answers.
+   */
+  writtenBy?: Actor;
+  /**
+   * **Which bench vouched for this agent** — the canvas id an `agent.invite`
+   * carried (the bench, journey 2). Absent on every row written by
+   * `agent.enroll`, which is most of them: an enrolment made from the machine
+   * that answers has no bench behind it to name.
+   *
+   * It is provenance and nothing more. Nothing reads it to decide anything —
+   * no reach, no gate, no right to summon — because a bench row confers
+   * nothing, and a field that started deciding would be the fence
+   * `agent-custody` built coming down quietly. It is here so the record can
+   * say where an invitation came from when somebody asks.
+   */
+  invitedFrom?: string;
+  /**
+   * **What this agent may do here, at most** (critique phase 2) — `note`
+   * for an enrolled critic: notes on items, replies, reactions, and nothing
+   * else, checked at the home after the badge's capability
+   * (`ceilingRefusal`), so it only ever narrows. Written by `agent.ceiling`,
+   * kept across a re-enrolment, gone with the row on `agent.withdraw`.
+   */
+  ceiling?: "note";
+  /** Who set the ceiling — the one actor, beside `agent.withdraw`, whose
+   *  `agent.ceiling … null` lifts it. */
+  ceilingBy?: Actor;
 }
 
+/**
+ * Everything ON one canvas: items, threads, the trash, and the agents with standing here.
+ * What the reducer mutates, and what the web client replicates.
+ */
 export interface CanvasContents {
   items: Record<string, Item>;
   threads: Record<string, CommentThread>;
   trash: TrashEntry[];
+  /** One O(n) capture per deletion, retained while members may be restored. */
+  groupCohorts?: Record<string, GroupCohortRecord>;
   /** Standing agents by actor id. Optional because snapshots older than the
    * field exist on disk; read it through `?? {}`. */
   agents?: Record<string, EnrolledAgent>;
+  /**
+   * **Agents somebody took off this canvas, and who did it** (pets phase 2):
+   * actor id → the author of the last `agent.withdraw` for it.
+   *
+   * It exists because withdrawal deletes the row, and a pet that follows its
+   * owner must not walk back onto a canvas it was removed from (pets journey,
+   * scene 3): "withdrawn from here" has to be readable from the canvas, not
+   * reconstructed from an oplog that compaction may have archived. Nothing
+   * lifts it, and nothing needs to: it only matters while the agent stands
+   * nowhere here, and a person who brings the agent back by hand (`agent.
+   * enroll`, `agent.invite`) makes it stand again; a later withdrawal simply
+   * writes a newer word. A record of the room's decision, read by
+   * `petsToBring` and nothing else — it refuses nothing at the door, so a
+   * person may always join an agent by hand. Absent on canvases where nobody
+   * has withdrawn an agent since the field existed.
+   */
+  withdrawn?: Record<string, Actor>;
 }
 
 /**
@@ -280,6 +652,9 @@ export interface CanvasState {
   canvas: CanvasContents;
 }
 
+/**
+ * A canvas with nothing on it — the state a new canvas starts from, and a reducer test's floor.
+ */
 export function emptyCanvas(): CanvasContents {
   return { items: {}, threads: {}, trash: [], agents: {} };
 }

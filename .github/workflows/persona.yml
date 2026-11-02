@@ -35,23 +35,45 @@ jobs:
   personas:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    # `secrets` cannot be read from a step's `if`, only from the job's env —
+    # the same arrangement as changelog.yml.
+    env:
+      HAS_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
       # The goals point at commands that grade a page in a browser and run
       # eslint; both need the workspace installed and built.
-      - run: npm ci
+      # --ignore-scripts: the root `prepare` would build the web app here, and
+      # the step below builds it again where it can be seen (DC-5, 27 Sep 2026;
+      # the Dockerfile's reason, and test/workflows.test.ts holds it).
+      - run: npm ci --ignore-scripts
       - run: npm run build
+
+      # The cheap tier's harness (docs/research/2026-09-07-small-personas.md).
+      # A persona that declares a `budget` gets one bounded `claude -p` call on
+      # a night its number misses — `librarian`, on Haiku, capped at $0.05.
+      # Installed only when there is a key: without one the runner SKIPS the
+      # small pass, says so on the page, and the finding waits for a person
+      # like any other, so this workflow stays green before the secret exists.
+      - name: Install the small tier's harness
+        if: env.HAS_KEY == 'true'
+        run: npm install -g @anthropic-ai/claude-code
 
       # A MISSED goal is news and does not fail this step — the page is the
       # report, and a run that goes red every morning trains everybody to stop
       # looking. It fails for one reason: an instrument that would not run,
       # because a number nobody could take must never be filed as a zero.
+      #
+      # The key reaches ONLY personas with a declared budget: the runner never
+      # starts a model for one without (`smallPassWanted`), so the nine opus
+      # personas take their numbers here exactly as before, for $0.
       - name: Take each persona's numbers
         env:
           ONE: ${{ inputs.persona }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: node scripts/persona-run.mjs ${ONE:---all}
 
       # A SEPARATE step, deliberately, and not something `persona-run.mjs` does.
@@ -66,11 +88,20 @@ jobs:
       - name: Rebuild the review index
         run: node scripts/reviews.mjs
 
+      # The same reason, one page along (cleanup TR-3, 27 Sep 2026).
+      # `docs/decisions.md` is derived partly from `docs/reviews/lessons.md`,
+      # and `test/decisions.test.ts` holds it to its generator — so a night
+      # that adds a lesson and merges itself would leave main red on a page
+      # nobody touched. The run rebuilds what it made stale; the generator
+      # rewrites only between its markers.
+      - name: Rebuild the decisions page
+        run: node scripts/decisions.mjs
+
       - name: Open the pull request
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if [ -z "$(git status --porcelain docs/reviews)" ]; then
+          if [ -z "$(git status --porcelain docs/reviews docs/decisions.md)" ]; then
             echo "nothing changed — the same readings as the last run"
             exit 0
           fi
@@ -78,7 +109,7 @@ jobs:
           git config user.name "isocan personas"
           git config user.email "noreply@github.com"
           git checkout -b "personas/$DAY"
-          git add docs/reviews
+          git add docs/reviews docs/decisions.md
           git commit -m "Persona runs: $DAY"
           git push -u origin "personas/$DAY" --force
           gh pr list --head "personas/$DAY" --json number --jq '.[0].number' | grep -q . || \
@@ -106,10 +137,17 @@ jobs:
           # The diff is checked rather than trusted: anything outside
           # docs/reviews/ and this PR stays for a person, which is also the
           # backstop if `persona-run.mjs` ever writes somewhere it should not.
+          #
+          # One page outside it is admitted, by name: `docs/decisions.md`, which
+          # the step above regenerates from the lessons (TR-3, 27 Sep 2026). A
+          # page computed from the reviews is no more a person's judgement than
+          # the reviews are, and leaving it out would strand every night that
+          # adds a lesson. `test/workflows.test.ts` runs SCOPE through this grep.
+          SCOPE='^(docs/reviews/|docs/decisions\.md$)'
           CHANGED="$(gh pr diff --name-only "personas/$DAY" || true)"
-          if [ -n "$CHANGED" ] && ! printf '%s\n' "$CHANGED" | grep -qv '^docs/reviews/'; then
+          if [ -n "$CHANGED" ] && ! printf '%s\n' "$CHANGED" | grep -Eqv "$SCOPE"; then
             gh pr merge --squash --delete-branch "personas/$DAY" \
               || echo "could not merge automatically — left for a person"
           else
-            echo "touches more than docs/reviews/ — left for a person"
+            echo "touches more than docs/reviews/ and docs/decisions.md — left for a person"
           fi

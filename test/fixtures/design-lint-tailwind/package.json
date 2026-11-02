@@ -1,0 +1,17 @@
+{
+  "name": "acme-tailwind-lint-fixture",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "devDependencies": {
+    "@shadcn/lint": "0.1.0",
+    "@typescript-eslint/parser": "8.68.0",
+    "class-variance-authority": "0.7.1",
+    "eslint": "10.9.1",
+    "tailwindcss": "4.3.3"
+  },
+  "version": "0.0.0"
+}

@@ -1,6 +1,6 @@
-import { promises as fs } from "node:fs";
+import { promises as fs, readFileSync } from "node:fs";
 import path from "node:path";
-import { normalizeHomeUrl } from "@isocan/core";
+import { isLoopbackBase, normalizeHomeUrl } from "@isocan/core";
 import { configFile } from "./paths.ts";
 
 /**
@@ -44,6 +44,38 @@ export async function updateConfigFile<T extends object>(home: string, patch: Pa
   await fs.writeFile(configFile(home), `${JSON.stringify({ ...current, ...patch }, null, 2)}\n`);
 }
 
+/**
+ * Per-home credential helper and forward-proxy entry in `~/.isocan/config.json`
+ * (`homeAuth[homeUrl]`) or `ISOCAN_HOME_AUTH`.
+ */
+export interface HomeAuthEntry {
+  /** Argv array, JSON-encoded argv string, or executable path run via `execFile` to print proxy auth headers. */
+  authHeaderCommand?: readonly string[] | string;
+  /** Optional explicit HTTP/HTTPS forward proxy URL for outbound requests to this home. */
+  httpProxy?: string;
+  /**
+   * How `httpProxy` reaches an `https:` home:
+   * - `true` (default): HTTP `CONNECT` tunnel; this process performs TLS with the home.
+   * - `false`: plain HTTP/1.1 forward request (`Host: <home>`) to a loopback (`127.0.0.1` / `localhost`)
+   *   sidecar proxy that originates the upstream TLS / client-certificate connection itself.
+   */
+  proxyTunnel?: boolean;
+  /** Cache TTL in seconds for headers emitted by `authHeaderCommand` (default `300`). */
+  ttlSeconds?: number;
+}
+
+/** Normalized per-home credential helper and forward-proxy configuration resolved by `homeAuthFor`. */
+export interface HomeAuthConfig {
+  /** Normalized argv array (`shell: false`) executed to obtain proxy auth headers. */
+  authHeaderCommand?: readonly string[];
+  /** Normalized forward-proxy URL for this home, when configured. */
+  httpProxy?: string;
+  /** Whether `httpProxy` uses `CONNECT` tunneling (`true`, default) or plain HTTP/1.1 to a loopback TLS-originating proxy (`false`). */
+  proxyTunnel?: boolean;
+  /** Positive cache TTL in seconds, when explicitly configured. */
+  ttlSeconds?: number;
+}
+
 /** The one key this package reads for itself. */
 export interface HomeConfig {
   /**
@@ -67,6 +99,240 @@ export interface HomeConfig {
    * mean two spellings forever.
    */
   home?: string;
+  /**
+   * **Per-home transport gateways** — local endpoints (e.g. `"http://127.0.0.1:4442"`)
+   * dialled when speaking HTTP or WebSocket to a home whose canonical URL sits
+   * behind an authenticating proxy (`"https://canvas.acme.example"`).
+   *
+   * Canonical `homeUrl` values remain untouched everywhere in `.isocan/project.json`,
+   * `homes.json`, `identity.json`, and `expectedHome` checks; only outbound wire
+   * connections substitute the gateway origin.
+   */
+  gateways?: Record<string, string>;
+  /**
+   * **Per-home external credential helpers and forward proxies** — keyed by
+   * canonical `homeUrl` (`"https://canvas.acme.test"`), so the CLI can run a
+   * local command (`execFile`, `shell: false`) to obtain short-lived proxy
+   * headers and optionally route through an explicit `httpProxy` without a
+   * background local gateway daemon.
+   */
+  homeAuth?: Record<string, HomeAuthEntry>;
+}
+
+function parseCommandSpec(raw: unknown): readonly string[] | undefined {
+  if (Array.isArray(raw)) {
+    if (
+      raw.length > 0 &&
+      raw.every((part): part is string => typeof part === "string") &&
+      raw[0]!.trim().length > 0
+    ) {
+      return raw;
+    }
+    return undefined;
+  }
+  if (typeof raw !== "string") return undefined;
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+  if (trimmed.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      return Array.isArray(parsed) ? parseCommandSpec(parsed) : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  return [trimmed];
+}
+
+function normalizeHomeAuthEntry(raw: unknown): HomeAuthConfig | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const record = raw as Record<string, unknown>;
+  const authHeaderCommand = parseCommandSpec(record.authHeaderCommand);
+  const httpProxy =
+    typeof record.httpProxy === "string" && record.httpProxy.trim().length > 0
+      ? record.httpProxy.trim()
+      : undefined;
+  const proxyTunnel =
+    typeof record.proxyTunnel === "boolean" ? record.proxyTunnel : undefined;
+  const ttlSeconds =
+    typeof record.ttlSeconds === "number" &&
+    Number.isFinite(record.ttlSeconds) &&
+    record.ttlSeconds > 0
+      ? record.ttlSeconds
+      : undefined;
+  if (!authHeaderCommand && !httpProxy) return null;
+  return {
+    ...(authHeaderCommand ? { authHeaderCommand } : {}),
+    ...(httpProxy ? { httpProxy } : {}),
+    ...(proxyTunnel !== undefined ? { proxyTunnel } : {}),
+    ...(ttlSeconds !== undefined ? { ttlSeconds } : {}),
+  };
+}
+
+/**
+ * Resolve the normalized external credential helper and forward-proxy settings
+ * for `homeUrl` (`ISOCAN_HOME_AUTH` JSON map first, then `config.json`'s
+ * `homeAuth`, and `ISOCAN_AUTH_HEADER_COMMAND` when `homeUrl` matches
+ * `ISOCAN_HOME_URL` or `config.json`'s `home` or when no other home is
+ * configured). Loopback URLs are intentionally preserved so local proxy tests
+ * and SSH tunnels work.
+ */
+export function homeAuthFor(
+  homeUrl: string,
+  home: string,
+  env: NodeJS.ProcessEnv = process.env,
+): HomeAuthConfig | null {
+  const canonical = normalizeHomeUrl(homeUrl);
+  if (!canonical) return null;
+  const lookup = (map: unknown): HomeAuthConfig | null => {
+    if (!map || typeof map !== "object" || Array.isArray(map)) return null;
+    for (const [k, v] of Object.entries(map as Record<string, unknown>)) {
+      if (normalizeHomeUrl(k) !== canonical) continue;
+      const entry = normalizeHomeAuthEntry(v);
+      if (entry) return entry;
+    }
+    return null;
+  };
+  let envMapRaw: unknown = null;
+  const fromEnvRaw = env.ISOCAN_HOME_AUTH?.trim();
+  if (fromEnvRaw) {
+    try {
+      envMapRaw = JSON.parse(fromEnvRaw);
+    } catch {
+      // Malformed JSON falls back to config.json rather than crashing client construction.
+    }
+  }
+  let parsed: HomeConfig | null = null;
+  try {
+    parsed = JSON.parse(readFileSync(configFile(home), "utf8")) as HomeConfig | null;
+  } catch {
+    // Missing or malformed config.json is treated as empty.
+  }
+  const fromEnvMap = lookup(envMapRaw);
+  const fromFileMap = lookup(parsed?.homeAuth);
+  const envCmd = parseCommandSpec(env.ISOCAN_AUTH_HEADER_COMMAND);
+  let cmdApplies = false;
+  if (envCmd) {
+    const envHome = env.ISOCAN_HOME_URL?.trim() ? normalizeHomeUrl(env.ISOCAN_HOME_URL.trim()) : null;
+    const fileHome =
+      typeof parsed?.home === "string" && parsed.home.trim()
+        ? normalizeHomeUrl(parsed.home.trim())
+        : null;
+    if (envHome || fileHome) {
+      cmdApplies = canonical === envHome || canonical === fileHome;
+    } else {
+      const configuredUrls = new Set<string>();
+      for (const map of [envMapRaw, parsed?.homeAuth]) {
+        if (!map || typeof map !== "object" || Array.isArray(map)) continue;
+        for (const [k, v] of Object.entries(map as Record<string, unknown>)) {
+          const url = normalizeHomeUrl(k);
+          if (url && normalizeHomeAuthEntry(v)) configuredUrls.add(url);
+        }
+      }
+      cmdApplies =
+        configuredUrls.size === 0 || (configuredUrls.size === 1 && configuredUrls.has(canonical));
+    }
+  }
+  const authHeaderCommand =
+    fromEnvMap?.authHeaderCommand ??
+    (cmdApplies ? envCmd : undefined) ??
+    fromFileMap?.authHeaderCommand;
+  const httpProxy = fromEnvMap?.httpProxy ?? fromFileMap?.httpProxy;
+  const proxyTunnel = fromEnvMap?.proxyTunnel ?? fromFileMap?.proxyTunnel;
+  const ttlSeconds = fromEnvMap?.ttlSeconds ?? fromFileMap?.ttlSeconds;
+  if (!authHeaderCommand && !httpProxy) return null;
+  return {
+    ...(authHeaderCommand ? { authHeaderCommand } : {}),
+    ...(httpProxy ? { httpProxy } : {}),
+    ...(proxyTunnel !== undefined ? { proxyTunnel } : {}),
+    ...(ttlSeconds !== undefined ? { ttlSeconds } : {}),
+  };
+}
+
+/**
+ * Return the single normalized `homeUrl` when `homeAuth` has one entry (in
+ * `ISOCAN_HOME_AUTH` or `config.json`), or `ISOCAN_HOME_URL` / `config.json`'s
+ * `home` when `ISOCAN_AUTH_HEADER_COMMAND` is set. Returns `null` when multiple
+ * homes are configured or no `homeAuth` target is unambiguous.
+ */
+export function configuredHomeAuthUrl(
+  home: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string | null {
+  const singleKey = (map: unknown): string | null | "multiple" => {
+    if (!map || typeof map !== "object" || Array.isArray(map)) return null;
+    const urls = new Set<string>();
+    for (const [k, v] of Object.entries(map as Record<string, unknown>)) {
+      const url = normalizeHomeUrl(k);
+      if (url && normalizeHomeAuthEntry(v)) urls.add(url);
+    }
+    if (urls.size === 1) return [...urls][0]!;
+    if (urls.size > 1) return "multiple";
+    return null;
+  };
+  const fromEnvRaw = env.ISOCAN_HOME_AUTH?.trim();
+  if (fromEnvRaw) {
+    try {
+      const hit = singleKey(JSON.parse(fromEnvRaw));
+      if (hit === "multiple") return null;
+      if (hit) return hit;
+    } catch {
+      // Malformed JSON falls back to config.json.
+    }
+  }
+  let parsed: HomeConfig | null = null;
+  try {
+    parsed = JSON.parse(readFileSync(configFile(home), "utf8")) as HomeConfig | null;
+  } catch {
+    // Missing or malformed config.json is treated as empty.
+  }
+  const fromFile = singleKey(parsed?.homeAuth);
+  if (fromFile === "multiple") return null;
+  if (fromFile) return fromFile;
+  if (parseCommandSpec(env.ISOCAN_AUTH_HEADER_COMMAND)) {
+    const envHome = env.ISOCAN_HOME_URL?.trim();
+    if (envHome) return normalizeHomeUrl(envHome);
+    const fileHome = typeof parsed?.home === "string" ? parsed.home.trim() : "";
+    if (fileHome) return normalizeHomeUrl(fileHome);
+  }
+  return null;
+}
+
+/**
+ * Resolve the transport dial URL for a canonical `homeUrl`, or `null` when no
+ * gateway is configured (`ISOCAN_HOME_GATEWAYS` env JSON first, then `gateways`
+ * in `config.json`).
+ */
+export function gatewayBaseFor(
+  homeUrl: string,
+  home: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string | null {
+  const canonical = normalizeHomeUrl(homeUrl);
+  const lookup = (map: unknown): string | null => {
+    if (!map || typeof map !== "object") return null;
+    for (const [k, v] of Object.entries(map as Record<string, unknown>)) {
+      if (typeof v !== "string" || !v.trim()) continue;
+      if (normalizeHomeUrl(k) === canonical) return normalizeHomeUrl(v.trim());
+    }
+    return null;
+  };
+  const fromEnv = env.ISOCAN_HOME_GATEWAYS?.trim();
+  if (fromEnv) {
+    try {
+      const hit = lookup(JSON.parse(fromEnv));
+      if (hit) return hit;
+    } catch {
+      // Malformed JSON falls back to config.json rather than crashing client construction.
+    }
+  }
+  if (isLoopbackBase(canonical)) return null;
+  try {
+    const parsed = JSON.parse(readFileSync(configFile(home), "utf8")) as HomeConfig | null;
+    return lookup(parsed?.gateways);
+  } catch {
+    return null;
+  }
 }
 
 /**

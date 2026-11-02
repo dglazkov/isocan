@@ -6,8 +6,13 @@ effort: xhigh
 color: cyan
 tools: Read, Write, Edit, Glob, Grep, Bash
 goal:
+  # 1 → 9 on 2026-09-20, accepted by Dion. The bound was 1 so the reducer would
+  # stay portable, and nine says that is now an intention rather than a
+  # measurement. Raising it records the truth instead of failing nightly about
+  # it — but the portability argument is NOT withdrawn, and the honest way back
+  # is work that removes dependencies, not a number that stops asking.
   - name: runtime dependencies of @isocan/core
-    at most: 1
+    at most: 9
     measured by: node scripts/measure.mjs core-runtime-deps
     baseline: 1, 2026-08-29, 6b1afaf
   # The product's central claim, as a number that can fail: every shared fact
@@ -17,6 +22,48 @@ goal:
   # perfectly by themselves. Audited 8 Sep 2026 and it was already zero, which
   # is why this is a bound rather than a ratchet: a guard is cheapest to
   # install at the moment the thing it guards is already true.
+  # **The doors the work queues at** (13 Sep 2026). Measured because Dimitri
+  # noticed the work had slowed and the repository's size turned out not to be
+  # the reason: 143k lines of source, a 4.4s build, a 29s typecheck — none of
+  # that is a codebase too big to work in. What had slowed was every unit of
+  # work passing through the same few files. In the fortnight to 13 September,
+  # `main.ts` took 120 touches, `styles.css` 108 and `agent-guide.md` 81, so
+  # parallel branches conflicted by construction rather than by accident.
+  #
+  # Lines are a crude stand-in for "how much has to go through one door" and
+  # that is the right crudeness: it cannot be argued with, it moves the moment
+  # somebody adds to a crowded file, and it goes DOWN when the thing that
+  # actually fixes it happens — a command family moving to its own module, a
+  # component taking its own stylesheet.
+  #
+  # The bound is where it stands today, so the number can only be paid down.
+  # Not a gate: a missed bound here is news in the nightly queue, because a
+  # hard stop on this would be switched off by the first person who needed one
+  # more line at midnight. `--names` says which door is worst.
+  # 24058 → 25267 on 2026-09-20, accepted by Dion in the nightly queue after the
+  # finding stood twice (15 and 16 Sep). The growth is extensions phase 3, voice
+  # phases 2–3 and memory phase 6 landing together rather than one crowded
+  # commit. The ratchet is unchanged in kind: it stands where the number stands,
+  # so this can still only be paid down, and `--names` says `main.ts` is the
+  # door — 14847 of the 25267. Paying it down is a command family moving out.
+  - name: lines in the files every feature must edit
+    at most: 25267
+    measured by: node scripts/measure.mjs registry-lines
+    baseline: 25267, 2026-09-20, ba75c0fb
+  # **What every agent pays before its first act** (#124, 24 Sep 2026). The
+  # guide `isocan --agent-help` printed had grown to ~59k tokens, all of it on
+  # every cold start, because each feature added a paragraph and nothing said
+  # no. It is now a cold start plus topics; this is the bound on the cold
+  # start. The same number is a test (`packages/cli/test/agent-guide.test.ts`),
+  # so a commit that crosses it is red at once — the goal is here so the
+  # nightly reads it beside op-types, which is the same argument about a
+  # different surface: the vocabulary an agent must hold should grow on
+  # purpose. Raise both together, by hand, with a sentence about what moved
+  # into the cold start and why it could not be a topic.
+  - name: tokens an agent reads before its first act
+    at most: 3500
+    measured by: node scripts/measure.mjs agent-help-tokens
+    baseline: 2982, 2026-09-24
   - name: operations a person can send and an agent cannot
     at most: 0
     measured by: node scripts/measure.mjs web-only-ops
@@ -50,10 +97,115 @@ goal:
   # Both are home-scoped and not undoable, exactly like `actor.setColor` next
   # to them, so this is the existing actor.* family growing rather than a new
   # kind of fact. The vocabulary genuinely needed to be bigger.
+  #
+  # HELD at 33 on 2026-09-12, and the holding is worth as much as a raise
+  # because it was pre-authorized. Dion decided on 11 Sep that seen-marks
+  # (#147 step 2, #134 step 4) could take a NEW OP if one was genuinely
+  # needed. None was, and the argument is
+  # `docs/research/2026-09-12-seen-marks.md` D4:
+  #
+  #   The invariant that holds for all 33 is that an op is appended to a log
+  #   AND its effect is visible to everyone who can see the thing it is
+  #   about. A seen-mark breaks both halves on purpose — nobody else may see
+  #   what you have read, and a log line per glance is attention replicating
+  #   — so an op would have needed exemptions from replication, from undo,
+  #   from the wire shapes and from the log. Four exceptions to the
+  #   definition of an op is not an op.
+  #
+  # It is desk state instead, written through the daemon API, which is the
+  # path the journey's rule 5 already names for grants, passes and spaces.
+  # The isomorphism is untouched: both surfaces call one route and merge with
+  # one function in `core/seen.ts`. If this bound ever rises for read state,
+  # that note is the thing to argue with.
+  # Canvas groups add one atomic structural act (group.change), with a closed
+  # intent union and exact inverse, instead of loops of per-item operations.
+  # See docs/projects/canvas-groups/design.md; the parser counts it directly.
+  # **34 -> 35 on 14 Sep, for `item.edit`, at Dion's answer.** The vocabulary is
+  # the product's central claim and grows only when an operation does something
+  # none of the others can. This one does: content AND metadata as a single
+  # conditional, undoable act, gated on `expectedVersionId` and
+  # `expectedMetadata`. The two-op alternative — `item.addVersion` then an
+  # update — cannot be conditional as one and cannot undo as one, which is the
+  # whole reason a concept's body and its title move together or not at all.
+  #
+  # It is a distinct type rather than a flag so an older daemon REFUSES it
+  # instead of ignoring a precondition it does not implement, which is the
+  # difference between a stale client that stops and one that silently writes
+  # over somebody. It inverts (`invert.ts`), it is sent from four places in the
+  # anatomy module, it is in that module's agent guide, and `web-only-ops`
+  # stays 0 — it is not a verb a person has and an agent does not.
+  #
+  # 35 → 36 on 2026-09-14: `item.pruneVersions`, which keeps the newest N
+  # versions of one item and forgets the rest. Not a loop of the existing
+  # `item.removeVersion` — that one is marked internal, the inverse of
+  # `item.addVersion` and nothing else, and N of them is N chances for a
+  # replica to fold half a prune and disagree with the home about an item's
+  # history. One op replays whole. It is in the log rather than beside `gc`
+  # for the same reason: maintenance done outside the log is invisible to
+  # every replica that folds it. It refuses to invert (`invert.ts`, beside
+  # `trash.empty`), it is confirmation-gated on both surfaces, and
+  # `web-only-ops` stays 0 — `isocan version prune` is the same act.
+  # 36 → 40 was omitted when design-partner phases 1–2 shipped. Recorded on
+  # 2026-09-15: questionnaire.ask/answer refuse old decoders instead of silently
+  # dropping typed authorship; design.request/receipt admit briefs and evidence
+  # at the writer instead of trusting public JSON. Their inverses reuse existing
+  # effects. All four have actual API, CLI and web producers.
+  #
+  # 40 → 44 is the deliberate phase 4 mechanism, committed before code:
+  # design.compare publishes an exact comparison; design.respond records a
+  # non-adopting revision/delegation with human or honest native-report custody;
+  # design.decide adopts content and records the choice in one fixed pair;
+  # internal design.restore makes that pair one conflict-safe Undo/Redo.
+  # Ordinary questionnaire answers remain known-human-only. A generic batch or
+  # separate answer/edit cannot enforce this act. The full argument and proof
+  # are docs/projects/design-partner/comparisons-and-decisions.md. This records
+  # specific vocabulary, not headroom for unspecified later operations.
+  # 44 → 45 on 2026-09-15: design-partner phase 5 adds design.repair, one
+  # conditional item.edit effect with an exact admitted-task continuation edge.
+  # Ordinary repairs strand selected-target context; a fake design decision or
+  # silent request recapture would hide that mismatch. No extra batch/inverse op.
+  #
+  # **45 → 46 on 2026-09-15: `agent.invite`** (the bench, phase 1). It is
+  # `agent.enroll` plus provenance — enroll says *this actor answers here*,
+  # invite says *this actor answers here, and here is the bench that vouched
+  # for it* — and it exists so a person can bring an agent they ALREADY HAVE
+  # to a canvas it has never worked on. Until now that was the same act as
+  # introducing a stranger ("no rc, no button"), which is why an agent's fifth
+  # canvas was as hard as its first.
+  #
+  # A distinct type rather than a `from` field on enroll, for the argument
+  # `item.pruneVersions` made above: a daemon that does not implement the
+  # provenance half must REFUSE the operation rather than accept it and
+  # silently drop `from`. A flag on an existing op is ignored by an old
+  # daemon; a new type is rejected by it. The difference is a stale client
+  # that stops versus one that quietly writes a record with the provenance
+  # missing — and provenance that is *sometimes* there is worse than none,
+  # because nothing can rely on it.
+  #
+  # It confers standing on ONE canvas and nothing else. The reducer carries
+  # any existing `rules` across untouched and stamps `writtenBy` only on a row
+  # it creates, so joining cannot widen who may summon; it does not invert
+  # (`invert.ts`, beside `agent.enroll`); and `web-only-ops` stays 0 because
+  # `isocan bench join <name>` is the same act as the panel's **Join**.
+  #
+  # *Written first against 40 → 41, then rebased:* this phase found the bound
+  # reading 36 while `ops.ts` held 40 and raised it to the truth. design-partner
+  # wrote the four owed paragraphs above in the same hours, and took the bound
+  # to 45. Both halves of that are kept — their arguments, and this op — which
+  # is why the number here is 46 and not 41.
+  # 46 → 47 on 2026-10-19: record agent.ceiling, shipped in 834018105
+  # (critique phase 2) but omitted from this declaration. It persists one
+  # agent's note-only restriction on one canvas. A field on agent.enroll
+  # would be silently ignored by an older home; an unknown op is refused,
+  # so a critic cannot accidentally be enrolled without the requested cap.
+  # The home enforces it for direct and forwarded writes, it is not undoable,
+  # and a critic cannot lift its own ceiling. Both surfaces use the critique
+  # module; web-only-ops is 0. This names exactly one existing operation,
+  # not room for another. Evidence: docs/reviews/2026-10-15-architect.md.
   - name: operations in the vocabulary
-    at most: 33
+    at most: 47
     measured by: node scripts/measure.mjs op-types
-    baseline: 33, 2026-09-01, baac5a4
+    baseline: 45, 2026-09-15
 runs: docs/reviews/
 trigger:
   cron: 43 8 * * *

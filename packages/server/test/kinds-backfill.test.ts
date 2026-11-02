@@ -3,6 +3,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { actorKinds } from "@isocan/core";
+import { questionnaireActorKind } from "../src/questionnaire.ts";
 import { FileStore } from "../src/file-store.ts";
 import * as p from "../src/paths.ts";
 
@@ -68,4 +69,16 @@ describe("the harness backfill", () => {
     const { registry } = await new FileStore(home).loadActors();
     expect(registry.harnesses).toEqual({});
   });
+});
+
+
+it("repairs only legacy relay-overwritten harnesses from existing actor history without changing other registry facts", async () => {
+  const log = [claim(1, "usr_h", "Acme Human", "web:h"), claim(2, "usr_a", "Acme Agent", "codex:a"), claim(3, "usr_h", "Acme Human", "replica:usr_h"), claim(4, "usr_a", "Acme Agent", "replica:usr_a"), claim(5, "usr_unknown", "Acme Unknown", "replica:usr_unknown"), claim(6, "usr_h", "Acme Human", "cli:h"), claim(7, "usr_h", "Acme Human", "replica:usr_h")].join("\n") + "\n";
+  const saved = { lastSeq: 7, names: { usr_h: { name: "Acme Renamed", at: "2026-09-08T00:00:00.000Z" } }, colors: { usr_h: "#123456" }, marks: { usr_a: "A" }, joined: { usr_old: "usr_h" }, harnesses: { usr_h: "replica", usr_a: "replica", usr_unknown: "replica", usr_untouched: "web" } };
+  await fs.writeFile(p.actorsFile(home), JSON.stringify(saved)); await fs.writeFile(p.actorsLogFile(home), log);
+  const first = await new FileStore(home).loadActors();
+  expect(first).toEqual({ lastSeq: 7, registry: { names: saved.names, colors: saved.colors, marks: saved.marks, joined: saved.joined, harnesses: { usr_h: "cli", usr_a: "codex", usr_untouched: "web" } } });
+  expect(questionnaireActorKind(first.registry, "usr_h")).toBe("human"); expect(questionnaireActorKind(first.registry, "usr_a")).toBe("agent"); expect(questionnaireActorKind(first.registry, "usr_unknown")).toBe("unknown");
+  expect(await new FileStore(home).loadActors()).toEqual(first);
+  expect(await fs.readFile(p.actorsLogFile(home), "utf8")).toBe(log);
 });

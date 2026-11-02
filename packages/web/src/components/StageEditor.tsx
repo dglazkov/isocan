@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
-import type { Actor, Item, NewVersion } from "@isocan/core";
-import { newVersionId, sourceFaceOf } from "@isocan/core";
+import { creationDestination } from "../lib/groupplacement.ts";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import type { Actor, AuditRange, CanvasSnapshotResponse, Item, NewVersion } from "@isocan/core";
+import { newVersionId, sourceFaceOf, shortcut } from "@isocan/core";
 import { EditorView, basicSetup } from "codemirror";
 import { EditorState } from "@codemirror/state";
 import { keymap } from "@codemirror/view";
@@ -10,8 +11,13 @@ import { javascript } from "@codemirror/lang-javascript";
 import { json } from "@codemirror/lang-json";
 import { markdown } from "@codemirror/lang-markdown";
 import { isocanSyntax } from "../lib/cmtheme.ts";
-import { sendEchoed, setNotice } from "../stores/canvasStore.ts";
-import { readBlobText, uploadBlob } from "../lib/api.ts";
+import { sendEchoedResult, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
+import { getSnapshot, readBlobText } from "../lib/api.ts";
+import { uploadOrStageTextBlob } from "../lib/upload.ts";
+import { everyWhileVisible } from "../lib/whilevisible.ts";
+import "./stage-editor.css";
+
+const DesignLintPanel = lazy(() => import("./DesignLintPanel.tsx").then(module => ({ default: module.DesignLintPanel })));
 
 /**
  * The stage's Edit mode: the artifact's text, and ⌘S lands a VERSION.
@@ -41,6 +47,23 @@ import { readBlobText, uploadBlob } from "../lib/api.ts";
 const draftKey = (canvasId: string, itemId: string, versionId: string) =>
   `isocan.draft.${canvasId}.${itemId}.${versionId}`;
 
+// Editor bookkeeping only: the operation and bytes still belong to the outbox.
+// Keep the original draft key across an optimistic version echo and remount.
+interface PendingSave { text: string; versionId: string; blobHash: string; baseVersionId: string }
+const pendingKey = (canvasId: string, itemId: string, actorId: string) =>
+  `isocan.pending-stage.${canvasId}.${itemId}.${actorId}`;
+function readPending(key: string): PendingSave | null {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) ?? "null");
+    return value && [value.text, value.versionId, value.blobHash, value.baseVersionId].every(v => typeof v === "string") ? value : null;
+  } catch { return null; }
+}
+function forgetPending(key: string, versionId: string) {
+  try {
+    if (readPending(key)?.versionId === versionId) localStorage.removeItem(key);
+  } catch { /* Draft storage is best effort. */ }
+}
+
 function languageFor(mimeType: string, filename: string) {
   if (mimeType === "text/html") return html();
   if (mimeType === "text/css") return css();
@@ -51,30 +74,38 @@ function languageFor(mimeType: string, filename: string) {
   return [];
 }
 
-export function StageEditor({
-  canvasId,
-  item,
-  actor,
-  onDraft,
-  onFold,
-}: {
+interface StageEditorProps {
   canvasId: string;
   item: Item;
   actor: Actor;
-  /** The open buffer, lifted to the stage so ITS preview pane can render
-   * the draft — the editor owns the text, never the layout beside it. */
+  /** The open buffer, lifted to the stage so its preview can render the draft. */
   onDraft: (doc: string | null) => void;
-  /** Fold this pane away — absent when it is the sole pane open, which is
-   * how the stage's never-empty rule is made unreachable. */
+  /** Fold this pane away — absent when it is the sole pane open. */
   onFold?: (() => void) | undefined;
-}) {
+}
+
+/** A draft and pending save belong to one canvas, item and acting identity. */
+export function StageEditor(props: StageEditorProps) {
+  return <StageEditorBuffer key={JSON.stringify([props.canvasId, props.item.id, props.actor.id])} {...props} />;
+}
+
+function StageEditorBuffer({ canvasId, item, actor, onDraft, onFold }: StageEditorProps) {
   const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0]!;
   const source = sourceFaceOf(current);
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   // The version the OPEN BUFFER is edits of — deliberately not live state:
   // a version landing while you type must not re-key your draft.
-  const baseVersion = useRef(current.id);
+  const pendingStorageKey = pendingKey(canvasId, item.id, actor.id);
+  const [restoredSave] = useState(() => readPending(pendingStorageKey));
+  const baseVersion = useRef(restoredSave?.baseVersionId ?? current.id);
+  // The lazy findings panel may arrive after typing or a teammate's metadata
+  // edit. Preserve what this editor actually opened, before either can happen.
+  const [repairOpening] = useState<CanvasSnapshotResponse | null>(() => {
+    const opened = useCanvasStore.getState();
+    if (opened.canvasId !== canvasId || !opened.record || !opened.canvas) return null;
+    return structuredClone({ project: opened.record, canvas: { ...opened.canvas, items: { ...opened.canvas.items, [item.id]: item } }, lastSeq: opened.lastSeq, colors: opened.actorColors, names: opened.actorNames, joined: opened.actorJoins });
+  });
   const [loaded, setLoaded] = useState(false);
   /**
    * The saved file could not be read, and there was no draft to fall back on.
@@ -95,14 +126,70 @@ export function StageEditor({
     dirtyRef.current = d;
     setDirtyState(d);
   };
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving] = useState(!!restoredSave);
+  const [repairing, setRepairing] = useState(false);
+  const writing = useRef(!!restoredSave);
+  const [pendingSave, setPendingSave] = useState<PendingSave | null>(restoredSave);
+  const savedCallback = useRef(saved);
+  savedCallback.current = saved;
+  // ⌘S is bound once, when CodeMirror mounts, so it calls through a ref: the
+  // binding that called `save` directly ran the FIRST render's, whose
+  // `current` was the version the editor opened on — after another version
+  // landed, ⌘S saved under that version's filename and carried its visual
+  // forward while the Save button did not (RH-4, 27 Sep 2026).
+  const saveCallback = useRef(save);
+  saveCallback.current = save;
+  // The versions this editor minted. Its own save reaches the item before
+  // its receipt does — for a queued save, for the whole wait — and the note
+  // below is for somebody ELSE's version (RH-3, 27 Sep 2026).
+  const mine = useRef(new Set<string>(restoredSave ? [restoredSave.versionId] : []));
+  useEffect(() => {
+    if (!pendingSave || !loaded) return;
+    const controller = new AbortController();
+    let reading = false;
+    let settled = false;
+    const finish = (accepted: boolean) => {
+      if (settled || controller.signal.aborted) return;
+      settled = true;
+      if (accepted) savedCallback.current(pendingSave.text, pendingSave.versionId);
+      else {
+        forgetPending(pendingStorageKey, pendingSave.versionId);
+        setNotice("That version is no longer queued. Your draft is still here.");
+      }
+      setPendingSave(null);
+      writing.current = false;
+      setSaving(false);
+    };
+    const observe = () => {
+      const state = useCanvasStore.getState();
+      if (state.canvasId !== canvasId || state.confirmed?.project.id !== canvasId) return;
+      const version = state.confirmed.canvas.items[item.id]?.versions.find(v => v.id === pendingSave.versionId && v.blobHash === pendingSave.blobHash);
+      const queued = state.queue.find(w => w.op.type === "item.addVersion" && w.op.itemId === item.id && w.op.version.id === pendingSave.versionId);
+      if (version || queued?.accepted) finish(true);
+      else if (!queued) finish(false); // refused or deliberately removed; never drop the draft
+    };
+    const unsubscribe = useCanvasStore.subscribe(observe);
+    observe();
+    const stop = everyWhileVisible(() => {
+      if (reading || settled) return;
+      reading = true;
+      void getSnapshot(canvasId, controller.signal).then(snapshot => {
+        if (controller.signal.aborted) return;
+        const current = snapshot.canvas.items[item.id];
+        if (!current?.versions.some(version => version.id === pendingSave.versionId && version.blobHash === pendingSave.blobHash)) return;
+        finish(true);
+      }).catch(() => { /* An unavailable snapshot leaves acceptance unknown. */ }).finally(() => { reading = false; });
+    }, 5_000);
+    return () => { unsubscribe(); stop(); controller.abort(); };
+  }, [canvasId, item.id, pendingSave, loaded, pendingStorageKey]);
+  const [checkedText, setCheckedText] = useState<string | null>(null);
   // The lift is debounced: an iframe srcdoc resets on every change, and a
   // preview that reloads per keystroke reads as flicker, not liveness.
   const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Somebody else's version landed while the buffer is open. Rendered as a
   // quiet note — the stack keeps both; there is nothing to resolve.
-  const landedUnder = current.id !== baseVersion.current;
+  const landedUnder = current.id !== baseVersion.current && !mine.current.has(current.id);
 
   useEffect(() => {
     let live = true;
@@ -142,7 +229,7 @@ export function StageEditor({
                 key: "Mod-s",
                 preventDefault: true,
                 run: () => {
-                  void save();
+                  void saveCallback.current();
                   return true;
                 },
               },
@@ -151,10 +238,11 @@ export function StageEditor({
               if (!update.docChanged) return;
               const doc = update.state.doc.toString();
               setDirty(true);
+              setCheckedText(doc);
               if (draftTimer.current) clearTimeout(draftTimer.current);
               draftTimer.current = setTimeout(() => onDraft(doc), 250);
               try {
-                localStorage.setItem(key, doc);
+                localStorage.setItem(draftKey(canvasId, item.id, baseVersion.current), doc);
               } catch {
                 // A full store loses persistence, not the buffer.
               }
@@ -162,6 +250,7 @@ export function StageEditor({
           ],
         }),
       });
+      setCheckedText(opening);
       setDirty(restored !== null);
       setLoaded(true);
       // A RESTORED draft is a draft and the preview should render it; a
@@ -183,15 +272,21 @@ export function StageEditor({
   }, [canvasId, item.id]);
 
   async function save() {
-    const doc = view.current?.state.doc.toString();
+    const savingView = view.current;
+    const doc = savingView?.state.doc.toString();
     // A clean buffer has nothing to say: the habitual ⌘S must not mint an
     // identical version, and the buttons for it are not even shown.
-    if (doc === undefined || saving || !dirtyRef.current) return;
+    if (doc === undefined || writing.current || !dirtyRef.current) return;
+    writing.current = true;
     setSaving(true);
+    const { originGroupMode } = creationDestination();
+    let pending: PendingSave | null = null;
+    let submitted = false;
     try {
-      const upload = await uploadBlob(
+      const { upload, stagedBlob } = await uploadOrStageTextBlob(
         canvasId,
-        new Blob([doc], { type: source.mimeType }),
+        doc,
+        source.mimeType,
         source.filename,
       );
       const version: NewVersion = {
@@ -201,20 +296,59 @@ export function StageEditor({
         filename: source.filename,
         size: upload.size,
         ...(current.visual ? { visual: current.visual } : {}),
+        ...(current.faces ? { faces: current.faces } : {}),
       };
       const op = { type: "item.addVersion", itemId: item.id, version } as const;
-      await sendEchoed(canvasId, actor, op);
-      try {
-        localStorage.removeItem(draftKey(canvasId, item.id, baseVersion.current));
-      } catch {
-        /* the save landed; a stranded draft key is cosmetic */
+      mine.current.add(version.id);
+      pending = { text: doc, versionId: version.id, blobHash: version.blobHash, baseVersionId: baseVersion.current };
+      try { localStorage.setItem(pendingStorageKey, JSON.stringify(pending)); } catch { /* The mounted buffer remains usable without storage. */ }
+      submitted = true;
+      const receipt = await sendEchoedResult(canvasId, actor, op, undefined, originGroupMode, stagedBlob);
+      if (receipt.status === "queued") setNotice("Version queued — awaiting home confirmation. Your draft is still here.");
+      const outcome = receipt.status === "queued" && receipt.completion ? await receipt.completion : receipt;
+      if (outcome.status === "accepted") {
+        pending = null;
+        if (view.current === savingView) saved(doc, version.id);
+      } else if (outcome.status === "refused") {
+        pending = null;
+        if (view.current === savingView) forgetPending(pendingStorageKey, version.id);
+        setNotice(`Version not saved: ${outcome.message ?? "the home refused the write"}. Your draft is still here.`);
       }
-      // The buffer is now edits of the version it just made.
-      baseVersion.current = version.id;
-      setDirty(false);
+    } catch (error) {
+      setNotice(`${submitted ? "Version acceptance is still unknown" : "Could not save this version"}: ${error instanceof Error ? error.message : String(error)} Your draft is still here.`);
     } finally {
-      setSaving(false);
+      if (view.current === savingView) {
+        if (pending) setPendingSave(pending);
+        else { writing.current = false; setSaving(false); }
+      }
     }
+  }
+
+  function saved(doc: string, versionId: string) {
+    forgetPending(pendingStorageKey, versionId);
+    const latest = view.current?.state.doc.toString();
+    const previous = draftKey(canvasId, item.id, baseVersion.current);
+    baseVersion.current = versionId;
+    // Typing can continue during upload. Only the bytes that actually landed
+    // become clean; newer typing follows the new base as an unsaved draft.
+    const stillDirty = latest !== undefined && latest !== doc;
+    try {
+      localStorage.removeItem(previous);
+      if (stillDirty) localStorage.setItem(draftKey(canvasId, item.id, versionId), latest);
+    } catch { /* A confirmed version remains saved if local draft storage is unavailable. */ }
+    setDirty(stillDirty);
+    if (draftTimer.current) clearTimeout(draftTimer.current);
+    onDraft(stillDirty ? latest : null);
+  }
+
+  function selectFinding(range: AuditRange, sourceText: string) {
+    const editor = view.current;
+    if (!editor || editor.state.doc.toString() !== sourceText) {
+      setNotice("The editor changed since that check. Wait for fresh findings before selecting a value.");
+      return;
+    }
+    editor.dispatch({ selection: { anchor: range.start.offset, head: range.end.offset }, scrollIntoView: true });
+    editor.focus();
   }
 
   function revert() {
@@ -284,6 +418,7 @@ export function StageEditor({
             <button
               className="stage-editor-btn"
               onClick={revert}
+              disabled={saving || repairing}
               title="Back to the saved version — clears the draft"
             >
               Revert
@@ -291,10 +426,10 @@ export function StageEditor({
             <button
               className="stage-editor-btn primary"
               onClick={() => void save()}
-              disabled={saving || !loaded}
-              title="Save as a new version (⌘S) — it stacks; S fans the history"
+              disabled={saving || repairing || !loaded}
+              title={`Save as a new version (${shortcut("S")}) — it stacks; S fans the history`}
             >
-              {saving ? "Saving…" : "Save version"}
+              {pendingSave ? "Awaiting confirmation…" : saving ? "Saving…" : "Save version"}
             </button>
           </>
         )}
@@ -312,6 +447,11 @@ export function StageEditor({
       <div className="stage-editor-body">
         <div ref={host} className="stage-editor-cm" />
       </div>
+      {source.mimeType === "text/html" && checkedText !== null && <Suspense fallback={<div className="page-note">Opening design check…</div>}>
+        <DesignLintPanel key={JSON.stringify([canvasId, actor.id, item.id])} canvasId={canvasId} itemId={item.id} actor={actor} text={checkedText} opened={repairOpening}
+          baseVersionId={baseVersion.current} filename={source.filename} dirty={dirty} saving={saving}
+          onSelect={selectFinding} onSaved={saved} onBusyChange={busy => { writing.current = busy; setRepairing(busy); }} />
+      </Suspense>}
     </div>
   );
 }

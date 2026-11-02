@@ -1,0 +1,10 @@
+## Lottie animations
+
+A Lottie animation (`application/vnd.lottie+json`, `.lottie.json` — or a dotLottie archive, `application/vnd.lottie+zip`, `.lottie`) is a structured vector scene graph of layers, bezier shapes, keyframes, and named state markers. Add one with `isocan add loader.lottie.json` and the canvas renders it live as crisp SVG (`isocan ls --kind lottie` lists them). Removing `@isocan/lottie` leaves every `.lottie.json` readable as plain JSON and every `.lottie` downloadable.
+
+- `isocan lottie inspect <item>` prints the animation's dimensions (`w` × `h`), frame rate (`fr`), frame span (`ip`–`op`), duration in seconds, layer hierarchy (index, name, kind, visibility), named markers (`cm`, `tm`, `dr`), and extracted hex color palette (`--json` emits the structured summary).
+- `isocan lottie palette <item>` lists every distinct fill and stroke hex color with its occurrence count and layers. Pass `--remap "#3b82f6=#10b981"` (repeatable) to recolor fills and strokes across static and keyframed properties, or `--sync-design` to bind colors to the governing `DESIGN.md` palette on the canvas — stacking a new version in one undoable op group.
+- `isocan lottie trim <item> [--in <frame>] [--out <frame>] [--fps <n>]` updates the animation's in-point (`ip`), out-point (`op`), or frame rate (`fr`) and stacks a new version.
+- `isocan lottie marker <item> [--add <name:frame:duration>] [--rm <name>]` lists named state markers (`markers[]`) or adds/removes a marker segment (for example `--add "hover:15:20"`) and stacks a new version.
+- `isocan lottie lint <item> [--target web-svg|thorvg|ios|android]` audits the animation for cross-platform runtime hazards (After Effects expressions `x`, Merge Paths `mm`, 3D layers `ddd=1`, layer effects `ef`, masks, track mattes, unembedded image assets) and prints per-frame complexity peak metrics.
+- `isocan lottie poster <item> [--frame <n>]` renders any frame (default: `lottiePosterFrame` property or `ip`) as deterministic, self-contained SVG to stdout — or pass `--set-poster <n>` to save `lottiePosterFrame` on the item for static thumbnails and `prefers-reduced-motion`.

@@ -1,5 +1,3 @@
-import { useUiStore } from "../stores/uiStore.ts";
-
 /**
  * **Things that are on because you turned them on** (9 Sep 2026).
  *
@@ -34,6 +32,12 @@ import { useUiStore } from "../stores/uiStore.ts";
  * canvas for everybody — readable by anyone whose build knows the kind, and a
  * file with a legible mime to anyone whose does not. That is #156's removal
  * story, and it is what makes an experiment safe to turn off again.
+ *
+ * ## Only Settings reads this list
+ *
+ * So it is only in Settings' lazy chunk, sentences and all. Whether one is on
+ * is the ui store's `experiments` — read where it is needed (`modules.ts`,
+ * `CanvasPage`) without pulling this file into a first visit.
  */
 interface Experiment {
   id: string;
@@ -41,6 +45,13 @@ interface Experiment {
   name: string;
   /** One sentence: what turning it on gets you, and what is unfinished. */
   what: string;
+  /** Shown only while this other experiment is on: a refinement meaningless without it. */
+  under?: string;
+  /**
+   * Offered only where the home's text model looks at pictures
+   * (`TEXT_PICTURES_ROUTE`); elsewhere the row says why, and stays off.
+   */
+  needsPictures?: true;
 }
 
 /** Every experiment this build offers, in the order Settings lists them. */
@@ -50,10 +61,58 @@ export const EXPERIMENTS: readonly Experiment[] = [
     name: "Stickers",
     what: "A tray of emoji you drag onto the canvas — the first module built on the overlay, drop and host APIs, which are still changing.",
   },
+  {
+    id: "modules.talk",
+    name: "Voice",
+    what: "A mic in the Chat composer that flips it into a live conversation, and a floating one for when the Chat is closed — a Gemini Live session from this browser with your own key. The composer and dialogs slots are proposed, undo is not carried here, and the tool wiring covers the fast set.",
+  },
+  {
+    id: "design.partner",
+    name: "Design partner",
+    what: "Start a design task from any message, and publish design questions into a thread. Off while its shape settles: today it puts a control under EVERY comment and one at the foot of every thread, which is a lot of surface for something a reader cannot yet explain.",
+  },
+  {
+    id: "inbox",
+    name: "Inbox",
+    what: "Everything addressed to you, across every canvas at this home. Off while its shape settles: what a row shows, what the count counts, and what a whole-home read costs on a busy home are all still moving.",
+  },
+  {
+    id: "modules.anatomy",
+    name: "Anatomy",
+    what: "Explore a codebase as a map of concepts, files and evidence on the canvas. The workspace slot and its four lenses are still taking shape.",
+  },
+  {
+    id: "critique",
+    name: "Critique",
+    what: "Critics on the canvas: a critic card shows its name, credit line, colour and three questions. Asking one to critique a screen, and the web's doors to add and write critics, are not built yet — `isocan critic` adds them today.",
+  },
+  {
+    id: "moodboard",
+    name: "Mood board",
+    what: "Explore how a thing should feel with generated pictures, drawn with your Gemini key. Keep favourites into a Mood board, drop the rest from the candidate tray, branch with More like this or Push dials, and drop in reference photos.",
+  },
+  {
+    id: "motion",
+    name: "Motion",
+    what: "Make SVGs move: `isocan motion new` turns selected SVGs into a motion item that plays on the canvas, from one clock that a movie will be rendered from too. The web's own doors — Animate…, the scrubber, Render movie… — are not built yet.",
+  },
+  {
+    id: "presentation.transitions",
+    name: "Presentation Transitions",
+    what: "Choose how full screen moves between slides — Push, Fade, Zoom, Depth, Cube, Flip, Morph or None — from the bar and the drawer. Off while the motions settle: a deck of screens does not push smoothly yet. Off, a deck of screens dissolves and a deck of pictures pushes, as it always has.",
+  },
+  {
+    id: "semantic.zoom",
+    name: "Semantic Zoom",
+    what: "Far away, a long note, a group or an area shows a short model-written summary instead of words too small to read, marked ≈.",
+  },
+  {
+    id: "semantic.zoom.vision",
+    name: "Semantic Zoom: look at pictures",
+    what: "Screens and pictures — alone, or in a group or an area — are summarised from what they show, not only their titles. One costs about ten text summaries, so a canvas makes at most 15 an hour.",
+    under: "semantic.zoom",
+    needsPictures: true,
+  },
 ];
 
-/** Is this one on? Read outside React — the module list is not a component. */
-export function experimentOn(id: string): boolean {
-  return useUiStore.getState().experiments.includes(id);
-}
 

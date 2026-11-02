@@ -13,11 +13,17 @@ import {
   TEXT_STYLES,
   TEXT_STYLE_SIZE,
   TEXT_WIDTH,
+  TEXT_HEADING_EM,
+  TEXT_HEADING_LINE,
   isTextItem,
   textBox,
+  type TextStyle,
   textFaceOf,
   textIsLegible,
   textMarkSize,
+  textNodeFit,
+  textNodeRefit,
+  textRefit,
   textSizeOf,
   textStyleOf,
   textTitle,
@@ -149,10 +155,10 @@ describe("the box it starts in", () => {
     const flowing = textBox("one\ntwo");
     const paragraphs = textBox("one\n\ntwo");
     expect(paragraphs.height).toBeGreaterThan(flowing.height);
-    // The marker takes no width; the heading itself is drawn at the
-    // stylesheet's 18px, so at body size it is a little wider than the word.
-    expect(textBox("# Title").width).toBeGreaterThanOrEqual(textBox("Title").width);
-    expect(textBox("# Title").width).toBeLessThan(textBox("Title").width * 1.3);
+    // The marker takes no width; the heading itself is drawn at 1.5em, so
+    // it is half again as wide as the word — and no wider.
+    expect(textBox("# Title").width).toBeGreaterThan(textBox("Title").width * 1.3);
+    expect(textBox("# Title").width).toBeLessThan(textBox("Title").width * 1.6);
     // A list is indented by the browser's own 40px and keeps its margins,
     // so it is wider and a little taller than the same lines bare.
     expect(textBox("- a\n- b").width).toBeGreaterThan(textBox("a\nb").width + 30);
@@ -162,6 +168,156 @@ describe("the box it starts in", () => {
   it("caps a word longer than the hard limit at the limit — the stylesheet breaks it there", () => {
     const w = textBox("x".repeat(400), "display").width;
     expect(w).toBeLessThanOrEqual(TEXT_COLUMN_MAX.display);
+  });
+});
+
+/**
+ * **A heading is bigger than its words at every step** (24 Sep 2026).
+ *
+ * The stylesheet drew a text node's `#` at the card renderer's fixed 18px —
+ * larger than body's 16, a seventh of display's 128. Now it is 1.5em, and
+ * the estimate has to know it or the box crops the heading (lessons #94).
+ * These numbers are the stylesheet's model of a heading, written out here so
+ * the test does not ask the estimate what the estimate should be:
+ * `.item.textnode .md-view h1 { font-size: 1.5em }`, `line-height: 1.25`,
+ * `margin: 0.4em 0 0.3em`, and the node's 4px padding top and bottom.
+ */
+describe("a heading in a text node, at its em size", () => {
+  const H1 = 1.5;
+  const drawn = (style: TextStyle, lines = 1) => {
+    const h = TEXT_STYLE_SIZE[style] * H1;
+    return lines * h * 1.25 + h * 0.7 + 8;
+  };
+
+  it("gets a box tall enough for the heading at the smallest and largest steps", () => {
+    for (const style of ["body", "display"] as const) {
+      expect(textBox("# Acme", style).height, style).toBeGreaterThanOrEqual(drawn(style));
+    }
+  });
+
+  it("gets a box as wide as the heading draws, not as wide as the words at body size", () => {
+    for (const style of ["body", "display"] as const) {
+      // Minus the padding, the heading's words need 1.5 times the bare words'
+      // (less a unit, for the two boxes each being rounded).
+      const bare = textBox("Acme", style).width - 12;
+      expect(textBox("# Acme", style).width - 12, style).toBeGreaterThanOrEqual(bare * H1 - 1);
+    }
+  });
+
+  it("counts the heading AND the paragraph under it at the largest step", () => {
+    const size = TEXT_STYLE_SIZE.display;
+    expect(textBox("# Acme\n\nGo", "display").height).toBeGreaterThanOrEqual(drawn("display") + size * 1.5);
+  });
+
+  it("gives every level h1's room — erring large, never small", () => {
+    // The stylesheet draws h2 and h3 smaller than h1; the estimate does not
+    // tell them apart, because a box too roomy is invisible on a caption and
+    // one too tight crops it.
+    for (const marks of ["#", "##", "###", "######"]) {
+      expect(textBox(`${marks} Acme`, "title"), marks).toEqual(textBox("# Acme", "title"));
+    }
+    expect(TEXT_HEADING_EM).toBe(H1);
+  });
+
+  it("knows a heading line, in one line or a whole body", () => {
+    expect(TEXT_HEADING_LINE.test("Acme\n## Plan")).toBe(true);
+    expect(TEXT_HEADING_LINE.test("#Roadmap is a reference, not a heading")).toBe(false);
+    expect(TEXT_HEADING_LINE.test("plain words")).toBe(false);
+  });
+});
+
+/**
+ * **The box after the node changed** (23 Sep 2026). A note measured at body
+ * and then restyled to heading drew 32px type in a 16px box — the second line
+ * cut in half — because nothing asked what the box should be once the look
+ * changed. `textNodeRefit` is that question, and both surfaces ask it.
+ */
+describe("the box after its words or its look change", () => {
+  const sentence = "Acme step 2 · the review side — and status notes too: step 1 waits on step 2";
+  const paragraphs = `## ${sentence}\n\n${sentence}\n\n- one\n- ${sentence}`;
+  const caption = (properties: Record<string, string>, box: { width: number; height: number }): Item => ({
+    ...item({ kind: TEXT_KIND, ...properties }),
+    ...box,
+  });
+
+  it("grows a body-sized box to hold the words at every larger step and face", () => {
+    for (const body of [sentence, paragraphs]) {
+      const born = caption({}, textBox(body));
+      for (const style of TEXT_STYLES.slice(1)) {
+        for (const face of TEXT_FACES) {
+          const next = textNodeRefit(born, body, { properties: { textStyle: style, textFace: face } });
+          const need = textBox(body, style, face);
+          expect(next, `${style}/${face}`).not.toBeNull();
+          expect(next!.width).toBeGreaterThanOrEqual(need.width);
+          expect(next!.height).toBeGreaterThanOrEqual(need.height);
+        }
+      }
+    }
+  });
+
+  it("grows a label's box when new words wrap onto more lines", () => {
+    const label = caption({ textStyle: "heading" }, textBox("Acme", "heading"));
+    const next = textNodeRefit(label, paragraphs)!;
+    expect(next.height).toBeGreaterThanOrEqual(textBox(paragraphs, "heading").height);
+    expect(next.height).toBeGreaterThan(label.height * 4);
+  });
+
+  it("only grows: a box dragged wider keeps its width, and a step down changes nothing", () => {
+    const wide = caption({ textStyle: "title" }, { width: 1200, height: 40 });
+    expect(textNodeRefit(wide, sentence)!.width).toBe(1200);
+    const big = caption({ textStyle: "title" }, textBox(sentence, "title"));
+    expect(textNodeRefit(big, sentence, { removeProperties: ["textStyle"] })).toBeNull();
+    expect(textRefit(textBox(sentence, "title"), sentence, "title", "sans")).toBeNull();
+  });
+
+  it("leaves paper and anything that is not a caption alone", () => {
+    const small = { width: 40, height: 20 };
+    expect(textNodeRefit(caption({ paper: "yellow" }, small), sentence, { properties: { textStyle: "display" } })).toBeNull();
+    expect(textNodeRefit(caption({}, small), sentence, { properties: { paper: "pink" } })).toBeNull();
+    expect(textNodeRefit({ ...item({}), ...small }, sentence)).toBeNull();
+    // Taking paper OFF makes it a caption again, which must hold its words.
+    expect(textNodeRefit(caption({ paper: "yellow" }, small), sentence, { removeProperties: ["paper"] })).not.toBeNull();
+  });
+
+  it("fits a caption's height at its own width — which may shrink — and not paper", () => {
+    const stretched = caption({ textStyle: "heading" }, { width: 2000, height: 2000 });
+    const fitted = textNodeFit(stretched, sentence)!;
+    expect(fitted.width).toBe(2000);
+    expect(fitted.height).toBeLessThanOrEqual(textBox(sentence, "heading").height);
+    // A node at the estimate's own width fits to the estimate exactly.
+    const born = caption({ textStyle: "heading" }, { ...textBox(sentence, "heading"), height: 9 });
+    expect(textNodeFit(born, sentence)).toEqual(textBox(sentence, "heading"));
+    expect(textNodeFit(caption({ paper: "blue" }, { width: 9, height: 9 }), sentence)).toBeNull();
+  });
+
+  /**
+   * **A wide note measured at its own width** (14 Oct 2026). `isocan fit` on
+   * an 840×400 note narrowed it to about 350×1600, and `isocan edit` on one
+   * grew its height to a 320 column's: both measured at the default column,
+   * whatever width the node had.
+   */
+  const notes = Array.from({ length: 6 }, (_, i) => `Acme planning note ${i + 1}: review the roadmap, the hiring plan and the budget for next quarter.`).join("\n\n");
+  it("fit keeps a wider hand-set width and measures the height inside it", () => {
+    const wide = caption({}, { width: 840, height: 400 });
+    const fitted = textNodeFit(wide, notes)!;
+    expect(fitted.width).toBe(840);
+    expect(fitted.height).toBeLessThan(textBox(notes).height);
+    // A box crushed narrower than its words still grows back to them.
+    expect(textNodeFit(caption({}, { width: 120, height: 40 }), notes)).toEqual(textBox(notes));
+  });
+
+  it("an edit to a wide note grows its height only to what its width needs", () => {
+    const wide = caption({}, { width: 840, height: 60 });
+    const next = textNodeRefit(wide, notes)!;
+    expect(next.width).toBe(840);
+    expect(next.height).toBe(textNodeFit(wide, notes)!.height);
+    expect(next.height).toBeLessThan(textBox(notes).height);
+    // And a wide note that already holds its words is left alone.
+    expect(textNodeRefit({ ...wide, height: next.height }, notes)).toBeNull();
+  });
+
+  it("counts the rows a word is broken onto when it is longer than the widest box", () => {
+    expect(textBox("Acme".repeat(20), "display").height).toBeGreaterThan(textBox("Acme", "display").height * 3);
   });
 });
 

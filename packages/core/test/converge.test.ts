@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { CanvasContents, Item } from "../src/model.ts";
-import { convergePlan, isRefusal } from "../src/converge.ts";
+import { convergeOps, convergePlan, isRefusal } from "../src/converge.ts";
 import { lineageProperties } from "../src/lineage.ts";
+import { COPY_PREFERENCE_PROP, PREFERRED_OVER_PROP, parseCopyPreference } from "../src/preference.ts";
 
 /**
  * **The half of diverge/converge the whole category left undone.**
@@ -86,5 +87,38 @@ describe("what it will not do, and says why", () => {
     const empty = { ...child("itm_a", "Bold"), versions: [], currentVersionId: "" } as unknown as Item;
     const plan = convergePlan(canvasOf([source(), empty]), "itm_a");
     expect(isRefusal(plan) && plan.refused).toContain("no content");
+  });
+});
+
+describe("what a choice sends", () => {
+  it("is the version onto the source first, then every child to the trash", () => {
+    // Both surfaces send this list under one group; the order is part of
+    // what they agree on, so the log reads the same from either.
+    const plan = convergePlan(canvasOf([source(), child("itm_a", "Bold"), child("itm_b", "Quiet")]), "itm_b");
+    if (isRefusal(plan)) throw new Error(plan.refused);
+    const ops = convergeOps(plan);
+    expect(ops[0]).toEqual({ type: "item.addVersion", itemId: "itm_src", version: plan.version });
+    expect(ops.slice(1)).toEqual(plan.trash.map((itemId) => ({ type: "item.delete", itemId })));
+    expect(ops).toHaveLength(3);
+  });
+
+  it("records a copy preference pair on the source when choosing a copy variant over sibling voices (copy-edit phase 6)", () => {
+    const voice = (id: string, stance: string) => item(id, `Checkout — ${stance}`, { ...lineageProperties("itm_src"), copyStance: stance });
+    const canvas = canvasOf([source(), voice("itm_a", "Plain"), voice("itm_b", "Warm"), voice("itm_c", "Benefit-first"), child("itm_layout", "Wide")]);
+    const plan = convergePlan(canvas, "itm_b");
+    if (isRefusal(plan)) throw new Error(plan.refused);
+    expect(plan.preference).toBeDefined();
+    expect(plan.preference!.properties?.[PREFERRED_OVER_PROP]).toBe("itm_a,itm_c");
+    expect(parseCopyPreference(plan.preference!.properties?.[COPY_PREFERENCE_PROP])).toEqual({
+      how: "choose",
+      stance: "Warm",
+      against: ["Plain", "Benefit-first"],
+      chosen: "itm_b",
+      againstIds: ["itm_a", "itm_c"],
+    });
+    const ops = convergeOps(plan);
+    expect(ops[0]).toEqual({ type: "item.addVersion", itemId: "itm_src", version: plan.version });
+    expect(ops[1]).toEqual({ type: "item.update", itemId: "itm_src", patch: plan.preference! });
+    expect(ops.slice(2)).toEqual(plan.trash.map((itemId) => ({ type: "item.delete", itemId })));
   });
 });

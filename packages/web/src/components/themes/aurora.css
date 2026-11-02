@@ -1,0 +1,19 @@
+/* Aurora's rules (living grounds phase 4), beside the ground that draws it,
+   for meadow.css's reason: only lazy chunks render these, so they ship with
+   them. Imported by `aurora.ts` and `PaintedGround` (the still frame). */
+
+/* The scene's own colour, measured off its still, under the WebGL layer
+   before it draws and under the still before the JPEG arrives. */
+.canvas-theme-aurora { background-color: var(--theme-aurora); }
+
+/* **An item under a lit ribbon catches a faint cool light** — Night's glow
+   with the sky's colour. `aurora.ts` sets `--aurora-glow` (0.02–0.5) on the
+   item only when it changes by more than 0.02, and removes it when the light
+   has gone, so this matches only items lit right now. Its own property, not
+   Night's `--ground-glow`, so the two sheets can both be loaded and never
+   colour one another's items. */
+.item[style*="--aurora-glow"] {
+  --aurora-glow: 0;  /* the default; the inline value aurora.ts writes wins */
+  box-shadow: var(--shadow-item), 0 0 calc(var(--aurora-glow) * 40px) calc(var(--aurora-glow) * 4px)
+    color-mix(in srgb, var(--aurora-light) calc(var(--aurora-glow) * 90%), transparent);
+}

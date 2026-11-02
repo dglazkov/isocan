@@ -1,0 +1,21 @@
+import parser from "@typescript-eslint/parser";
+import shadcn from "@shadcn/lint";
+export default [
+  { ignores: ["**/ignored.tsx"] },
+  {
+    files: ["**/*.{tsx,jsx}"],
+    languageOptions: { parser, parserOptions: { ecmaFeatures: { jsx: true } } },
+    plugins: { shadcn },
+    settings: { shadcn: { note: "Acme uses the existing component variants." } },
+    rules: {
+      "shadcn/no-restyle": ["error", { allow: ["layout"] }],
+      "shadcn/no-raw-colors": "error",
+      "shadcn/no-arbitrary-values": "error",
+      "shadcn/no-inline-styles": "warn",
+      "shadcn/no-unknown-classes": "error",
+      "shadcn/require-static-classes": "error",
+    },
+  },
+  { files: ["packages/design/controls/**/*.{tsx,jsx}"], rules: { "shadcn/no-restyle": "off" } },
+  { files: ["**/disabled.tsx"], rules: { "shadcn/no-arbitrary-values": "off" } },
+];

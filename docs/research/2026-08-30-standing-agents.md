@@ -1,15 +1,18 @@
 ---
-status: partial
-since: 2026-08-30
+status: built
+since: 2026-09-03
 issue: 149
 see: standing-agents, on-demand, personas
-note: the wake was the hinge and on-demand built it 30 Aug; the project that followed is standing-agents — phase 1 (one name, one machine, many canvases) built 1 Sep, the multi-canvas rc and `available` not
+note: the wake was the hinge and on-demand built it 30 Aug; the project that followed is standing-agents, and all four of this note's recommendations are built — one name on one machine across many canvases (1 Sep), then on 3 Sep the multi-canvas rc (`isocan rc --all`), `available` as a roster state, the lens and `isocan history <actor>`. What is left is the cross-machine actor credential, which belongs to one-agent-many-canvases (#145)
 ---
 # Standing agents: watching many canvases, woken into one
 
 **30 August 2026.** Research. The project it opened is
 [projects/standing-agents](../projects/standing-agents/design.md), where the
-status lives; phase 1 was built 1 Sep 2026.
+status lives; phase 1 was built 1 Sep 2026, and **all four phases closed 3 Sep
+2026** — `isocan rc --all` parks one process on every canvas the machine's
+rows name, and `available` is a roster state (`core/src/lens.ts`) the facepile
+draws apart from *here*. The front matter said both were unbuilt until 11 Sep.
 
 The question, in four parts: *one agent, one name, watching several canvases;
 woken when something wants it; starting a session with that canvas's context;

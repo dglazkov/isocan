@@ -21,7 +21,14 @@ const src = readFileSync(
  */
 describe("the Rename button", () => {
   it("asks one question, in one place", () => {
-    expect(src).toContain('const renames = trimmed !== "" && trimmed !== actor.name;');
+    expect(src).toContain('const renames = trimmed !== "" && trimmed !== current;');
+  });
+
+  it("compares against the name everybody sees, not the one this browser stored", () => {
+    // A rename made elsewhere left the stored name behind: the field opened on
+    // "Admiral One" under a hover card saying "Dion Almaer" (14 Oct 2026).
+    expect(src).toContain("const current = actorNameIn(useActorNames(), actor);");
+    expect(src).toContain("useState(current)");
   });
 
   it("is disabled unless the name actually changed", () => {

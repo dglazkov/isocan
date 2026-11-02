@@ -1,29 +1,68 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useChatDraft } from "../lib/chatdraft.ts";
+import "./command-chip.css";
+import { modules } from "../modules.ts";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Markdown } from "../lib/markdown.tsx";
+/**
+ * **Loaded only when a module actually offers a control** (proposed:
+ * `composer`). The slot's renderer reaches the module host and the theme
+ * store, which measured 6KB in the entry chunk when it was a plain import —
+ * paid by every first visit for a slot that is empty unless an experiment is
+ * on. Same argument as `EXPERIMENT_HALVES`: merged but off has to mean off.
+ */
+const ModuleComposerControls = lazy(() =>
+  import("./ModuleComposer.tsx").then((module) => ({ default: module.ModuleComposerControls })),
+);
+
+/** **That's the plan** under a goodnight conversation (proactive-agent
+ *  phase 2) — loaded only once this person has said `/goodnight` here. */
+const GoodnightPlan = lazy(() => import("./GoodnightPlan.tsx"));
+
+/** **Say it like a designer** (proactive-agent phase 10): the vague words'
+ *  underline, their readings and the designer's sentence — loaded on the
+ *  first keystroke, with the vocabulary panel beside it. */
+const DesignerWords = lazy(() => import("./DesignerWords.tsx"));
+const Vocabulary = lazy(() => import("./DesignerWords.tsx").then((m) => ({ default: m.Vocabulary })));
+
+/** The Chat's clean-up — the remove control on a message and the owner's
+ *  "Clean up…" menu — loaded only for somebody who can write here. */
+const ChatTidy = lazy(() => import("./ChatTidy.tsx"));
+
+const DesignComment = lazy(() => import("./DesignComment.tsx").then((module) => ({ default: module.DesignComment })));
+const DesignComparisonComment = lazy(() => import("./DesignComparisonComment.tsx").then((module) => ({ default: module.DesignComparisonComment })));
 import type { Actor, CanvasContents, Comment, CommentThread, Item } from "@isocan/core";
-import { isSystemActor, laneFor, mainThread, parseSlashCommand, workedFor } from "@isocan/core";
-import { sendOp } from "../lib/api.ts";
+import { benchJoinAsk, isGroupItem, isSystemActor, laneFor, mainThread, parseSlashCommand, workedFor, shortcut } from "@isocan/core";
 import { postToMain } from "../lib/mainthread.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { centerOn } from "../lib/viewport.ts";
 import { railSpan, stageRect } from "../lib/stage.ts";
-import { glideToBox, revealItem } from "../lib/zoomactions.ts";
+import { revealItem } from "../lib/zoomactions.ts";
 import { type FollowState, nextFollow } from "../lib/lanefollow.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { useMentionRoster } from "../lib/mentions.ts";
+import { useBenchMentions } from "../lib/benchmentions.ts";
 import { useItemRefRoster } from "../lib/itemrefs.ts";
 import { rehypeChips } from "../lib/chips.ts";
 import { MentionField } from "./MentionField.tsx";
 import { ItemPeek, ItemThumb } from "./ItemThumb.tsx";
+import { KindIcon } from "./KindIcon.tsx";
+import { iconKindFor } from "../lib/kinds.ts";
 import { submitOnCmdEnter, submitOnEnter } from "../lib/submit.ts";
 import { markRead } from "../stores/unreadStore.ts";
-import { openPanel, storedPanel } from "../lib/panels.ts";
+import { chatHiddenNow, openPanel, storedPanel } from "../lib/panels.ts";
 import { ChatGlyph } from "./Glyphs.tsx";
 import { OnIt } from "./OnIt.tsx";
+import { GateGrant } from "./LazyGate.tsx";
 import { runLocalCommand } from "../lib/localcommands.ts";
 import { useCommands } from "../lib/commands.ts";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
+const DesignTaskPanel = lazy(() => import("./DesignTaskPanel.tsx").then((module) => ({ default: module.DesignTaskPanel })));
+const QuestionnairePanel = lazy(() => import("./QuestionnairePanel.tsx").then((module) => ({ default: module.QuestionnairePanel })));
+import { messageContextRoots, needsContextManifestPreview, useMessageContext, useMessageSend } from "../lib/messagecontext.ts";
+import { ContextManifestView, MessageContextPreview } from "./LazyGroupContext.tsx";
+import { useCanEdit } from "../lib/capability.ts";
+
 
 /**
  * The designated main thread (#36): one thread per canvas rendered as a
@@ -43,9 +82,44 @@ import { actorNameIn, useActorNames } from "../lib/names.ts";
  */
 export { PANEL_MIN_WIDTH } from "../stores/uiStore.ts";
 
+/**
+ * **What the `@` menu says beside a name that is on your bench and not on this
+ * canvas** (the bench, phase 2 — journey 3).
+ *
+ * A name in a mention menu reads as somebody who can hear you. Sian cannot,
+ * until the next word is `join` — so the row says so rather than letting the
+ * menu imply otherwise. Present tense and no apology: it is not an error, it
+ * is the state, and the fix is one word away.
+ */
+const NOT_HERE_YET = "not here yet";
+
 import { PanelResizer } from "./PanelResizer.tsx";
 import { PanelHead } from "./PanelHead.tsx";
 import { CommentFold, CommentWhen } from "./CommentWhen.tsx";
+
+/**
+ * Circular miniature for an attached-item pill: the item's own visual face when
+ * it has one, or its kind/group glyph when it does not (e.g. a group frame).
+ */
+function AttachedIcon({ canvasId, item }: { canvasId: string; item: Item }) {
+  if (item.versions.length > 0) {
+    return <ItemThumb canvasId={canvasId} item={item} itemId={item.id} width={22} height={22} />;
+  }
+  return (
+    <span className="attached-kind" aria-hidden>
+      {isGroupItem(item) ? (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="4" width="18" height="16" rx="3" strokeDasharray="3 3" />
+          <rect x="7" y="8" width="10" height="8" rx="1.5" />
+        </svg>
+      ) : (
+        <KindIcon kind={iconKindFor(item)} />
+      )}
+    </span>
+  );
+}
+
+export { needsContextManifestPreview };
 
 /**
  * What the message is about: the current selection, shown as chips over the
@@ -53,7 +127,7 @@ import { CommentFold, CommentWhen } from "./CommentWhen.tsx";
  * removing one deselects it — so there is one answer to "what am I pointing
  * at" rather than two that can disagree.
  */
-function Attached({ canvasId }: { canvasId: string }) {
+export function Attached({ canvasId }: { canvasId: string }) {
   const selected = useUiStore((s) => s.selectedItemIds);
   // Which pill the pointer is on, and where it sits, so the bigger look at it
   // opens over the chip rather than under the pointer.
@@ -66,7 +140,7 @@ function Attached({ canvasId }: { canvasId: string }) {
   const canvas = useCanvasStore((s) => s.canvas);
   const items = selected.map((id) => canvas?.items[id]).filter((item) => item !== undefined);
   if (items.length === 0) return null;
-  const shown = items.slice(0, 3);
+  const shown = items.slice(0, 4);
   return (
     <div
       className="attached"
@@ -90,20 +164,25 @@ function Attached({ canvasId }: { canvasId: string }) {
         useUiStore.getState().setPeeked(null);
       }}
     >
-      {shown.map((item) => (
-        <span key={item.id} className="attached-chip" data-chip-id={item.id}>
-          <ItemThumb canvasId={canvasId} itemId={item.id} width={18} height={18} />
-          <b>{item.title}</b>
-          <button
-            type="button"
-            title={`Don't send ${item.title}`}
-            aria-label={`Remove ${item.title}`}
-            onClick={() => useUiStore.getState().toggleSelect(item.id)}
-          >
-            ✕
-          </button>
-        </span>
-      ))}
+      {shown.map((item) => {
+        const label = item.title.trim() || "Untitled";
+        return (
+          <span key={item.id} className="attached-chip" data-chip-id={item.id}>
+            <AttachedIcon canvasId={canvasId} item={item} />
+            <b>{label}</b>
+            <button
+              type="button"
+              title={`Don't send ${label}`}
+              aria-label={`Remove ${label}`}
+              onClick={() => useUiStore.getState().toggleSelect(item.id)}
+            >
+              <svg viewBox="0 0 12 12" width={11} height={11} aria-hidden fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round">
+                <path d="M2.5 2.5l7 7M9.5 2.5l-7 7" />
+              </svg>
+            </button>
+          </span>
+        );
+      })}
       {items.length > shown.length && (
         <span className="attached-more">+{items.length - shown.length}</span>
       )}
@@ -136,6 +215,7 @@ export function CommandChip({ body }: { body: string }) {
 
 /** The message without its command word — what they typed on top of it. */
 export function withoutCommand(body: string): string {
+  if (/^\/ask(?:\s|$)/.test(body)) return body; // Invalid legacy data remains readable text.
   const parsed = parseSlashCommand(body);
   return parsed ? body.slice(parsed.end).trimStart() : body;
 }
@@ -143,14 +223,16 @@ export function withoutCommand(body: string): string {
 /**
  * Is the last word in this thread yours, and unanswered? That is the only
  * moment "sent — somebody is listening" is worth saying: before you have asked
- * it is noise, and after somebody has answered it is wrong.
+ * it is noise, and after somebody has answered it is wrong. A `record` asked
+ * nothing (a `/wire` act's account of what it made summons nobody), so it
+ * waits on nobody either.
  */
 export function awaitingReply(
-  thread: { comments: { author: { id: string } }[] },
+  thread: { comments: { author: { id: string }; record?: Comment["record"] }[] },
   actorId: string,
 ): boolean {
   const last = thread.comments[thread.comments.length - 1];
-  return last !== undefined && last.author.id === actorId;
+  return last !== undefined && last.author.id === actorId && !last.record;
 }
 
 /** catapultToItem, but centered in the canvas area the panel leaves visible. */
@@ -173,11 +255,12 @@ export function openMainPanel(canvasId: string, open: boolean): void {
 export function MainThreadPanel({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   const canvas = useCanvasStore((s) => s.canvas);
   const open = useUiStore((s) => s.mainPanelOpen);
-  const panelWidth = useUiStore((s) => s.panelWidth);
 
-  // First snapshot decides the default: open when a main thread already
-  // exists (someone designated this channel), closed on a virgin canvas.
-  // A stored preference from an earlier visit wins either way.
+  // A canvas you have never chosen for opens with the Chat: it is where you
+  // talk to everyone here, agents included, and a closed pill on a new canvas
+  // read as "nothing to say" (reported 24 Sep 2026). It used to open only
+  // when a main thread already existed. A stored choice from an earlier visit
+  // wins either way.
   const initedFor = useRef<string | null>(null);
   /**
    * **A remembered rail is restored BEFORE the first paint, not after the
@@ -194,30 +277,27 @@ export function MainThreadPanel({ canvasId, actor }: { canvasId: string; actor: 
    * localStorage — so it is applied synchronously, in a layout effect, before
    * anything is painted. Only the case where nobody has ever chosen has to
    * wait, because "open if this canvas already has a Chat" is a question about
-   * the canvas.
+   * the canvas. (Since 24 Sep the never-chosen default is simply open, so it
+   * waits on nothing and is applied here too.)
    */
   useLayoutEffect(() => {
     if (initedFor.current === canvasId) return;
     const stored = storedPanel(canvasId);
-    if (stored === undefined) return; // never chosen: needs the canvas, below
     initedFor.current = canvasId;
     // No pan: the viewport being restored was saved WITH this rail open, so
     // it is already correct. Panning here would slide the canvas sideways on
     // every load.
-    openPanel(canvasId, stored, false);
+    // Never chosen here (undefined): open with the Chat, not remembered, so
+    // the first real choice is still the person's (`openPanel` folds `"main"`
+    // to `null` when `?embed=1` / `chatHiddenNow()` is active).
+    // (Kept at the bottom, `openPanel` leaves the dock empty and the bar shut.)
+    openPanel(canvasId, stored === undefined ? "main" : stored, false, false);
   }, [canvasId]);
-
-  useEffect(() => {
-    if (!canvas || initedFor.current === canvasId) return;
-    initedFor.current = canvasId;
-    // Never chosen here: a canvas that already has a main thread opens with it.
-    openPanel(canvasId, mainThread(canvas) ? "main" : null, false);
-  }, [canvas, canvasId]);
 
   // Closed, the panel has no surface of its own — its toggle (wearing the
   // unread badge) is the "Main" button in the top bar's create actions.
-  if (!canvas || !open) return null;
-  return <Panel canvasId={canvasId} actor={actor} />;
+  if (!canvas || !open || chatHiddenNow()) return null;
+  return <Panel key={canvasId} canvasId={canvasId} actor={actor} />;
 }
 
 /**
@@ -335,22 +415,38 @@ export function MainThreadBody({
   canvasId,
   actor,
   docked = true,
+  onOpenItem,
+  refCards,
 }: {
   canvasId: string;
   actor: Actor;
   docked?: boolean;
+  onOpenItem?: ((id: string) => void) | undefined;
+  refCards?: RefCards | undefined;
 }) {
-  return <Panel canvasId={canvasId} actor={actor} docked={docked} />;
+  return <Panel key={canvasId} canvasId={canvasId} actor={actor} docked={docked} onOpenItem={onOpenItem} refCards={refCards} />;
 }
+
+/**
+ * **What a message links, drawn by the frame that wants it drawn so.** The
+ * phone passes its reference cards (`MessageReferenceCards.tsx`) in; the
+ * docked Chat never drew them, so the cards and the core reader under them
+ * sit in the phone's chunk rather than on every first visit.
+ */
+type RefCards = (comment: Comment) => ReactNode;
 
 function Panel({
   canvasId,
   actor,
   docked = true,
+  onOpenItem,
+  refCards,
 }: {
   canvasId: string;
   actor: Actor;
   docked?: boolean;
+  onOpenItem?: ((id: string) => void) | undefined;
+  refCards?: RefCards | undefined;
 }) {
   // A subscription, not a read: the chips have to appear and vanish as the
   // selection changes under the pointer.
@@ -362,8 +458,70 @@ function Panel({
   const names = useActorNames();
   const canvas = useCanvasStore((s) => s.canvas);
   const thread = canvas ? mainThread(canvas) : null;
-  useLaneFollow(canvas, thread);
-  const [draft, setDraft] = useState("");
+  useLaneFollow(onOpenItem ? null : canvas, onOpenItem ? null : thread);
+  const [draft, setDraft] = useChatDraft(canvasId, actor.id);
+  /** What `DesignerWords` read in the draft: what to underline, what Tab takes, the readings Enter carries. */
+  const [say, setSay] = useState<{ marks: { start: number; end: number }[]; sentence: string | null; readings: { word: string; reading: string }[] } | null>(null);
+  const vocabularyOpen = useUiStore((s) => s.vocabularyOpen);
+  const setVocabularyOpen = (vocabularyOpen: boolean) => useUiStore.setState({ vocabularyOpen });
+  const context = useMessageContext(canvasId, messageContextRoots(canvas, draft, selected));
+  const sending = useMessageSend(canvasId, context, draft);
+  /**
+   * **Which module is standing where the message box is** (proposed:
+   * `composer`), or null when the composer is the shell's own.
+   *
+   * State here rather than in the slot because the SHELL owns the row: a
+   * module reports that it wants it and the shell decides what yielding
+   * means. That also makes the recovery obvious — an experiment switched off
+   * mid-session takes its control away, and a holder with no control left
+   * would be a composer nobody can type in and nothing on screen to give it
+   * back, which no reload-free gesture fixes.
+   */
+  const [composerHolder, setComposerHolder] = useState<string | null>(null);
+  const takeComposer = useCallback(
+    (moduleName: string, active: boolean) => setComposerHolder(active ? moduleName : null),
+    [],
+  );
+  // Re-render when an experiment or runtime module arrives or is switched off,
+  // so `composerOffered` reflects what `modules()` returns right now.
+  useUiStore((s) => s.modulesGeneration);
+  useUiStore((s) => s.experiments);
+  const composerOffered = modules()
+    .filter((m) => (m.composer ?? []).length > 0)
+    .map((m) => m.core.name);
+  useEffect(() => {
+    if (composerHolder !== null && !composerOffered.includes(composerHolder)) setComposerHolder(null);
+  }, [composerHolder, composerOffered]);
+  /** What a `@Name join` was answered with, when it was not carried out. Its
+   *  own state rather than `sending.error`: nothing was sent, so nothing was
+   *  refused by a home, and saying "the message was refused" would be wrong
+   *  about which refusal this is. */
+  const [refused, setRefused] = useState("");
+  const canEdit = useCanEdit();
+  /**
+   * **The design partner's two entrances, behind their experiment.**
+   *
+   * `Start design task` renders under EVERY comment and `Ask design questions`
+   * at the foot of every thread, unconditionally for anyone who can edit — so
+   * a canvas with forty messages grew forty controls for a feature that landed
+   * the same day. Dion's reading, 16 Sep 2026: *"verbose and I don't get it"*.
+   *
+   * The gate is the house answer for exactly this, and `experiments.ts` says so
+   * — a module behind an experiment ships in the bundle and is off. The Inbox
+   * went behind one for the same reason: off while its shape settles.
+   *
+   * Only the ALWAYS-ON entrances are gated. A canvas that already carries
+   * design requests or questions still draws them, because hiding work
+   * somebody has already started would be a different and worse bug.
+   */
+  const designPartner = useUiStore((s) => s.experiments.includes("design.partner"));
+  const questionnaireViewer = JSON.stringify([canvasId, actor.id]);
+  const [publisherFor, setPublisherFor] = useState<string | null>(null);
+  const showDesignQuestions = publisherFor === questionnaireViewer;
+  const [designSource, setDesignSource] = useState<{ entrance: "canvas-chat"; threadId: string; commentId: string } | null>(null);
+  const hasDesignRequests = canvas && Object.values(canvas.items).some((item) => item.versions.some((version) => version.designRecord?.kind === "brief"));
+  const hasDesignQuestions = canvas && Object.values(canvas.threads).some((one) => one.comments.some((comment) => comment.design?.kind === "questions" || /^\/ask(?:\s|$)/.test(comment.body)));
+
 
   /**
    * A command the launcher picked, handed over rather than posted.
@@ -381,13 +539,46 @@ function Panel({
     if (pendingChat === null) return;
     setDraft((current) => (current.trim() === "" ? pendingChat : current));
     useUiStore.getState().setPendingChat(null);
-  }, [pendingChat]);
+  }, [pendingChat, setDraft]);
   const { candidates, peers } = useMentionRoster(actor.id);
+  /**
+   * **The composer's candidates gain the asker's own bench** (the bench, phase
+   * 2 — journey 3): `@Sian` has to resolve here BEFORE Sian is on this canvas,
+   * or `@Sian join` is a line nobody can type.
+   *
+   * Only the composer's. `rehypeChips` below keeps the canvas's own
+   * candidates, because a rendered body is read by everybody and a bench is
+   * read by one person — painting somebody else's message with names off MY
+   * bench would be the canvas showing me a chip nobody else can see.
+   *
+   * And only the ASKER's. `useBenchMentions` takes one actor id and reads one
+   * personal canvas; there is no argument anywhere here that could reach a
+   * second bench, which is what makes "Theo cannot see Sian" structural
+   * rather than a filter somebody has to remember.
+   */
+  const bench = useBenchMentions(actor.id);
+  const composerCandidates = useMemo(
+    () => [...candidates, ...bench.mentions],
+    [candidates, bench.mentions],
+  );
+  const composerPeers = useMemo(() => {
+    const here = new Set(peers.map((peer) => peer.id));
+    return [
+      ...peers,
+      ...bench.mentions
+        .filter((one) => one.notHereYet && !here.has(one.id))
+        .map((one) => ({ id: one.id, name: one.name, online: false, note: NOT_HERE_YET })),
+    ];
+  }, [peers, bench.mentions]);
   const itemRoster = useItemRefRoster();
   const commands = useCommands();
+  /* The verbs this canvas actually has, for the chips. A command is chipped
+     only where the palette could offer it — a chip that opens nothing is
+     worse than plain text. */
+  const commandNames = useMemo(() => commands.map((one) => one.name), [commands]);
   const chips = useMemo(
-    () => [rehypeChips(candidates, actor.id, itemRoster.candidates)],
-    [candidates, actor.id, itemRoster.candidates],
+    () => [rehypeChips(candidates, actor.id, itemRoster.candidates, commandNames)],
+    [candidates, actor.id, itemRoster.candidates, commandNames],
   );
 
   // Open is read — including messages landing while you are looking at it.
@@ -413,10 +604,6 @@ function Panel({
   }, [thread?.id, commentCount]);
 
   if (!canvas) return null; // reconnecting — parent unmounts us next render
-
-  async function send(body: string, attached: string[]) {
-    await postToMain(canvasId, actor, body, attached);
-  }
 
   function chipTarget(e: { target: EventTarget }): string | null {
     return (e.target as HTMLElement).closest("[data-item-id]")?.getAttribute("data-item-id") ?? null;
@@ -456,7 +643,7 @@ function Panel({
        *
        * Deliberately reintroducing it would trip `chrome.test.ts`.
        */}
-      <PanelHead
+      {!onOpenItem && <PanelHead
         glyph={<ChatGlyph size={13} />}
         /* The same word the button that opens it says. It read "Main thread"
            under a button that said "Main" — two labels for one panel, and both
@@ -467,13 +654,23 @@ function Panel({
         closeTitle="Collapse"
         closeLabel="Collapse the Chat"
         onClose={() => openMainPanel(canvasId, false)}
-      />
+      />}
+      {canEdit && <Suspense fallback={null}><ChatTidy canvasId={canvasId} actor={actor} /></Suspense>}
       <div
         className="main-scroll"
         ref={scrollRef}
         onClick={(e) => {
           const itemId = chipTarget(e);
-          if (itemId) catapultBesidePanel(itemId);
+          if (itemId) {
+            (onOpenItem ?? catapultBesidePanel)(itemId);
+            return;
+          }
+          /* A command chip opens the palette at that verb. The reader who
+             clicks one usually wants to do the same thing, not read about it
+             — a definition you cannot act on is the worse half of the answer,
+             and the palette shows the description anyway. */
+          const command = (e.target as HTMLElement).closest("[data-command]")?.getAttribute("data-command");
+          if (command) useUiStore.getState().setPaletteOpen("commands");
         }}
       >
         <div className="main-msgs">
@@ -515,18 +712,25 @@ function Panel({
                   cards especially, which are the tallest thing here. */}
               <CommentFold comment={comment}>
                 <div className="body">
-                  <CommandChip body={comment.body} />
-                  <Markdown rehypePlugins={chips}>
-                    {withoutCommand(comment.body)}
-                  </Markdown>
+                  {comment.designDecision ? <Suspense fallback={<p>Reading design decision…</p>}><DesignComparisonComment comment={comment} canvasId={canvasId} actor={actor} threadId={thread!.id} /></Suspense> : comment.design ? <Suspense fallback={<p>Reading design record…</p>}><DesignComment comment={comment} /></Suspense> : <><CommandChip body={comment.body} /><Markdown rehypePlugins={chips}>{withoutCommand(comment.body)}</Markdown></>}
                 </div>
-                {canvas && thread && <LaneChips canvas={canvas} thread={thread} comment={comment} />}
-                {(comment.items ?? [])
+                {!onOpenItem && canvas && thread && <LaneChips canvas={canvas} thread={thread} comment={comment} />}
+                {comment.context && <ContextManifestView manifest={comment.context} comment={{ threadId: thread.id, commentId: comment.id }} />}
+                {refCards ? refCards(comment) : !comment.context && (comment.items ?? [])
                   .filter((id, i, all) => all.indexOf(id) === i)
                   .map((itemId) => (
-                    <ItemCard key={itemId} canvasId={canvasId} itemId={itemId} />
+                    <ItemCard key={itemId} canvasId={canvasId} itemId={itemId} onOpenItem={onOpenItem} />
                   ))}
+                {designPartner && canEdit && !comment.design && !isSystemActor(comment.author.id) && <button className="main-design-ask" type="button" onClick={() => setDesignSource({ entrance: "canvas-chat", threadId: thread.id, commentId: comment.id })}>Start design task</button>}
               </CommentFold>
+              {/* The refusal is the control (#272): the Chat reaches everyone,
+                  so a mention here is turned away exactly as one in a thread
+                  is, and the owner answers it in the same place. Mounted only
+                  for a comment that names somebody — it subscribes to the rc
+                  poll, and the Chat is the longest thread on the canvas. */}
+              {thread && comment.mentions && comment.mentions.length > 0 && (
+                <GateGrant canvasId={canvasId} viewer={actor} thread={thread} comment={comment} />
+              )}
             </div>
           ))}
           {thread && (
@@ -537,17 +741,68 @@ function Panel({
                 actor={actor}
               />
           )}
+          {thread && canEdit && thread.comments.some((c) => c.author.id === actor.id && c.body.trimStart().startsWith("/goodnight")) && (
+            <Suspense fallback={null}><GoodnightPlan canvasId={canvasId} actor={actor} thread={thread} /></Suspense>
+          )}
+        {(hasDesignRequests || designSource) && <Suspense fallback={<p>Opening design task…</p>}><DesignTaskPanel key={questionnaireViewer} canvasId={canvasId} actor={actor} startSource={designSource} onStarted={() => setDesignSource(null)} /></Suspense>}
         </div>
       </div>
-      <form
+      {hasDesignQuestions || showDesignQuestions ? <Suspense fallback={null}><QuestionnairePanel key={questionnaireViewer} canvasId={canvasId} canvas={canvas} actor={actor} thread={thread} canEdit={canEdit} startPublishing={showDesignQuestions} /></Suspense> : designPartner && canEdit && thread && <button className="main-design-ask" type="button" onClick={() => setPublisherFor(questionnaireViewer)}>Ask design questions</button>}
+      {canEdit && <form
         onKeyDown={(e) => {
+          // Tab takes the designer's sentence; the field's own menu, open, has the key first.
+          if (e.key === "Tab" && !e.shiftKey && !e.defaultPrevented && say?.sentence && (e.target as HTMLElement).tagName === "TEXTAREA") {
+            e.preventDefault();
+            setDraft(say.sentence);
+            return;
+          }
           submitOnEnter(e);
           submitOnCmdEnter(e);
         }}
         onSubmit={async (e) => {
           e.preventDefault();
           const body = draft.trim();
-          if (!body) return;
+          if (!body || sending.disabled) return;
+          setRefused("");
+          /**
+           * **`@Sian join` is carried out here, not posted** (the bench,
+           * phase 2 — journey 3), for `/help`'s reason: the act is the
+           * message, and posting it would leave a request in the thread for
+           * an agent that is not here to answer.
+           *
+           * A line that named nobody on YOUR bench is refused rather than
+           * posted, and the refusal is shown to you rather than written into
+           * the thread — it is an answer to the person who typed it, and
+           * posting it would tell the whole canvas which names somebody
+           * tried. `benchJoinAsk` returns an ask for an unresolved name
+           * precisely so this branch exists: silence here would read as *no
+           * such agent*, which is a claim about a canvas the speaker cannot
+           * see.
+           */
+          const ask = benchJoinAsk(body, bench.mentions);
+          if (ask) {
+            // Fetched on the Enter that asks for it, never on the visit that
+            // renders the composer: recognising the line is a dozen bytes of
+            // core, and CARRYING IT OUT — the op, the thread's line, both
+            // sentences — is a chunk that most people never touch. The same
+            // boundary `lib/benchmentions.ts` puts round the bench reader,
+            // for the same reason.
+            const { joinFromChat } = await import("../lib/benchjoin.ts");
+            const said = await joinFromChat(canvasId, actor, ask, bench);
+            if (said) setRefused(said);
+            else setDraft("");
+            return;
+          }
+          // `/goodnight` posts to the lead by name, and when nothing can
+          // answer writes the honest note too (lib/goodnight.ts, fetched on
+          // this Enter only).
+          if (/^\s*\/goodnight(\s|$)/.test(body)) {
+            const { startGoodnight } = await import("../lib/goodnight.ts");
+            const said = await startGoodnight(canvasId, actor, body, useUiStore.getState().selectedItemIds);
+            setDraft("");
+            if (said) setRefused(said);
+            return;
+          }
           // /help and its kind are answered here rather than posted: see
           // lib/localcommands.ts.
           if (runLocalCommand(body, commands)) {
@@ -555,12 +810,24 @@ function Panel({
             return;
           }
           const attached = useUiStore.getState().selectedItemIds;
-          setDraft("");
-          await send(body, attached);
+          // The words as typed; a reading they picked rides beside them as data.
+          const readings = say?.readings ?? [];
+          await sending.submit(() => postToMain(canvasId, actor, body, attached, context.request, readings.length ? { readings } : undefined), () => setDraft(""));
         }}
       >
-        <Attached canvasId={canvasId} />
-        <MentionField
+        {/* **A module may stand where the message box is** (proposed:
+            `composer`). While one holds the row — a live voice session, say —
+            the shell puts its own input, chips and send button away rather
+            than drawing two ways to say something at once. It keeps the form,
+            so ⌘⏎ and the submit handler are untouched and giving the row back
+            restores a composer that never went anywhere. */}
+        {composerHolder === null && <Attached canvasId={canvasId} />}
+        {composerHolder === null && needsContextManifestPreview(context, selected) && <MessageContextPreview context={context} />}
+        {composerHolder === null && sending.error && <p role="alert">{sending.error}</p>}
+        {composerHolder === null && refused && <p role="alert">{refused}</p>}
+        {composerHolder === null && vocabularyOpen && <Suspense fallback={null}><Vocabulary canvasId={canvasId} actor={actor} onClose={() => setVocabularyOpen(false)} /></Suspense>}
+        {composerHolder === null && draft.trim() !== "" && <Suspense fallback={null}><DesignerWords draft={draft} actor={actor} onState={setSay} onVocabulary={() => setVocabularyOpen(true)} /></Suspense>}
+        {composerHolder === null && <MentionField
           // One placeholder, both states: what the CHANNEL is beats what the
           // moment is. Everything typed here reaches every agent listening
           // unless a name is called, and that is the thing worth knowing
@@ -570,16 +837,43 @@ function Panel({
           placeholder="Message everyone — agents included"
           grow
           value={draft}
-          onChange={setDraft}
-          candidates={candidates}
-          peers={peers}
+          // A refusal is about the line that was typed. Keep it on screen
+          // while that line is still there — and drop it the moment it is
+          // not, rather than leaving "Sian is not on your bench" sitting
+          // under a message about something else entirely.
+          onChange={(next) => {
+            setDraft(next);
+            if (refused) setRefused("");
+          }}
+          marks={say?.marks}
+          candidates={composerCandidates}
+          peers={composerPeers}
+          bench={bench.mentions}
           itemCandidates={itemRoster.candidates}
           items={itemRoster.entries}
-        />
-        <button className="btn primary" type="submit" title="Send (⌘⏎)" disabled={!draft.trim()}>
+        />}
+        {/* **One render site, always mounted.** Drawn in two places — one for
+            the idle row and one for the taken-over row — React unmounts and
+            remounts the control on takeover, which drops its state and flips
+            it straight back. The shell hides its OWN parts instead.
+            When voice is offered, the empty composer shows the mic and flips
+            to Send as soon as typing begins — you either start a voice session
+            or type and send, never both at once. */}
+        {composerOffered.length > 0 && (
+          <Suspense fallback={null}>
+            <ModuleComposerControls
+              canvasId={canvasId}
+              actor={actor}
+              takenOverBy={composerHolder}
+              onTakeOver={takeComposer}
+              hidden={composerHolder === null && draft.trim() !== ""}
+            />
+          </Suspense>
+        )}
+        {composerHolder === null && (composerOffered.length === 0 || draft.trim() !== "") && <button className="btn primary" type="submit" title={`Send (${shortcut("⏎")})`} disabled={!draft.trim() || sending.disabled}>
           ↑
-        </button>
-      </form>
+        </button>}
+      </form>}
     </div>
   );
 }
@@ -590,7 +884,7 @@ function Panel({
  * it, and pointing at it opens the same peek the panel and the rim open,
  * beside the panel, while the item itself lights up on the canvas.
  */
-function ItemCard({ canvasId, itemId }: { canvasId: string; itemId: string }) {
+export function ItemCard({ canvasId, itemId, onOpenItem }: { canvasId: string; itemId: string; onOpenItem?: ((id: string) => void) | undefined }) {
   const item = useCanvasStore((s) => s.canvas?.items[itemId]);
   const panelWidth = useUiStore((s) => s.panelWidth);
   const [peekTop, setPeekTop] = useState<number | null>(null);
@@ -606,9 +900,10 @@ function ItemCard({ canvasId, itemId }: { canvasId: string; itemId: string }) {
     <>
       <button
         className="mt-card"
-        onClick={() => catapultBesidePanel(itemId)}
-        aria-label={`Fly to ${item.title}`}
+        onClick={() => (onOpenItem ?? catapultBesidePanel)(itemId)}
+        aria-label={`${onOpenItem ? "Open" : "Fly to"} ${item.title}`}
         onPointerEnter={(e) => {
+          if (onOpenItem) return;
           const rect = e.currentTarget.getBoundingClientRect();
           setPeekTop(rect.top + rect.height / 2);
           useUiStore.getState().setPeeked(itemId);

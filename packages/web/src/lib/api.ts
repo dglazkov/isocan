@@ -1,4 +1,8 @@
+import type { TextPictures } from "@isocan/core/text";
+import { inboxRoute, type InboxResponse } from "@isocan/core";
+import { rcAnsweringRoute, rcAskRoute } from "@isocan/core";
 import type {
+  CanvasGroupMigrationPreview,
   Actor,
   ActorClaimOp,
   AttestOffer,
@@ -7,22 +11,23 @@ import type {
   ActorColors,
   BadgesResponse,
   BlobUploadResponse,
-  Capability,
   CanvasSnapshotResponse,
   DirClaim,
   GcReport,
   GcRequest,
-  GrantResponse,
-  GrantsResponse,
-  GrantSubject,
   HomesResponse,
   NewsResponse,
   PresenceWhereResponse,
+  PresenceSession,
   ActorKinds,
   DocExportResponse,
   KillBadgeResponse,
   LogEntry,
   MintPassResponse,
+  TakedownNotice,
+  TakedownsResponse,
+  BadgeEnd,
+  RefusalNotice,
   Operation,
   Persona,
   PostOpResponse,
@@ -36,36 +41,35 @@ import type {
   ServingResponse,
   SignedBlobsResponse,
   SlashCommand,
-  SpaceCanvasResponse,
-  SpaceLinkRequest,
-  SpaceLinkResponse,
-  SpaceResponse,
-  SpacesResponse,
-  GroupResponse,
-  GroupsResponse,
+  SeenMarksResponse,
+  SeenResponse,
+  ContextManifest,
+  ContextContentPage,
 } from "@isocan/core";
+
+/** Conversion previews are writer reads, so the reviewed revision guards one apply. */
+export function fetchGroupMigration(
+  canvasId: string,
+  signal?: AbortSignal,
+): Promise<CanvasGroupMigrationPreview> {
+  return request("GET", `/api/projects/${encodeURIComponent(canvasId)}/groups/migration`, undefined, signal);
+}
 import {
+  CURRENT_CLIENT_FEATURES,
+  CLIENT_FEATURES_HEADER,
+  CANVAS_GROUPS_REQUIRED,
   ATTEST_ROUTE,
-  groupActingRoute,
-  groupMemberRoute,
-  groupRoute,
-  GROUPS_ROUTE,
-  spaceActingRoute,
-  spaceCanvasRoute,
-  spaceGrantRevokeRoute,
-  spaceGrantsRoute,
-  spaceLinkRoute,
-  spaceRoute,
-  SPACES_ROUTE,
+  seenMarksRoute,
+  seenRoute,
   badgeRoute,
   BADGES_ROUTE,
+  BADGE_ENDED,
+  REFUSED,
+  NOT_ADMITTED,
   DOOR_ROUTE,
   encodeFilename,
   FILENAME_HEADER,
-  grantRevokeRoute,
-  grantsRoute,
   HOMES_ROUTE,
-  narrowed,
   NEWS_ROUTE,
   PRESENCE_WHERE_ROUTE,
   ACTOR_KINDS_ROUTE,
@@ -76,9 +80,33 @@ import {
   passesRoute,
   canvasesRoute,
   SERVING_ROUTE,
+  TAKEDOWNS_CANVAS_PARAM,
+  TAKEDOWNS_ROUTE,
   SIGN_BLOBS_PARAM,
   SIGN_BLOBS_ROUTE,
+  canvasContextRoute,
+  commentContextRoute,
 } from "@isocan/core";
+
+/** Context previews come from the home so the shown revision can guard the eventual send. */
+export function fetchContextManifest(canvasId: string, roots?: string[], includeExcluded = false): Promise<ContextManifest> {
+  const query = new URLSearchParams();
+  if (roots !== undefined) query.set("roots", roots.join(","));
+  if (includeExcluded) query.set("includeExcluded", "true");
+  return request("GET", `${canvasContextRoute(canvasId)}?${query}`);
+}
+
+/** Frozen messages read retained faces through the same admitted route as current context. */
+export function fetchContextContent(manifest: ContextManifest, offset: number, face: "source" | "visual", comment?: { threadId: string; commentId: string }): Promise<ContextContentPage> {
+  const route = comment ? commentContextRoute(manifest.canvasId, comment.threadId, comment.commentId) : canvasContextRoute(manifest.canvasId);
+  const query = new URLSearchParams({ offset: String(offset), limit: "50", face });
+  if (!comment) {
+    if (!manifest.ambient) query.set("roots", manifest.rootIds.join(","));
+    query.set("expectedRevision", String(manifest.revision));
+    if (manifest.includeExcluded) query.set("includeExcluded", "true");
+  }
+  return request("GET", `${route}/content?${query}`);
+}
 
 /** Stable per-tab id so a client can recognize its own ops in broadcasts. */
 export const CLIENT_ID = newClientId();
@@ -140,7 +168,7 @@ export function homeAnswered(err: unknown): err is ApiError {
  * — a hook keeps the dependency pointing one way.
  */
 let reclaim: (() => Promise<unknown>) | null = null;
-let reclaiming = false;
+let reclaiming: Promise<boolean> | null = null;
 
 export function onReBadge(fn: () => Promise<unknown>): void {
   reclaim = fn;
@@ -164,6 +192,19 @@ function isFramed(): boolean {
 }
 
 /**
+ * **The last refusal the door gave a knock** (operator phase 6), or null.
+ *
+ * A refused MINT — a knock from a network the operator refused — is answered
+ * 403 with the home's sentence, and `knockOnDoor` keeps its boolean contract
+ * for its many callers by recording the refusal here rather than throwing.
+ * `request` reads it to surface the sentence in place of the bare *a badge is
+ * required*, which is the *cheerful wrong answer* — advice to do the one thing
+ * that cannot work — the meter's own comment warns against. A 429 (metered) is
+ * NOT recorded: waiting genuinely fixes that one.
+ */
+let lastDoorRefusal: { message: string; refusal?: RefusalNotice } | null = null;
+
+/**
  * Go to the door and be handed a cookie. The page load already badges this
  * browser — the daemon sets the cookie on the HTML document — so this is
  * belt-and-braces: it heals a cookie that was cleared mid-session, and the
@@ -176,7 +217,7 @@ function isFramed(): boolean {
  * recovery is a 401 followed by a `not-your-actor` on the first action after
  * it — the canvas would flinch, once, for good.
  */
-export async function knockOnDoor(): Promise<boolean> {
+export async function knockOnDoor(claimIdentity = true): Promise<boolean> {
   try {
     const res = await fetch(DOOR_ROUTE, {
       method: "POST",
@@ -188,20 +229,43 @@ export async function knockOnDoor(): Promise<boolean> {
       // jar it cannot read back — see `badgeCookie`.
       body: JSON.stringify({ carrier: "cookie", framed: isFramed() }),
     });
-    if (!res.ok) return false;
-    await reclaimNow();
+    if (!res.ok) {
+      if (res.status === 403) {
+        const json = (await res.json().catch(() => null)) as
+          | { error?: string; reason?: string; refusal?: RefusalNotice }
+          | null;
+        if (json?.reason === REFUSED) {
+          lastDoorRefusal = {
+            message: json.error ?? "This home will not admit knocks from your network.",
+            ...(json.refusal ? { refusal: json.refusal } : {}),
+          };
+        }
+      }
+      return false;
+    }
+    lastDoorRefusal = null;
+    // An actor.claim can need a new badge too, but must not wait on the
+    // identity recovery promise that is waiting for this very claim.
+    if (claimIdentity) await reclaimNow();
     return true;
   } catch {
     return false;
   }
 }
 
-async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
+/** Shared authenticated transport for lazy feature adapters, with caller cancellation. */
+export async function request<T>(
+  method: string, url: string, body?: unknown, signal?: AbortSignal,
+  recovery: "identity" | "badge" = "identity",
+  extraHeaders?: Record<string, string>,
+): Promise<T> {
   const send = () =>
     fetch(url, {
       method,
+      ...(signal ? { signal } : {}),
+      headers: { [CLIENT_FEATURES_HEADER]: CURRENT_CLIENT_FEATURES, ...extraHeaders, ...(body !== undefined ? { "Content-Type": "application/json" } : {}) },
       ...(body !== undefined
-        ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
+        ? { body: JSON.stringify(body) }
         : {}),
     });
   let res = await send();
@@ -210,36 +274,46 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
   // door (which re-claims on the way back); a `not-your-actor` means the
   // badge is fine and the CLAIM is gone — a tab whose persona the desk no
   // longer remembers — so it claims and comes straight back.
+  signal?.throwIfAborted();
   const recovered =
     res.status === 401
-      ? await knockOnDoor()
-      : json?.code === "not-your-actor" && (await reclaimNow());
+      ? await knockOnDoor(recovery === "identity")
+      : recovery === "identity" && json?.code === "not-your-actor" && (await reclaimNow());
   if (recovered) {
+    signal?.throwIfAborted();
     res = await send();
     json = (await res.json().catch(() => null)) as any;
+  } else if (res.status === 401 && lastDoorRefusal) {
+    // The door refused the mint this recovery needed (operator phase 6): the
+    // home's sentence, not *a badge is required — ask the door*, which here
+    // would be advice to do the one thing that cannot work.
+    const said = lastDoorRefusal;
+    lastDoorRefusal = null;
+    throw new ApiError(403, said.message, NOT_ADMITTED, REFUSED);
   }
   if (!res.ok) throw new ApiError(res.status, json?.error ?? `HTTP ${res.status}`, json?.code, json?.reason);
   return json as T;
 }
 
 async function reclaimNow(): Promise<boolean> {
-  if (!reclaim || reclaiming) return false;
-  reclaiming = true;
-  try {
-    await reclaim();
-    return true;
-  } catch {
-    return false; // somebody else is that persona now; the replay says so
-  } finally {
-    reclaiming = false;
-  }
+  if (!reclaim) return false;
+  if (reclaiming) return reclaiming;
+  // Distinct inbox/visit scopes still share one identity claim. A second
+  // request waits for it, then gets its own single replay and cancellation.
+  const claim = reclaim;
+  const shared = Promise.resolve().then(claim).then(() => true, () => false)
+    .finally(() => { if (reclaiming === shared) reclaiming = null; });
+  reclaiming = shared;
+  return shared;
 }
 
 /** Name (or resume) this browser's actor — the one op sent without an
  * actor: the claim resolves who is speaking, and the response envelope
  * carries the answer. */
 export function claimActor(op: ActorClaimOp): Promise<PostOpResponse> {
-  return request("POST", "/api/ops", { canvasId: null, clientId: CLIENT_ID, op });
+  // A refused claim is final for this identity attempt. It may recover a
+  // missing badge once, but cannot re-enter (or join) its own claim recovery.
+  return request("POST", "/api/ops", { canvasId: null, clientId: CLIENT_ID, op }, undefined, "badge");
 }
 
 /**
@@ -255,6 +329,9 @@ export function postOp(
   op: Operation,
   opId: string,
   group?: string,
+  originGroupMode?: "legacy" | "groups",
+  spaceId?: string,
+  transport?: { signal?: AbortSignal | undefined; headers?: Record<string, string> | undefined },
 ): Promise<PostOpResponse> {
   return request("POST", "/api/ops", {
     canvasId,
@@ -263,7 +340,9 @@ export function postOp(
     opId,
     op,
     ...(group !== undefined ? { group } : {}),
-  });
+    ...(originGroupMode ? { originGroupMode } : {}),
+    ...(spaceId !== undefined ? { spaceId } : {}),
+  }, transport?.signal, "identity", transport?.headers);
 }
 
 /**
@@ -280,11 +359,13 @@ export function postOp(
  * have open — and then `sendOp` throws, because a gesture that quietly
  * evaporates is the failure this phase exists to remove.
  */
-let queueWrite: ((canvasId: string | null, actor: Actor, op: Operation, opId: string) => boolean) | null =
+let queueWrite: ((canvasId: string | null, actor: Actor, op: Operation, opId: string, originGroupMode?: "legacy" | "groups", upgradeRequired?: boolean) => boolean) | null =
   null;
+let writeOrigin: ((canvasId: string | null) => "legacy" | "groups" | undefined) | null = null;
 
-export function onOfflineWrite(fn: typeof queueWrite): void {
+export function onOfflineWrite(fn: typeof queueWrite, origin: typeof writeOrigin = null): void {
   queueWrite = fn;
+  writeOrigin = origin;
 }
 
 /** What to tell somebody whose act cannot wait in a queue. Each sentence
@@ -327,13 +408,19 @@ export async function sendOp(
    *  nothing here; a paste, or an edit that changes words and title, passes
    *  the same id for every op it writes. */
   group?: string,
+  capturedOrigin?: "legacy" | "groups",
+  /** Birth metadata; project.create is never placed in the offline queue. */
+  spaceId?: string,
 ): Promise<PostOpResponse | null> {
   const opId = newOpId();
+  const originGroupMode = capturedOrigin ?? writeOrigin?.(canvasId);
   try {
-    return await postOp(canvasId, actor, op, opId, group);
+    return await postOp(canvasId, actor, op, opId, group, originGroupMode, spaceId);
   } catch (err) {
-    if (homeAnswered(err)) throw err;
-    if (queueWrite?.(canvasId, actor, op, opId)) return null;
+    const upgradeRequired = err instanceof ApiError && err.code === CANVAS_GROUPS_REQUIRED;
+    if (homeAnswered(err) && !upgradeRequired) throw err;
+    if (queueWrite?.(canvasId, actor, op, opId, originGroupMode, upgradeRequired)) return null;
+    if (upgradeRequired) throw err;
     throw new OfflineError(offlineNote(op));
   }
 }
@@ -388,8 +475,99 @@ export function fetchCommands(): Promise<SlashCommand[]> {
  * home of a canvas does not admit anybody to it. A tab still sees only what
  * its badge may see.
  */
-export function listCanvases(): Promise<Canvas[]> {
-  return request("GET", canvasesRoute("here"));
+export function listCanvases(signal?: AbortSignal): Promise<Canvas[]> {
+  return request("GET", canvasesRoute("here"), undefined, signal);
+}
+
+/**
+ * **The home's sentence about a canvas it has taken down** (operator phase 2),
+ * or null when it has not.
+ *
+ * A second small read beside the list rather than a field on `Canvas`, and the
+ * reason is worth having here where somebody would be tempted: `Canvas` is the
+ * replicated canvas record. A takedown on it would travel to every replica,
+ * and a replica that read it would stop opening its own copy — which is the
+ * operator reaching a laptop, the one thing a takedown must never do. So the
+ * list keeps its shape, and this answers `[]` on every home that has taken
+ * nothing down, which is every home in this repo.
+ *
+ * With a canvas id it asks about one and is answered whoever asks, because the
+ * door already says the sentence in its refusal.
+ */
+export async function fetchTakedowns(canvasId?: string, signal?: AbortSignal): Promise<TakedownNotice[]> {
+  const suffix = canvasId ? `?${TAKEDOWNS_CANVAS_PARAM}=${encodeURIComponent(canvasId)}` : "";
+  const answer = await request<TakedownsResponse>("GET", `${TAKEDOWNS_ROUTE}${suffix}`, undefined, signal);
+  return answer.takedowns;
+}
+
+/** One canvas's notice, or null. Best-effort: a home too old for the route, or
+ * one that will not answer, leaves the surface saying the short version, which
+ * is still true. */
+export async function fetchTakedown(canvasId: string): Promise<TakedownNotice | null> {
+  const rows = await fetchTakedowns(canvasId).catch(() => []);
+  return rows.find((row) => row.canvasId === canvasId) ?? null;
+}
+
+/**
+ * **The sentence about THIS badge having been ended** (operator phase 4), or
+ * null.
+ *
+ * Read off the 401, deliberately, and not through `request`: a dead badge is
+ * given exactly one answer by its home — *this surface was ended, on this
+ * date, by this hand* — and it is given as the refusal of whatever it asks
+ * next. `request` would knock on the door on that 401 and come back a
+ * stranger with nothing to say; a raw fetch reads the words before the cookie
+ * is replaced. Best-effort, like `fetchTakedown`: a home that has already
+ * handed this tab a new badge answers 200 here, and the page says the short
+ * version, which is still true.
+ */
+export async function fetchEnded(): Promise<BadgeEnd | null> {
+  try {
+    const res = await fetch(BADGES_ROUTE);
+    if (res.status !== 401) return null;
+    const json = (await res.json().catch(() => null)) as { code?: string; ended?: BadgeEnd } | null;
+    return json?.code === BADGE_ENDED && json.ended ? json.ended : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * **The sentence for a badge this home refuses at the door** (operator phase
+ * 6), or null. Read off the 403 the canvas gives — the home writes the
+ * refusal notice beside the code — so the tab that was closed with `refused`
+ * shows the home's words: *This home will not admit …* with the date, the
+ * category and the address to write to. Best-effort, like `fetchTakedown`: a
+ * home that will not answer leaves the page saying the short version.
+ */
+export async function fetchRefused(canvasId: string): Promise<RefusalNotice | null> {
+  try {
+    const res = await fetch(`/api/projects/${encodeURIComponent(canvasId)}/canvas`);
+    if (res.status !== 403) return null;
+    const json = (await res.json().catch(() => null)) as
+      | { reason?: string; refusal?: RefusalNotice }
+      | null;
+    return json?.reason === REFUSED && json.refusal ? json.refusal : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * **What you have already seen** (#147, #134) — your own marks, every canvas,
+ * one read. Desk state at the home, so this is asked rather than remembered:
+ * the point of the feature is that your other machine finds what this one
+ * saw. A canvas selector asks that canvas's home for only its prior mark.
+ * There is deliberately no way to ask for anybody else's.
+ */
+export function fetchSeen(actorId: string, signal?: AbortSignal, canvasId?: string): Promise<SeenMarksResponse> {
+  return request("GET", seenMarksRoute(actorId, canvasId), undefined, signal);
+}
+
+/** Move the mark for one canvas to the head you had in front of you. Called
+ *  on a VISIT and nowhere else — see `lib/seen.ts`. */
+export function putSeen(canvasId: string, seq: number, actorId: string): Promise<SeenResponse> {
+  return request("PUT", seenRoute(canvasId), { seq, actorId });
 }
 
 /**
@@ -416,8 +594,8 @@ export function fetchHomes(): Promise<HomesResponse> {
  * of them; opening a dozen to keep a dozen dots exact is a cost nobody asked
  * for, and a dot a few seconds stale is still a dot.
  */
-export function fetchPresenceWhere(): Promise<PresenceWhereResponse> {
-  return request("GET", PRESENCE_WHERE_ROUTE);
+export function fetchPresenceWhere(signal?: AbortSignal): Promise<PresenceWhereResponse> {
+  return request("GET", PRESENCE_WHERE_ROUTE, undefined, signal);
 }
 
 /** What changed, for the person using this — see `NEWS_ROUTE`. Open, because
@@ -430,14 +608,16 @@ export function fetchNews(): Promise<NewsResponse> {
  * **Which enrolled agents a live rc is actually answering for — and whether
  * one is parked at all.**
  *
- * Connection-bound, never a TTL: the daemon reports the holds it is holding
- * right now, unioned with what member machines' daemons relay up their
- * home-link sockets (agent-custody mechanism 1). `roster()` takes the ids as
- * its fourth argument and downgrades every standing row to `enrolled`
- * without them; `parked` is the add-agent gate. See `useAnswerable`.
+ * Connection-bound, never a TTL: the holds open right now, as the canvas's
+ * HOME has them — its own, what member machines' daemons relay up their
+ * home-link sockets (agent-custody mechanism 1), and an rc parked at it on
+ * another badge. A daemon that is not the home asks the home and folds in
+ * its own holds (issue #306). `roster()` takes the ids as its fourth
+ * argument and downgrades every standing row to `enrolled` without them;
+ * `parked` is the add-agent gate. See `useAnswerable`.
  */
-export function fetchRcAnswering(canvasId: string): Promise<RcAnsweringResponse> {
-  return request("GET", `/api/projects/${encodeURIComponent(canvasId)}/rc`);
+export function fetchRcAnswering(canvasId: string, signal?: AbortSignal): Promise<RcAnsweringResponse> {
+  return request("GET", rcAnsweringRoute(canvasId), undefined, signal);
 }
 
 /**
@@ -447,11 +627,11 @@ export function fetchRcAnswering(canvasId: string): Promise<RcAnsweringResponse>
  * `agent.enroll` op lands, or the dialog's countdown says nothing answered.
  */
 export function askEnrolAgent(canvasId: string, body: RcAskRequest): Promise<RcAskResponse> {
-  return request("POST", `/api/projects/${encodeURIComponent(canvasId)}/agents/ask`, body);
+  return request("POST", rcAskRoute(canvasId), body);
 }
 
-export function getSnapshot(canvasId: string): Promise<CanvasSnapshotResponse> {
-  return request("GET", `/api/projects/${canvasId}/canvas`);
+export function getSnapshot(canvasId: string, signal?: AbortSignal, headers?: Record<string, string>): Promise<CanvasSnapshotResponse> {
+  return request("GET", `/api/projects/${encodeURIComponent(canvasId)}/canvas`, undefined, signal, "identity", headers);
 }
 
 /**
@@ -470,8 +650,8 @@ export function getSnapshot(canvasId: string): Promise<CanvasSnapshotResponse> {
  * `since=0` because every caller wants the whole log; a caller that wants a
  * tail can pass one.
  */
-export function getOplog(canvasId: string, since = 0): Promise<LogEntry[]> {
-  return request("GET", `/api/projects/${encodeURIComponent(canvasId)}/oplog?since=${since}`);
+export function getOplog(canvasId: string, since = 0, signal?: AbortSignal): Promise<LogEntry[]> {
+  return request("GET", `/api/projects/${encodeURIComponent(canvasId)}/oplog?since=${since}`, undefined, signal);
 }
 
 /**
@@ -481,11 +661,13 @@ export function getOplog(canvasId: string, since = 0): Promise<LogEntry[]> {
  * so this answers `[]` rather than throwing, and the caller can fold either
  * way without a branch.
  */
-export function getArchivedOplog(canvasId: string): Promise<LogEntry[]> {
-  return request<LogEntry[]>(
+export function getArchivedOplog(canvasId: string, options: { strict?: boolean; signal?: AbortSignal } = {}): Promise<LogEntry[]> {
+  const reading = request<LogEntry[]>(
     "GET",
     `/api/projects/${encodeURIComponent(canvasId)}/oplog/archive`,
-  ).catch(() => []);
+    undefined, options.signal,
+  );
+  return options.strict ? reading : reading.catch(() => []);
 }
 
 /**
@@ -562,6 +744,7 @@ export async function uploadBlob(
   canvasId: string,
   file: File | Blob,
   filename: string,
+  transport?: { signal?: AbortSignal | undefined; headers?: Record<string, string> | undefined },
 ): Promise<BlobUploadResponse> {
   // Bypasses `request` (raw bytes), so the recovery retry is spelled out —
   // a 401 here would read as a drop that silently failed.
@@ -571,8 +754,10 @@ export async function uploadBlob(
       headers: {
         "Content-Type": file.type || "application/octet-stream",
         [FILENAME_HEADER]: encodeFilename(filename),
+        ...transport?.headers,
       },
       body: file,
+      ...(transport?.signal ? { signal: transport.signal } : {}),
     });
   let res: Response;
   try {
@@ -777,199 +962,6 @@ export function writeItem(
   return request("POST", `/api/projects/${encodeURIComponent(canvasId)}/write`, { itemId, force });
 }
 
-// ---- who may enter this canvas (the Share dialog's three calls) ----
-//
-// The routes are built by `@isocan/core`'s `grantsRoute`/`grantRoute` rather
-// than spelled here, and the subject is core's `GrantSubject` rather than the
-// string `"link"`: the dialog, the CLI verb and the daemon all have to agree
-// about the shape of a URL and the spelling of a subject, and a disagreement
-// shows up at runtime as a refusal with nothing to read.
-
-/** The rows still admitting, oldest first. Tombstones stay on the desk; the
- * route does not hand them over, because "who can get in" is a question about
- * the present. */
-export function listGrants(canvasId: string): Promise<GrantsResponse> {
-  return request("GET", grantsRoute(canvasId));
-}
-
-/** Share it. `link` needs no attester; `email:` and `repo:` need one this home
- * has borrowed, and a home that has borrowed none refuses with `no-attester`
- * — the dialog shows that refusal rather than hiding it behind a disabled
- * control. */
-export function createGrant(
-  canvasId: string,
-  subject: GrantSubject,
-  capability?: Capability,
-  /** Who is acting — the persona this tab wears. A write to grants asks
-   * `own`, which a person holds, and a browser's badge may hold several. */
-  actorId?: string,
-): Promise<GrantResponse> {
-  return request("POST", grantsRoute(canvasId), {
-    subject,
-    // Sent whenever it is not edit (#88, `narrowed`), so an older home never
-    // meets the field for the one value it has always meant by omission.
-    ...(narrowed(capability) ? { capability } : {}),
-    ...(actorId ? { actorId } : {}),
-  });
-}
-
-/**
- * Un-share it. Deliberately sends NO body and no content-type: a `DELETE`
- * declaring `application/json` with nothing in it is a Fastify parse error,
- * and while `http.ts` now answers that with the 400 it always was, the
- * request that never needed a body should not send headers about one.
- */
-export function revokeGrant(
-  canvasId: string,
-  grantId: string,
-  actorId?: string,
-  /** `?bar=1`: revoke and keep them out in one request (roles phase 3). The
-   * parameter's spelling is core's, like the route. */
-  bar?: boolean,
-): Promise<GrantResponse> {
-  return request(
-    "DELETE",
-    grantRevokeRoute(canvasId, grantId, { ...(actorId ? { actorId } : {}), ...(bar ? { bar } : {}) }),
-  );
-}
-
-/**
- * Keep somebody out (roles phase 3): a bar, written directly — the dialog's
- * **and keep them out** after a Remove whose answer said the link would still
- * admit them. The same POST as an invitation, with `bars: true` and no rung;
- * the home replaces any live row naming them and sweeps.
- */
-export function createBar(
-  canvasId: string,
-  subject: GrantSubject,
-  actorId?: string,
-): Promise<GrantResponse> {
-  return request("POST", grantsRoute(canvasId), {
-    subject,
-    bars: true,
-    ...(actorId ? { actorId } : {}),
-  });
-}
-
-// ---- the space: a named set of canvases access is set on once (roles phase 4) ----
-//
-// The canvas list's headings, **Move to space…**, and the space's Share
-// dialog drive these; `isocan space` and `isocan share --space` drive the
-// same routes, spelled once in core. A space is at the home, like a grant.
-
-/** The spaces this badge may see — made by an actor it claims, or named by
- * a live row it satisfies — each with its `canvasIds`, which the canvas list
- * joins to `GET /api/projects`. A badge admitted to one canvas sees none. */
-export function listSpaces(): Promise<SpacesResponse> {
-  return request("GET", SPACES_ROUTE);
-}
-
-export function createSpace(name: string, actorId?: string): Promise<SpaceResponse> {
-  return request("POST", SPACES_ROUTE, { name, ...(actorId ? { actorId } : {}) });
-}
-
-/** No body, for `revokeGrant`'s reason; the actor rides the query. */
-export function deleteSpace(spaceId: string, actorId?: string): Promise<SpaceCanvasResponse> {
-  return request("DELETE", spaceActingRoute(spaceRoute(spaceId), actorId));
-}
-
-/** **Move to space…** — refused with `canvas-in-space` when the canvas is
- * in another; move it out first. */
-export function addToSpace(spaceId: string, canvasId: string, actorId?: string): Promise<SpaceCanvasResponse> {
-  return request("PUT", spaceCanvasRoute(spaceId, canvasId), actorId ? { actorId } : {});
-}
-
-/** **No space** — the canvas keeps its own rows and the space's stop
- * reaching it; the home sweeps it. */
-export function removeFromSpace(spaceId: string, canvasId: string, actorId?: string): Promise<SpaceCanvasResponse> {
-  return request("DELETE", spaceActingRoute(spaceCanvasRoute(spaceId, canvasId), actorId));
-}
-
-export function listSpaceGrants(spaceId: string): Promise<GrantsResponse> {
-  return request("GET", spaceGrantsRoute(spaceId));
-}
-
-export function createSpaceGrant(
-  spaceId: string,
-  subject: GrantSubject,
-  capability?: Capability,
-  actorId?: string,
-): Promise<GrantResponse> {
-  return request("POST", spaceGrantsRoute(spaceId), {
-    subject,
-    ...(narrowed(capability) ? { capability } : {}),
-    ...(actorId ? { actorId } : {}),
-  });
-}
-
-function createSpaceBar(spaceId: string, subject: GrantSubject, actorId?: string): Promise<GrantResponse> {
-  return request("POST", spaceGrantsRoute(spaceId), {
-    subject,
-    bars: true,
-    ...(actorId ? { actorId } : {}),
-  });
-}
-
-export function revokeSpaceGrant(
-  spaceId: string,
-  grantId: string,
-  actorId?: string,
-  bar?: boolean,
-): Promise<GrantResponse> {
-  return request(
-    "DELETE",
-    spaceGrantRevokeRoute(spaceId, grantId, { ...(actorId ? { actorId } : {}), ...(bar ? { bar } : {}) }),
-  );
-}
-
-/** **Every canvas in this space** (roles journey 4, step 4): the link on
- * each canvas set to a rung or turned off, in one request, and the answer
- * says how many canvases it reached. */
-export function setSpaceLink(
-  spaceId: string,
-  capability: SpaceLinkRequest["capability"],
-  actorId?: string,
-): Promise<SpaceLinkResponse> {
-  return request("POST", spaceLinkRoute(spaceId), {
-    capability,
-    ...(actorId ? { actorId } : {}),
-  } satisfies SpaceLinkRequest);
-}
-
-// ---- the group: a named set of people access is given to once (roles phase 5) ----
-//
-// The Groups panel on the canvas list and the Share dialog's group picker
-// drive these; `isocan group` and `isocan share group:<name>` drive the same
-// routes, spelled once in core. A group is at the home, like a grant.
-
-/** The groups this badge's actors made, members and all — the owner's list. */
-export function listGroups(): Promise<GroupsResponse> {
-  return request("GET", GROUPS_ROUTE);
-}
-
-export function createGroup(name: string, actorId?: string): Promise<GroupResponse> {
-  return request("POST", GROUPS_ROUTE, { name, ...(actorId ? { actorId } : {}) });
-}
-
-/** One group: members for its maker; name and size for anybody a live row
- * naming it lets see it — what a group row in the Share dialog shows. */
-export function readGroup(groupId: string): Promise<GroupResponse> {
-  return request("GET", groupRoute(groupId));
-}
-
-export function addGroupMember(groupId: string, attribute: string, actorId?: string): Promise<GroupResponse> {
-  return request("PUT", groupMemberRoute(groupId, attribute), actorId ? { actorId } : {});
-}
-
-/** No body, for `revokeGrant`'s reason; the actor rides the query. */
-export function removeGroupMember(groupId: string, attribute: string, actorId?: string): Promise<GroupResponse> {
-  return request("DELETE", groupActingRoute(groupMemberRoute(groupId, attribute), actorId));
-}
-
-export function deleteGroup(groupId: string, actorId?: string): Promise<GroupResponse> {
-  return request("DELETE", groupActingRoute(groupRoute(groupId), actorId));
-}
-
 // ---- what this holder has proved (phase 9 stage 2) ----
 //
 // One route, two verbs, and not canvas-scoped: an attestation is a fact about
@@ -1072,8 +1064,25 @@ export function runGc(canvasId: string, options: GcRequest = {}): Promise<GcRepo
   return request("POST", `/api/projects/${canvasId}/gc`, options);
 }
 
+const stagedBlobs = new Map<string, { mimeType: string; text: string; dataUrl: string }>();
+
+/** Make a staged text blob available to `blobUrl` and `readBlobText` while its write is in the offline queue. */
+export function stageLocalBlob(canvasId: string, blob: { blobHash: string; mimeType: string; text: string }): void {
+  stagedBlobs.set(`${canvasId}/${blob.blobHash}`, {
+    mimeType: blob.mimeType,
+    text: blob.text,
+    dataUrl: `data:${blob.mimeType};utf8,${encodeURIComponent(blob.text)}`,
+  });
+}
+
+/** Drop a staged text blob once the home has confirmed the write or refused it. */
+export function unstageLocalBlob(canvasId: string, blobHash: string): void {
+  stagedBlobs.delete(`${canvasId}/${blobHash}`);
+}
+
+/** URL for an `<img src>`, video, or iframe — returns an inline data URL while a blob is staged in the offline queue. */
 export function blobUrl(canvasId: string, blobHash: string): string {
-  return `/api/projects/${canvasId}/blobs/${blobHash}`;
+  return stagedBlobs.get(`${canvasId}/${blobHash}`)?.dataUrl ?? `/api/projects/${canvasId}/blobs/${blobHash}`;
 }
 
 /**
@@ -1097,10 +1106,15 @@ export function blobUrl(canvasId: string, blobHash: string): string {
  * `homeAnswered` tells that apart from never reaching it — so a caller can
  * say which silence it is instead of rendering empty.
  */
-async function fetchBlob(canvasId: string, blobHash: string): Promise<Response> {
-  const url = blobUrl(canvasId, blobHash);
-  let res = await fetch(url);
-  if (res.status === 401 && (await knockOnDoor())) res = await fetch(url);
+async function fetchBlob(canvasId: string, blobHash: string, signal?: AbortSignal, headers: Record<string, string> = {}): Promise<Response> {
+  const url = `/api/projects/${canvasId}/blobs/${blobHash}`;
+  const send = () => fetch(url, { signal: signal ?? null, headers });
+  let res = await send();
+  signal?.throwIfAborted();
+  if (res.status === 401 && (await knockOnDoor())) {
+    signal?.throwIfAborted();
+    res = await send();
+  }
   if (!res.ok) {
     const json = (await res.json().catch(() => null)) as any;
     throw new ApiError(res.status, json?.error ?? `HTTP ${res.status}`, json?.code, json?.reason);
@@ -1109,8 +1123,10 @@ async function fetchBlob(canvasId: string, blobHash: string): Promise<Response> 
 }
 
 /** A version's bytes. */
-export async function readBlob(canvasId: string, blobHash: string): Promise<Blob> {
-  return (await fetchBlob(canvasId, blobHash)).blob();
+export async function readBlob(canvasId: string, blobHash: string, signal?: AbortSignal, headers?: Record<string, string>): Promise<Blob> {
+  const staged = stagedBlobs.get(`${canvasId}/${blobHash}`);
+  if (staged) return new Blob([staged.text], { type: staged.mimeType });
+  return (await fetchBlob(canvasId, blobHash, signal, headers)).blob();
 }
 
 /**
@@ -1121,8 +1137,10 @@ export async function readBlob(canvasId: string, blobHash: string): Promise<Blob
  * that JSON ends up rendered on the canvas — or, worse, opened in an editor
  * and saved back over the file.
  */
-export async function readBlobText(canvasId: string, blobHash: string): Promise<string> {
-  return (await fetchBlob(canvasId, blobHash)).text();
+export async function readBlobText(canvasId: string, blobHash: string, signal?: AbortSignal): Promise<string> {
+  const staged = stagedBlobs.get(`${canvasId}/${blobHash}`);
+  if (staged) return staged.text;
+  return (await fetchBlob(canvasId, blobHash, signal)).text();
 }
 
 /** How this home serves — today, only whether a content origin exists. */
@@ -1177,4 +1195,24 @@ export async function checkFrameable(
   } catch {
     return { ok: true };
   }
+}
+
+/** One authoritative read, including remote homes; polling never writes marks. */
+export function fetchInbox(actorId: string, signal?: AbortSignal): Promise<InboxResponse> {
+  return request("GET", inboxRoute(actorId), undefined, signal);
+}
+
+/** Actual current sessions establish offer liveness; stored enrollment never substitutes for this read. */
+export function getCurrentSessions(canvasId: string, signal?: AbortSignal): Promise<PresenceSession[]> {
+  return request("GET", `/api/projects/${encodeURIComponent(canvasId)}/sessions`, undefined, signal);
+}
+
+/**
+ * Whether this home's model takes pictures (Semantic Zoom's "look at
+ * pictures" row). Core's `TEXT_PICTURES_ROUTE`, spelled here because this
+ * file is the app's one door and importing the constant would make the
+ * entry name core's text chunk; the Semantic Zoom test holds the two equal.
+ */
+export function fetchTextPictures(): Promise<TextPictures> {
+  return request<TextPictures>("GET", "/api/text/pictures");
 }

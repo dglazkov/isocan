@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Fast Is a Feature — Specimen</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #08090a;
+      color: #f7f8f8;
+      font-family: Inter, system-ui, sans-serif;
+      font-size: 13px;
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      -webkit-font-smoothing: antialiased;
+    }
+    aside {
+      background: #0f1011;
+      border-right: 1px solid #23252a;
+      padding: 12px 8px;
+      color: #8a8f98;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .nav-item {
+      height: 28px;
+      padding: 0 10px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .nav-item.active { background: #1c1d1f; color: #f7f8f8; }
+    main { display: flex; flex-direction: column; }
+    header {
+      height: 44px;
+      border-bottom: 1px solid #23252a;
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .row {
+      height: 34px;
+      padding: 0 16px;
+      border-bottom: 1px solid #23252a;
+      display: grid;
+      grid-template-columns: 16px 76px 1fr auto;
+      align-items: center;
+      gap: 12px;
+      font-variant-numeric: tabular-nums;
+      cursor: pointer;
+    }
+    .row.selected {
+      background: #0f1011;
+      box-shadow: inset 2px 0 0 #5e6ad2;
+    }
+    .dot { width: 8px; height: 8px; border-radius: 999px; background: #4cb782; }
+    .dot.wait { background: #f2c94c; }
+    .id { font-family: ui-monospace, monospace; font-size: 12px; color: #8a8f98; }
+    kbd {
+      background: #1c1d1f;
+      border: 1px solid #23252a;
+      border-radius: 4px;
+      padding: 2px 5px;
+      font-size: 11px;
+      font-family: Inter, system-ui, sans-serif;
+      color: #8a8f98;
+    }
+    .primary {
+      height: 32px;
+      padding: 0 12px;
+      border-radius: 6px;
+      border: 0;
+      background: #5e6ad2;
+      color: #ffffff;
+      font-size: 13px;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <aside>
+    <div class="nav-item active"><span>Dispatch queue</span><kbd>G</kbd></div>
+    <div class="nav-item"><span>Command bar</span><kbd>⌘K</kbd></div>
+  </aside>
+  <main>
+    <header>
+      <strong style="font-size:15px;">Ready for dispatch (3)</strong>
+      <button class="primary" id="ship" type="button">Dispatch selected <kbd style="color:#fff;background:rgb(255 255 255/.16);border:0;">⌘↵</kbd></button>
+    </header>
+    <div class="row selected"><span class="dot"></span><span class="id">PLT-104</span><span>Ficus Lyrata · Matte Stoneware 24 cm</span><span>$84.00</span></div>
+    <div class="row"><span class="dot wait"></span><span class="id">PLT-105</span><span>Monstera Deliciosa · Terracotta 20 cm</span><span>$62.00</span></div>
+    <div class="row"><span class="dot"></span><span class="id">PLT-106</span><span>Asplenium Nidus · Shade Fern 15 cm</span><span>$36.00</span></div>
+  </main>
+</body>
+</html>
