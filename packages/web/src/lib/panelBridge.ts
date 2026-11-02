@@ -31,7 +31,7 @@ import { ApiError, postOp } from "./api.ts";
  * - The bridge replies with ONLY a frozen {@link PanelOpResult}: no store, no
  *   client, no badge, no bearer token, and no snapshot.
  */
-export interface PanelBridgeOptions {
+interface PanelBridgeOptions {
   canvasId: string;
   itemId: string;
   /** The content origin (`origin.base`), e.g. `http://127.0.0.1:4442`. */
@@ -99,7 +99,7 @@ async function resolvePanelCredential(
  * own actor (`ext_…`) and bearer credential, returning ONLY the sanitized
  * {@link PanelOpResult}.
  */
-export async function submitPanelOp(
+async function submitPanelOp(
   canvasId: string,
   itemId: string,
   op: Operation,

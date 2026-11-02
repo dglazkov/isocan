@@ -507,14 +507,6 @@ export const PANEL_OP_MESSAGE_TYPE = "isocan:panel-op" as const;
 /** Outbound `postMessage` type the bridge answers a hosted panel with. */
 export const PANEL_OP_RESULT_TYPE = "isocan:panel-op-result" as const;
 
-/** Inbound `postMessage` payload a hosted panel sends through the narrow door. */
-export interface PanelOpMessage {
-  type: typeof PANEL_OP_MESSAGE_TYPE;
-  version: number;
-  requestId?: string;
-  op: Operation;
-}
-
 /**
  * The ONLY object the narrow door ever hands back to a hosted panel frame
  * (extensions phase 6) — never a store, a client, a badge or a snapshot.
@@ -538,7 +530,7 @@ export type PanelOpResult =
     };
 
 /** Outcome of reading a raw `postMessage` body at the panel's narrow door. */
-export type PanelMessageRead =
+type PanelMessageRead =
   | {
       ok: true;
       requestId?: string;
