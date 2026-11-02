@@ -220,7 +220,7 @@ export function bridgePanelFrame(options: PanelBridgeOptions): () => void {
     // 2. When a specific panel iframe window is bound, ignore other frames.
     if (frameWindow) {
       const expected = frameWindow();
-      if (expected !== null && e.source !== null && e.source !== expected) return;
+      if (expected === null || e.source !== expected) return;
     }
     const parsed = readPanelOpMessage(e.data);
     if (parsed === null) return;

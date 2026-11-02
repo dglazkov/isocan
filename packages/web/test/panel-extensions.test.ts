@@ -239,6 +239,40 @@ describe("extensions phase 6: the narrow door (postMessage bridge)", () => {
     };
   }
 
+  it("requires a live bound frame and its exact message source", async () => {
+    clearPanelBridgeCredentials();
+    const win = makeMockWindow();
+    const frame = { postMessage() {} } as unknown as Window;
+    let currentFrame: Window | null = frame;
+    const requests: string[] = [];
+    const replies: PanelOpResult[] = [];
+    const cleanup = bridgePanelFrame({
+      canvasId: "prj_acme",
+      itemId: "itm_panel",
+      contentOrigin: "https://content.example",
+      frameWindow: () => currentFrame,
+      win,
+      fetchImpl: async (input) => {
+        requests.push(String(input));
+        return new Response("{}", { status: 403 });
+      },
+      onReply: (reply) => replies.push(reply),
+    });
+    const data = {
+      type: PANEL_OP_MESSAGE_TYPE,
+      version: PANEL_BRIDGE_VERSION,
+      op: { type: "item.move", itemId: "itm_page", x: 10, y: 20 },
+    };
+    win.dispatch({ origin: "https://content.example", source: null, data });
+    win.dispatch({ origin: "https://content.example", source: {} as Window, data });
+    currentFrame = null;
+    win.dispatch({ origin: "https://content.example", source: frame, data });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(requests).toEqual([]);
+    expect(replies).toEqual([]);
+    cleanup();
+  });
+
   it("ignores messages from any origin other than the content origin", async () => {
     clearPanelBridgeCredentials();
     const win = makeMockWindow();
