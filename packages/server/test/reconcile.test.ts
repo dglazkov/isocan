@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import type { IncomingMessage, ServerResponse } from "node:http";
+import { createHash } from "node:crypto";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
+import * as pathsOf from "../src/paths.ts";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
 
 /**
@@ -232,5 +235,319 @@ describe("the replica checks its own bytes on a clock", () => {
       // The suite's afterEach closes `replica`; it is already down.
       replica = keeper;
     }
+  });
+});
+
+/**
+ * **The check must not hold the machine's writes hostage.**
+ *
+ * `reconcileBlobs` used to run whole on the engine's single-writer chain, so
+ * one HEAD per blob held every write on the daemon — every canvas, every
+ * home. The blob keeper runs it for every replica canvas every ten minutes,
+ * and on a laptop replicating ~2,600 blobs from isocan.io that was minutes of
+ * `isocan set` and `wire link` sitting silent behind a sweep they had nothing
+ * to do with. The home's answer is held open here, which is a slow home made
+ * exact: a write has to land while the question is still unanswered.
+ */
+describe("a slow home does not stall the writer", () => {
+  it("lands a write while the check is still waiting on the home", async () => {
+    await untilReplicated();
+    await replica.store.putBlob(CANVAS, bytes("<h1>slow</h1>"), {
+      mimeType: "text/html",
+      filename: "slow.html",
+    });
+    expect(replica.homes!.for(CANVAS), "the canvas must be a replica here").not.toBeNull();
+    // Held at the HOME, so the test does not care how the replica asks.
+    const { asked, release } = tapHome(home).hold();
+    const check = replica.engine.reconcileBlobs(CANVAS, { push: false });
+    await asked;
+
+    const write = fetch(`${baseOf(replica)}/api/ops`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...repBadge.headers },
+      body: JSON.stringify({
+        canvasId: CANVAS,
+        actor: { id: "usr_dion", name: "Dion" },
+        op: { type: "project.update", patch: { title: "Slides, renamed" } },
+      }),
+    }).then((res) => res.status);
+    const outcome = await Promise.race([
+      write,
+      new Promise<"stalled">((r) => setTimeout(() => r("stalled"), 3000)),
+    ]);
+    release();
+    await check;
+    expect(outcome, "the write waited on the blob check's round trip to the home").toBe(200);
+  });
+});
+
+/**
+ * **What the home hears, and a way to make it an older, a sicker or a slower
+ * home.**
+ *
+ * Wraps the home's own `request` listener, so every request is counted on the
+ * home — the side the meter is on — and none is answered differently unless
+ * asked: `old` renames the batch route to a path no home serves, so the REAL
+ * door and not-found handler answer exactly as a home that predates the route
+ * does; `sick` answers every blob request 503 before the home sees it; and
+ * `hold` keeps matching requests waiting until released.
+ */
+function tapHome(d: Daemon, mode: "current" | "old" | "sick" = "current") {
+  const server = d.app.server;
+  const inner = server.listeners("request") as Array<(req: IncomingMessage, res: ServerResponse) => void>;
+  server.removeAllListeners("request");
+  const heard: string[] = [];
+  let hold: { gate: Promise<void>; asked: () => void; match: RegExp } | null = null;
+  server.on("request", (req: IncomingMessage, res: ServerResponse) => {
+    heard.push(`${req.method} ${req.url}`);
+    if (mode === "sick" && req.url?.includes("/blobs")) {
+      res.writeHead(503, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "the home is having a bad minute" }));
+      return;
+    }
+    if (mode === "old" && req.url?.endsWith("/blobs/present")) req.url = req.url.replace(/\/blobs\/present$/, "/blobs/predates");
+    const pass = () => { for (const listener of inner) listener.call(server, req, res); };
+    if (hold && hold.match.test(`${req.method} ${req.url}`)) {
+      // The body, if any, waits unread in the request stream until the home's
+      // own listener attaches to it.
+      hold.asked();
+      void hold.gate.then(pass);
+      return;
+    }
+    pass();
+  });
+  return {
+    /** Requests about this canvas's bytes — HEADs, batch asks, uploads. */
+    blobAsks: () => heard.filter((line) => line.includes(`/api/projects/${CANVAS}/blobs`)),
+    reset: () => void heard.splice(0),
+    /** Hold every request whose `METHOD url` matches until released. */
+    hold: (match: RegExp = /\/blobs/) => {
+      let release!: () => void;
+      let asked!: () => void;
+      const gate = new Promise<void>((r) => (release = r));
+      const askedOnce = new Promise<void>((r) => (asked = r));
+      hold = { gate, asked, match };
+      return { asked: askedOnce, release: () => { hold = null; release(); } };
+    },
+  };
+}
+
+/**
+ * The same bytes `store.putBlob` would leave, written in one index rewrite
+ * rather than one per blob — a thousand-blob canvas through `putBlob` is a
+ * thousand rewrites of a growing `blobs.json`, which is most of a minute.
+ */
+async function seedBlobs(dir: string, seeded: ReturnType<typeof files>): Promise<void> {
+  const blobs = pathsOf.blobsDir(dir, CANVAS);
+  await fs.mkdir(blobs, { recursive: true });
+  const indexFile = pathsOf.blobsIndexFile(dir, CANVAS);
+  const index = JSON.parse(await fs.readFile(indexFile, "utf8").catch(() => "{}")) as Record<string, unknown>;
+  for (const f of seeded) {
+    const hash = createHash("sha256").update(f.data).digest("hex");
+    await fs.writeFile(path.join(blobs, `${hash}.html`), f.data);
+    index[hash] = { file: `${hash}.html`, mimeType: f.meta.mimeType, filename: f.meta.filename, size: f.data.length };
+  }
+  await fs.writeFile(indexFile, JSON.stringify(index));
+}
+
+/** `n` distinct little files. */
+const files = (n: number, tag: string) =>
+  Array.from({ length: n }, (_, i) => ({
+    data: bytes(`<p>${tag} ${i}</p>`),
+    meta: { mimeType: "text/html", filename: `${tag}-${i}.html` },
+  }));
+
+/**
+ * **A sweep is a handful of requests, not one per blob.**
+ *
+ * One HEAD per blob per replica canvas every ten minutes was ~2,550 requests
+ * a sweep from one laptop replicating isocan.io canvases, at a door metered by
+ * address — whose symptom when tripped is a silent 401. These count what the
+ * HOME hears.
+ */
+describe("a sweep asks the home in a handful of requests", () => {
+  it("asks about 1,100 blobs in two requests, and finds the few it lacks", async () => {
+    await untilReplicated();
+    const both = files(1_097, "both");
+    await seedBlobs(homeDir, both);
+    await seedBlobs(repDir, both);
+    const lost: string[] = [];
+    for (const f of files(3, "lost")) lost.push((await replica.store.putBlob(CANVAS, f.data, f.meta)).blobHash);
+    const tap = tapHome(home);
+
+    const report = await replica.engine.reconcileBlobs(CANVAS, { push: false });
+    expect(report.checked).toBe(1_100);
+    expect(report.missing.sort()).toEqual([...lost].sort());
+    expect(report.unknown).toEqual([]);
+    expect(tap.blobAsks(), "one request per thousand hashes, not one per blob").toHaveLength(2);
+
+    tap.reset();
+    const repair = await replica.engine.reconcileBlobs(CANVAS, { push: true });
+    expect(repair.pushed.sort()).toEqual([...lost].sort());
+    // Two asks and the three uploads the repair is for — nothing per blob.
+    expect(tap.blobAsks()).toHaveLength(2 + 3);
+  }, 60_000);
+
+  it("asks on the keeper's clock only about blobs new since the home said yes", async () => {
+    await untilReplicated();
+    for (const f of files(40, "old-news")) await replica.engine.putBlob(CANVAS, f.data, f.meta);
+    const tap = tapHome(home);
+    // A person's `isocan blobs` asks about everything, every time.
+    const asked = await replica.engine.reconcileBlobs(CANVAS, { push: false });
+    expect(asked.missing).toEqual([]);
+    expect(tap.blobAsks()).toHaveLength(1);
+    tap.reset();
+    const quiet = await replica.engine.reconcileBlobs(CANVAS, { push: true, trustConfirmed: true });
+    expect(quiet.checked).toBe(40);
+    expect(tap.blobAsks(), "a quiet canvas costs its home nothing").toEqual([]);
+  });
+});
+
+describe("a home older than the batch route", () => {
+  it("is asked one HEAD per blob once, and then only about what is new", async () => {
+    await untilReplicated();
+    for (const f of files(38, "shared")) {
+      await home.store.putBlob(CANVAS, f.data, f.meta);
+      await replica.store.putBlob(CANVAS, f.data, f.meta);
+    }
+    const lost: string[] = [];
+    for (const f of files(2, "behind")) lost.push((await replica.store.putBlob(CANVAS, f.data, f.meta)).blobHash);
+    const tap = tapHome(home, "old");
+
+    const first = await replica.engine.reconcileBlobs(CANVAS, { push: false, trustConfirmed: true });
+    expect(first.missing.sort(), "the HEADs still find what is behind").toEqual([...lost].sort());
+    expect(first.unknown).toEqual([]);
+    const asks = tap.blobAsks();
+    expect(asks.filter((line) => line.startsWith("POST")), "the batch was tried, once").toHaveLength(1);
+    expect(asks.filter((line) => line.startsWith("HEAD"))).toHaveLength(40);
+
+    tap.reset();
+    const second = await replica.engine.reconcileBlobs(CANVAS, { push: true, trustConfirmed: true });
+    expect(second.pushed.sort()).toEqual([...lost].sort());
+    // No second try of a route the home has just said it lacks, and no HEAD
+    // for the 38 it said yes to: two HEADs, and the two uploads.
+    const again = tap.blobAsks();
+    expect(again.filter((line) => line.startsWith("POST") && line.endsWith("/present"))).toEqual([]);
+    expect(again.filter((line) => line.startsWith("HEAD"))).toHaveLength(2);
+  });
+});
+
+describe("a home that cannot answer", () => {
+  it("is sent nothing, and is not asked blob by blob", async () => {
+    await untilReplicated();
+    for (const f of files(30, "stranded")) await replica.store.putBlob(CANVAS, f.data, f.meta);
+    const tap = tapHome(home, "sick");
+    const report = await replica.engine.reconcileBlobs(CANVAS, { push: true, trustConfirmed: true });
+    expect(report.unknown, "a 503 is 'I could not ask'").toHaveLength(30);
+    expect(report.missing).toEqual([]);
+    expect(report.pushed, "and 'I could not ask' is never answered by uploading").toEqual([]);
+    const uploads = tap.blobAsks().filter((line) => line.startsWith("POST") && !line.endsWith("/present"));
+    expect(uploads, "no upload reached it").toEqual([]);
+    expect(tap.blobAsks().length, "one ask, not thirty").toBeLessThanOrEqual(2);
+  });
+});
+
+/**
+ * **The batch is the HEAD's question, behind the HEAD's gate** — not one notch
+ * wider (a stranger learning which hashes a canvas holds) and not one narrower
+ * (a view-only member, who may send the HEAD, refused the POST by the hook
+ * that refuses every other non-GET below `edit`).
+ */
+describe("the batch route has the blob HEAD's gate", () => {
+  it("refuses whom the HEAD refuses, and answers whom it answers", async () => {
+    await untilReplicated();
+    const { blobHash } = await home.store.putBlob(CANVAS, bytes("<p>gated</p>"), { mimeType: "text/html", filename: "g.html" });
+    const absent = "0".repeat(64);
+    const base = baseOf(home);
+    const head = (headers: Record<string, string>) =>
+      fetch(`${base}/api/projects/${CANVAS}/blobs/${blobHash}`, { method: "HEAD", headers }).then((r) => r.status);
+    const ask = (headers: Record<string, string>, hashes: unknown = [blobHash, absent]) =>
+      fetch(`${base}/api/projects/${CANVAS}/blobs/present`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...headers },
+        body: JSON.stringify({ hashes }),
+      });
+    for (const grant of await home.desk.grantsFor(CANVAS)) {
+      await home.desk.revokeGrant(grant.id, new Date().toISOString(), homeBadge.badgeId);
+    }
+
+    expect(await head({})).toBe(401);
+    expect((await ask({})).status).toBe(401);
+    const stranger = await mintTestBadge(base);
+    expect(await head(stranger.headers)).toBe(403);
+    const refused = await ask(stranger.headers);
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toMatchObject({ code: "not-admitted" });
+
+    await home.desk.putGrant({
+      id: "gnt_rc_view",
+      canvasId: CANVAS,
+      subject: "link",
+      capability: "view",
+      grantedBy: homeBadge.badgeId,
+      at: new Date().toISOString(),
+    });
+    const viewer = await mintTestBadge(base);
+    expect(await head(viewer.headers)).toBe(200);
+    const answered = await ask(viewer.headers);
+    expect(answered.status, "a viewer may ask what it may HEAD").toBe(200);
+    expect(await answered.json()).toEqual({ missing: [absent] });
+    expect((await ask(viewer.headers, ["not-a-hash"])).status).toBe(400);
+  });
+});
+
+/**
+ * **Nor does an upload, or a question about the canvas's shape.**
+ *
+ * #95 moved the blob check's round trips off the single-writer chain and left
+ * two more behind on it: `Engine.putBlob` sent the bytes to the home and
+ * waited for its confirmation inside `enqueue`, and the group-migration
+ * preview asked the home from inside it too. One large file to a slow home
+ * held every write on the machine for as long as the bytes took to cross.
+ */
+describe("a slow home does not stall the writer during an upload or a preview", () => {
+  const write = (title: string) =>
+    fetch(`${baseOf(replica)}/api/ops`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...repBadge.headers },
+      body: JSON.stringify({
+        canvasId: CANVAS,
+        actor: { id: "usr_dion", name: "Dion" },
+        op: { type: "project.update", patch: { title } },
+      }),
+    }).then((res) => res.status);
+  const within = <T,>(p: Promise<T>) =>
+    Promise.race([p, new Promise<"stalled">((r) => setTimeout(() => r("stalled"), 3000))]);
+
+  it("lands a write while the home is holding an added file's upload open", async () => {
+    await untilReplicated();
+    const tap = tapHome(home);
+    const { asked, release } = tap.hold(new RegExp(`^POST /api/projects/${CANVAS}/blobs$`));
+    const upload = fetch(`${baseOf(replica)}/api/projects/${CANVAS}/blobs`, {
+      method: "POST",
+      headers: { "Content-Type": "text/html", "X-Isocan-Filename": "held.html", ...repBadge.headers },
+      body: "<h1>held</h1>",
+    });
+    await asked;
+    const outcome = await within(write("Slides, while uploading"));
+    release();
+    const landed = await upload;
+    expect(outcome, "the write waited on the upload's round trip to the home").toBe(200);
+    // And the upload itself still did both halves, in order.
+    expect(landed.status).toBe(200);
+    const { blobHash } = (await landed.json()) as { blobHash: string };
+    expect(await home.store.blobMeta(CANVAS, blobHash)).not.toBeNull();
+    expect(await replica.store.blobMeta(CANVAS, blobHash)).not.toBeNull();
+  });
+
+  it("lands a write while the home is holding a migration preview open", async () => {
+    await untilReplicated();
+    const { asked, release } = tapHome(home).hold(new RegExp(`^GET /api/projects/${CANVAS}/groups/migration`));
+    const preview = fetch(`${baseOf(replica)}/api/projects/${CANVAS}/groups/migration`, { headers: repBadge.headers });
+    await asked;
+    const outcome = await within(write("Slides, while previewing"));
+    release();
+    expect((await preview).status).toBe(200);
+    expect(outcome, "the write waited on the preview's round trip to the home").toBe(200);
   });
 });

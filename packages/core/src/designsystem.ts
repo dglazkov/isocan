@@ -1,5 +1,9 @@
 import type { CanvasContents, Item } from "./model.ts";
 import type { MetaPatch } from "./ops.ts";
+import { areasOf, isArea } from "./area.ts";
+import { canvasScopes } from "./canvas-scope.ts";
+import { isDesignSystem } from "./design-role.ts";
+export * from "./design-role.ts";
 
 /**
  * The design system: what this canvas has decided things look like.
@@ -20,34 +24,88 @@ import type { MetaPatch } from "./ops.ts";
  * The convention is one property, so nothing else has to learn a new kind.
  */
 
-const ROLE_PROP = "role";
-/** The `role` an item wears to BE this canvas's design system. */
-export const DESIGN_SYSTEM_ROLE = "design-system";
-/** What this was called for an afternoon. Canvases written in that window
- * still say it, and a rename that orphans somebody's file is not a rename. */
-const LEGACY_DESIGN_ROLE = "house-style";
-
-/** The properties that make an item this canvas's design system. */
-export function designSystemProperties(): Record<string, string> {
-  return { [ROLE_PROP]: DESIGN_SYSTEM_ROLE };
-}
-
-/** Is this item the design system — under either name it has been given? */
-export function isDesignSystem(item: Item): boolean {
-  const role = item.properties[ROLE_PROP];
-  return role === DESIGN_SYSTEM_ROLE || role === LEGACY_DESIGN_ROLE;
-}
-
 /**
- * The canvas's design system, if it has one. Most recently updated wins: two
- * are a mistake rather than a feature, and the newest is the likelier answer
- * to "which one is real".
+ * **The design system that governs a place on the canvas**, if there is one.
+ *
+ * With no `at`: the canvas's own — a design-system item in NO scope. Most
+ * recently updated wins: two at the same level are a mistake rather than a
+ * feature, and the newest is the likelier answer to "which one is real".
+ *
+ * With `at` (11 Sep 2026, `docs/projects/design-competition/module-gaps.md`
+ * §4): an item follows direct group membership and then its ancestors, else
+ * the canvas's own. Legacy items and point queries use geometric areas.
+ * Detaching a `DESIGN.md` from its group makes it the canvas's in one undo.
+ *
+ * **Why the canvas-wide pick now ignores scoped ones**: it did not, and
+ * "newest wins" over the whole canvas meant three lanes each holding a
+ * `DESIGN.md` silently replaced the canvas's own system with whichever lane
+ * was touched last — every later `design --css`, every audit on a screen's
+ * arrival, every nudge. That was not a missing feature; it was a bug waiting
+ * for the first canvas with two systems, and a canvas holding a marketing
+ * site and an admin app has always been one.
  */
-export function designSystem(canvas: CanvasContents): Item | null {
-  const found = Object.values(canvas.items)
+export function designSystem(canvas: CanvasContents, opts?: DesignScopeOptions): Item | null {
+  return selectDesignSystem(canvas, opts).item;
+}
+
+/** An existing item or legacy point has scope; a proposed screen can explicitly name its group or canvas root. */
+export interface DesignScopeOptions { at?: { x: number; y: number } | Item; groupId?: string | null }
+/** The winning local level keeps all its candidates visible, while preserving the existing newest-item rule. */
+export interface DesignSystemSelection {
+  status: "selected" | "none" | "unavailable";
+  item: Item | null;
+  level: "scope" | "canvas" | "none";
+  scopeId: string | null;
+  scopeDepth: number | null;
+  candidates: Item[];
+  reason: string;
+}
+/** Scope resolution is shared by winner selection and per-target screen counts, including planned membership. */
+export function designTargetScopes(canvas: CanvasContents, opts: DesignScopeOptions = {}): { scopes: Item[]; unavailable?: string } {
+  if (opts.groupId !== undefined) {
+    if (opts.groupId === null) return { scopes: [] };
+    const group = canvas.items[opts.groupId];
+    if (!group || group.properties.kind !== "group" && !isArea(group)) return { scopes: [], unavailable: `The requested design scope ${opts.groupId} is unavailable.` };
+    return { scopes: canvasScopes(canvas, group) };
+  }
+  const at = opts.at;
+  if (!at) return { scopes: [] };
+  if ("id" in at) {
+    const current = canvas.items[at.id];
+    if (!current) return { scopes: [], unavailable: `The design target ${at.id} is unavailable.` };
+    return { scopes: canvasScopes(canvas, current) };
+  }
+  if (!Number.isFinite(at.x) || !Number.isFinite(at.y)) return { scopes: [], unavailable: "The proposed design location is invalid." };
+  return { scopes: areasOf(canvas).filter((area) => at.x >= area.x && at.x < area.x + area.width && at.y >= area.y && at.y < area.y + area.height).sort((a, b) => a.width * a.height - b.width * b.height) };
+}
+/** Explains direct scope, ancestor and canvas selection without treating another lane as coverage. */
+export function selectDesignSystem(canvas: CanvasContents, opts: DesignScopeOptions = {}): DesignSystemSelection {
+  const target = designTargetScopes(canvas, opts);
+  const empty = { item: null, level: "none" as const, scopeId: null, scopeDepth: null, candidates: [] };
+  if (target.unavailable) return { ...empty, status: "unavailable", reason: target.unavailable };
+  const systems = Object.values(canvas.items).filter(isDesignSystem);
+  const pick = (items: Item[], scope: Item | null, depth: number | null): DesignSystemSelection | null => {
+    const candidates = [...items].sort((a, b) => a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0);
+    if (!candidates.length) return null;
+    const location = scope ? `${depth === 0 ? "direct scope" : "ancestor scope"} “${scope.title}”` : "canvas level";
+    return { status: "selected", item: candidates[0]!, level: scope ? "scope" : "canvas", scopeId: scope?.id ?? null, scopeDepth: depth, candidates, reason: `Selected the newest system at ${location}.${candidates.length > 1 ? ` ${candidates.length} systems compete at this level.` : ""}` };
+  };
+  for (const [depth, scope] of target.scopes.entries()) {
+    const selected = pick(systems.filter((item) => canvasScopes(canvas, item)[0]?.id === scope.id), scope, depth);
+    if (selected) return selected;
+  }
+  return pick(systems.filter((item) => !canvasScopes(canvas, item).length), null, null) ?? { ...empty, status: "none", reason: "No local design system governs this target." };
+}
+
+/** Every design system that governs an area rather than the canvas, with
+ *  the area it governs — what the Context view lists under each area. */
+export function scopedDesignSystems(canvas: CanvasContents): { area: Item; item: Item }[] {
+  return Object.values(canvas.items)
     .filter(isDesignSystem)
-    .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0));
-  return found[0] ?? null;
+    .flatMap((item) => {
+      const area = canvasScopes(canvas, item)[0];
+      return area ? [{ area, item }] : [];
+    });
 }
 
 /**
@@ -149,7 +207,10 @@ export function designStanding(
   screens: number,
   project?: HasProperties,
 ): DesignStanding {
-  if (designSystem(canvas) !== null) return "fine";
+  // A numeric caller cannot prove coverage of individual scopes. Actual-item
+  // callers use designScopeStanding; this compatibility wrapper recognizes
+  // only a canvas-wide incumbent and retains the original numeric thresholds.
+  if (designSystem(canvas)) return "fine";
   if (project !== undefined && designSkipped(project)) return "fine";
   if (screens >= DESIGN_SYSTEM_LIMIT) return "overdue";
   return screens >= DESIGN_SYSTEM_AFTER ? "owed" : "fine";

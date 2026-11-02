@@ -34,10 +34,13 @@ and the hosting model of
 - **Zero new operations**: Saving a snapshot emits standard `item.add`. Re-capturing
   a page over time emits `item.addVersion`, preserving the visual and textual
   chronology of the site in the version stack.
-- **Hosting is existing blob serving**: Blobs are served by the home daemon via
-  content hash (`/api/blob/:hash`). No secondary relay role or snapshot server
-  is introduced. Cross-machine access on hosted canvases shares the exact same
-  remote-serving gap identified in Issue #141.
+- **Hosting is existing blob serving**: The existing route is
+  `/api/projects/:id/blobs/:hash`; `packages/server/src/content.ts` can stream a
+  missing blob from the canvas home through `HomeLinks`. No secondary relay or
+  snapshot server is needed. Issue #141's hosted directory-tree gap is separate
+  from blob delivery. This track still needs an authorized capture/upload path
+  that puts snapshot bytes into that existing blob service, then adds the item
+  under the canvas's existing access rules.
 - **Drag-and-drop ingestion overlap with Track D**: Importing a downloaded
   `.mhtml` or `.pdf` file via canvas drop reuses the same file ingestion path
   designed for Track D (`isocan-pa5`) collections.

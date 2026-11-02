@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { rules } from "./cssrules.ts";
+import { appSheets, rules } from "./cssrules.ts";
 
 /**
  * The measures this stylesheet is written in.
@@ -33,8 +33,16 @@ import { rules } from "./cssrules.ts";
  */
 
 const css = readFileSync(fileURLToPath(new URL("../src/styles.css", import.meta.url)), "utf8");
+/**
+ * Every sheet the app's own screens are written in — `styles.css` and the
+ * twenty beside their components — not `styles.css` alone (BC-6/BC-4, 27 Sep
+ * 2026). The split-out sheets had invented steps no count could see. A
+ * module's sheet is not here: a module brings its own look, and `tokens.test.ts`
+ * holds what it borrows from the app.
+ */
+const appCss = appSheets.map((s) => s.text).join("\n");
 /** Comments discuss measurements at length; they do not set them. */
-const bare = css.replace(/\/\*[\s\S]*?\*\//g, "");
+const bare = appCss.replace(/\/\*[\s\S]*?\*\//g, "");
 /** The `:root` blocks are where a step is DECLARED. Everything else uses one. */
 const outside = bare.replace(/:root[^{]*\{[^}]*\}/gs, "");
 
@@ -104,7 +112,7 @@ function partition(): { app: string; front: string } {
   // `at` is consulted as well as the selector: a door rule inside a media
   // query belongs to the door, and asking the selector alone is the bug above.
   const doorish = (text: string) => /\.front[-\b]|\.terms[-\b]/.test(text);
-  for (const rule of rules()) {
+  for (const rule of appSheets.flatMap((s) => rules(s.text))) {
     (doorish(rule.selector) || rule.at.some(doorish) ? front : app).push(
       `${rule.selector}{${rule.body}}`,
     );
@@ -130,7 +138,8 @@ const frontRadii = lengths(RADIUS, FRONT_CSS);
  */
 const typeIn = (text: string) =>
   [...text.matchAll(FONT_SIZE)]
-    .map((m) => (m[1] ?? "").trim())
+    // `12px !important` is 12px: the priority is not a size.
+    .map((m) => (m[1] ?? "").trim().replace(/\s*!important$/, ""))
     .filter((value) => !/var\(--/.test(value));
 const sizes = typeIn(APP_CSS);
 const frontSizes = typeIn(FRONT_CSS);
@@ -169,8 +178,12 @@ describe("the parser can still see the stylesheet", () => {
  */
 describe("spacing", () => {
   /* 24 → 22 when the ⌘K message bar was removed and took its two private
-     steps with it. Lowering is the record of the fix, as the message says. */
-  const SPACING_STEPS = 22;
+     steps with it. Lowering is the record of the fix, as the message says.
+     22 → 27 on 27 Sep 2026, and not by anything new: this began reading the
+     sheets beside the components (BC-6/BC-4), which had already invented 44,
+     50, 76, 80 and 112 — the phone face, the presenter's sheets and the
+     public catalogue — where no count could see them. Recorded as found; each is a step to fold back. */
+  const SPACING_STEPS = 27;
 
   it("invents no new step", () => {
     expect(
@@ -185,8 +198,40 @@ describe("spacing", () => {
     // by the count above, and should not be — but a jump in declarations with
     // no jump in steps is exactly the shape of healthy growth, so it is worth
     // being able to see. Generous bounds; this is a trip-wire, not a budget.
+    // Raised 900 -> 950 when the questionnaire dock (.q-*) landed, and
+    // 950 -> 960 for the arrival toasts (.joined-*): three declarations, all
+    // on existing steps. 960 -> 1320 on 27 Sep 2026 when the component
+    // sheets were counted too (BC-6/BC-4): 340 declarations that were always
+    // there, measured at 1,291. 1320 -> 1340 on 14 Oct 2026 for the proposal
+    // marks and their Delete toast (proactive-agent phase 1): fifteen
+    // declarations, all on existing steps, against a total already at 1,318.
+    // 1340 -> 1350 the same day for the morning review (phase 3): six
+    // declarations, all on existing steps, against a total at 1,338; the
+    // digest's own rules moved from phone.css rather than being restated.
+    // 1350 -> 1360 the same day for the Explain panel (phase 4): ten
+    // declarations, all on existing steps, against a total at 1,344; the
+    // panel's sheet restates the morning panel's measures rather than
+    // sharing a sheet across two lazy chunks.
+    // 1360 -> 1390 on 14 Oct 2026 for the brief card (phase 5): twenty-six
+    // lengths in its own lazy sheet, all on existing steps, against a total
+    // at 1,355; the card's lines, its editor and the re-read's three piles.
+    // 1390 -> 1420 on 14 Oct 2026 for changes ripple (phase 6): the pulse
+    // strip and the ripple panel in their own lazy sheet, all on existing
+    // steps, taking the total to 1,405; the panel restates Explain's
+    // measures rather than sharing a sheet across two lazy chunks.
+    // 1420 -> 1470 on 14 Oct 2026 for walking it as someone else (phase 9):
+    // the walk panel's lanes, thumbnails, low-vision swatches and setup in
+    // their own lazy sheet, all on existing steps, taking the total to 1,460 from 1,419, one under the old bound;
+    // the panel restates Explain's measures rather than sharing a sheet.
+    // 1470 -> 1490 on 14 Oct 2026 for saying it like a designer (phase 10):
+    // the readings card above the Chat's composer and the vocabulary panel,
+    // twenty lengths in the proposal marks' lazy sheet, all on existing
+    // steps, taking the total to 1,480 from 1,460.
+    // 1490 -> 1720 on 15 Oct 2026 when focus.css landed for FocusHeader,
+    // NodeFocusChat, and the Image/DesignSystem/Screen focus studios, all
+    // on existing steps (measured at 1,690).
     expect(spacing.length).toBeGreaterThan(SPACING_STEPS * 4);
-    expect(spacing.length).toBeLessThan(900);
+    expect(spacing.length).toBeLessThan(1720);
   });
 });
 
@@ -200,7 +245,11 @@ describe("spacing", () => {
  * `var(--radius)` and it is a no-op today.
  */
 describe("corner radii", () => {
-  const RADIUS_STEPS = 14;
+  /* 14 → 15 on 27 Sep 2026: the component sheets, read for the first time
+     (BC-6/BC-4), brought an 18px (the phone and presentation sheets) no rule in
+     styles.css uses. Their seven
+     `border-radius: 8px` restatements became `var(--radius)` the same day. */
+  const RADIUS_STEPS = 15;
 
   const RESTATES_THE_TOKEN = [
     ".share-link-row",
@@ -271,7 +320,21 @@ describe("corner radii", () => {
  * chosen.
  */
 describe("type sizes", () => {
-  const TYPE_STEPS = 16;
+  /**
+   * 16 → 20 on 24 Sep 2026, and none of the four is a pixel size: they are a
+   * text node's heading ladder — h1 1.5em, h2 1.25em, h3 1.125em, h4–h6 1em —
+   * relative to a node whose own size runs 16 to 128. A fixed px there was the
+   * bug (a `#` at 18px under a 128px paragraph, lessons.md #96), so the steps
+   * have to be ratios; `textheading.test.ts` holds them to core's estimate.
+   */
+  /* 20 → 23 on 27 Sep 2026 when the component sheets were read too
+     (BC-6/BC-4): 23px, 24px and 26px were already there, in the design
+     comparison and the phone face, where no count looked. */
+  /* 23 → 25 on 19 Oct 2026: the arrival screen's title is a poster size,
+     `clamp(32px, 4.8vw, 68px)`, and the eyebrow and sentence under it share
+     one step measured from it, `max(12px, 0.16em)` — Dion asked for the name
+     very large and the rest sized from it, which no fixed px can say. */
+  const TYPE_STEPS = 25;
   const HALF_PIXEL = [9.5, 10.5, 11.5, 12.5, 13.5];
 
   it("invents no new size", () => {

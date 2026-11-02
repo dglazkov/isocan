@@ -7,6 +7,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { RE_HOMING_NOT_YET, TERMS, TERMS_HISTORY, TERMS_LEDE } from "../src/lib/terms.ts";
 import { TermsPage } from "../src/pages/TermsPage.tsx";
+import { sheets } from "./cssrules.ts";
 
 /**
  * **The innkeeper's obligations, guarded** (phase 13.7).
@@ -211,10 +212,12 @@ describe("the terms page", () => {
    * `data:` is not a fetch and is allowed — the pen cursor is one, inline.
    */
   it("adds no rule that fetches from another host", () => {
-    const css = readFileSync(path.join(REPO, "packages/web/src/styles.css"), "utf8").replace(
-      /\/\*[\s\S]*?\*\//g,
-      "",
-    );
+    // Every sheet the page loads, not `styles.css` alone (BC-6/BC-4, 27 Sep
+    // 2026): a component's own sheet reaches the same origin boundary.
+    const css = sheets
+      .map((s) => s.text)
+      .join("\n")
+      .replace(/\/\*[\s\S]*?\*\//g, "");
     const urls = [...css.matchAll(/url\(\s*['"]?([^'")]+)/g)].map((m) => m[1]!);
     expect(urls.length, "no url() found at all — this parse is wrong").toBeGreaterThan(0);
     const offsite = urls.filter((u) => !u.startsWith("data:") && !u.startsWith("/"));

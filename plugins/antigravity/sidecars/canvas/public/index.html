@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Isocan Canvas</title>
+  <!-- The host's bridge (window.sidecar): its token-carrying fetch and the
+       workspace pushes. Absent when the page is opened by hand, and the page
+       says so rather than pretending. -->
+  <script src="/preload.js"></script>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --fallback-bg: #fafafa;
+      --fallback-card: #ffffff;
+      --fallback-secondary: #f4f4f5;
+      --fallback-fg: #18181b;
+      --fallback-muted: #71717a;
+      --fallback-border: #d4d4d8;
+      --fallback-primary: #2563eb;
+      --fallback-primary-fg: #ffffff;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --fallback-bg: #18181b;
+        --fallback-card: #202024;
+        --fallback-secondary: #27272a;
+        --fallback-fg: #f4f4f5;
+        --fallback-muted: #a1a1aa;
+        --fallback-border: #3f3f46;
+        --fallback-primary: #3b82f6;
+        --fallback-primary-fg: #ffffff;
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; }
+    body {
+      font: 12px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--background, var(--fallback-bg));
+      color: var(--foreground, var(--fallback-fg));
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 8px;
+      border-bottom: 1px solid var(--border, var(--fallback-border));
+      background: var(--card, var(--background, var(--fallback-card)));
+      color: var(--foreground, var(--fallback-fg));
+      flex-wrap: wrap;
+      flex-shrink: 0;
+    }
+    .where {
+      font-weight: 600;
+      max-width: 100%;
+      min-width: 0;
+      display: inline-flex;
+      align-items: center;
+      color: var(--foreground, var(--fallback-fg));
+      text-decoration: none;
+    }
+    .where:hover { text-decoration: none; }
+    .where-text {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    a.where[href] { cursor: pointer; }
+    a.where[href]:hover .where-text,
+    a.where[href]:focus-visible .where-text {
+      color: var(--primary, var(--fallback-primary));
+      text-decoration: underline;
+    }
+    .muted { color: var(--muted-foreground, var(--fallback-muted)); }
+    .spacer { flex: 1; }
+    button, input {
+      font: inherit;
+      color: var(--foreground, var(--fallback-fg));
+      background: var(--secondary, var(--fallback-secondary));
+      border: 1px solid var(--border, var(--fallback-border));
+      border-radius: 6px;
+      padding: 3px 8px;
+    }
+    button { cursor: pointer; transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease; }
+    button:hover:not(:disabled):not(.primary) {
+      background: color-mix(in srgb, var(--foreground, var(--fallback-fg)) 8%, var(--secondary, var(--fallback-secondary)));
+    }
+    button:disabled { opacity: 0.5; cursor: default; }
+    button.primary {
+      background: var(--primary, var(--fallback-primary));
+      color: var(--primary-foreground, var(--fallback-primary-fg));
+      border-color: transparent;
+    }
+    button.primary:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--primary, var(--fallback-primary)) 88%, var(--foreground, #000));
+    }
+    button.small { padding: 1px 6px; font-size: 11px; }
+    a { color: var(--primary, var(--fallback-primary)); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    input {
+      background: var(--background, var(--fallback-bg));
+      color: var(--foreground, var(--fallback-fg));
+      min-width: 0;
+      flex: 1;
+    }
+    input::placeholder { color: var(--placeholder, var(--muted-foreground, var(--fallback-muted))); }
+    input:focus-visible, button:focus-visible {
+      outline: 2px solid var(--primary, var(--fallback-primary));
+      outline-offset: -1px;
+    }
+    .note {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 8px;
+      border-bottom: 1px solid var(--border, var(--fallback-border));
+      flex-shrink: 0;
+    }
+    .note-body { flex: 1; min-width: 0; }
+    .ok {
+      color: color-mix(in srgb, #22c55e 65%, var(--foreground, var(--fallback-fg)));
+      background: color-mix(in srgb, #22c55e 12%, var(--card, var(--background, var(--fallback-card))));
+    }
+    .pending {
+      color: var(--muted-foreground, var(--fallback-muted));
+      background: color-mix(in srgb, var(--primary, var(--fallback-primary)) 8%, var(--card, var(--background, var(--fallback-card))));
+    }
+    .warn {
+      color: color-mix(in srgb, #d97706 75%, var(--foreground, var(--fallback-fg)));
+      background: color-mix(in srgb, #f59e0b 12%, var(--card, var(--background, var(--fallback-card))));
+    }
+    .error {
+      color: color-mix(in srgb, #ef4444 75%, var(--foreground, var(--fallback-fg)));
+      background: color-mix(in srgb, #ef4444 12%, var(--card, var(--background, var(--fallback-card))));
+    }
+    [hidden] { display: none !important; }
+    main { flex: 1; position: relative; min-height: 0; }
+    iframe { width: 100%; height: 100%; border: 0; display: block; }
+    .card {
+      max-width: 380px;
+      margin: 48px auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background: var(--card, var(--background, var(--fallback-card)));
+      border: 1px solid var(--card-border, var(--border, var(--fallback-border)));
+      border-radius: 8px;
+    }
+    .card h2 { margin: 0; font-size: 14px; }
+    .card p { margin: 0; }
+    .row { display: flex; gap: 6px; }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+      background: var(--muted, var(--secondary, var(--fallback-secondary)));
+      padding: 1px 4px;
+      border-radius: 4px;
+    }
+    [data-tip] {
+      position: relative;
+    }
+    [data-tip]::after {
+      content: attr(data-tip);
+      position: absolute;
+      left: 0;
+      top: calc(100% + 5px);
+      z-index: 20;
+      width: max-content;
+      max-width: 280px;
+      padding: 5px 8px;
+      border-radius: 6px;
+      background: var(--card, var(--background, var(--fallback-card)));
+      color: var(--foreground, var(--fallback-fg));
+      border: 1px solid var(--card-border, var(--border, var(--fallback-border)));
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+      font-size: 11px;
+      font-weight: 400;
+      line-height: 1.35;
+      text-decoration: none;
+      white-space: normal;
+      pointer-events: none;
+      opacity: 0;
+      transform: translateY(-2px);
+      transition: opacity 0.1s ease, transform 0.1s ease;
+    }
+    header [data-tip]::after {
+      left: auto;
+      right: 0;
+    }
+    header .where[data-tip]::after {
+      left: 0;
+      right: auto;
+    }
+    [data-tip]:hover::after,
+    [data-tip]:focus-visible::after {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <a class="where" id="where" target="_blank" rel="noopener"><span class="where-text" id="where-text">Waiting for Antigravity to say which workspace this is…</span></a>
+    <span class="spacer"></span>
+  </header>
+
+  <div class="note" id="status" role="status" hidden>
+    <span class="note-body" id="status-text"></span>
+    <button id="status-dismiss" type="button" class="small" aria-label="Dismiss status" title="Dismiss">×</button>
+  </div>
+
+  <main>
+    <iframe id="frame" title="Isocan canvas" allow="clipboard-read; clipboard-write" hidden></iframe>
+
+    <div class="card" id="unbound" hidden>
+      <h2>This folder has no canvas yet</h2>
+      <p class="muted" id="unbound-folder"></p>
+      <div class="row">
+        <input id="ref" type="text" placeholder="Canvas id, link, or title" aria-label="Canvas id, link, or title" />
+        <button id="use" type="button">Use</button>
+      </div>
+      <button id="create" type="button" class="primary">Create a canvas for it</button>
+      <p class="muted">Either way <code>isocan use</code> writes <code>.isocan/project.json</code> at the folder's top — commit it and everyone who clones the repo lands on the same canvas.</p>
+    </div>
+
+    <div class="card" id="nocli" hidden>
+      <h2>The isocan CLI is not on this machine</h2>
+      <p>Everything this pane does is an <code>isocan</code> command. Install it, then reopen the pane:</p>
+      <p><code>npm i -g github:dglazkov/isocan#release</code></p>
+    </div>
+
+    <div class="card" id="noworkspace" hidden>
+      <h2>No workspace folder</h2>
+      <p class="muted" id="noworkspace-why"></p>
+    </div>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const host = window.sidecar ?? null;
+    const standalone = !host;
+
+    let uris = [];
+    let state = null;
+    /** The frame's canvas and the origin its messages must come from. */
+    let framed = { canvasId: null, origin: null, tab: null, ready: false };
+    let pendingBridge = [];
+    const seenBridge = new Map();
+    let bridgeBootstrapped = false;
+    let selection = [];
+
+    // The host's first push arrives through both doors at the bottom, and a
+    // push can land while a refresh is still minting — so pushes are
+    // deduplicated by value and every refresh waits for the one before it,
+    // and one push never mints two passes.
+    let lastKey = null;
+    let queue = Promise.resolve();
+    function requeue() {
+      queue = queue.then(refresh, refresh);
+      return queue;
+    }
+
+    let statusSource = "";
+    let pollFailures = 0;
+    function say(text, tone = "", source = "user") {
+      statusSource = text ? source : "";
+      $("status").hidden = !text;
+      $("status").className = `note ${tone}`;
+      $("status-text").textContent = text || "";
+    }
+
+    // Opened by hand, there is no host fetch to carry the token; a `?token=`
+    // on this page's own address is forwarded the way the SDK would.
+    const handToken = standalone ? new URLSearchParams(location.search).get("token") : null;
+
+    async function api(route, body) {
+      const call = host?.fetch ?? fetch;
+      const res = await call(route, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(handToken ? { "x-sidecar-token": handToken } : {}) },
+        body: JSON.stringify({ workspaceUris: uris, ...(host?.conversationId ? { conversationId: host.conversationId } : {}), ...body }),
+      });
+      let data = null;
+      try { data = await res.json(); } catch { /* not JSON: said below */ }
+      if (!res.ok || !data || data.error) throw new Error(data?.error || `${route} answered ${res.status}`);
+      return data;
+    }
+
+    const leaf = (p) => (p || "").split(/[\\/]/).filter(Boolean).pop() || p || "";
+
+    function setWhere(label, url = "", fallbackTip = "") {
+      $("where-text").textContent = label;
+      const tip = url ? "Open in browser ↗" : fallbackTip;
+      if (url) {
+        $("where").href = url;
+      } else {
+        $("where").removeAttribute("href");
+      }
+      $("where").removeAttribute("title");
+      if (tip) {
+        $("where").setAttribute("data-tip", tip);
+      } else {
+        $("where").removeAttribute("data-tip");
+      }
+    }
+
+    function show(which) {
+      for (const id of ["frame", "unbound", "nocli", "noworkspace"]) $(id).hidden = id !== which;
+      if (which !== "frame") {
+        selection = [];
+      }
+    }
+
+    function sendBridge(msg) {
+      if (!msg || typeof msg !== "object") return;
+      if (framed.origin && framed.ready) {
+        $("frame").contentWindow?.postMessage(msg, framed.origin);
+      } else {
+        pendingBridge.push(msg);
+      }
+    }
+
+    function syncBridgeCues(sessions) {
+      const now = Date.now();
+      for (const sess of sessions ?? []) {
+        const cue = sess?.bridge;
+        if (!cue || typeof cue.at !== "number" || !cue.message) continue;
+        const prev = seenBridge.get(sess.actorId) ?? 0;
+        if (!bridgeBootstrapped) {
+          seenBridge.set(sess.actorId, cue.at);
+          if (now - cue.at <= 15_000) sendBridge(cue.message);
+          continue;
+        }
+        if (cue.at > prev) {
+          seenBridge.set(sess.actorId, cue.at);
+          sendBridge(cue.message);
+        }
+      }
+      bridgeBootstrapped = true;
+    }
+
+    async function refresh() {
+      if (uris.length === 0 && !host?.conversationId) {
+        state = null;
+        setWhere("No workspace");
+        $("noworkspace-why").textContent = standalone
+          ? "Opened outside Antigravity: add ?workspace=/path/to/folder to this page's address."
+          : "This conversation has no workspace folder open, so there is no canvas to show.";
+        return show("noworkspace");
+      }
+      try {
+        state = await api("/api/workspace");
+        pollFailures = 0;
+        if (statusSource === "poll") say("");
+      } catch (err) {
+        pollFailures += 1;
+        if (!state || pollFailures >= 3) {
+          const msg = /failed to fetch|networkerror|fetch failed/i.test(err?.message || "")
+            ? "Reconnecting to the pane server…"
+            : err.message;
+          say(msg, state ? "warn" : "error", "poll");
+        }
+        return;
+      }
+      if (uris.length === 0 && state.workspace) {
+        uris = [state.workspace];
+        lastKey = uris.join("\n");
+      }
+      if (uris.length === 0 && !state.workspace) {
+        state = null;
+        setWhere("No workspace");
+        $("noworkspace-why").textContent = "This conversation has no workspace folder open, so there is no canvas to show.";
+        return show("noworkspace");
+      }
+      const tab = state.bound && framed.canvasId === state.canvasId ? (framed.tab || "") : "";
+      setWhere(
+        state.bound
+          ? `${leaf(state.workspace)} · ${state.title || state.canvasId}`
+          : `${leaf(state.workspace)} · no canvas`,
+        tab,
+        state.bound ? `${state.canvasId} — bound by ${state.root}/.isocan/project.json` : state.workspace || "",
+      );
+      syncBridgeCues(state.sessions);
+      if (!state.cli) return show("nocli");
+      if (!state.bound) {
+        framed = { canvasId: null, origin: null, tab: null, ready: false };
+        pendingBridge = [];
+        $("frame").removeAttribute("src");
+        $("unbound-folder").textContent = state.workspace;
+        return show("unbound");
+      }
+      if (framed.canvasId !== state.canvasId) await load();
+      else show("frame");
+    }
+
+    /** A fresh pass per load: a pass is single-use, and a frame on a local
+     * daemon cannot keep a badge across reloads. */
+    async function load() {
+      say("Opening the canvas…");
+      try {
+        const embed = await api("/api/embed");
+        const tab = embed.tab || embed.canvas;
+        framed = { canvasId: state.canvasId, origin: new URL(embed.address).origin, tab, ready: false };
+        selection = [];
+        $("frame").src = embed.address;
+        setWhere(`${leaf(state.workspace)} · ${state.title || state.canvasId}`, tab);
+        show("frame");
+        const here = location.hostname;
+        const hereIsLoopback = here === "localhost" || here === "::1" || here === "[::1]" || /^127\./.test(here);
+        say(
+          embed.loopback && !hereIsLoopback
+            ? `This canvas lives on this machine's own daemon (${framed.origin}), which a browser on another machine cannot reach. If the frame stays blank, bind the folder to a canvas on a shared home such as isocan.io.`
+            : "",
+          "warn",
+        );
+      } catch (err) {
+        say(err.message, "error");
+      }
+    }
+
+    function focusItem(itemId, zoom = false) {
+      sendBridge({ type: "isocan:focus-item", itemId, zoom });
+    }
+
+    function camera(action, extra = {}) {
+      sendBridge({ type: "isocan:camera", action, ...extra });
+    }
+
+    function selectItems(itemIds, zoom = false) {
+      sendBridge({ type: "isocan:select", itemIds, zoom });
+    }
+
+    function followAgent(sessionId, actorId = null) {
+      sendBridge({ type: "isocan:follow", sessionId, actorId });
+    }
+
+    function openThread(threadId, zoom = false) {
+      sendBridge({ type: "isocan:open-thread", threadId, zoom });
+    }
+
+    // The canvas's half of the bridge (packages/web/src/lib/hostbridge.ts):
+    // it says ready to anyone, is answered by name, and from then on talks
+    // only to this page's origin. Its messages are believed only from the
+    // frame, from the origin the pass was minted at.
+    window.addEventListener("message", (e) => {
+      const frame = $("frame");
+      if (!framed.origin || e.source !== frame.contentWindow || e.origin !== framed.origin) return;
+      const data = e.data;
+      if (!data || typeof data !== "object" || data.canvasId !== framed.canvasId) return;
+      if (data.type === "isocan:ready") {
+        framed.ready = true;
+        frame.contentWindow.postMessage({ type: "isocan:hello" }, framed.origin);
+        for (const msg of pendingBridge.splice(0)) frame.contentWindow.postMessage(msg, framed.origin);
+      } else if (data.type === "isocan:selection" && Array.isArray(data.items)) {
+        selection = data.items;
+      }
+    });
+
+    $("status-dismiss").addEventListener("click", () => say(""));
+
+    async function bind(body, doing) {
+      say(doing);
+      for (const id of ["use", "create"]) $(id).disabled = true;
+      try {
+        const out = await api("/api/bind", body);
+        say(out.said || "");
+        await requeue();
+      } catch (err) {
+        say(err.message, "error");
+      } finally {
+        for (const id of ["use", "create"]) $(id).disabled = false;
+      }
+    }
+    $("use").addEventListener("click", () => {
+      const ref = $("ref").value.trim();
+      if (ref) bind({ ref }, `Binding this folder to ${ref}…`);
+    });
+    $("create").addEventListener("click", () => bind({}, "Creating a canvas for this folder…"));
+
+    function setUris(next) {
+      const list = Array.isArray(next) ? next.filter((u) => typeof u === "string") : [];
+      if (list.length > 0) {
+        try { sessionStorage.setItem("isocan:workspaceUris", JSON.stringify(list)); } catch { /* ignore */ }
+      }
+      const key = list.join("\n");
+      if (key === lastKey) return;
+      lastKey = key;
+      uris = list;
+      requeue();
+    }
+
+    // Preserve host theme variables and workspace URIs across in-frame reloads,
+    // because the Antigravity parent window only pushes `theme-change` and
+    // `workspace-change` when the host itself mounts the AuxPane.
+    try {
+      const savedTheme = JSON.parse(sessionStorage.getItem("isocan:themeVars") || "null");
+      if (savedTheme && typeof savedTheme === "object") {
+        for (const [k, v] of Object.entries(savedTheme)) {
+          if (typeof v === "string") document.documentElement.style.setProperty(k, v);
+        }
+      }
+    } catch { /* ignore */ }
+    window.addEventListener("message", (e) => {
+      if (e.data?.type === "theme-change" && e.data?.payload?.cssVariables) {
+        try { sessionStorage.setItem("isocan:themeVars", JSON.stringify(e.data.payload.cssVariables)); } catch { /* ignore */ }
+      }
+    });
+
+    if (standalone) {
+      setUris(new URLSearchParams(location.search).getAll("workspace"));
+    } else {
+      try {
+        const savedUris = JSON.parse(sessionStorage.getItem("isocan:workspaceUris") || "null");
+        if (Array.isArray(savedUris) && savedUris.length > 0) setUris(savedUris);
+      } catch { /* ignore */ }
+      host.onWorkspaceChange(setUris);
+      host.getWorkspaceUris().then(setUris, () => setUris([]));
+      if (uris.length === 0 && host?.conversationId) {
+        setTimeout(() => {
+          if (uris.length === 0) void requeue();
+        }, 150);
+      }
+    }
+
+    setInterval(() => {
+      if (!document.hidden && uris.length > 0 && state?.bound) requeue();
+    }, 2000);
+  </script>
+</body>
+</html>

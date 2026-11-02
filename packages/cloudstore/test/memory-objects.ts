@@ -78,6 +78,10 @@ export class MemoryObjects implements ObjectStore {
     this.data.delete(key);
   }
 
+  async list(prefix: string): Promise<string[]> {
+    return this.keys().filter((key) => key.startsWith(prefix));
+  }
+
   /** What a compose does, without the compose. */
   async append(key: string, bytes: Buffer): Promise<void> {
     const found = this.data.get(key);

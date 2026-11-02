@@ -1,6 +1,8 @@
-import { promises as fs } from "node:fs";
-import type { DoorResponse } from "@isocan/core";
-import { BADGE_SCHEME, DOOR_ROUTE, formatBadgeToken, normalizeHomeUrl } from "@isocan/core";
+import { promises as fs, type Stats } from "node:fs";
+import { randomUUID } from "node:crypto";
+import path from "node:path";
+import type { Actor, BadgeStore, StoredBadge } from "@isocan/core";
+import { askTheDoor, newActorId, normalizeHomeUrl } from "@isocan/core";
 import { writeFileAtomic } from "./fsutil.ts";
 import { identityFile } from "./paths.ts";
 
@@ -25,34 +27,16 @@ import { identityFile } from "./paths.ts";
  */
 
 /**
- * One badge, as `identity.json`'s `auth` block holds it.
- *
- * Keyed by home address in that block, which is what makes a second badge
- * free: a machine holds its badge at `http://127.0.0.1:4441` (its own daemon)
- * AND its badge at `https://isocan.io` (the daemon's home) in the same file,
- * under two keys, with neither aware of the other.
- *
- * **From phase 10.3 the key is NORMALIZED** (`normalizeHomeUrl`), and here
- * rather than at each call site — house rule 4's ordinary argument, sharpened
- * by what this file already says: two answers to "which credential is in that
- * file" on one machine is the divergence the module exists to prevent, and a
- * trailing slash would have been exactly that. A daemon holds one badge per
- * home now, so an address that spelled itself two ways would knock on one
- * door twice and hold two badges, of which only one carries the admissions.
- *
- * **No on-disk migration, and that is measured rather than assumed.** The
- * `auth` block was already keyed per address, and the only spellings that
- * CHANGE under normalization are a trailing slash and a mixed-case host. A
- * machine whose config carried one re-badges exactly once: the fresh badge
- * holds no admissions, the local half of the sweep keeps every canvas, and the
- * machine is let back in by a pass. That cost belongs in 10.5's upgrade doc,
- * not in engineering around it.
+ * One badge, as `identity.json`'s `auth` block holds it — `StoredBadge`, with
+ * the door's knock (`askTheDoor`) and the header it is presented in
+ * (`bearerHeader`), lives in `@isocan/core` beside the door vocabulary it
+ * speaks (docs/projects/room/design.md): the typed route surface uses all
+ * three and must not import this package, and this package calls the knock
+ * itself, so neither of the other two could be their home. Re-exported here
+ * so every import of them from this file keeps working.
  */
-export interface StoredBadge {
-  badgeId: string;
-  secret: string;
-  at: string;
-}
+export { askTheDoor, bearerHeader } from "@isocan/core";
+export type { BadgeStore, DoorAnswer, StoredBadge } from "@isocan/core";
 
 /**
  * The `auth` block `identity.json` has stubbed since the beginning, read.
@@ -74,52 +58,171 @@ export async function readBadge(home: string, base: string): Promise<StoredBadge
 }
 
 /**
- * Badge writes, serialized within this process.
- *
- * A read-modify-write on one file, which was safe while one thing in a daemon
- * ever wrote it. Phase 10.3 put several home links in one process, each
- * fetching its own badge, and two of them badging at the same moment BOTH read
- * the pre-write file and the second write erased the first's key — a machine
- * that had been let into a canvas at one home losing that badge, silently, and
- * re-badging into an admissionless one at the next boot.
- *
- * A chain rather than a lock file: the writers are all in this process (the
- * CLI writes its local badge, the daemon writes its home badges), badge writes
- * are rare, and a cross-process lock would be ceremony for a file two
- * processes touch minutes apart. The honest limit, stated: a CLI and a daemon
- * writing in the same millisecond can still clobber, exactly as before, and
- * the cost is one re-badge.
+ * Keep local callers ordered as well as serializing other processes (#284).
+ * During `isocan setup`, the CLI and the local/away daemon can write to the
+ * same `identity.json` simultaneously (e.g. `adoptIdentity` vs `writeBadge`).
+ * The lock covers only the physical home's read/choice/atomic replacement,
+ * never a door request. An abandoned lock requires explicit inspection, not
+ * PID guessing.
  */
-let badgeWrites: Promise<unknown> = Promise.resolve();
+let identityWrites: Promise<unknown> = Promise.resolve();
 
-/** Read-merge, never clobber: `identity.json` also holds the human's name,
- * and a badge write that rewrote the file from scratch would delete it (and
- * the mirror bug — `isocan identity --name` deleting the badge — is why
- * `writeIdentity` merges too). The same argument now covers a second badge:
- * a daemon writing its home badge must not erase the CLI's local one, nor its
- * own badge at another home. */
-export async function writeBadge(home: string, base: string, badge: StoredBadge): Promise<void> {
-  const work = badgeWrites.then(async () => {
-    await fs.mkdir(home, { recursive: true });
-    let current: Record<string, unknown> = {};
+function hasCode(error: unknown, code: string): boolean {
+  return (error as NodeJS.ErrnoException | null)?.code === code;
+}
+
+function sameFile(a: Stats, b: Stats): boolean {
+  return a.dev === b.dev && a.ino === b.ino;
+}
+
+async function identityLock(home: string): Promise<() => Promise<void>> {
+  const directory = path.join(home, ".identity-write.lock");
+  const ownerFile = path.join(directory, "owner.json");
+  const owner = JSON.stringify({ pid: process.pid, nonce: randomUUID() });
+  const deadline = Date.now() + 5_000;
+  for (;;) {
     try {
-      current = JSON.parse(await fs.readFile(identityFile(home), "utf8")) as Record<string, unknown>;
-    } catch {
-      // No identity yet: an agent-only machine gets a file holding just its
-      // badge. `readIdentity` returns null without id/name, so nothing
-      // mis-resolves.
+      await fs.mkdir(directory, { mode: 0o700 });
+      break;
+    } catch (error) {
+      if (!hasCode(error, "EEXIST")) throw error;
+      if (Date.now() >= deadline) {
+        throw new Error(`Identity write is locked at ${directory}. Inspect the owner and recover an abandoned lock explicitly; it was not removed.`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 25));
     }
-    const auth = {
-      ...((current.auth as Record<string, StoredBadge>) ?? {}),
-      [normalizeHomeUrl(base)]: badge,
-    };
-    // Atomic, for `homes.json`'s reason and with more at stake: this file
-    // holds the human's name AND every badge, a torn read of it is a machine
-    // with no identity and no credentials, and the daemon reads it at boot.
-    await writeFileAtomic(identityFile(home), JSON.stringify({ ...current, auth }, null, 2));
+  }
+  const claimed = await fs.lstat(directory);
+  let ownedFile: Stats | undefined;
+  let handle: Awaited<ReturnType<typeof fs.open>> | undefined;
+  try {
+    handle = await fs.open(ownerFile, "wx", 0o600);
+    ownedFile = await handle.stat();
+    await handle.writeFile(owner);
+    await handle.close();
+    handle = undefined;
+  } catch (error) {
+    await handle?.close().catch(() => {});
+    // Only our newly claimed directory and, if created, our own partial file.
+    // A replacement/foreign record is never recursively removed.
+    if (sameFile(claimed, await fs.lstat(directory))) {
+      if (ownedFile && sameFile(ownedFile, await fs.lstat(ownerFile))) await fs.unlink(ownerFile);
+      await fs.rmdir(directory);
+    }
+    throw error;
+  }
+  return async () => {
+    if (!sameFile(claimed, await fs.lstat(directory)) || await fs.readFile(ownerFile, "utf8") !== owner) {
+      throw new Error(`Identity lock ownership changed at ${directory}; the lock was not removed.`);
+    }
+    await fs.unlink(ownerFile);
+    await fs.rmdir(directory);
+  };
+}
+
+function identityObject(value: unknown, file: string): Record<string, unknown> {
+  const object = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v);
+  if (!object(value) || ["id", "name", "createdAt"].some((key) => value[key] !== undefined && typeof value[key] !== "string") ||
+      (value.auth !== undefined && !object(value.auth))) {
+    throw new Error(`Unsupported identity data at ${file}; the existing file was not replaced.`);
+  }
+  return value;
+}
+
+async function updateIdentity<T>(
+  home: string,
+  update: (current: Record<string, unknown>) => { next?: Record<string, unknown>; result: T },
+): Promise<T> {
+  const work = identityWrites.then(async () => {
+    await fs.mkdir(home, { recursive: true });
+    const physicalHome = await fs.realpath(home);
+    const release = await identityLock(physicalHome);
+    try {
+      const file = identityFile(physicalHome);
+      let current: Record<string, unknown> = {};
+      try {
+        current = identityObject(JSON.parse(await fs.readFile(file, "utf8")), file);
+      } catch (error) {
+        // A fresh machine may have a badge before it has a person. No other
+        // read/parse failure grants permission to replace existing data.
+        if (!hasCode(error, "ENOENT")) throw error;
+      }
+      const { next, result } = update(current);
+      if (next) {
+        const mode = await fs.stat(file).then((stat) => stat.mode & 0o777).catch((error: unknown) => {
+          if (!hasCode(error, "ENOENT")) throw error;
+          return 0o600;
+        });
+        await writeFileAtomic(file, JSON.stringify(next, null, 2), mode);
+      }
+      return result;
+    } finally {
+      await release();
+    }
   });
-  badgeWrites = work.catch(() => {});
+  identityWrites = work.catch(() => {});
   return work;
+}
+
+/** Rename the home person, or explicitly choose a fresh ID, inside the same
+ * transaction as credentials and pass adoption. Unknown fields remain intact. */
+export async function writeIdentityName(home: string, name: string, fresh = false): Promise<Actor> {
+  return updateIdentity(home, (current) => {
+    const id = !fresh && current.id && current.name ? current.id as string : newActorId();
+    const actor = { id, name };
+    return { next: { ...current, ...actor, createdAt: new Date().toISOString() }, result: actor };
+  });
+}
+
+/** Make an EXISTING actor this machine's person (`isocan identity --home
+ * --as`): the id and name the home answered with, replacing whoever the file
+ * named. Unlike `adoptIdentity` this overwrites on purpose — the caller has
+ * already been told by the home that this badge speaks for `actor`. Returns
+ * who the file named before, so the caller can say how to switch back. */
+export async function writeIdentityActor(home: string, actor: Actor): Promise<Actor | null> {
+  return updateIdentity(home, (current) => {
+    const previous = current.id && current.name
+      ? { id: current.id as string, name: current.name as string }
+      : null;
+    return {
+      next: { ...current, id: actor.id, name: actor.name, createdAt: new Date().toISOString() },
+      result: previous,
+    };
+  });
+}
+
+/** Merge a credential without dropping the person, other badges or private fields. */
+export async function writeBadge(home: string, base: string, badge: StoredBadge): Promise<void> {
+  return updateIdentity(home, (current) => ({
+    next: {
+      ...current,
+      auth: {
+        ...((current.auth as Record<string, StoredBadge>) ?? {}),
+        [normalizeHomeUrl(base)]: badge,
+      },
+    },
+    result: undefined,
+  }));
+}
+
+/** Persist only an actor returned by successful pass redemption. A different
+ * person already held by the machine remains its default. The choice and
+ * write share the badge queue, so neither can erase the other's fresh fields. */
+export async function adoptIdentity(
+  home: string,
+  actor: Actor,
+): Promise<{ actor: Actor; adopted: boolean }> {
+  return updateIdentity<{ actor: Actor; adopted: boolean }>(home, (current) => {
+    const existing = current.id && current.name
+      ? { id: current.id as string, name: current.name as string }
+      : null;
+    if (existing && existing.id !== actor.id) return { result: { actor: existing, adopted: false } };
+    if (!actor.name) return { result: { actor, adopted: false } };
+    return {
+      next: { ...current, ...actor, createdAt: new Date().toISOString() },
+      result: { actor, adopted: true },
+    };
+  });
 }
 
 /**
@@ -138,63 +241,14 @@ export async function knockOnDoor(base: string, timeoutMs = 10_000): Promise<Sto
 }
 
 /**
- * What the door said, refusal and all — the same knock, with the answer kept
- * instead of flattened to null.
- *
- * **Why this exists** (phase 13.7). The door is metered now, and a `null`
- * here becomes, one frame up the stack, the ORIGINAL 401 the caller was
- * recovering from: *"a badge is required — ask the door for one."* Told to a
- * person whose knock was just refused 429, that is this codebase's oldest
- * failure — the cheerful wrong answer — delivered as advice to do the one
- * thing that cannot work. So the refusal travels.
- *
- * `knockOnDoor` keeps its null contract for the callers whose recovery is
- * genuinely "give up quietly" (`HomeLink.ensureBadge`, where the replica's
- * next attempt is the retry), and the CLI takes this form because its caller
- * is a person reading a terminal.
+ * **The file-backed badge store** — `identity.json`'s `auth` block for one
+ * address, as the two verbs `DaemonRoutes` takes (docs/projects/room/design.md,
+ * `routes`). The CLI, the MCP server and every Node holder hand this one over;
+ * a host with no disk hands its own.
  */
-export type DoorAnswer =
-  | { badge: StoredBadge }
-  | { refused: { status: number; error: string; code?: string } };
-
-export async function askTheDoor(base: string, timeoutMs = 10_000): Promise<DoorAnswer> {
-  try {
-    const res = await fetch(`${base}${DOOR_ROUTE}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ carrier: "bearer" }),
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-    const body = (await res.json().catch(() => null)) as (DoorResponse & Refused) | null;
-    if (!res.ok) {
-      return {
-        refused: {
-          status: res.status,
-          error: body?.error ?? `the door refused: HTTP ${res.status}`,
-          ...(body?.code ? { code: body.code } : {}),
-        },
-      };
-    }
-    if (!body?.secret) {
-      // 200 with no secret is the door answering a caller it already knows —
-      // which this function's caller, by construction, is not. Nothing to
-      // keep, and nothing a retry improves.
-      return { refused: { status: res.status, error: "the door handed back no secret" } };
-    }
-    return { badge: { badgeId: body.badgeId, secret: body.secret, at: new Date().toISOString() } };
-  } catch (err) {
-    return { refused: { status: 0, error: `could not reach the door at ${base}: ${(err as Error).message}` } };
-  }
-}
-
-/** This file's `{error, code}` — the shape every refusal in `http.ts` uses. */
-interface Refused {
-  error?: string;
-  code?: string;
-}
-
-/** `Authorization: Bearer <badgeId>.<secret>` — the one place that spelling
- * is written, so a holder cannot get the separator wrong on its own. */
-export function bearerHeader(badge: StoredBadge): Record<string, string> {
-  return { Authorization: `${BADGE_SCHEME} ${formatBadgeToken(badge.badgeId, badge.secret)}` };
+export function fileBadgeStore(home: string, base: string): BadgeStore {
+  return {
+    read: () => readBadge(home, base),
+    keep: (badge) => writeBadge(home, base, badge),
+  };
 }

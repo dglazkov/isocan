@@ -147,6 +147,31 @@ describe("a tab whose badge was deleted", () => {
     expect(seen).toHaveLength(2);
   });
 
+  it("recovers the claim's missing badge without recursively re-claiming", async () => {
+    let claimed = false;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const body = init?.body ? JSON.parse(String(init.body)) : null;
+      seen.push(`${init?.method ?? "GET"} ${url}${body?.op ? ` ${body.op.type}` : ""}`);
+      const reply = (status: number, value: unknown) => new Response(JSON.stringify(value), { status });
+      if (url === DOOR_ROUTE) { badged = true; return reply(200, { badgeId: "bdg_replaced" }); }
+      if (body?.op?.type === "actor.claim") {
+        if (!badged) return reply(401, { code: "no-badge", error: "claim needs a badge" });
+        claimed = true;
+        return reply(200, { seq: 1, envelope: { actor: { id: persona.id, name: persona.name } } });
+      }
+      if (!claimed) return reply(400, { code: "not-your-actor", error: "claim needed" });
+      return reply(200, { seq: 2, envelope: {} });
+    }) as typeof fetch;
+    await sendOp("prj_1", { id: persona.id, name: persona.name }, {
+      type: "item.move", itemId: "itm_1", x: 1, y: 1,
+    });
+    expect(seen).toEqual([
+      "POST /api/ops item.move", "POST /api/ops actor.claim", `POST ${DOOR_ROUTE}`,
+      "POST /api/ops actor.claim", "POST /api/ops item.move",
+    ]);
+  });
+
   it("has nothing to re-claim for a browser that never entered a name", async () => {
     stubStorage();
     await sendOp("prj_1", { id: persona.id, name: persona.name }, {

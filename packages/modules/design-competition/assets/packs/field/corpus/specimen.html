@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Serious Toys — Specimen</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #e5e5e3;
+      color: #191919;
+      font-family: Inter, system-ui, sans-serif;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+    .unit {
+      width: 100%;
+      max-width: 460px;
+      background: #e5e5e3;
+      border: 1.5px solid #191919;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .bar {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 12px;
+      border-bottom: 1px solid #191919;
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+    }
+    .oled {
+      background: #111111;
+      color: #f0f0ee;
+      padding: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+    }
+    .oled strong { font-size: 28px; color: #ff4f00; font-weight: 500; }
+    .cells {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      border-top: 1px solid #191919;
+      border-bottom: 1px solid #191919;
+    }
+    .cell {
+      padding: 12px;
+      border-right: 1px solid #191919;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 11px;
+    }
+    .cell:last-child { border-right: 0; }
+    .cap {
+      width: 44px;
+      height: 44px;
+      border-radius: 999px;
+      border: 1.5px solid #191919;
+      box-shadow: 0 2px 0 #191919;
+      cursor: pointer;
+    }
+    .cap:active { transform: translateY(2px); box-shadow: none; }
+    .trigger {
+      margin: 12px;
+      width: calc(100% - 24px);
+      height: 48px;
+      background: #ff4f00;
+      color: #f0f0ee;
+      border: 1.5px solid #191919;
+      border-radius: 3px;
+      box-shadow: 0 2px 0 #191919;
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <section class="unit" aria-label="Field Dispatch Synthesizer">
+    <div class="bar"><span>+ FLD-01 // BOTANIC</span><span>CH-04 READY +</span></div>
+    <div class="oled">
+      <div>
+        <div style="font-size:11px; color:#888;">SPECIMEN // FICUS LYRATA</div>
+        <div style="font-size:14px; margin-top:4px;">24 CM STONEWARE · THU 14:00</div>
+      </div>
+      <strong>$84</strong>
+    </div>
+    <div class="cells">
+      <div class="cell"><span>01 POT</span><button class="cap" style="background:#0078ff;" type="button" aria-label="Pot"></button></div>
+      <div class="cell"><span>02 SOIL</span><button class="cap" style="background:#18a957;" type="button" aria-label="Soil"></button></div>
+      <div class="cell"><span>03 SUN</span><button class="cap" style="background:#f2b705;" type="button" aria-label="Sun"></button></div>
+      <div class="cell"><span>04 MIST</span><button class="cap" style="background:#f0f0ee;" type="button" aria-label="Mist"></button></div>
+    </div>
+    <button class="trigger" type="button">[ REC ] TRANSMIT ORDER →</button>
+  </section>
+</body>
+</html>

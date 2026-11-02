@@ -1,0 +1,822 @@
+import { FIDELITY_PROP, groupContentBox, groupDescendants, isGroupItem, newGroupId, newItemId, newVersionId, titleSlug, type CanvasContents, type Item, type Operation } from "@isocan/core";
+import { RECIPES } from "./catalog/index.ts";
+import { JEV_INPUT_PRICE, PriorityGate, type Answerer, type JevResponse } from "./answerer.ts";
+import { applyPinnedToSpecs, formatAskComment, gateFlowDecision, type RootGateQuestion } from "./entropy-ask.ts";
+import {
+  applyPropsRound, applyStructure, decideFlow, flowScreen, pendingRound, requestBlueprint, roundCalls,
+  type FlowDecision, type RoundCall,
+} from "./compose.ts";
+import { currentVersionOf, type WirePort } from "./port.ts";
+import { PROTOTYPE_PROP } from "./prototype.ts";
+import { readWire, renderWire } from "./render.ts";
+import { StyleResolver, governingSystem, mappingLines } from "./restyle.ts";
+import { wireBy, wireSize, wireTitle, type WireBy, type WireSpec } from "./spec.ts";
+import type { WireStyle } from "./theme.ts";
+import { DEFAULT_VARIATIONS, honestFlips, variations } from "./vary.ts";
+import { choosePack, flagPack, packLine, type PackChoice } from "./content/choose.ts";
+import { fleshSpec, seedKey } from "./content/flesh-spec.ts";
+import { packOf } from "./content/fill.ts";
+import { maybeProperties } from "./maybe.ts";
+import { firstChoices, isKept, keepPatch } from "./keep.ts";
+import { PROTOTYPE_CLEAR, keptFlowsOf, writePrototype } from "./kept-flows.ts";
+import type { WireLink } from "./links.ts";
+import { recordDecisions } from "./why.ts";
+
+/**
+ * **A flow, composed in rounds, drawn in place** — the composer both
+ * surfaces run (`isocan wire "<request>"`, and the web's `/wire <request>`),
+ * over a `WirePort`.
+ *
+ * The first thing written is a blueprint titled with the request, before any
+ * answerer is asked: the first frame a person sees is blue within one round
+ * trip of the canvas, not of the model. Round 1 turns it into the first
+ * screen and adds a blueprint per remaining archetype in a row; rounds 2 and
+ * 3 write `item.addVersion` into those same items, so a screen fills rather
+ * than being replaced. Every op carries the flow's id as its group, so one
+ * undo takes the whole request back.
+ *
+ * Unless it was asked `basic`, a flow then ends with a prototype you can
+ * click (24 Sep 2026): the first choice of every row round 1 was confident
+ * of goes in it (📐, signed `wireKeepBy=<answerer>`), and the prototype is
+ * built above the row — still in the flow's group.
+ */
+
+const GAP = 80;
+
+export interface Screen {
+  item: string;
+  spec: WireSpec;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** The group the screen's item sits in, if any — where its variations and its prototype go too. */
+  containerId?: string;
+}
+
+/** Where an added item goes besides its spot: a group, placed exactly where it was asked (Porchlight #2, #6). */
+export interface Into {
+  containerId: string;
+  groupPlacement: "exact";
+}
+
+/** The group an item sits in, as the fields an `item.add` carries to land in it too. */
+export function intoOf(item: { containerId?: string | undefined } | undefined): Into | undefined {
+  return item?.containerId ? { containerId: item.containerId, groupPlacement: "exact" } : undefined;
+}
+
+/** A screen's filename stem: core's one title rule (cleanup DU-2), or "screen".
+ *  Each round mints its version's filename here, so a flow screen titled
+ *  "Café" that was `caf.html` gets `cafe.html` at its next round; the
+ *  versions already written keep their names. */
+function slugOf(title: string): string {
+  return titleSlug(title, { max: 60 }) || "screen";
+}
+
+/** The canvas half: every write is one of four existing ops, under the flow's group. */
+export class FlowCanvas {
+  /** Variations this run added, in the order they landed. */
+  readonly variants: Screen[] = [];
+  /**
+   * The governing design system's mapping (design §9), stamped on every spec
+   * this canvas writes that has none of its own — so a flow asked for where a
+   * system governs arrives in it. Unset: the default look.
+   */
+  style: WireStyle | undefined;
+  /**
+   * The group every item this canvas adds lands in — `wire --in <group>`'s,
+   * or the source screen's for a variation. Sent as the op's own
+   * `containerId` (not inside `placement`), which both surfaces' writers read.
+   */
+  into: Into | undefined;
+  /**
+   * The pack a composed flow fills from (design §10): stamped on every
+   * screen as round 3 draws it, so the flow arrives fleshed — no second pass.
+   */
+  pack: PackChoice | undefined;
+  /**
+   * Who is drawing (`WireSpec.by`): stamped on every spec this canvas writes
+   * once an answerer has spoken — the composer sets it when round 1 answers,
+   * `wire answer` for an agent, `wire vary` from the screen it varies.
+   */
+  by: WireBy | undefined;
+  /**
+   * Root decisions pinned via `--pin key=value` or `/ask` disambiguation
+   * (design §12), stamped on every non-blueprint spec this flow writes.
+   */
+  pinned: Record<string, string> | undefined;
+
+  constructor(readonly port: WirePort, readonly group: string) {}
+
+  private styled(given: WireSpec, itemId: string): WireSpec {
+    const signed = this.by && given.round !== 0 ? { ...given, by: this.by } : given;
+    const withPinned = given.round !== 0 ? applyPinnedToSpecs([signed], this.pinned)[0]! : signed;
+    const spec = this.style && withPinned.style === undefined ? { ...withPinned, style: this.style } : withPinned;
+    if (!this.pack || spec.round !== 3 || spec.content) return spec;
+    return fleshSpec(spec, seedKey(spec, itemId), packOf(this.pack.pack), { p: this.pack.p, by: this.pack.by });
+  }
+
+  private async version(spec: WireSpec) {
+    const filename = `${slugOf(wireTitle(spec))}.html`;
+    const upload = await this.port.put(renderWire(spec), "text/html", filename);
+    return { id: newVersionId(), blobHash: upload.blobHash, mimeType: "text/html", filename, size: upload.size };
+  }
+
+  private send(op: Operation) {
+    return this.port.send(op, this.group);
+  }
+
+  async add(given: WireSpec, placement: Record<string, unknown>, into: Into | undefined = this.into): Promise<Screen> {
+    const itemId = newItemId();
+    const spec = this.styled(given, itemId);
+    const { width, height } = wireSize(spec);
+    const at = await this.send({
+      type: "item.add",
+      itemId,
+      version: await this.version(spec),
+      width,
+      height,
+      placement: placement as never,
+      title: wireTitle(spec),
+      // A maybe says so in the op that draws it; the canvas marks it until it is kept (maybe.ts).
+      properties: { [FIDELITY_PROP]: "wireframe", ...maybeProperties(spec) },
+      ...(into ?? {}),
+    });
+    const landed = at ?? (placement as { x?: number; y?: number });
+    return { item: itemId, spec, x: landed.x ?? 0, y: landed.y ?? 0, width, height, ...(into ? { containerId: into.containerId } : {}) };
+  }
+
+  /** A new version of the same item — the screen fills in place — and its title and size if they moved. */
+  async write(screen: Screen, given: WireSpec): Promise<Screen> {
+    const spec = this.styled(given, screen.item);
+    await this.send({ type: "item.addVersion", itemId: screen.item, version: await this.version(spec) });
+    // The request's blueprint becomes round 1's first screen in place: if that screen is a maybe, its
+    // property rides the same update as its new title — still the composer's act, never a second write.
+    const maybe = maybeProperties(spec);
+    const retitled = wireTitle(spec) !== wireTitle(screen.spec);
+    const newlyMaybe = spec.maybe === true && !screen.spec.maybe;
+    if (retitled || newlyMaybe) {
+      await this.send({ type: "item.update", itemId: screen.item, patch: { ...(retitled ? { title: wireTitle(spec) } : {}), ...(newlyMaybe ? { properties: maybe } : {}) } });
+    }
+    const { width, height } = wireSize(spec);
+    if (width !== screen.width || height !== screen.height) await this.send({ type: "item.resize", itemId: screen.item, width, height });
+    return { ...screen, spec, width, height };
+  }
+}
+
+/**
+ * The room a flow that will end with a prototype leaves between what is
+ * already on the canvas and its row: the prototype's clearance over the
+ * arrows (`PROTOTYPE_CLEAR`) and a prototype's height with its title strip —
+ * so the prototype lands right over its own row, not above everything else
+ * on the canvas and across another flow's arrows (24 Sep 2026, seen on the
+ * second flow of a canvas once every flow built one).
+ */
+export const PROTOTYPE_ROOM = PROTOTYPE_CLEAR + 1000;
+
+/** Where a new flow's row starts when nothing was asked: under everything on the canvas (and `room` more), at its left edge. */
+export function rowStart(canvas: CanvasContents, room = 0): { x: number; y: number; chosen: true } {
+  const items = Object.values(canvas.items ?? {});
+  if (items.length === 0) return { x: 0, y: 0, chosen: true };
+  const left = Math.min(...items.map((i) => i.x));
+  const bottom = Math.max(...items.map((i) => i.y + i.height));
+  return { x: Math.round(left), y: Math.round(bottom + 160 + room), chosen: true };
+}
+
+/**
+ * Where a new flow's row starts inside a group: under everything the group
+ * already holds (its descendants, nested groups and all), at their left edge —
+ * or the group's content corner when it is empty.
+ */
+export function rowStartIn(canvas: CanvasContents, groupId: string, room = 0): { x: number; y: number; chosen: true } {
+  const group = canvas.items[groupId];
+  if (!group) throw new Error(`no group ${groupId} on this canvas`);
+  const inside = groupDescendants(canvas, groupId);
+  if (inside.length === 0) {
+    const box = groupContentBox(group);
+    return { x: Math.round(box.x), y: Math.round(box.y), chosen: true };
+  }
+  const left = Math.min(...inside.map((i) => i.x));
+  const bottom = Math.max(...inside.map((i) => i.y + i.height));
+  return { x: Math.round(left), y: Math.round(bottom + 160 + room), chosen: true };
+}
+
+// ---------- asking
+
+export interface RoundTally {
+  round: 1 | 2 | 3;
+  calls: number;
+  /** Wall clock of the round: its calls run in parallel. */
+  ms: number;
+  inputTokens: number;
+}
+
+/** Told of every round asked — the CLI's `--save` writes the files. */
+export type OnAsked = (round: 1 | 2 | 3, calls: RoundCall[], responses: JevResponse[]) => Promise<void>;
+
+export async function ask(answerer: Answerer, round: 1 | 2 | 3, calls: RoundCall[], onAsked?: OnAsked): Promise<{ responses: JevResponse[]; tally: RoundTally; by: string }> {
+  const t0 = Date.now();
+  let by = answerer.name as string;
+  const answered = await Promise.all(calls.map(async (call) => {
+    // A screen with nothing left to decide asks nothing — Jev is never sent an empty question set.
+    if (Object.keys(call.request.questions).length === 0) return { response: { answers: {} } as JevResponse, asked: false };
+    const a = await answerer.answer(call.request);
+    by = a.by;
+    return { response: a.response, asked: true };
+  }));
+  const ms = Date.now() - t0;
+  const responses = answered.map((a) => a.response);
+  await onAsked?.(round, calls, responses);
+  return {
+    responses,
+    by,
+    tally: {
+      round,
+      calls: answered.filter((a) => a.asked).length,
+      ms,
+      inputTokens: responses.reduce((sum, r) => sum + (r.usage?.input_tokens ?? 0), 0),
+    },
+  };
+}
+
+// ---------- applying
+
+const pct = (p: number | undefined) => (p === undefined ? "—" : p.toFixed(2));
+
+/** What a maybe screen's line says: round 1 was unsure, and the keep decides. */
+export const MAYBE_WORDS = "maybe — round 1 was unsure it is needed; use it in the prototype (📐) or leave it";
+
+/** A flow's screens by title, a maybe marked — the Chat record's and the CLI's list. */
+export function screenTitles(screens: readonly Pick<Screen, "spec">[]): string {
+  return screens.map((s) => `${s.spec.title}${s.spec.maybe ? " (maybe)" : ""}`).join(" · ");
+}
+
+function describeFlow(d: FlowDecision): string {
+  const chosen = d.archetypes.map((a) => `${a.id} ${pct(a.p)}${a.maybe ? " (maybe)" : ""}`).join(", ");
+  const declined = d.declined.map((a) => `${a.id} ${pct(a.p)}${a.why === "platform" ? ` (not on ${d.platform})` : ""}`).join(", ");
+  return (
+    `flow: ${d.platform} ${pct(d.distributions.platform[d.platform])} · nav ${d.chrome.nav} ${pct(d.distributions.nav[d.chrome.nav])}` +
+    ` · header ${d.chrome.header} ${pct(d.distributions.header[d.chrome.header])}\n` +
+    `  screens: ${chosen}\n  declined: ${declined || "none"}`
+  );
+}
+
+export function screenLine(s: Screen, note: string): string {
+  const open = s.spec.slots.filter((x) => x.block === null).length;
+  const state = open === 0 ? "wireframe" : open === s.spec.slots.length ? "blueprint" : `${s.spec.slots.length - open} of ${s.spec.slots.length} slots chosen`;
+  return `${s.item}  ${wireTitle(s.spec)} — ${s.spec.archetype}, ${s.spec.platform}, ${state}${note ? ` · ${note}` : ""}`;
+}
+
+/**
+ * Write one round's answers into the canvas. Round 1 turns the request's
+ * blueprint into the first screen and adds the rest beside it in running
+ * order; rounds 2 and 3 version each screen in place.
+ */
+export async function applyRound(
+  canvas: FlowCanvas, round: 1 | 2 | 3, screens: Screen[], calls: RoundCall[], responses: JevResponse[], say: (line: string) => void,
+): Promise<Screen[]> {
+  if (round === 1) {
+    const first = screens[0]!;
+    const decision = decideFlow(calls[0]!.request, responses[0]!);
+    say(describeFlow(decision));
+    const specs = decision.archetypes.map((a) =>
+      recordDecisions(flowScreen(a.id, first.spec.request, first.spec.flow, decision), calls[0]!.request, responses[0]!),
+    );
+    const out: Screen[] = [await canvas.write(first, specs[0]!)];
+    for (const spec of specs.slice(1)) {
+      const prev = out[out.length - 1]!;
+      out.push(await canvas.add(spec, { x: prev.x + prev.width + GAP, y: prev.y, chosen: true }));
+    }
+    out.forEach((s, i) => say(screenLine(s, `p(yes) ${pct(decision.archetypes[i]!.p)}${s.spec.maybe ? ` · ${MAYBE_WORDS}` : ""}`)));
+    return out;
+  }
+  const specs = round === 2
+    ? screens.map((screen, i) =>
+        recordDecisions(applyStructure(screen.spec, calls[i]!.request, responses[i]!), calls[i]!.request, responses[i]!),
+      )
+    // A screen with no honest alternative says so in the same version that draws it.
+    : applyPropsRound(screens.map((s) => s.spec), calls.map((c) => c.request), responses)
+        .map((spec, i) => {
+          const withDec = recordDecisions(spec, calls[i]!.request, responses[i]!);
+          return honestFlips(withDec).length === 0 ? { ...withDec, varied: "none" as const } : withDec;
+        });
+  const out: Screen[] = [];
+  for (const [i, screen] of screens.entries()) out.push(await canvas.write(screen, specs[i]!));
+  if (round === 3) {
+    // Variations close the flow, in its op group: one undo still takes it all back.
+    for (const s of out) {
+      // A maybe waits for its keep before it is varied: over-including is cheap only while each maybe is one screen.
+      if (s.spec.maybe) {
+        say(screenLine(s, "maybe — no variations until it is in the prototype (`wire vary` draws them)"));
+        continue;
+      }
+      const made = await addVariations(canvas, s, [], DEFAULT_VARIATIONS);
+      say(screenLine(s, s.spec.varied === "none" ? "one way to draw this" : `${made.length} variation${made.length === 1 ? "" : "s"}`));
+      for (const v of made) say(`  ${screenLine(v, "")}`);
+    }
+  }
+  return out;
+}
+
+/**
+ * Add a screen's variations directly under it — same x, stacked below the
+ * screen and any sibling already there — up to `count` in all.
+ */
+export async function addVariations(canvas: FlowCanvas, screen: Screen, siblings: readonly Screen[], count: number): Promise<Screen[]> {
+  const specs = variations(screen.spec, screen.item, count, siblings.map((v) => v.spec.flip!).filter(Boolean));
+  const made: Screen[] = [];
+  let bottom = Math.max(screen.y + screen.height, ...siblings.map((v) => v.y + v.height));
+  // In the screen's own group, so moving the group takes its variations along (Porchlight #2).
+  const into = canvas.into ?? (screen.containerId ? { containerId: screen.containerId, groupPlacement: "exact" as const } : undefined);
+  for (const spec of specs) {
+    const v = await canvas.add(spec, { x: screen.x, y: bottom + GAP, chosen: true }, into);
+    bottom = v.y + v.height;
+    made.push(v);
+    canvas.variants.push(v);
+  }
+  return made;
+}
+
+// ---------- reading a flow back off the canvas
+
+/** Every wireframe screen on the canvas whose file carries a spec, read back off its current version (or its saved wireLayer:system / wireLayer:wire version when on a bespoke High-Fi layer). */
+export async function wiresOn(port: Pick<WirePort, "readText">, canvas: CanvasContents): Promise<Screen[]> {
+  const items = Object.values(canvas.items ?? {}).filter((i) => i.properties?.[FIDELITY_PROP] === "wireframe");
+  const read = await Promise.all(items.map(async (item) => {
+    const current = currentVersionOf(item);
+    if (!current || current.mimeType !== "text/html") return null;
+    let spec = readWire(await port.readText(current.blobHash));
+    if (!spec) {
+      const fallbackId = item.properties?.["wireLayer:system"] ?? item.properties?.["wireLayer:wire"];
+      const fallbackVer = fallbackId ? item.versions.find((v) => v.id === fallbackId) : undefined;
+      if (fallbackVer && fallbackVer.mimeType === "text/html") {
+        spec = readWire(await port.readText(fallbackVer.blobHash));
+      }
+    }
+    // A variation chosen home (`isocan choose`, copy-edit phase 2) is folded onto its source as-is, so the
+    // source's spec can say `variantOf` itself: a screen is never a variation of itself, so it reads as none.
+    if (spec?.variantOf === item.id) {
+      const { variantOf: _self, ...own } = spec;
+      spec = own;
+    }
+    return spec ? { item: item.id, spec, x: item.x, y: item.y, width: item.width, height: item.height, ...(item.containerId ? { containerId: item.containerId } : {}) } : null;
+  }));
+  return read.filter((s): s is Screen => s !== null);
+}
+
+/** The flows on the canvas — a variation shares its screen's flow but is not one of its screens. */
+export async function flowsOn(port: Pick<WirePort, "readText">, canvas: CanvasContents): Promise<Map<string, Screen[]>> {
+  const flows = new Map<string, Screen[]>();
+  const order = (s: Screen) => RECIPES.findIndex((r) => r.id === s.spec.archetype);
+  for (const s of await wiresOn(port, canvas)) {
+    if (!s.spec.flow || s.spec.variantOf) continue;
+    flows.set(s.spec.flow, [...(flows.get(s.spec.flow) ?? []), s]);
+  }
+  for (const list of flows.values()) list.sort((a, b) => order(a) - order(b));
+  return flows;
+}
+
+export function pickFlow(flows: Map<string, Screen[]>, wanted?: string): { flow: string; screens: Screen[]; round: 1 | 2 | 3 } {
+  if (wanted) {
+    const screens = flows.get(wanted);
+    if (!screens) throw new Error(`no wireframe flow "${wanted}" on this canvas`);
+    const round = pendingRound(screens.map((s) => s.spec));
+    if (!round) throw new Error(`flow ${wanted} is drawn — every screen has answered all three rounds`);
+    return { flow: wanted, screens, round };
+  }
+  const pending = [...flows.entries()].flatMap(([flow, screens]) => {
+    const round = pendingRound(screens.map((s) => s.spec));
+    return round ? [{ flow, screens, round }] : [];
+  });
+  if (pending.length === 0) throw new Error("no wireframe flow on this canvas is waiting on answers — `isocan wire \"<request>\" --answerer agent` starts one");
+  // The newest: the last one the snapshot lists.
+  return pending[pending.length - 1]!;
+}
+
+// ---------- the style a flow arrives in
+
+/**
+ * The style a flow starting at this item takes: the mapping of the design
+ * system governing its place, or the default when none does — with the lines
+ * that say which, for a person.
+ */
+export async function styleAt(port: WirePort, itemId: string, mapper: StyleResolver): Promise<{ system: Item | null; style: WireStyle; lines: string[] }> {
+  const canvas = await port.canvas();
+  const item = canvas.items[itemId];
+  const system = item ? governingSystem(canvas, item) : null;
+  const style = await mapper.styleFor(system);
+  if (!system) return { system, style, lines: [] };
+  const m = [...mapper.mappings.values()].find((x) => x.system.id === system.id)!;
+  const cost = mapper.calls ? ` · ${mapper.inputTokens.toLocaleString("en-US")} input tokens · $${mapper.cost().toFixed(6)}` : "";
+  return { system, style, lines: [`style: in the design system that governs here${cost}`, ...mappingLines(m, mapper.who).map((l) => `  ${l}`)] };
+}
+
+// ---------- the whole request
+
+export interface ComposeOptions {
+  /** Where the first blueprint goes. Default: under everything on the canvas (`rowStart`). */
+  placement?: Record<string, unknown>;
+  /** Lines for a person, as the flow is drawn. */
+  say?: (line: string) => void;
+  /** The blueprint is on the canvas, before any answer — the first frame. */
+  onBlueprint?: (screen: Screen, ms: number, flow: string) => void | Promise<void>;
+  onAsked?: OnAsked;
+  /** Who maps the governing design system's tokens (design §9). Default: `answerer`. */
+  mappingAnswerer?: Answerer;
+  /** Told of the mapping, if one is asked — the CLI's `--save`. */
+  onMappingAsked?: ConstructorParameters<typeof StyleResolver>[3];
+  /**
+   * Sample content (design §10), **on by default** (24 Sep 2026: a person
+   * composing expects the words, not a second act to ask for them): the
+   * screens land grey in round 2 and arrive fleshed in round 3, from the
+   * pack chosen while round 1 is asked — one call more — or `pack` when
+   * given. `false` is `--basic` (`/wire basic …`): plain grey wires, as
+   * before, for `wire flesh` later — and nothing is put in a prototype.
+   */
+  flesh?: { pack?: string } | false;
+  /** Root decisions pinned ahead of time via `--pin key=value` (design §12). */
+  pinned?: Record<string, string>;
+  /** Suppress interactive `/ask` prompts and pick top-1 argmax silently (`--no-ask`). */
+  noAsk?: boolean;
+  /**
+   * Optional handler invoked when a root decision in round 1 has high entropy
+   * (`H(p) > 1.0` bits or `max(p) < 0.50`). May return the user's chosen option id
+   * to pin it before round 1 draws, or `undefined` to accept top-1.
+   */
+  onGateAsk?: (ask: RootGateQuestion, comment: string) => Promise<string | undefined> | string | undefined;
+  /** Called once Round 1's entropy gate check (and any `onGateAsk` prompts) settles. */
+  onGateSettled?: () => void | Promise<void>;
+  /** Shared priority gate for concurrent Jev calls (design §12). */
+  priorityGate?: PriorityGate;
+}
+
+/** The prototype a composed flow ends with: the answerer's first choices, played above the row. */
+export interface FlowPrototype {
+  itemId: string;
+  title: string;
+  links: WireLink[];
+  /** The screens in it, in reading order — each signed with `wireKeepBy`. */
+  screens: Screen[];
+  /** Whose first choices they are: `jev` or `stub`. */
+  answerer: string;
+}
+
+export interface Composed {
+  flow: string;
+  screens: Screen[];
+  variants: Screen[];
+  tallies: RoundTally[];
+  /** Who answered the rounds — the versioned model when it said. */
+  by: string;
+  firstMs: number;
+  totalMs: number;
+  style: WireStyle | undefined;
+  mapper: StyleResolver;
+  /** The pack the flow was filled from — absent for `--basic`, or when none could be chosen. */
+  pack?: PackChoice;
+  /** The prototype it ends with — absent for `--basic`, or when round 1 was confident of no screen. */
+  prototype?: FlowPrototype;
+  /** Root decisions pinned during composition (`--pin` or `/ask`). */
+  pinned?: Record<string, string>;
+  /** High-entropy root questions surfaced on round 1 when `noAsk` is not set. */
+  askedGates?: RootGateQuestion[];
+}
+
+/**
+ * Start a flow: the request's blueprint, alone, before anybody is asked
+ * anything. `room` is left above the row when its place is not given — a
+ * flow that will end with a prototype passes `PROTOTYPE_ROOM`.
+ */
+export async function startFlow(port: WirePort, request: string, placement?: Record<string, unknown>, room = 0): Promise<{ canvas: FlowCanvas; first: Screen; flow: string }> {
+  const flow = newGroupId();
+  const canvas = new FlowCanvas(port, flow);
+  const { containerId, groupPlacement, ...spot } = (placement ?? rowStart(await port.canvas(), room)) as Record<string, unknown> & { containerId?: string; groupPlacement?: string };
+  // The whole flow joins the group, at exactly the spots the row computes.
+  if (typeof containerId === "string") canvas.into = { containerId, groupPlacement: "exact" };
+  // `--in <group>` without `--at`: under everything already in the group, as a
+  // flow at the root goes under everything on the canvas — not in the first gap
+  // the first screen fits, from which the row would run over what is beside it
+  // (Porchlight #1: a second flow laid across the first's variations).
+  const where = typeof containerId === "string" && groupPlacement !== "exact" ? rowStartIn(await port.canvas(), containerId, room) : spot;
+  const first = await canvas.add(requestBlueprint(request, flow), where);
+  return { canvas, first, flow };
+}
+
+/** `wire "<request>"`, whole: the blueprint, the three rounds, the variations — one op group. */
+export async function composeFlow(port: WirePort, request: string, answerer: Answerer, opts: ComposeOptions = {}): Promise<Composed> {
+  const say = opts.say ?? (() => {});
+  const gate = opts.priorityGate ?? new PriorityGate();
+  const gatedAnswerer = gate.asAnswerer(answerer, "normal");
+  const activePinned: Record<string, string> = { ...(opts.pinned ?? {}) };
+  const t0 = Date.now();
+  // A flow that will end with a prototype leaves it room over its own row.
+  const { canvas, first, flow } = await startFlow(port, request, opts.placement, opts.flesh === false ? 0 : PROTOTYPE_ROOM);
+  if (Object.keys(activePinned).length > 0) canvas.pinned = activePinned;
+  const firstMs = Date.now() - t0;
+  await opts.onBlueprint?.(first, firstMs, flow);
+  // The governing design system's mapping is asked for while round 1 is (design §9): a flow
+  // asked for where a system governs arrives in it, and the wait is the longer of the two.
+  const mapper = new StyleResolver(port, opts.mappingAnswerer ?? gatedAnswerer, async () => (await wiresOn(port, await port.canvas())).map((s) => s.spec), opts.onMappingAsked);
+  const styling = styleAt(port, first.item, mapper);
+  styling.catch(() => {});
+  // The pack is one more question, asked beside round 1 — the wait is the longer of the two.
+  // A pack that cannot be chosen is not a flow that cannot be drawn: it arrives in bars, and says so.
+  const fleshWith = opts.flesh === false ? undefined : (opts.flesh ?? {});
+  const packPin = activePinned.pack ?? fleshWith?.pack;
+  const choosing: Promise<PackChoice | Error> | undefined = fleshWith
+    ? (packPin !== undefined ? Promise.resolve(flagPack(packPin)) : choosePack(gatedAnswerer, request)).catch((e: unknown) => (e instanceof Error ? e : new Error(String(e))))
+    : undefined;
+  let screens = [first];
+  const tallies: RoundTally[] = [];
+  let by = answerer.name as string;
+  let askedGates: RootGateQuestion[] | undefined;
+  for (const round of [1, 2, 3] as const) {
+    const calls = roundCalls(round, screens);
+    const asked = await ask(gatedAnswerer, round, calls, opts.onAsked);
+    tallies.push(asked.tally);
+    by = asked.by;
+    // Signed by whoever answered this round — a home that fell back to the stub says so on the screens too.
+    canvas.by = wireBy(by, port.actor);
+    if (round === 1) {
+      const gateResult = gateFlowDecision(calls[0]!.request, asked.responses[0]!, {
+        pinned: activePinned,
+        ...(opts.noAsk !== undefined ? { noAsk: opts.noAsk } : {}),
+      });
+      if (gateResult.asks.length > 0 && !opts.noAsk) {
+        askedGates = gateResult.asks;
+        for (const q of gateResult.asks) {
+          const comment = formatAskComment(q);
+          say(comment);
+          if (opts.onGateAsk) {
+            const picked = await opts.onGateAsk(q, comment);
+            if (picked) activePinned[q.key] = picked;
+          }
+        }
+      }
+      await opts.onGateSettled?.();
+      if (Object.keys(activePinned).length > 0) {
+        canvas.pinned = { ...activePinned };
+        const prevPlatform = asked.responses[0]?.answers.platform;
+        if (activePinned.platform && prevPlatform?.type === "choice") {
+          asked.responses[0] = {
+            ...asked.responses[0]!,
+            answers: {
+              ...asked.responses[0]!.answers,
+              platform: {
+                type: "choice",
+                choice: activePinned.platform,
+                probabilities: {
+                  ...Object.fromEntries(Object.keys(prevPlatform.probabilities).map((k) => [k, 0])),
+                  [activePinned.platform]: 1,
+                },
+              },
+            },
+          };
+        }
+      }
+      const styled = await styling;
+      canvas.style = styled.system ? styled.style : undefined;
+      for (const line of styled.lines) say(line);
+    }
+    if (round === 3 && choosing) {
+      const chosen = await choosing;
+      if (chosen instanceof Error) {
+        say(`no pack: ${chosen.message} — the screens stay in grey bars; \`wire flesh\` fills them later`);
+      } else {
+        canvas.pack = chosen;
+        say(packLine(chosen, "the screens arrive fleshed"));
+        // Its one call was asked beside round 1, so it counts there.
+        if (chosen.how === "asked" && tallies[0]) {
+          tallies[0].calls += 1;
+          tallies[0].inputTokens += chosen.inputTokens ?? 0;
+        }
+      }
+    }
+    screens = await applyRound(canvas, round, screens, calls, asked.responses, say);
+  }
+  // `basic` is plain grey wires with nothing chosen; anything else ends with a prototype you can click.
+  const prototype = fleshWith ? await prototypeOfFirstChoices(canvas, screens, say) : undefined;
+  return {
+    flow,
+    screens,
+    variants: canvas.variants,
+    tallies,
+    by,
+    firstMs,
+    totalMs: Date.now() - t0,
+    style: canvas.style,
+    mapper,
+    ...(canvas.pack ? { pack: canvas.pack } : {}),
+    ...(prototype ? { prototype } : {}),
+    ...(canvas.pinned ? { pinned: canvas.pinned } : {}),
+    ...(askedGates ? { askedGates } : {}),
+  };
+}
+
+/**
+ * **The answerer's first choices, in the prototype** — each confident row's screen
+ * (`firstChoices`: never a maybe, never a variation) marked 📐 and signed
+ * with the answerer (`wireKeepBy`), then the prototype built above the row,
+ * all in the flow's op group: one undo takes the flow, its picks and its
+ * prototype back together. A person swapping a variation in (⇧K) signs that
+ * keep as theirs, which is what makes the swap a label.
+ */
+export async function prototypeOfFirstChoices(canvas: FlowCanvas, screens: readonly Screen[], say: (line: string) => void = () => {}): Promise<FlowPrototype | undefined> {
+  const picked = firstChoices(screens);
+  if (picked.length === 0) {
+    say("no prototype: round 1 was confident of no screen — use the ones that belong (📐), then `wire prototype`");
+    return undefined;
+  }
+  // Signed with whoever answered, read off the flow — an agent's picks are not Jev's.
+  const answerer = canvas.by?.answerer ?? "jev";
+  for (const s of picked) await canvas.port.send({ type: "item.update", itemId: s.item, patch: keepPatch(true, answerer) }, canvas.group);
+  const now = await canvas.port.canvas();
+  const flow = keptFlowsOf(now, [...screens, ...canvas.variants]).find((f) => f.flow === picked[0]!.spec.flow);
+  if (!flow) return undefined;
+  const written = await writePrototype(canvas.port, now, flow, canvas.group);
+  const inIt = flow.items.map((i) => picked.find((s) => s.item === i.id)!).filter(Boolean);
+  const line = prototypeWords(inIt.length, answerer);
+  say(`${written.itemId}  "${written.title}" — ${line}`);
+  return { itemId: written.itemId, title: written.title, links: written.links, screens: inIt, answerer };
+}
+
+/** How a composed flow's prototype is said: how many screens, and whose first choices they are. */
+export function prototypeWords(screens: number, answerer: string): string {
+  const whose = answerer === "stub" ? "the stub's" : answerer === "agent" ? "the agent's" : "Jev's";
+  return `prototype of ${screens} screen${screens === 1 ? "" : "s"}, ${whose} first choices`;
+}
+
+/** The closing line of a flow, for a person. */
+export function costLine(tallies: readonly RoundTally[], by: string, screens: number, maybe = 0): string {
+  const tokens = tallies.reduce((s, t) => s + t.inputTokens, 0);
+  const calls = tallies.reduce((s, t) => s + t.calls, 0);
+  const rounds = tallies.map((t) => `round ${t.round} ${t.ms} ms`).join(" · ");
+  return `${screens} screens${maybe ? ` (${maybe} maybe)` : ""}, one op group — answered by ${by} · ${rounds} · ${calls} calls · ${tokens.toLocaleString("en-US")} input tokens · $${(tokens * JEV_INPUT_PRICE).toFixed(6)}`;
+}
+
+/** Summary of one wireframe flow on a canvas, for flow-scoping refusals and pickers. */
+export interface ScopedFlow {
+  /** Flow identifier (`spec.flow`, or `""` for hand-drawn screens). */
+  flow: string;
+  /** Original prompt/request that composed the flow. */
+  request: string;
+  /** Primary (non-variation) screens belonging to this flow. */
+  screens: Screen[];
+}
+
+/** Options for `scopeFlowScreens`. */
+export interface ScopeFlowOptions {
+  /** Explicitly named or selected item IDs (wireframes, prototypes, or canvas groups). */
+  itemIds?: readonly string[];
+  /** Explicit `--flow <id>` filter. */
+  flow?: string;
+  /**
+   * When true (`name`, `ds`), naming any screen expands to its whole flow.
+   * When false (`copy --ai`, `polish`), naming explicit screen/variant IDs scopes
+   * only to those screens (while selecting a prototype or group still scopes to its flow).
+   */
+  wholeFlow?: boolean;
+  /**
+   * When true (`copy --ai`, `name`, `polish`), flow-scoped screens exclude unkept
+   * variations (`!s.spec.variantOf || isKept(item)`), while keeping any explicitly
+   * named variant IDs.
+   */
+  excludeUnkeptVariants?: boolean;
+}
+
+/** Result of `scopeFlowScreens`: either resolved target `screens`, or `ambiguousFlows` when > 1 flow exists and none was specified. */
+export interface ScopeFlowResult {
+  /** Resolved target screens (empty when `ambiguousFlows` is returned). */
+  screens: Screen[];
+  /** Present when > 1 distinct flows exist on the canvas and neither `itemIds` nor `flow` chose one. */
+  ambiguousFlows?: ScopedFlow[];
+}
+
+function flowsSummary(all: readonly Screen[]): ScopedFlow[] {
+  const byFlow = new Map<string, { request: string; screens: Screen[]; allInFlow: Screen[] }>();
+  for (const s of all) {
+    const key = s.spec.flow || "";
+    let entry = byFlow.get(key);
+    if (!entry) {
+      entry = { request: s.spec.request || "", screens: [], allInFlow: [] };
+      byFlow.set(key, entry);
+    }
+    if (!entry.request && s.spec.request) entry.request = s.spec.request;
+    entry.allInFlow.push(s);
+    if (!s.spec.variantOf) entry.screens.push(s);
+  }
+  return [...byFlow.entries()].map(([flow, entry]) => ({
+    flow,
+    request: entry.request,
+    screens: entry.screens.length > 0 ? entry.screens : entry.allInFlow,
+  }));
+}
+
+/**
+ * Scope a canvas's wireframes (`all`) to target screens for `copy --ai`, `name`,
+ * `ds`, or `polish`:
+ * - When explicit screens, prototypes, or groups are named (`itemIds`), scopes to
+ *   those screens (or their whole flow when `wholeFlow` is true or a prototype/group
+ *   is named).
+ * - When `flow` (`--flow <id>`) is passed, scopes to that flow.
+ * - When neither is given: if 1 flow exists on the canvas, scopes to it; if > 1
+ *   flows exist, returns `ambiguousFlows` so the CLI can refuse with `--flow <id>`
+ *   and the web dialog can present a flow picker.
+ * - When `excludeUnkeptVariants` is true, flow-scoped screens omit unkept variations
+ *   (`!s.spec.variantOf || isKept(item)`).
+ */
+export function scopeFlowScreens(
+  canvas: CanvasContents,
+  all: readonly Screen[],
+  opts: ScopeFlowOptions = {},
+): ScopeFlowResult {
+  if (all.length === 0) {
+    throw new Error("no wireframe on this canvas — `isocan wire \"<request>\"` composes some");
+  }
+  const filterVariants = (list: readonly Screen[], explicitIds: ReadonlySet<string>): Screen[] => {
+    if (!opts.excludeUnkeptVariants) return [...list];
+    return list.filter((s) => {
+      if (explicitIds.has(s.item)) return true;
+      if (!s.spec.variantOf) return true;
+      const item = canvas.items[s.item];
+      return item ? isKept(item) : false;
+    });
+  };
+
+  if (opts.flow !== undefined) {
+    const inFlow = all.filter((s) => s.spec.flow === opts.flow);
+    if (inFlow.length === 0) {
+      throw new Error(`no wireframe in flow "${opts.flow}" on this canvas`);
+    }
+    if (opts.itemIds && opts.itemIds.length > 0) {
+      const explicitSet = new Set(opts.itemIds.filter((id) => inFlow.some((s) => s.item === id)));
+      if (explicitSet.size > 0 && !opts.wholeFlow) {
+        return { screens: inFlow.filter((s) => explicitSet.has(s.item)) };
+      }
+      return { screens: filterVariants(inFlow, explicitSet) };
+    }
+    return { screens: filterVariants(inFlow, new Set()) };
+  }
+
+  if (opts.itemIds && opts.itemIds.length > 0) {
+    const explicitWireIds = new Set<string>();
+    const targetFlows = new Set<string>();
+    for (const id of opts.itemIds) {
+      const w = all.find((s) => s.item === id);
+      if (w) {
+        explicitWireIds.add(id);
+        if (opts.wholeFlow) targetFlows.add(w.spec.flow || w.item);
+        continue;
+      }
+      const item = canvas.items[id];
+      if (!item) continue;
+      const protoFlow = item.properties?.[PROTOTYPE_PROP];
+      if (protoFlow !== undefined) {
+        targetFlows.add(protoFlow);
+        continue;
+      }
+      if (isGroupItem(item)) {
+        const descIds = new Set(groupDescendants(canvas, item.id).map((d) => d.id));
+        for (const s of all) {
+          if (descIds.has(s.item)) targetFlows.add(s.spec.flow || s.item);
+        }
+      }
+    }
+    if (explicitWireIds.size > 0 || targetFlows.size > 0) {
+      if (opts.wholeFlow || targetFlows.size > 0) {
+        const matched = all.filter(
+          (s) => explicitWireIds.has(s.item) || targetFlows.has(s.spec.flow || s.item),
+        );
+        return { screens: filterVariants(matched, explicitWireIds) };
+      }
+      return { screens: all.filter((s) => explicitWireIds.has(s.item)) };
+    }
+  }
+
+  const flows = flowsSummary(all);
+  if (flows.length > 1) {
+    return { screens: [], ambiguousFlows: flows };
+  }
+  const onlyFlow = flows[0]!.flow;
+  const inFlow = all.filter((s) => (s.spec.flow || "") === onlyFlow);
+  return { screens: filterVariants(inFlow, new Set()) };
+}
+
+/**
+ * Return `result.screens`, or throw an actionable refusal listing every flow
+ * and `--flow <id>` when `result.ambiguousFlows` is present.
+ */
+export function requireScopedScreens(result: ScopeFlowResult, flag = "--flow"): Screen[] {
+  if (result.ambiguousFlows && result.ambiguousFlows.length > 1) {
+    throw new Error(
+      `this canvas has ${result.ambiguousFlows.length} wireframe flows — say which with ${flag}:\n  ` +
+        result.ambiguousFlows
+          .map(
+            (f) =>
+              `${flag} ${f.flow || '""'}  "${f.request || "hand-drawn screens"}" (${f.screens.length} screen${f.screens.length === 1 ? "" : "s"})`,
+          )
+          .join("\n  "),
+    );
+  }
+  return result.screens;
+}

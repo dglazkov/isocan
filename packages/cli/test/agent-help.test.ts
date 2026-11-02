@@ -1,9 +1,9 @@
-import { spawn } from "node:child_process";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { runCli, type Run } from "./cli.ts";
 
 /**
  * `isocan --agent-help` is how an agent learns to work a canvas (#75). It has
@@ -12,54 +12,85 @@ import { describe, expect, it } from "vitest";
  * it how to get them.
  */
 
-const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 const guideFile = fileURLToPath(new URL("../src/agent-guide.md", import.meta.url));
 
-async function isocan(...args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
+async function isocan(...args: string[]): Promise<Run> {
   // A home nothing has ever run in: no identity, no config, no daemon — and
   // FRESH, made for this run. A fixed /tmp path was "never run in" only on
   // the first machine that ran it (a latent debt named on the roadmap).
   const home = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-agent-help-"));
-  const child = spawn(process.execPath, [cliBin, ...args], {
-    env: { ...process.env, ISOCAN_HOME: home },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  let stdout = "";
-  let stderr = "";
-  /**
-   * **`setEncoding`, or the guide comes back with holes in it.**
-   *
-   * `stdout += chunk` on a raw stream concatenates BUFFERS onto a string, and
-   * each one is decoded on its own. A UTF-8 character that straddles a chunk
-   * boundary is therefore decoded as two half-characters and lands as `���`.
-   *
-   * That is exactly how this test failed on CI and never here: the guide is
-   * 61KB with em-dashes all through it, where the OS splits the stream depends
-   * on how loaded the machine is, and the assertion diff read
-   *
-   *     - prints — and opens — the address of that ONE item
-   *     + prints — and opens ��� the address of that ONE item
-   *
-   * one em-dash mangled and every other one intact. Setting the encoding puts
-   * a `StringDecoder` in the way, which holds a partial character back until
-   * its remaining bytes arrive. `main.ts` already does this when it reads
-   * stdin — the tests simply had not copied the idiom.
-   */
-  child.stdout.setEncoding("utf8");
-  child.stdout.on("data", (chunk) => (stdout += chunk));
-  child.stderr.setEncoding("utf8");
-  child.stderr.on("data", (chunk) => (stderr += chunk));
-  return new Promise((resolve) =>
-    child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })),
-  );
+  // `runCli` decodes both streams as UTF-8, and this file is why: the guide
+  // is 61KB with em-dashes all through it, and on a loaded CI box one of them
+  // was split across two chunks and came back as `���` — one mangled and
+  // every other intact. `./cli.ts` keeps the rest of the story.
+  // Keep the source launcher and its workspace/Markdown loaders under test.
+  return runCli(args, { source: true, env: { ...process.env, ISOCAN_HOME: home } });
 }
 
 describe("isocan --agent-help", () => {
-  it("prints the guide the CLI ships, in full", async () => {
+  it("the test bundle agrees with the source launcher on version, guides and module registration", async () => {
+    const home = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-cli-parity-"));
+    try {
+      for (const args of [["--version"], ["--agent-help", "all"], ["map", "--help"]]) {
+        const expected = await isocan(...args);
+        expect(expected.code, expected.stderr).toBe(0);
+        const bundled = await runCli(args, { env: { ...process.env, ISOCAN_HOME: home } });
+        expect(bundled).toEqual(expected);
+      }
+    } finally {
+      await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
+  });
+
+  it("prints the cold start the CLI ships, and an index of the rest", async () => {
+    // The cold start is the guide up to its first topic marker (#124).
     const guide = await fs.readFile(guideFile, "utf8");
+    const start = guide.slice(0, guide.indexOf("<!-- topic:"));
     const { code, stdout } = await isocan("--agent-help");
     expect(code).toBe(0);
-    expect(stdout).toContain(guide.trimEnd());
+    expect(stdout).toContain(start.trim());
+    expect(stdout).toContain("## Topics");
+    // The cold start is a fraction of the guide (#124), not the guide.
+    expect(stdout).not.toContain("## Practices that earn trust");
+  });
+
+  it("prints everything with `all`, and one topic by name", async () => {
+    const guide = await fs.readFile(guideFile, "utf8");
+    const all = await isocan("--agent-help", "all");
+    expect(all.code).toBe(0);
+    for (const heading of guide.match(/^## .+$/gm) ?? []) expect(all.stdout).toContain(heading);
+
+    const one = await isocan("--agent-help", "sharing");
+    expect(one.code).toBe(0);
+    expect(one.stdout).toContain("## Sharing a canvas");
+    expect(one.stdout.length).toBeLessThan(all.stdout.length / 4);
+
+    const none = await isocan("--agent-help", "no-such-topic");
+    expect(none.code).toBe(2);
+    expect(none.stderr).toContain("topics: protocol");
+  });
+
+  it("names every top-level verb `--help` lists, in the cold start itself", async () => {
+    /**
+     * `surface.test.ts` holds that every registered command is findable —
+     * in the cold start or a topic it points to. This is the stronger half
+     * for the verbs an agent sees first: every top-level door is on a line of
+     * the cold start's index, so no family is one topic-lookup away from
+     * being invisible. Read from `--help`, which knows which commands are
+     * top-level; the source parse in `surface.test.ts` does not.
+     */
+    const PLUMBING = new Set(["serve", "stop", "restart", "status", "upgrade", "help", "gc", "mcp"]);
+    const help = (await isocan("--help")).stdout;
+    const block = help.slice(help.indexOf("Commands:"), help.indexOf("Agents, start here:"));
+    const verbs = [...block.matchAll(/^ {2}([a-z][a-z-]*)/gm)].map((m) => m[1]!);
+    expect(verbs.length).toBeGreaterThan(50);
+    const cold = (await isocan("--agent-help")).stdout;
+    const named = new Set([...cold.matchAll(/`([a-z][a-z-]*)/g)].map((m) => m[1]!));
+    // `browse` and `versions` are older spellings (`add --as site`,
+    // `version ls`) — taught once, in topic `reference`, not in the cold start.
+    const older = new Set(["browse", "versions"]);
+    const missing = verbs.filter((v) => !PLUMBING.has(v) && !older.has(v) && !named.has(v));
+    expect(missing, `add a line for these to the cold start's verb index in packages/cli/src/agent-guide.md`).toEqual([]);
   });
 
   it("means the same thing after a subcommand, and runs nothing else", async () => {

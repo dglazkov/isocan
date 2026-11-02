@@ -4,20 +4,14 @@
 phase ends with **Trajectory**: only what the phase discovered that
 changes the project's course.
 
-**Where we are: phases 0 to 2 closed, 10 and 11 September. Phase 3,
-the week with the bill, is next and needs the shepherd (⚑); so does
-redeploying sheep-2, which predates `sheep rm` and cannot end a sheep
-until it is.** Three steps below wait on the sheep side and
-are marked ⇢ with the journey filed there. Three more journeys are filed
-for findings phase 1 works around rather than waits on, and one for what
-phase 1 found:
-[sheep#4](https://github.com/dglazkov/sheep/issues/4) (setup visible to
-the dog), [sheep#5](https://github.com/dglazkov/sheep/issues/5) (a
-secret per sheep), [sheep#6](https://github.com/dglazkov/sheep/issues/6)
-(a home directory that survives the container) and
-[sheep#7](https://github.com/dglazkov/sheep/issues/7) (entries on
-`attach`'s stream). ⚑ marks a step that
-needs the shepherd's permission or account.
+**Where we are: THE PROJECT IS CLOSED (2026-09-11), at phase 2.5, and
+phase 2.7 took up the sheep side on 2026-09-12.** Phase 3 was retired
+unstarted: a week of use is using the harness, not a phase. Every
+journey filed on the sheep side has landed there: sheep#1, #3 and #5
+were taken up in phases 2 and 2.5, and sheep#2, #4, #6 and #7 in phase
+2.7, where sheep#2's cache turned out not to apply to a sheep with its
+own secret. Steps marked ⇢ waited on the sheep side. ⚑ marks a step
+that needs the shepherd's permission or account.
 
 ## Phase 0 — The spike
 
@@ -80,7 +74,7 @@ waits, a guess from the clock until
 reads `sheep attach --json` and turns pi's tool-call entries into the
 inferred statuses the ACP path already produces.
 
-**Proof:** `packages/cli/test/rc.test.ts` gains the sheep harness against
+**Proof:** `packages/cli/test/rc-sheep.test.ts` (split out of `rc.test.ts` on 12 Sep) holds the sheep harness against
 a fake `sheep` on PATH that records its arguments and answers from a
 script: enrol, birth, summons, resume, the row's home and id, and a
 birth refused because the pasture's herd already holds a sheep. The scan's
@@ -134,7 +128,8 @@ station's phase-1 agent, whose row had no pass, was withdrawn with the
 sentence naming `isocan badges --kill`. That walk found the aborted turn
 exiting cleanly, which the parked rc logged as "turn ended"; it now
 reads as a withdrawal, with a test. The walk left Timmy's and Shirley's
-sheep, and a probe, idle on sheep-2 until it can end them.
+sheep, and a probe, on sheep-2; they were ended with `sheep rm` once the
+station was redeployed.
 
 **Outcome:** `agent.withdraw` for a sheep-harnessed agent aborts a
 running turn, ends the sheep for good, leaves the pasture and says so,
@@ -149,7 +144,8 @@ sheep has no verb to drop it, so it stays.
 
 ⇢ Installing once needs a sheep mechanism
 ([sheep#2](https://github.com/dglazkov/sheep/issues/2)). Until it lands,
-the brief says a cold turn is slow.
+the brief says a cold turn is slow. (It landed 11 September and does not
+apply to a sheep with its own secret; see phase 2.7.)
 
 ⇢ A birth without a spent turn needs `sheep new` to mint without a
 prompt ([sheep#3](https://github.com/dglazkov/sheep/issues/3)).
@@ -157,9 +153,9 @@ Until it lands, the opening prompt stays and `--wait` queues the first
 summons behind it. Once it lands, the pass moves from the birth to the
 first summons: a pass lives fifteen minutes and setup runs on the first
 command that rents a container, so a pass minted at an idle birth would
-expire unredeemed.
+expire unredeemed. (Built in phase 2.5.)
 
-**Proof:** `packages/cli/test/rc.test.ts`'s "withdrawal ends the sheep"
+**Proof:** `packages/cli/test/rc-sheep-withdrawal.test.ts`'s "withdrawal ends the sheep"
 cases, against the fake `sheep`, which now answers `rm` and `abort`, can
 make a turn or a birth take a while, and can answer `rm` the way a station
 deployed before sheep's end verb does. `rc remove` with no rc running
@@ -200,7 +196,133 @@ prompt waits on sheep#3.
   leaves the sheep and its badge while another row on the machine still
   names them, and hands that row the pass.
 
+## Phase 2.5 — The birth without a turn
+
+**Status: CLOSED (2026-09-11).** Walked by the conductor on sheep-2
+against the scratch canvas at dev.isocan.io: a new agent's first summons
+minted its sheep with no turn spent, `sheep ls --json` listed
+`ISOCAN_PASS` among that sheep's secrets, the new pasture held none, and
+the agent replied as itself naming the canvas, which only `BRIEF.md` had
+told it; `isocan badges` listed its cell. The station's transcript read
+then failed for that sheep (`500 AgentHarness storage or invariant
+fault`), which ended the rc's `attach` two minutes into setup, and the
+reply landed eight and a half minutes after the summons. A pastureless
+sheep read while polled did not fault, so the fault is the station's,
+recorded in design.md; the station's container image was also still the
+one from before the day's redeploy, which stopped midway. Once the
+station was redeployed whole, the same agent was withdrawn (its sheep
+and cell badge ended, the pasture kept), re-enrolled, minted into the
+kept pasture, and answered in 2 minutes 10 seconds.
+
+Pays phase 2's step that waited on
+[sheep#3](https://github.com/dglazkov/sheep/issues/3), which closed on
+11 September together with
+[sheep#5](https://github.com/dglazkov/sheep/issues/5).
+
+**Outcome:** a birth spends no model turn. The first summons for an
+agent with no sheep mints one with `sheep new --detach --name <agent>
+--pasture isocan-<agent> --secret ISOCAN_PASS`, the pass address the
+one line of stdin and no prompt, and sends the summons straight to it
+with `sheep attach --wait`, so the sheep's first command runs setup and
+redeems the pass within the fifteen minutes it lives. The pass is the
+sheep's own secret, never the pasture's, so nothing is left in a kept
+pasture and ending the sheep ends it. The pasture keeps `setup.sh`, the
+brief and the skill; the brief is `BRIEF.md`, which the home puts in the
+system prompt of every model call. The birth says "sheep <id> minted —
+no turn spent; its first container runs setup before this summons", and
+a sheep found in the herd with no transcript yet gets the same warning
+before its summons. A `sheep` or a home from before per-sheep secrets
+mints the sheep and drops the secret without refusing, so the rc reads
+the new sheep's `secrets` in `sheep ls --json`; when `ISOCAN_PASS` is
+missing, the same pass goes to the pasture's `ISOCAN_PASS` secret, the
+phase 1 birth's credential, the one sheep minted is used, and one
+sentence says the home cannot keep a secret for one sheep.
+
+**Proof:** `packages/cli/test/rc-sheep.test.ts`'s "the birth without a turn"
+cases, against the fake `sheep`, which now reads `new --secret`'s values
+from stdin, keeps them per sheep and drops them with the sheep, lists
+the names in `ls --json`, mints with no transcript under `--detach` with
+no prompt, and can answer `new --secret` the way a `sheep` or home from
+before sheep#5 does. A parked rc's summons mints with exactly `new
+--detach --name Percy --pasture isocan-percy --secret ISOCAN_PASS`, the
+pass on stdin and in no argument, no pasture secret set, and the one
+call carrying a prompt is the `attach` with the summons, which opens
+the transcript. The fallback sets the pasture secret between the mint's
+listing and the `attach`, leaves one sheep, and says so. Phase 1's
+"enrol, birth, resume" case checks the same from `rc turn`, and that the
+resume mints no pass; the herd case that a found sheep mints none and is
+said to have no transcript yet; the phase 2 cases redeem the sheep's own
+secret, and journey 4's finds it gone with the sheep and the kept
+pasture holding none. Putting back the opening prompt reddens two cases,
+and putting back the pasture secret five.
+
+**Trajectory:**
+
+- The fallback is detected from `sheep ls --json`, not from a refusal.
+  Neither side refuses: a `sheep` from before `--secret` takes the flag
+  and its name as stray words, and a home from before per-sheep secrets
+  ignores the `secrets` field of the mint, and both mint the sheep and
+  exit 0. The sheep minted is kept, since nothing of it has run, and the
+  pass goes to the pasture before its first command.
+- The brief is `BRIEF.md`, not `brief.md`. The home puts only
+  `/pasture/BRIEF.md` in the system prompt, and until now the opening
+  prompt was what told the sheep to read the lowercase file. Pastures
+  made before keep a `brief.md` that the rc no longer writes or reads.
+
+## Phase 2.7 — The sheep side lands
+
+**Status: CLOSED (2026-09-12).** The four journeys filed on the sheep
+side closed there on 11 and 12 September (sheep#2 and #6 as fold, #4 as
+bleat, #7 as bell), and this phase takes each up. Walked against the
+real `sheep` on a scripted local home: `sheep attach --wait --json`
+streamed the prompt entry and the assistant's as they landed, in the
+shape the rc reads, and `sheep ls --json` listed `setup: null` for a
+sheep never asked. The station sheep-2 was not redeployed: it predates
+bleat and fold, its rows carry no `setup`, and the rc's fallbacks for a
+home from before are the ones this phase keeps. ⚑ Redeploying it is the
+shepherd's.
+
+**Outcome:** `prompt` is `sheep attach --wait --json` and reads the
+turn's entries from the one client that holds it: tool beats and the
+reply, nothing running beside it, and no transcript read before or
+during a turn. Sheep's own stderr while it holds the turn — `queued`,
+`setup running (1m 40s)`, `setup ok` — is the narration, and the rc's
+guess from the clock is gone; a sheep found in the herd whose row says
+no setup has run is said to have its first container still to come. The
+setup script leaves the badge in `~/.isocan`, which the home now keeps
+with the sheep, and makes the workspace link only on a home from before
+or for a sheep whose badge is in the workspace already; the pasture's
+tree is put again at every turn, so a sheep from before runs the current
+script in its next container. sheep#2's cache does not apply: a setup
+that held a sheep's own secret never keeps what it left, and the pass is
+one, so the cold install stays and the brief still says so.
+
+**Proof:** `packages/cli/test/rc.test.ts`'s sheep cases against the fake
+`sheep`, which now streams a turn's entries under `attach --json`, lists
+`setup` on its rows, and marks a sheep's first turn as its setup: the
+tool beat and the reply come from the stream, no `sheep log` is ever
+run, the resumed sheep's tree is put again and its `setup.sh` names
+`/home/sheep`, and a herd-found sheep with `setup: null` is said to have
+never run setup. `sheep.test.ts` covers the reply's text from an
+assistant entry.
+
+**Trajectory:**
+
+- sheep#2 landed and does not end the cold install here. The cache is
+  refused for a setup whose environment held a sheep's own secret, which
+  phase 2.5's pass is. The choice — the pass back in the pasture, a
+  secretless warm-up sheep, or a sheep-side split of setup — is a door in
+  design.md, not made here.
+- The pasture's tree is put at every turn, not only at the birth. A
+  sheep born before the home kept `~` would otherwise run the old script
+  against a new home and lose its badge; three calls, under a second.
+
 ## Phase 3 — The walk, with the bill
+
+**Status: RETIRED 2026-09-11, unstarted.** A week on one canvas with
+the harness is using it, and bugs found in use are filed as they come.
+The number #210 asked for is read the same way, from the station's `GET
+/home`, whenever it is wanted.
 
 **Outcome:** journeys 1 to 5 walked on the deployed station with a real
 model, by the shepherd, over a week on one canvas with two agents on the
@@ -220,5 +342,5 @@ narration and `sheep log`, and the two numbers.
 The rc in a cell, which is #210's shape 2 and the on-demand sketch's
 isocannery in full. A pasture per canvas once secrets can be per sheep.
 The web dialog offering a harness. Each is a project of its own; this
-one ends when an agent on the sheep harness can be enrolled, summoned,
-resumed and withdrawn with nothing left behind, and its cost is known.
+one ended when an agent on the sheep harness could be enrolled, summoned,
+resumed and withdrawn with nothing left behind.

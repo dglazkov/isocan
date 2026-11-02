@@ -3,7 +3,7 @@ status: partial
 since: 2026-09-10
 see: on-demand, harnesses, agent-custody, standing-agents
 issue: 238
-note: Layers 1 and 3 built 11 Sep. Layer 1 — permissions answered by kind (the allow_once option, else the agent's own reject; a mode switch is never chosen) and the adapter's environment as a list rather than the whole shell. Layer 3 — `isocan rc --sandbox` fences every adapter in @anthropic-ai/sandbox-runtime with a policy derived from the enrolment, after a spike that measured the fence holding on Linux (the daemon reachable through srt's proxy, a real Claude turn completed, sessions resuming) and found SIX things a wrapper must know, each a silent failure otherwise: srt's Linux bridge dies unreported on a kernel without IPv6; `NO_PROXY` cleared and `NODE_USE_ENV_PROXY=1` inside; npm's own proxy keys for `npx`; the harness's config dir re-allowed or sessions never resume; and srt's own files re-allowed or it vanishes inside its own fence. Asked for and not buildable is a refusal, never a quiet unfenced run. Measured 10 Sep, before any of it: a summoned agent got `{ ...process.env }` minus harness variables, the person's shell on the host, every permission auto-allowed by a regex, codex forced to full access because its sandbox refused loopback, and any admitted member of a shared canvas could ring. macOS is the one gating measurement left — `scripts/spike-srt.sh` is it in one command — and codex nested with it. Still owed: a reach word on the enrolment translated per harness, the second-user recipe, owner-only summons
+note: Layers 1 and 3 built 11 Sep. Layer 1 — permissions answered by kind (the allow_once option, else the agent's own reject; a mode switch is never chosen) and the adapter's environment as a list rather than the whole shell. Layer 3 — `isocan rc --sandbox` fences every adapter in @anthropic-ai/sandbox-runtime with a policy derived from the enrolment, after a spike that measured the fence holding on Linux (the daemon reachable through srt's proxy, a real Claude turn completed, sessions resuming) and found SIX things a wrapper must know, each a silent failure otherwise: srt's Linux bridge dies unreported on a kernel without IPv6; `NO_PROXY` cleared and `NODE_USE_ENV_PROXY=1` inside; npm's own proxy keys for `npx`; the harness's config dir re-allowed or sessions never resume; and srt's own files re-allowed or it vanishes inside its own fence. Asked for and not buildable is a refusal, never a quiet unfenced run. Measured 10 Sep, before any of it: a summoned agent got `{ ...process.env }` minus harness variables, the person's shell on the host, every permission auto-allowed by a regex, codex forced to full access because its sandbox refused loopback, and any admitted member of a shared canvas could ring. macOS outer-sandbox checks now pass too (srt 0.0.76). Native Codex is separately opt-in via --codex-sandbox, with command-level policy checks on macOS and Linux; nesting remains refused. Decided 11 Sep (D1): --sandbox stays opt-in, not the default yet. Recommendation 6 (D2, decided the same day) built 11 Sep too — owner-only summons: an agent answers only the person whose rc runs it (and that machine's own actors) until the owner widens it with `rc listen --to` or the tray's Let anyone ask; the gate is at the rc's dispatch, announced with its hold, a refused mention answered in its thread, and only the owner's word widens (`writtenBy` on the enrolment). Still owed: a reach word on the enrolment translated per harness, the second-user recipe
 ---
 
 # What the rc hands over, and how to hand over less
@@ -12,9 +12,14 @@ note: Layers 1 and 3 built 11 Sep. Layer 1 — permissions answered by kind (the
 Layer 1 is in `acp.ts`: permissions answered by kind, the environment as a
 list, with `config.json`'s `adapterEnv` hook for what the list does not
 know. Layer 3 is `sandbox.ts`: `isocan rc --sandbox`, written from what the
-measurement below found rather than from the documentation. Layer 2, the
-second-user recipe and the consent default are owed — and so is the macOS
-half of the measurement, which `scripts/spike-srt.sh` exists to get.
+measurement below found rather than from the documentation. Native Codex now has a separate opt-in (measured below). The
+consent default — recommendation 6, owner-only summons — was built the same
+day too ([below](#owner-only-summons--11-september)). The second-user recipe
+and nested sandboxes remain owed.
+`scripts/spike-srt.sh` now also has passing macOS measurements.
+**Decided 11 Sep** (Decisions, below): the fence stays opt-in rather than the
+default, and summons become owner-only by default — the consent default is
+decided and built ([owner-only summons](#owner-only-summons--11-september)).
 
 > "I realise that when I run rc and give it my harness... it pretty much has
 > access to my entire system :)"
@@ -116,6 +121,7 @@ Cheap, and worth doing whatever else is decided.
 3. **Decide who may ring.** Owner-only by default, with an rc-side allow —
    the candidate agent-custody already names. The rc announces its policy
    with its hold, so the web dialog can say whose ask this machine honours.
+   *Built 11 September — [owner-only summons](#owner-only-summons--11-september).*
 
 ### Layer 2 — each harness's own narrowing, through the client isocan already is
 
@@ -297,14 +303,33 @@ backends and would still need their files mounted.
    one word cannot also mean its opposite.
 5. **Write the second-user recipe** in `docs/`, and point at Docker
    Sandboxes for anyone who wants a VM. Neither costs code.
-6. **Close the consent door** in agent-custody: owner-only summons by
+6. ~~**Close the consent door** in agent-custody: owner-only summons by
    default. Reach limits bound what a turn may do; consent bounds who may
-   start one, and a shared canvas makes the second question the sharper one.
+   start one, and a shared canvas makes the second question the sharper one.~~
+   Built 11 September — [owner-only summons](#owner-only-summons--11-september).
 
 What isocan should not do: own a Seatbelt profile, a bwrap line, or a
 Landlock ruleset of its own. Those are srt with fewer maintainers, and the
 constraint `harness.ts` already states — no adapter per harness — applies
 to sandboxes too.
+
+## Decisions
+
+**D1. `isocan rc --sandbox` stays opt-in; it is not the default yet.** Dion,
+11 Sep 2026. Step 4 above said the macOS run would decide whether the fence
+becomes the default. That run has since passed (srt 0.0.76, eight checks held
+— the last section below), and the decision is still *not yet*. A person asks
+for the fence with `--sandbox`; asked for and not buildable is a refusal,
+never a quiet unfenced run. Revisiting the default is a later decision, not a
+consequence of any one measurement.
+
+**D2. Summons are owner-only by default.** Dion, 11 Sep 2026 — step 6 above,
+taken as written. Reach limits bound what a turn may do; consent bounds who
+may start one, and on a shared canvas that is the sharper question. Decided,
+and built the same day — [owner-only summons](#owner-only-summons--11-september):
+the owner is the rc's person, the gate is at the rc's dispatch and announced
+with its hold, widening is `isocan rc listen <name> --to` or the owner's *Let
+anyone ask*, and every enrolment with no gate now answers its owner alone.
 
 ## The srt spike, measured (11 September, Linux)
 
@@ -454,3 +479,250 @@ too.
   spike work.
 - Keyring-backed logins (Antigravity, codex `keyring` mode) inside any
   fence that hides the secret service.
+
+
+## Native Codex opt-in — 11 September
+
+`rc --codex-sandbox` and `rc turn --codex-sandbox` now configure a separate,
+opt-in native boundary. The default remains unchanged. A local
+`codexSandbox: true` setting makes it persistent; `--unsandboxed` disables it
+for a run. A request to combine native and outer srt fences is refused.
+
+The measured adapter is **codex-acp 1.11.0**, bundling **Codex 0.153.4**.
+The client checks the adapter version and refuses an older or unidentified
+bridge. Both new and resumed ACP sessions receive the isocan state directory
+as `additionalDirectories`; the enrollment directory is the workspace.
+The adapter's misleadingly named `read-only` mode sends `workspaceWrite`
+with a human reviewer. Its `agent` mode uses automatic approval review.
+Native opt-in deliberately uses the former, and isocan rejects **every**
+permission request in this mode, including `allow_once`. This prevents an
+ordinary approval response from silently widening the selected sandbox.
+The existing default permission behavior remains unchanged outside this mode.
+
+The exact config used by this bridge enables
+`sandbox_workspace_write.network_access` and
+`features.network_proxy.enabled`, with `allow_local_binding: false` and an
+explicit daemon-host allow entry. Additional exact hostnames come from local
+`codexSandboxDomains`, such as `github.com` and `registry.npmjs.org`.
+Existing Codex domain rules compose; this is not an assertion that the local
+user's other allow entries were erased. Hosts are allowed, not individual
+ports on a host. No unrestricted private-network exception is requested.
+
+### What was run
+
+`scripts/check-codex-sandbox.mjs` uses the bundled binary's **app-server
+command/exec API**, without a model or login, and the same `workspaceWrite`
+policy that the adapter sends. It creates synthetic workspace/state files
+and a local HTTP listener, then removes them. `codex sandbox -P :workspace`
+was the wrong instrument: in this version the explicit profile ignores
+`sandbox_workspace_write.writable_roots`. The app-server path proves the
+actual extra-root policy without weakening the test to put both roots in one
+directory.
+
+| Check | macOS 25.6 arm64 | Linux arm64 (Docker, Node 24 bookworm) |
+| --- | --- | --- |
+| Workspace and separate isocan-state writes | Allowed | Allowed |
+| HTTP daemon request on explicit IPv4 loopback | Allowed | Allowed |
+| npm registry lookup, with registry explicitly listed | Allowed | Allowed |
+| Git status and GitHub ls-remote | Allowed | Allowed |
+| Git metadata write (`git add`) | Refused | Refused |
+| Write outside the workspace/state roots | Refused | Refused |
+| Unlisted external host through proxy | Refused | Refused |
+| Direct external request bypassing the proxy | Refused | Refused |
+| Unlisted IPv6 loopback listener, bypassing proxy | Refused | Refused |
+
+The Linux container mounted only the probe script, with no project or login
+material. It needed permission to create its nested sandbox (`SYS_ADMIN` and
+an unconfined container seccomp profile); these are test-container settings,
+not changes to the host or to isocan's runtime policy. This is command-level
+OS enforcement evidence, not a claim that a new authenticated model turn ran
+on Linux. The earlier macOS ACP turn measurements established daemon reach;
+the current fake-bridge tests pin directory propagation on new/resumed
+sessions and refusal of escalation.
+
+**Limits:** native mode does not hide file reads, fence the ACP adapter
+process, or constrain separately configured MCP services. Git commits need
+protected metadata writes and therefore fail in this mode. Report the
+refusal rather than suggesting a tool bypass. A second-user recipe and a
+unified enrollment reach policy remain separate work (owner-only summons
+was built the same day, below). The [official permission documentation](https://learn.chatgpt.com/docs/permissions)
+also distinguishes tool sandboxing from other integrations; configuration
+syntax must be checked against the binary the ACP bridge actually bundles.
+
+The outer fence was measured separately with
+`PATH=<temporary srt bin>:$PATH bash scripts/spike-srt.sh --no-harness`:
+**srt 0.0.76 on macOS, eight checks held and none broke**, including the CLI's
+identity request, `wait` parking, hidden home canary and unlisted-host refusal.
+The probe now creates a unique canary, so rerunning it cannot overwrite an
+older probe's file. Linux outer-fence and real Claude-turn evidence remains
+in the earlier section; native/outer nesting is still unverified and refused.
+
+
+## Owner-only summons — 11 September
+
+Decided by Dion the day after this note, and built: **a parked agent
+answers only its owner unless its owner widens it.** Layer 1's third item and
+recommendation 6, and agent-custody's oldest open question ("whose ask a
+parked rc honors").
+
+**Who the owner is.** The person whose machine answers — the rc's home
+identity (`~/.isocan/identity.json`, claimed on the machine's badge under
+`home:person`) — compared through `actor.join`, so the same person under a
+second, joined identity counts. Not whoever wrote the enrolment: an agent can
+enrol an agent, and the web's add is an ask the rc completes; the bill is the
+machine's person's, and only the machine can say who that is. Every other
+actor the rc's badge speaks as (`actorBindings()`: the agents it answers
+for, the person's own interactive sessions) is the owner's hands — they run
+on the same machine and tokens already, so two agents on one laptop keep
+asking each other things, with the cycle guard still bounding the chain.
+
+**Where the gate lives.** At the rc's dispatch, because only the rc starts a
+turn. The home never enforces (it starts nothing, and a comment is still a
+comment); it carries the words. The shape reuses the 9 Sep gate rather than
+adding a second one: `AgentRules.listen` is read through its owner by
+`answerPolicy` in core — absent or empty means **the owner alone** (it meant
+everyone from 9 to 11 Sep), a list means the owner and those people, `["*"]`
+means everyone — and `dispatchReason` applies that value before the
+composition, where a mention cannot pierce it and nothing is counted
+against the ceiling. A `wait` park, which answers for itself, keeps the old
+reading.
+
+**The word, not the mouth.** Walking it in a browser found the hole the
+hands leave: a stranger's Chat line, turned away by Sian, woke Percy (open to
+everyone), and Percy's reply — the owner's machine talking — woke Sian
+anyway. So the rc records whose asks started each agent's turn
+(`speakersFor`, followed through agents), and the gate reads the word an
+agent's op carries (`onBehalfOf`) rather than the agent that wrote it.
+
+**How it is said.** The rc announces its owner and each agent's policy with
+its hold (`RcHoldRequest.owner/policies`), relayed up the home-link beside
+the faces with the owner vouched like a face, and read back from
+`GET /api/projects/:id/rc`. `isocan who`, `agent rules`, `rc listen`, the
+tray and the add dialog read that, not the stored field. A mention from
+outside the gate is answered in its thread in the system voice, naming the
+owner and the exact command — once per thread and asker, and not repeated by
+a restarted rc; the CLI prints the same sentence as a non-owner posts, the
+web shows it under the comment instead of *Sent*, a row no longer promises
+*answers if you comment* to a reader outside, and `summonsState` gained a
+`refused` state that is never *nothing answered*. Only mentions get words —
+the Chat being loud is the room.
+
+**How it widens.** `isocan rc listen <name> --to <names>|everyone` (the
+owner's verb, refused inside a harness session), `--listen` on `rc add` /
+`agent add`, and *Let anyone ask* on the owner's own row in the tray — all
+the same `agent.enroll`. No new op; the vocabulary stays at 33. And **only
+the owner's word widens**: the gate sits in a record every admitted member
+can write, so the reducer now stamps `writtenBy` on the enrolment row, and
+the rc honours a stored gate only when the owner (or the owner's machine)
+wrote it, saying so when it sets one aside. Rows from before the stamp are
+taken as they stand. The ask to add an agent follows the same rule: the home
+routes it only to an rc its asker owns and refuses anybody else with the
+owner's name (`not-your-rc`), and the rc refuses it again where the machine
+is.
+
+**Migration.** The default is the migration: an enrolment with no gate —
+every one written before 9 Sep — answers its owner alone from the first rc
+on this build, which says so at start, per agent. The repo's own machinery
+was walked for anything that relied on waking somebody else's agent, and
+nothing did; the day's changelog walks each (the night, sprints, the design
+competition, personas, the sheep harness).
+
+**Left open.** The owner is one person per machine; a team box whose
+machine identity is a service account has to name its people (`--to`) or
+open itself (`--to everyone`). A person's web identity that is neither the
+same actor as their machine nor joined to it reads as a stranger to their
+own rc — the refusal names the owner, which is the hint, and `actor.join`
+is the fix. Widening from the web offers everyone-or-only-me; naming people
+is the CLI's. And the provenance is the rc's memory: an rc restarted in the
+middle of a chain reads an open sibling's backlog as its owner's machine
+talking (the walk saw exactly that, and the cycle guard stopped it at
+three), and an interactive session on the owner's machine that a stranger
+talked into mentioning a gated agent is read as the owner's hand — nothing
+records whose word it carries.
+
+
+## Granting from the UI — 11 September, the same evening
+
+The gate above shipped in the afternoon and was proved by the first thing it
+refused. Dion asked Lamb — Dimitri's sheep-harnessed agent — for a canvas,
+nothing woke, and the thread said so correctly and completely, in a command
+line he could not run. *"Maybe we can have UI that lets you give me access to
+a lamb … instead of just saying the command line lol"* is issue #272, and its
+answer is one sentence: **the refusal is the control.**
+
+**Where the control is.** Under the refusal, which is already a system
+comment in the thread where the asking happened, and only for the owner —
+the person the announced policy names. Nobody else's screen changes; a
+stranger keeps reading the words, which were already the right words. This
+is the same rule as everything else in this note, applied to pixels: *never
+render a control to somebody whose click would be set aside*, because the rc
+discards a gate its owner did not write and a discarded click is worse than
+no button.
+
+**What the click writes.** The same `agent.enroll` `rc listen --to` writes,
+computed by the same function in core (`withListener`) — appended to the gate
+that already STANDS (`RcPolicy.listen`, the announced value) rather than to
+the stored field, so a grant can never quietly resurrect a gate the rc had
+set aside. Still no new op; the vocabulary stays at 33.
+
+**What the thread shows afterwards.** A line, not a comment. The enrolment op
+is the record already; what the thread needed was for the refusal above to
+stop reading as true, so the same place says *Lamb listens to you now — ask
+again*. Recognising the refusal to sit under is core's job too
+(`readsAsTurnedAway`, one phrase shared by the writer and the reader), rather
+than a marker bolted onto what a comment is.
+
+**Naming people, from the web.** The tray's two-position toggle becomes the
+gate itself: everybody here, each a checkbox, plus *anyone*, worded by
+`policyWords`. This closes "widening from the web offers
+everyone-or-only-me" above — and it closes it in the direction the story
+asked for, since the case that produced the issue was one person wanting one
+other person let in.
+
+**How long, and where the expiry lives.** A grant may carry one, and
+`docs/research/2026-09-11-per-asker-scopes.md` asked that `listen` stop being
+a list of strings **exactly once**, becoming an entry per name. It has:
+`ListenEntry` is an actor id, or `{ id, until }`, and `ListenGrant` —
+`parseListen`'s reading of either — is the single shape a plain grant and an
+expiring grant both take.
+
+The first attempt packed the date into the string (`usr_dion until <ISO>`),
+and it was wrong for a reason worth keeping written down: **a gate that fails
+by accident, in either direction, is exactly what this field exists to
+prevent, so the failure has to be one a compiler can see.** With `string[]` a
+reader that forgets to parse compiles fine and silently matches nobody; with
+the union it is a type error, which is how the three call sites outside core
+were found. The other half is what an older build does with an entry it does
+not understand: `rulesOf` has always kept only strings in this list, so the
+object is dropped whole — the grant is absent, the agent answers its owner
+alone, and nothing anywhere renders half a date as a person's name. Fail
+closed, tested as such (`packages/core/test/agents.test.ts`, "is dropped
+whole by a reader that has never heard of expiry").
+
+There is no migration to write, because both shapes are read and a grant with
+no expiry is still a bare id — so every gate written before today is
+unchanged, and one that gains no expiry stays byte-identical. A sibling
+`until` map beside `listen` was the third option and the only unsafe one:
+`rulesOf` drops keys it does not know, so an older build would have gone on
+honouring a grant that lapsed a month ago — a gate failing OPEN on the one
+field that decides who may spend somebody's tokens.
+
+A lapsed grant refuses in the words a gate that never had one would use, plus
+one sentence saying it lapsed: *"you were never let in"* and *"you were,
+until Tuesday"* have different next moves, and only the second is the owner's
+to repeat.
+
+**Left open, still.** The mockup's other two switches — *create and edit
+items* and *run shell commands* — are deliberately not built: what an agent
+MAY DO is its rung on the canvas and the fence on its owner's machine,
+neither of which is per-asker, and a capability that travels with a summons
+does not exist anywhere today. Shipping it as a switch that silently did
+nothing would be worse than not having it; it is the missing half of compute
+consent, and `docs/research/2026-09-11-per-asker-scopes.md` (#273) is the
+note that examined it and declined it for now. The panel says so in one line
+rather than leaving the absence to be read as an oversight: *a grant decides
+whether this agent answers this person; what it may do here is its own rung
+on this canvas.* And a grant's expiry is read
+against each reader's clock: the gate is applied at the rc, so the rc's clock
+is the one that decides, and a tray a minute behind may still show a grant
+the rc has already let lapse.

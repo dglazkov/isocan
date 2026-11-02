@@ -71,6 +71,28 @@ describe("what is addressed to you", () => {
     expect(inboxOn(canvas, dion, names, "prj_a")[0]!.reason).toBe("main-thread");
   });
 
+  it("NEVER a comment in the Chat addressed to someone else", () => {
+    const dolly: Actor = { id: "usr_dolly", name: "Dolly" };
+    const canvas = canvasWith({
+      t1: {
+        id: "t1",
+        main: true,
+        comments: [
+          comment("c1", kenny, "@Dolly what day is it in Sydney?", "2026-08-01", ["usr_dolly"]),
+          comment("c2", kenny, "@Dolly and un-resolved text mention?", "2026-08-02"),
+        ],
+      },
+      t2: {
+        id: "t2",
+        comments: [comment("c0", dolly, "I am on this canvas", "2026-08-01")],
+      },
+    });
+    expect(inboxOn(canvas, dion, names, "prj_a")).toEqual([]);
+    const forDolly = inboxOn(canvas, dolly, namesFor(dolly), "prj_a");
+    expect(forDolly.map((f) => f.comment.id)).toEqual(["c1", "c2"]);
+    expect(forDolly.every((f) => f.reason === "mentioned")).toBe(true);
+  });
+
   it("a reply to a thread you are in, even when it does not repeat your name", () => {
     const canvas = canvasWith({
       t1: {
@@ -84,6 +106,22 @@ describe("what is addressed to you", () => {
     const found = inboxOn(canvas, dion, names, "prj_a");
     expect(found.map((f) => f.comment.id)).toEqual(["c2"]);
     expect(found[0]!.reason).toBe("in-your-thread");
+  });
+
+  it("NEVER a reply in your thread that explicitly addresses someone else", () => {
+    const canvas = canvasWith({
+      t1: {
+        id: "t1",
+        comments: [
+          comment("c1", dion, "what about the dock?", "2026-08-01"),
+          comment("c2", kenny, "@Dolly can you check the dock?", "2026-08-02", ["usr_dolly"]),
+          comment("c3", kenny, "@Dion @Dolly both of you look", "2026-08-03", ["usr_dion", "usr_dolly"]),
+        ],
+      },
+    });
+    const found = inboxOn(canvas, dion, names, "prj_a");
+    expect(found.map((f) => f.comment.id)).toEqual(["c3"]);
+    expect(found[0]!.reason).toBe("mentioned");
   });
 
   it("NEVER your own words", () => {
@@ -171,8 +209,24 @@ describe("both surfaces ask the same question", () => {
 
   it("the inbox reads core's rule rather than restating it", () => {
     const cli = read("../../cli/src/main.ts");
-    expect(cli).toContain("inboxOn(");
+    expect(cli).toContain("ctx.client.inbox(");
+    const home = read("../../server/src/http.ts");
+    expect(home).toContain("inboxOn(");
     expect(cli).toContain("namesFor(");
+  });
+
+  it("and asks 'what is new' as a SECOND question, not a clause inside it", () => {
+    /**
+     * Seen-marks (#147 step 2, 12 Sep 2026). "Is this for me" has one
+     * definition; "have I looked since" is a different question, and folding
+     * it into `reasonFor` would mean a parked agent's summons started
+     * depending on whether somebody had read a canvas. `newSince` takes the
+     * entries the rule already produced.
+     */
+    const inbox = read("../src/inbox.ts");
+    expect(inbox, "the routing rule knows nothing about read state").not.toContain("SeenMark");
+    const cli = read("../../cli/src/main.ts");
+    expect(cli).toContain("newSince(");
   });
 
   it("the three reasons are spelled once, here", () => {
@@ -185,5 +239,58 @@ describe("both surfaces ask the same question", () => {
     const cli = read("../../cli/src/main.ts");
     // The CLI may FILTER on a reason; it may not decide one.
     expect(cli).not.toMatch(/reason:\s*"(main-thread|in-your-thread)"/);
+  });
+});
+
+/**
+ * **A record reports; it never summons.**
+ *
+ * A voice session's transcript is posted to the Chat when the session stops,
+ * and the Chat wakes everybody by design — so every parked agent was handed
+ * somebody's spoken half of a conversation with a DIFFERENT agent and read it
+ * as an ask. The screenshot that filed this shows Scout beginning to answer a
+ * transcript of a person talking to Enceladus.
+ *
+ * The mention case is the one worth holding: it is deliberate, and it is the
+ * opposite of how every other rule here works. Speech is transcribed and
+ * transcription is full of names, so a record that could page somebody by
+ * mention would page somebody on nearly every long session.
+ */
+describe("a record summons nobody", () => {
+  const record = (body: string, mentions?: string[]) => ({
+    ...comment("c1", kenny, body, "2026-09-22T10:00:00.000Z", mentions),
+    record: true as const,
+  });
+  const main = (one: ReturnType<typeof record>) =>
+    canvasWith({ t1: { id: "t1", main: true, comments: [one] } });
+
+  it("is not in the inbox although it landed in the main thread", () => {
+    expect(inboxOn(main(record("🎙 Voice session\n\nDion: move the screens")), dion, names, "prj_1")).toEqual([]);
+  });
+
+  it("is not in the inbox although it names you", () => {
+    expect(inboxOn(main(record("🎙 Voice session\n\nKenny: Dion should look at this")), dion, names, "prj_1")).toEqual([]);
+  });
+
+  it("is not in the inbox although it RESOLVED a mention of you", () => {
+    expect(inboxOn(main(record("🎙 Voice session", [dion.id])), dion, names, "prj_1")).toEqual([]);
+  });
+
+  it("the same comment without the mark is in the inbox, so the mark is what did it", () => {
+    const plain = canvasWith({
+      t1: { id: "t1", main: true, comments: [comment("c1", kenny, "move the screens", "2026-09-22T10:00:00.000Z")] },
+    });
+    expect(inboxOn(plain, dion, names, "prj_1")).toHaveLength(1);
+  });
+
+  it("a reply in the thread is ordinary again — the mark is per comment, not per thread", () => {
+    const canvas = canvasWith({
+      t1: {
+        id: "t1",
+        main: true,
+        comments: [record("🎙 Voice session"), comment("c2", kenny, "so — thoughts?", "2026-09-22T10:01:00.000Z")],
+      },
+    });
+    expect(inboxOn(canvas, dion, names, "prj_1").map((e) => e.comment.id)).toEqual(["c2"]);
   });
 });

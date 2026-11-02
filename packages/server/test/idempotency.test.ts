@@ -117,7 +117,9 @@ describe("an op sent twice, meant once", () => {
     );
     // The failure this phase is designed against.
     expect(await items("prj_1")).toEqual(["itm_acme"]);
-    expect((await log("prj_1")).filter((e) => e.envelope.op.type === "item.add")).toHaveLength(1);
+    const entries = await log("prj_1");
+    expect(entries).toHaveLength(2);
+    expect(entries[1]!.envelope.op).toMatchObject({ type: "group.change", action: { kind: "apply", change: { intent: "insert", writes: [{ kind: "create", item: { id: "itm_acme" } }] } } });
   });
 
   it("keeps the key as the envelope id, because the log is where the next retry looks", async () => {

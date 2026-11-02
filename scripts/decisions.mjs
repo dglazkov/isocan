@@ -5,6 +5,8 @@
  *   node scripts/decisions.mjs           # write docs/decisions.md
  *   node scripts/decisions.mjs --check   # fail if it is out of date
  *
+ * `test/decisions.test.ts` holds the page to `render()` on every `npm test`.
+ *
  * #206 phase 5. The decisions index has been unstarted on the board for weeks
  * for want of somewhere to put it, and the reason it kept not getting written
  * is that it looked like a fifth artifact to keep by hand — beside the
@@ -83,51 +85,65 @@ function titleOf(text, rel) {
   return /^#\s+(.+)$/m.exec(text)?.[1]?.trim() ?? path.basename(rel, ".md");
 }
 
-const ds = decisions();
-const ls = lessons();
-const byFile = new Map();
-for (const d of ds) {
-  if (!byFile.has(d.file)) byFile.set(d.file, { title: d.title, rows: [] });
-  byFile.get(d.file).rows.push(d);
-}
-
-const block = [
-  BEGIN,
-  "",
-  `**${ds.length} decisions across ${byFile.size} documents, and ${ls.length} lessons.**`,
-  "Derived from the `**Dn.**` lines each design already carries and from",
-  "`docs/reviews/lessons.md` — so this cannot be more right than the thing it",
-  "describes, and it is never a second place to keep one.",
-  "",
-  "Read it to answer *did we already decide this, and why* — the question that",
-  "precedes re-litigating something, or rebuilding it.",
-  "",
-  "## Decisions",
-  "",
-];
-for (const [file, { title, rows }] of [...byFile].sort()) {
-  block.push(`### [${title}](${path.relative(path.join(repo, "docs"), path.join(repo, file))})`, "");
-  for (const d of rows) block.push(`- **${d.id}** — ${d.claim}`);
-  block.push("");
-}
-block.push("## Lessons", "", "The shape each one states; the cost and the guard are in the file.", "");
-for (const l of ls) block.push(`- **${l.n}** — ${l.shape}`);
-block.push("", END);
-
-const rendered = block.join("\n");
-const current = existsSync(OUT) ? readFileSync(OUT, "utf8") : "";
-const head = `# Decisions\n\nWhat this project has decided, and where each argument lives. Generated —\n\`node scripts/decisions.mjs\`.\n\n`;
-const next = current.includes(BEGIN)
-  ? current.slice(0, current.indexOf(BEGIN)) + rendered + current.slice(current.indexOf(END) + END.length)
-  : head + rendered + "\n";
-
-if (CHECK) {
-  if (next !== current) {
-    console.error("docs/decisions.md is out of date — run `node scripts/decisions.mjs`");
-    process.exit(1);
+/**
+ * The page as it should read, given the page as it does: the generated block
+ * between the markers, and whatever a person wrote outside them kept.
+ *
+ * Exported so the suite can hold the page to it (TR-3, 27 Sep 2026):
+ * `--check` existed and ran nowhere, and the page sat at 88 lessons while
+ * `lessons.md` carried 93. A check nothing runs is a sentence, not a guard.
+ */
+export function render(current = existsSync(OUT) ? readFileSync(OUT, "utf8") : "") {
+  const ds = decisions();
+  const ls = lessons();
+  const byFile = new Map();
+  for (const d of ds) {
+    if (!byFile.has(d.file)) byFile.set(d.file, { title: d.title, rows: [] });
+    byFile.get(d.file).rows.push(d);
   }
-  console.log(`docs/decisions.md — ${ds.length} decisions, ${ls.length} lessons`);
-} else {
-  writeFileSync(OUT, next);
-  console.log(`docs/decisions.md — ${ds.length} decisions, ${ls.length} lessons`);
+
+  const block = [
+    BEGIN,
+    "",
+    `**${ds.length} decisions across ${byFile.size} documents, and ${ls.length} lessons.**`,
+    "Derived from the `**Dn.**` lines each design already carries and from",
+    "`docs/reviews/lessons.md` — so this cannot be more right than the thing it",
+    "describes, and it is never a second place to keep one.",
+    "",
+    "Read it to answer *did we already decide this, and why* — the question that",
+    "precedes re-litigating something, or rebuilding it.",
+    "",
+    "## Decisions",
+    "",
+  ];
+  for (const [file, { title, rows }] of [...byFile].sort()) {
+    block.push(`### [${title}](${path.relative(path.join(repo, "docs"), path.join(repo, file))})`, "");
+    for (const d of rows) block.push(`- **${d.id}** — ${d.claim}`);
+    block.push("");
+  }
+  block.push("## Lessons", "", "The shape each one states; the cost and the guard are in the file.", "");
+  for (const l of ls) block.push(`- **${l.n}** — ${l.shape}`);
+  block.push("", END);
+
+  const rendered = block.join("\n");
+  const head = `# Decisions\n\nWhat this project has decided, and where each argument lives. Generated —\n\`node scripts/decisions.mjs\`.\n\n`;
+  const next = current.includes(BEGIN)
+    ? current.slice(0, current.indexOf(BEGIN)) + rendered + current.slice(current.indexOf(END) + END.length)
+    : head + rendered + "\n";
+  return { next, decisions: ds.length, lessons: ls.length };
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const current = existsSync(OUT) ? readFileSync(OUT, "utf8") : "";
+  const { next, decisions: nd, lessons: nl } = render(current);
+  if (CHECK) {
+    if (next !== current) {
+      console.error("docs/decisions.md is out of date — run `node scripts/decisions.mjs`");
+      process.exit(1);
+    }
+    console.log(`docs/decisions.md — ${nd} decisions, ${nl} lessons`);
+  } else {
+    writeFileSync(OUT, next);
+    console.log(`docs/decisions.md — ${nd} decisions, ${nl} lessons`);
+  }
 }

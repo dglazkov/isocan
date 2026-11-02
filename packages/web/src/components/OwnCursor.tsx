@@ -1,11 +1,14 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useCanvasCursor } from "../lib/wearscursor.ts";
-import type { Actor } from "@isocan/core";
-import { useCanvasStore } from "../stores/canvasStore.ts";
+import { CURSOR_SIGNAL_MAX_LENGTH, cursorChipLabel, markOf, type Actor } from "@isocan/core";
+import { clearCursorSignal, commitCursorSignal, setCursorSignalText } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { useActorColor } from "../lib/colors.ts";
+import { useActorMarks } from "../lib/marks.ts";
 import { actorName } from "../lib/names.ts";
 import { ownCursorFits } from "../lib/owncursor.ts";
+
+let lastPointer: { x: number; y: number } | null = null;
 
 /**
  * Your own cursor, drawn the way everybody else sees it.
@@ -38,7 +41,11 @@ import { ownCursorFits } from "../lib/owncursor.ts";
 export function OwnCursor({ actor }: { actor: Actor }) {
   const tool = useUiStore((s) => s.activeTool);
   const commentMode = useUiStore((s) => s.commentMode);
+  const editing = useUiStore((s) => s.cursorSignalEditing);
+  const signal = useUiStore((s) => s.cursorSignal);
   const ref = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [draft, setDraft] = useState("");
   /**
    * The SUBSCRIPTION, not the one-shot read — and ABOVE the early return,
    * with the other hooks, which is the whole reason it is up here rather than
@@ -60,8 +67,18 @@ export function OwnCursor({ actor }: { actor: Actor }) {
    * go. Inside a component it is always the wrong one.
    */
   const color = useActorColor(actor.id);
+  const marks = useActorMarks();
   const cursorPath = useCanvasCursor();
-  const shown = tool === "select" && !commentMode;
+  const shown = (tool === "select" && !commentMode) || editing;
+
+  useEffect(() => {
+    if (!editing) {
+      setDraft("");
+      return;
+    }
+    setDraft("");
+    inputRef.current?.focus();
+  }, [editing]);
 
   useEffect(() => {
     if (!shown) return;
@@ -76,6 +93,12 @@ export function OwnCursor({ actor }: { actor: Actor }) {
       el.style.transform = `translate(${at.x}px, ${at.y}px)`;
       el.style.opacity = "1";
     };
+    if (editing || lastPointer) {
+      const initial = lastPointer ?? { x: Math.round(window.innerWidth / 2), y: Math.round(window.innerHeight / 2) };
+      at = initial;
+      el.style.transform = `translate(${initial.x}px, ${initial.y}px)`;
+      el.style.opacity = "1";
+    }
     // getComputedStyle per pixel would be wasteful and the answer only changes
     // when the pointer crosses onto something else, so it is asked once per
     // element and remembered.
@@ -83,22 +106,24 @@ export function OwnCursor({ actor }: { actor: Actor }) {
     let fits = false;
 
     const hide = () => {
+      if (editing) return;
       el.style.opacity = "0";
       at = null;
       last = null;
     };
     const onMove = (e: PointerEvent) => {
+      lastPointer = { x: e.clientX, y: e.clientY };
       const target = e.target as Element | null;
       if (target !== last) {
         last = target;
-        fits = target !== null && ownCursorFits(target, getComputedStyle(target).cursor);
+        fits = editing || (target !== null && ownCursorFits(target, getComputedStyle(target).cursor));
       }
-      if (!fits) {
+      if (!fits && !editing) {
         el.style.opacity = "0";
         at = null;
         return;
       }
-      at = { x: e.clientX, y: e.clientY };
+      at = lastPointer;
       if (!frame) frame = requestAnimationFrame(paint);
     };
     // Two ways to lose the pointer without a move telling you: out of the
@@ -122,19 +147,67 @@ export function OwnCursor({ actor }: { actor: Actor }) {
       window.removeEventListener("blur", hide);
       if (frame) cancelAnimationFrame(frame);
     };
-  }, [shown]);
+  }, [shown, editing]);
 
   if (!shown) return null;
+  // Your own cursor does not need a badge telling you your own name; the chip
+  // only appears while typing or wearing a 20-second `/` cursor signal.
+  const label = cursorChipLabel(signal, "");
+  /**
+   * **Your mark is your pointer, here as everywhere else** (1 Oct 2026). The
+   * canvas's shape is the default; a mark you chose for your face replaces it,
+   * which is how everybody else already sees you (`CursorLayer`). Drawing the
+   * arrow under your own hand while they see your emoji made the one pointer
+   * you look at all day the one that disagreed. The raw mark, not
+   * `faceMark` — an initial is not a pointer.
+   */
+  const mark = markOf(marks, actor);
   return (
-    <div className="own-cursor" ref={ref} aria-hidden style={{ opacity: 0 }}>
+    <div className={`own-cursor${mark ? " marked" : ""}`} ref={ref} aria-hidden={!editing} style={{ opacity: 0, color }}>
       {/* Your own cursor wears the canvas's ground too — otherwise the one
           pointer you look at all day is the one that never joins in (#195). */}
       <svg width="18" height="20" viewBox="0 0 18 20">
         <path d={cursorPath} fill={color} strokeWidth="1" />
       </svg>
-      <span className="cursor-chip" style={{ background: color }}>
-        {actorName(actor)}
-      </span>
+      {mark && <b className="cursor-glyph">{mark}</b>}
+      {(editing || label) && (
+        <span className="cursor-chip" style={{ background: color }}>
+          {editing ? (
+            <span className="cursor-chip-row">
+              <input
+                ref={inputRef}
+                className="cursor-chip-input"
+                type="text"
+                maxLength={CURSOR_SIGNAL_MAX_LENGTH}
+                value={draft}
+                placeholder={actorName(actor)}
+                aria-label="Cursor message"
+                onChange={(e) => {
+                  setDraft(e.target.value);
+                  setCursorSignalText(e.target.value);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    clearCursorSignal();
+                  } else if (e.key === "Enter") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    commitCursorSignal(draft);
+                  }
+                }}
+                onBlur={() => {
+                  if (useUiStore.getState().cursorSignalEditing) commitCursorSignal(draft);
+                }}
+              />
+              <em>Esc</em>
+            </span>
+          ) : (
+            <span>{label}</span>
+          )}
+        </span>
+      )}
     </div>
   );
 }

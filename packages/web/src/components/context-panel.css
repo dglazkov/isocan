@@ -1,0 +1,43 @@
+/* ---------- what an agent reads ----------
+   Loaded with ContextPanel, never on a first visit: moved out of `styles.css`
+   on 27 Sep 2026 (BC-2). Imported before the panel's other sheets, so these
+   base rules still come first in the cascade, as they did.
+
+   The dock's fourth panel, on the agent tray's rhythm — a name, a quiet hint,
+   a close. Each row is a fact and, where there is one, the reason it needs
+   attention underneath it in the panel's own words. */
+
+.context-body { flex: 1; overflow: auto; padding: 6px; }
+.ctx-row {
+  padding: 8px 10px; border-radius: var(--radius);
+  display: flex; flex-direction: column; gap: 3px;
+}
+.ctx-row + .ctx-row { border-top: 1px solid var(--line-soft); border-radius: 0; }
+.ctx-line { display: flex; align-items: baseline; gap: 10px; }
+.ctx-name { font-size: 12.5px; font-weight: 600; }
+.ctx-size {
+  margin-left: auto; font-size: 11.5px; color: var(--ink-soft);
+  font-variant-numeric: tabular-nums; text-align: right;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Absent is quiet, not alarming: most canvases are missing most of this and
+   that is fine. What is NOT fine gets `stale`, which has a reason. */
+.ctx-row.absent .ctx-name { color: var(--ink-soft); font-weight: 500; }
+.ctx-row.stale .ctx-name { color: var(--warn); }
+.ctx-why { font-size: 11.5px; color: var(--ink-muted); line-height: 1.45; }
+.ctx-fix { font-size: 11.5px; color: var(--accent-text); line-height: 1.45; }
+/* Layers (memory phases 0–1): a heading per source canvas. The first is
+   "This canvas"; the rest are inherited, and every borrowed piece wears a
+   `from` chip so provenance is on the line, not in a tooltip. */
+.ctx-layer + .ctx-layer { margin-top: 10px; }
+.ctx-heading {
+  margin: 0; padding: 6px 10px 4px; display: flex; align-items: baseline; gap: 8px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.ctx-heading-note { font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--ink-soft); }
+.ctx-from {
+  font-size: 10.5px; padding: 1px 7px; border-radius: 999px;
+  background: var(--accent-wash, var(--chip)); color: var(--accent-text); white-space: nowrap;
+}
+.ctx-row.overridden .ctx-name, .ctx-row.overridden .ctx-size { text-decoration: line-through; color: var(--ink-soft); }

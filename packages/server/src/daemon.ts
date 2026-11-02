@@ -6,28 +6,47 @@ import { Engine } from "./engine.ts";
 import { registerRoutes } from "./http.ts";
 import { ParkCursors } from "./park.ts";
 import { RcHolds } from "./rc-holds.ts";
-import { attachWebSockets } from "./ws.ts";
+import { attachWebSockets, SocketCensus } from "./ws.ts";
+import { Refusals } from "./takedowns.ts";
 import { SweepHub } from "./sweep.ts";
 import { buildStamp } from "./build.ts";
 import { FileStore } from "./file-store.ts";
 import type { Store } from "./store.ts";
 import { FileDesk } from "./file-desk.ts";
 import type { Desk } from "./desk.ts";
-import { runMigrations } from "./migrations.ts";
+import { FileWorkstation } from "./file-workstation.ts";
+import type { Workstation } from "./workstation.ts";
+import { grantTheLinkOnOldCanvases } from "./migrations.ts";
 import { PresenceHub } from "./presence.ts";
 import { daemonFile, isocanHome } from "./paths.ts";
 import { resolveHomeUrl } from "./config.ts";
-import { readGoogleToken } from "./google.ts";
-import { resolveAuth, type AuthConfig, type SigningKeys } from "./attest.ts";
+import {
+  resolveAuth,
+  resolveProxyAuth,
+  type AuthConfig,
+  type ProxyAuthConfig,
+  type SigningKeys,
+} from "./attest.ts";
+import { resolveOperators } from "./operator.ts";
 import { startBlobKeeper } from "./blobkeeper.ts";
 import { gcIntervalFromEnv, startGcSweeper } from "./gc.ts";
-import { HomeLinks } from "./home-links.ts";
+import type { HomeLinks } from "./home-links.ts";
 import { contentPorts, registerContentRoutes } from "./content.ts";
 import { contentTtl } from "./content-auth.ts";
+import type { JudgmentOptions } from "./judgment.ts";
+import type { KeyRouteOptions } from "./key-routes.ts";
+import type { SummaryOptions } from "./summaries.ts";
+import type { TextOptions } from "./text.ts";
+import type { ImageOptions } from "./image.ts";
+import type { LiveTokenOptions } from "./live-token.ts";
 
 export interface DaemonOptions {
   port?: number;
   home?: string;
+  /** Optional Store override (tests inject a separate backing directory). */
+  store?: Store;
+  /** Optional Desk override (tests inject a separate backing directory). */
+  desk?: Desk;
   /** The WebSocket heartbeat interval; tests only. Production beats every
    * 25 s (`ws.ts`), and a test that has to watch a beat find an instance
    * behind the store should not have to wait one. */
@@ -46,11 +65,23 @@ export interface DaemonOptions {
    * `ISOCAN_BIND=0.0.0.0` is what the image sets, environment rather than
    * flag, for the same reason `ISOCAN_STORE` is: this is innkeeper
    * configuration, not a per-invocation choice an agent should be able to
-   * reach for. `http.ts`'s `loopbackBound` already reads the bound address to
+   * reach for. `route-helpers.ts`'s `loopbackBound` already reads the bound address to
    * decide whether the localhost clause applies, so binding wide turns that
    * trust off by itself.
    */
   host?: string;
+  /**
+   * **A home that serves the world, said outright — tests only.** Production
+   * derives this from `host` just below, and that is the only thing that sets
+   * it in a running daemon.
+   *
+   * It exists because the behaviour it gates (`GET /api/projects` showing a
+   * local caller everything this machine holds) is the difference between a
+   * laptop and isocan.io, and a test cannot bind `0.0.0.0` to stand on the
+   * other side of it: binding wide from a test opens a port to the network,
+   * and `127.0.0.2` is not an address every machine has.
+   */
+  servesWorld?: boolean;
   /**
    * The content listener's port: a number pins it, `0` asks for an ephemeral
    * one, `"off"` disables it. Absent, `ISOCAN_CONTENT_PORT` is read, and
@@ -123,6 +154,20 @@ export interface DaemonOptions {
    * which a test needs to be able to say on a machine whose environment has.
    */
   auth?: AuthConfig | null;
+  /** Trusted reverse-proxy identity header configuration (`ISOCAN_PROXY_EMAIL_HEADER`). */
+  proxyAuth?: ProxyAuthConfig | null;
+  /**
+   * **The addresses this home calls its operator**, or `[]` for none — which
+   * is every daemon in this repo, and is not a defect (operator phase 1).
+   *
+   * Read from `ISOCAN_OPERATORS` by `resolveOperators`, beside the attester
+   * and for exactly its reason: who can set a home's configuration is who
+   * decides who its operator is, so this is configuration rather than a flag
+   * and there is no compiled-in default. An explicit list is a test — or a
+   * caller composing a home by hand — saying so on a machine whose
+   * environment says otherwise.
+   */
+  operators?: string[];
   /** Where the public keys a presented ID token is checked against come from.
    * Defaults to Google's published endpoint; `SigningKeys` in `attest.ts`
    * carries the argument for why it is configuration at all. */
@@ -170,6 +215,33 @@ export interface DaemonOptions {
    * wrong for no decision anybody wants to make.
    */
   gcFirstSweepMs?: number;
+  /**
+   * **The clock the refusals registry judges expiry against** (operator phase
+   * 6). A `DaemonOptions` field for `gcIntervalMs`'s reason: the acceptance is
+   * a `net:` refusal *gone on its own* at `--for 10m`, and a proof of that
+   * cannot wait ten minutes — it hands the registry a clock and advances it.
+   * The daemon uses the wall when this is absent, which is every real home.
+   */
+  refusalsNow?: () => number;
+  /** The home's judge (`judgment.ts`) — tests hand it a key and a fake
+   * transport; a running home reads `TYPESAFE_API_KEY`, else its
+   * `keys.json`, per call. */
+  judgment?: JudgmentOptions;
+  /** The home's text model (`text.ts`) — tests hand it a key and a fake
+   * transport; a running home reads `ISOCAN_TEXT_API_KEY`, else its
+   * `keys.json`, per call. */
+  text?: TextOptions;
+  /** Semantic Zoom's summaries (`summaries.ts`) — tests hand it a clock and a quiet period; a running home reads `ISOCAN_SUMMARY_MODEL` and `ISOCAN_SUMMARY_QUIET_MS`. */
+  summaries?: SummaryOptions;
+  /** The talk module's Live tokens (`live-token.ts`) — tests hand it a fake
+   * Google; a running home reads `GEMINI_API_KEY`, else its `keys.json`. */
+  liveToken?: LiveTokenOptions;
+  /** The mood board's image model (`image.ts`) — tests hand it a fake
+   * Google; a running home reads `GEMINI_API_KEY`, else its `keys.json`. */
+  image?: ImageOptions;
+  /** The settings area's key routes (`key-routes.ts`) — tests hand them an
+   * environment and a fake provider; a running home reads its own. */
+  keys?: KeyRouteOptions;
 }
 
 export interface RunDaemonOptions extends DaemonOptions {
@@ -187,6 +259,9 @@ export interface Daemon {
   /** The home's private ledgers. Two seams, side by side: canvas state
    * replicates through the store, the desk's ledgers never leave. */
   desk: Desk;
+  /** The local workstation (`FileWorkstation`) on a personal machine, or `null`
+   * on an authoritative hosted home (`ISOCAN_STORE=cloud` or `servesWorld: true`). */
+  workstation: Workstation | null;
   port: number;
   /** The content origin this daemon actually stands behind — what
    * `GET /api/serving` advertises — or null when no content listener bound
@@ -197,16 +272,15 @@ export interface Daemon {
    * it would do next would be a daemon nothing could ask. */
   birthHome: string | null;
   /**
-   * **Every home this daemon dials, and which canvas belongs to which.**
+   * **Every home this daemon dials, and which canvas belongs to which**
+   * (`workstation?.homes ?? null`).
    *
-   * Never null — a daemon that is the home of everything it holds has an empty
-   * registry rather than a missing one, which is what lets every caller ask
-   * one kind of question instead of branching on whether there is anywhere to
-   * ask. Exposed so a test can reach one link and ask what its last handshake
-   * actually was ("resumed from 241" versus "re-snapshotted"), and, as
-   * importantly, what a link did NOT do.
+   * Present on a local workstation and `null` on a hosted home, which dials
+   * nothing and cannot become a replica. Exposed so a test can reach one link
+   * and ask what its last handshake actually was ("resumed from 241" versus
+   * "re-snapshotted"), and, as importantly, what a link did NOT do.
    */
-  homes: HomeLinks;
+  homes: HomeLinks | null;
   /**
    * The sweep's outcomes (roles design, "Reaching an open socket"), exposed
    * for the reason `homes` is: a test that writes rows on the desk can run a
@@ -326,31 +400,75 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
   const port = options.port ?? DEFAULT_PORT;
   const home = options.home ?? isocanHome();
   const host = options.host ?? process.env.ISOCAN_BIND ?? "127.0.0.1";
-  // Undefined means "nobody has said" — go and look. An explicit `null` is a
-  // caller saying "this one is a home", which a test needs to be able to say
-  // on a machine whose config.json names one.
-  const birthHome =
-    options.birthHome !== undefined ? options.birthHome : await resolveHomeUrl(home);
+  // What the bind means, said once here rather than read off the socket at
+  // every listing: anything but the loopback address is a daemon other
+  // machines can reach, and the shelf and local workstation are off there.
+  const servesWorld =
+    options.servesWorld ?? !(host === "127.0.0.1" || host === "::1" || host === "localhost");
+  const isCloud = process.env.ISOCAN_STORE === "cloud";
+  // A hosted home (`isCloud` or `servesWorld`) has no local workstation and
+  // no birth default — it never reads `config.json` from `home`. On a local
+  // workstation, `undefined` means "go and look", and explicit `null` means a
+  // caller (a test) stating this daemon is a home.
+  const configuredBirthHome =
+    isCloud || servesWorld
+      ? null
+      : options.birthHome !== undefined
+        ? options.birthHome
+        : await resolveHomeUrl(home);
   // The attester, resolved the same way and at the same moment as the home:
   // both are innkeeper configuration that decides what kind of daemon this is,
   // and an explicit value is a caller (a test) saying so on a machine whose
   // environment says otherwise.
   const auth = options.auth !== undefined ? options.auth : resolveAuth();
+  const proxyAuth = options.proxyAuth !== undefined ? options.proxyAuth : resolveProxyAuth();
+  /**
+   * **Who runs this home**, read beside the attester and at the same moment,
+   * because they are two halves of one capability: a list with no attester
+   * cannot be proved and an attester with no list recognises nobody.
+   * `undefined` means go and look; an explicit list is a test saying so on a
+   * machine whose environment says otherwise. See `operator.ts`.
+   */
+  const operators = options.operators !== undefined ? options.operators : resolveOperators();
+  /** Counted by the socket layer, read by the operator's `show`. Made here
+   * because `registerRoutes` runs before `attachWebSockets` and both need the
+   * same object. */
+  const sockets = new SocketCensus();
+  /**
+   * **What this home refuses at the door** — takedowns (operator phase 2) and
+   * home-scope refusals (operator phase 6), in ONE registry, shared by the
+   * routes, the socket layer and the mint meter. One object rather than two,
+   * because the design's shape for both is one shape — *loaded into memory at
+   * boot on a single-instance home and re-read on write, so the door's cost is
+   * a set lookup* — and three readers of one list must not become three
+   * answers. `refusalsNow` is injectable for the acceptance's movable clock (a
+   * `net:` refusal gone on its own at `--for 10m`); the daemon uses the wall.
+   */
+  const refusals = new Refusals(options.refusalsNow ? { now: options.refusalsNow } : {});
 
   // The composition root, and the ONE place any backing is named.
-  const { store, desk } = await openBacking(home);
+  const opened =
+    options.store && options.desk
+      ? { store: options.store, desk: options.desk }
+      : await openBacking(home);
+  const store = options.store ?? opened.store;
+  const desk = options.desk ?? opened.desk;
   await store.init();
   await desk.init();
-  // The one-time migrations, composed across the two ledgers: the pre-badge
-  // claims table, the pre-#57 `agents.json`, the link grants a pre-door world
-  // has no rows for — and phase 10.3's, which writes down where the canvases
-  // this machine already holds actually live before "no row means local"
-  // starts being true. The birth default is handed in because that migration
-  // turns on whether one is configured; see `recordWhereTheCanvasesAlreadyLive`.
-  await runMigrations(home, store, desk, birthHome);
+  await refusals.load(desk);
+  // The desk-backed link-grants migration runs on every home (local or cloud),
+  // recording its marker on `Desk` rather than in `home`.
+  await grantTheLinkOnOldCanvases(store, desk);
   const presence = new PresenceHub();
   // Claims consult presence: a live face holds its name (see core/claims.ts).
-  const engine = new Engine(store, desk, { liveness: (canvasId) => presence.roster(canvasId) });
+  // And they consult the refusals: `actor.claim {as}` for a name the operator
+  // refused is turned away with the home's sentence — the refuse-by-actor the
+  // design puts here, which also closes operator phase 4's open finding that a
+  // modified client could reclaim a name whose last holder was ended.
+  const engine = new Engine(store, desk, {
+    liveness: (canvasId) => presence.roster(canvasId),
+    refusedActor: (actorId) => refusals.refusingActor(actorId),
+  });
 
   // Op piggyback: an op bound to a session (clientId === sessionId) moves
   // that session's cursor to the op's locus — presence traces real work.
@@ -370,48 +488,42 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
       .catch(() => {});
   });
 
-  /**
-   * The demotion, wired — per canvas since phase 10.3.
-   *
-   * Built BEFORE the port is bound and before anything is dialled, so there is
-   * no window in which this daemon accepts a write it would have applied
-   * locally and a moment later would have forwarded. `forwardTo` is the whole
-   * switch: with a row naming a home, the engine stops assigning seqs for that
-   * canvas and the home does.
-   *
-   * Constructed unconditionally, including on a daemon that is the home of
-   * everything it holds: the registry is then simply empty, and every caller
-   * asks it the same question instead of branching on whether it exists.
-   */
   // The rc hold registry (agent-custody): one instance shared by the routes
   // (holds and asks), the WS layer (mirrors of what members relay), and the
   // home-links (relaying this machine's own holds up).
   const rc = new RcHolds();
-  const homes = new HomeLinks({
-    home,
-    engine,
-    presence,
-    birthHome,
-    rc,
-    ...(options.homePollMs !== undefined ? { pollMs: options.homePollMs } : {}),
-    ...(options.homeProbeMs !== undefined ? { probeMs: options.homeProbeMs } : {}),
-  });
-  engine.forwardTo(homes);
-
   /**
-   * A canvas is gone, so its routing goes with it (ruling 3): a re-created id
-   * would otherwise inherit a dead one and forward its birth to whichever home
-   * used to hold the canvas that had that name.
+   * **The local workstation (`Workstation | null`).**
    *
-   * Hung off the engine's own event rather than written into the three places
-   * a delete lands (a local one, a forwarded one, a `canvas-deleted` from a
-   * home) for the reason `HomeLink`'s dial is hung off the same event: one
-   * subscription cannot be forgotten by the next person who adds a fourth path.
+   * Built ONLY when this daemon runs on a personal machine (`!isCloud && !servesWorld`),
+   * and `null` on a hosted home — so a hosted home has no `HomeLinks` to become
+   * a replica through, no `homes.json`, and no local `keys.json` or directory
+   * roster to read. On a workstation, `init` runs the local disk migrations and
+   * loads `homes.json` BEFORE the port is bound, so there is no window in which
+   * a replicated canvas looks local.
    */
-  engine.onEvent((canvasId, message) => {
-    if (message.type !== "canvas-deleted") return;
-    void homes.release(canvasId).catch(() => {});
-  });
+  const workstation: Workstation | null =
+    isCloud || servesWorld
+      ? null
+      : new FileWorkstation({
+          home,
+          birthHome: configuredBirthHome,
+          engine,
+          presence,
+          rc,
+          ...(options.homePollMs !== undefined ? { homePollMs: options.homePollMs } : {}),
+          ...(options.homeProbeMs !== undefined ? { homeProbeMs: options.homeProbeMs } : {}),
+        });
+  if (workstation) {
+    await workstation.init(store, desk);
+    engine.forwardTo(workstation.homes);
+    engine.onEvent((canvasId, message) => {
+      if (message.type !== "canvas-deleted") return;
+      void workstation.homes.release(canvasId).catch(() => {});
+    });
+  }
+  const homes = workstation?.homes ?? null;
+  const birthHome = workstation?.birthHome ?? null;
 
   // forceCloseConnections: shutdown must not hang on a browser's idle
   // keep-alive sockets or a half-read blob stream.
@@ -447,36 +559,34 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     ? { key: () => desk.contentKey(), ttlSeconds: contentTtl(process.env.ISOCAN_CONTENT_TTL) }
     : null;
 
+  const keysHome = workstation?.keysHome ?? null;
   const routeOptions = {
-    birthHome,
-    homes,
+    workstation,
     auth,
+    proxyAuth,
+    operators,
+    sockets,
     sweeps,
+    refusals,
     contentBase: null as string | null,
     contentHost,
     contentSigning,
-    // This machine's Drive token, if `isocan gdoc auth` saved one — read per
-    // request, so saving one needs no restart. Never sent anywhere.
-    googleToken: () => readGoogleToken(home),
-    // The durable park cursor (on-demand phase 1) — a machine-local fact
-    // beside homes.json, never behind the Store seam. See park.ts.
-    park: new ParkCursors(home),
-    // This machine's runtime modules, read per request (modules phase 3).
-    modulesHome: home,
+    // The durable park cursor (on-demand phase 1) — backed by `Desk`, so a
+    // hosted home persists cursors in Firestore and never touches `/tmp`.
+    park: new ParkCursors(desk),
+    servesWorld,
     rc,
     ...(options.signingKeys ? { signingKeys: options.signingKeys } : {}),
+    // The two spenders read the workstation's `keys.json` (keys phase 1) on a
+    // local daemon, and `null` (env-only) on a hosted home.
+    judgment: { keysHome, ...options.judgment },
+    text: { keysHome, ...options.text },
+    ...(options.summaries ? { summaries: options.summaries } : {}),
+    liveToken: { keysHome, ...options.liveToken },
+    image: { keysHome, ...options.image },
+    ...(options.keys ? { keys: options.keys } : {}),
   };
   registerRoutes(app, engine, store, desk, presence, routeOptions);
-  /**
-   * **Where every canvas lives, known BEFORE the first request is answered.**
-   *
-   * Reading the table is not dialling — see `HomeLinks.load`. Dialling still
-   * happens after `listen`, for the reason stated there. But an unloaded
-   * table makes every canvas look like this daemon's own, and a write that
-   * believes that pushes its bytes nowhere while its op replicates: the
-   * teammate gets the item and a "blob not found" behind it, permanently.
-   */
-  await homes.load();
   await app.listen({ port, host });
 
   /**
@@ -498,6 +608,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
    */
   const bound = app.server.address();
   const mainPort = typeof bound === "object" && bound ? bound.port : port;
+  workstation?.setLocalPort(mainPort);
   /**
    * **The hosted flip** (stage 4c), which is this one line and nothing else.
    *
@@ -541,7 +652,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
   // Dialling starts only once we are serving: the first thing that arrives
   // down a canvas socket is written through the engine, and an engine whose
   // daemon is still coming up is a race for no benefit.
-  await homes.start();
+  if (workstation) await workstation.start();
   // Which build this is, on the hello and the heartbeat (#85): Cloud Run's
   // revision when there is one, so a tab can say which instance it left and
   // which it reached across a rollout; the commit otherwise.
@@ -550,6 +661,15 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     ...(options.heartbeatMs !== undefined ? { heartbeatMs: options.heartbeatMs } : {}),
     ...(revision !== undefined ? { revision } : {}),
     sweeps,
+    // The room map lets itself be counted, for `isocan operator show`, and
+    // closed with a reason, for a takedown (operator phase 2).
+    census: sockets,
+    // Asked on every upgrade (one registry, operator phases 2 and 6): a socket
+    // on a canvas this home has taken down is refused `taken-down`, and one
+    // from a badge that proved a refused address is refused `refused` — both
+    // before an admitted member short-circuits past the door.
+    refusals,
+    proxyAuth,
     // The content origin has no socket either — the upgrade is hijacked off
     // the raw server and never sees the door hook that refuses it everything
     // but blob bytes.
@@ -645,14 +765,17 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
    * sweep matters most and is the one that would have caught this — it looks
    * at what was lost while the daemon was NOT running.
    */
-  const blobKeeper = startBlobKeeper({
-    engine,
-    assignments: () => homes.assignments(),
-    intervalMs: options.blobCheckIntervalMs ?? 10 * 60_000,
-    ...(options.blobCheckFirstMs !== undefined ? { firstSweepMs: options.blobCheckFirstMs } : {}),
-    log: (message: string) => app.log.info(message),
-  });
+  const blobKeeper = workstation
+    ? startBlobKeeper({
+        engine,
+        assignments: () => workstation.homes.assignments(),
+        intervalMs: options.blobCheckIntervalMs ?? 10 * 60_000,
+        ...(options.blobCheckFirstMs !== undefined ? { firstSweepMs: options.blobCheckFirstMs } : {}),
+        log: (message: string) => app.log.info(message),
+      })
+    : null;
 
+  await fs.mkdir(home, { recursive: true });
   await fs.writeFile(
     daemonFile(home),
     JSON.stringify({ pid: process.pid, port, startedAt: new Date().toISOString() }, null, 2),
@@ -669,7 +792,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     await sweeper.stop();
     // The blob keeper on the same terms: it UPLOADS, so shutdown may not race
     // past a sweep that is mid-push.
-    await blobKeeper.stop();
+    if (blobKeeper) await blobKeeper.stop();
     // The metadata repair, on the same terms and for the same reason: it is a
     // writer, so shutdown may not race past it. Setting the flag first cuts it
     // short at the next canvas instead of making `close()` wait out a large
@@ -680,9 +803,9 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     // The home connections first, and before the store: they are the one thing
     // here that is still WRITING (an entry may be mid-apply), and a socket
     // left open is a process that never exits — which phase 4's finding
-    // already paid for once. All of them, together: `HomeLinks.close()` is
+    // already paid for once. All of them, together: `workstation.close()` is
     // where `homeLink.close()` used to be, for the same reason.
-    await homes.close();
+    if (workstation) await workstation.close();
     closeWebSockets();
     // The content listener holds no writers — its whole route table is a
     // read — so it closes beside the main app with nothing to drain.
@@ -732,6 +855,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     engine,
     store,
     desk,
+    workstation,
     presence,
     port,
     birthHome,
@@ -950,7 +1074,7 @@ export async function runDaemon(options: RunDaemonOptions = {}): Promise<Daemon>
     // home the path Google's frontend will forward rather than the one it
     // swallows (phase 5's finding). This is why the birth default keeps an
     // open link even with no canvas assigned to it — see `HomeLinks.start`.
-    void daemon.homes.link(daemon.birthHome)?.reachable().then((up) => {
+    void daemon.homes?.link(daemon.birthHome)?.reachable().then((up) => {
       console.log(
         up
           ? `home ${daemon.birthHome} is answering`

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { Actor } from "@isocan/core";
+import { sameActor } from "@isocan/core";
 import { askEnrolAgent } from "../lib/api.ts";
-import { useRcParked } from "../lib/answerable.ts";
+import { useRcOwners, useRcParked } from "../lib/answerable.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 
 /**
@@ -37,6 +38,8 @@ const ASK_PATIENCE_MS = 25_000;
 
 export function AddAgent({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   const parked = useRcParked(canvasId);
+  const owners = useRcOwners(canvasId);
+  const joined = useCanvasStore((s) => s.actorJoins);
   const agents = useCanvasStore((s) => s.canvas?.agents);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -70,6 +73,26 @@ export function AddAgent({ canvasId, actor }: { canvasId: string; actor: Actor }
   );
 
   if (!parked) return null;
+
+  /**
+   * **The add is the rc owner's** (owner-only summons, 11 Sep 2026). An rc
+   * runs what its owner says, and an agent added to it answers its owner
+   * alone — so to anybody else the button would be a promise of an agent
+   * they could not use, and the home refuses the ask anyway. Instead: whose
+   * rc it is, in words. An rc too old to say whose it is (no owners) keeps
+   * the button, as before.
+   */
+  if (owners.length > 0 && !owners.some((o) => sameActor(joined, o.id, actor.id))) {
+    const names = owners.map((o) => o.name).join(" or ");
+    return (
+      <div className="add-agent">
+        <p className="add-agent-note">
+          The <code>isocan rc</code> parked here is {names}&rsquo;s — adding an agent to it is
+          theirs to do, and its agents listen to {names} unless {names} widens them.
+        </p>
+      </div>
+    );
+  }
 
   const add = async () => {
     const wanted = name.trim();
@@ -139,7 +162,8 @@ export function AddAgent({ canvasId, actor }: { canvasId: string; actor: Actor }
       {error && <p className="identity-warning">{error}</p>}
       {added && (
         <p className="add-agent-note">
-          {added} is enrolled — the parked <code>isocan rc</code> answers for them.
+          {added} is enrolled — the parked <code>isocan rc</code> answers for them, and
+          listens only to its owner until they widen it (<em>Let anyone ask</em>, on its row).
         </p>
       )}
     </div>

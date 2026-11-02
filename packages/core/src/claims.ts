@@ -1,3 +1,5 @@
+import { PERSON_HARNESSES, isAgentHarness } from "./harness.ts";
+export { PERSON_HARNESSES, isAgentHarness } from "./harness.ts";
 import type { Actor } from "./model.ts";
 import type { Operation } from "./ops.ts";
 import type { ActorClaim } from "./badge.ts";
@@ -68,6 +70,10 @@ interface ActorNameRow {
 /** Actor id → the name they go by now. */
 type ActorNamesRegistry = Record<string, ActorNameRow>;
 
+/**
+ * The PUBLIC half of the registry described above: what everyone may know about everyone
+ * else, keyed by actor id. It replicates and replays; who may speak as whom does neither.
+ */
 export interface ActorRegistry {
   /**
    * The name each actor goes by now, keyed by ACTOR id.
@@ -122,6 +128,7 @@ export interface ActorRegistry {
   harnesses?: Record<string, string>;
 }
 
+/** A registry nobody has claimed anything in — every field present, so readers need no `??`. */
 export const emptyActorRegistry = (): ActorRegistry => ({
   names: {},
   colors: {},
@@ -130,18 +137,9 @@ export const emptyActorRegistry = (): ActorRegistry => ({
   harnesses: {},
 });
 
-/**
- * The harnesses a PERSON claims from. Everything else — a coding harness,
- * an enrolment (`agent:`), a bot on a timer (`board:`) — is an agent. The
- * list is of people rather than of agents because new harnesses appear
- * (`harnessVars` in config.json) and a new one should be an agent by
- * default: the failure mode of guessing wrong the other way is a corpus
- * that counts a bot's receipts as somebody asking.
- */
-export const PERSON_HARNESSES: ReadonlySet<string> = new Set(["web", "home", "cli", "person"]);
-
-export const isAgentHarness = (harness: string | null | undefined): boolean =>
-  harness !== null && harness !== undefined && harness !== "" && !PERSON_HARNESSES.has(harness.toLowerCase());
+/** Is this harness a person's own surface? */
+const isPersonHarness = (harness: string | null | undefined): boolean =>
+  typeof harness === "string" && PERSON_HARNESSES.has(harness.toLowerCase());
 
 /** Actor id → "agent", for every actor whose last claim came from a harness
  *  that is not a person's. People are absent rather than "person", so a
@@ -149,10 +147,23 @@ export const isAgentHarness = (harness: string | null | undefined): boolean =>
  *  which is the safe direction for a face and the honest one for a count. */
 export type ActorKinds = Record<string, "agent">;
 
+/**
+ * Which actors are agents, from the harness each last claimed from — keyed by the actor an
+ * id has joined, so an agent that merged into another is counted as the one it became.
+ */
 export function actorKinds(registry: ActorRegistry): ActorKinds {
   const kinds: ActorKinds = {};
+  // **People win a fold** (14 Oct 2026). A join says two ids are one person,
+  // so when any id folded into an actor last claimed from a person's surface,
+  // the actor is a person — an agent's old id folded into you does not make
+  // you an agent. Only an actor every one of whose ids is an agent's is one.
+  const people = new Set<string>();
   for (const [id, harness] of Object.entries(registry.harnesses ?? {})) {
-    if (isAgentHarness(harness)) kinds[resolveActor(registry.joined, id)] = "agent";
+    if (isPersonHarness(harness)) people.add(resolveActor(registry.joined, id));
+  }
+  for (const [id, harness] of Object.entries(registry.harnesses ?? {})) {
+    const into = resolveActor(registry.joined, id);
+    if (isAgentHarness(harness) && !people.has(into)) kinds[into] = "agent";
   }
   return kinds;
 }
@@ -290,6 +301,10 @@ function firstFree(roster: readonly string[], taken: Set<string>, seed: string):
   return null;
 }
 
+/**
+ * The harness a session key names: the part before its first `:` — `claude-code:abc` is
+ * `claude-code` — or null for no key.
+ */
 export function harnessOf(sessionKey: string | undefined): string | null {
   const harness = sessionKey?.split(":")[0]?.trim();
   return harness ? harness : null;
@@ -332,6 +347,10 @@ export interface FreeNameResponse {
  */
 const CLAIM_STANDS_MS = 30 * 60 * 1000;
 
+/**
+ * Everything a claim is judged against besides the op itself: the registry, and which claims
+ * the presenting badge already holds.
+ */
 export interface ClaimContext {
   registry: ActorRegistry;
   /**
@@ -517,7 +536,15 @@ export function bindName(
   // Recorded whenever the claim says which harness it came from, and left
   // alone otherwise (a legacy migration row, a name set by the door).
   const harness = harnessOf(sessionKey);
-  const withHarness: ActorRegistry = harness
+  // A replica claims transport custody. It does not identify the person or
+  // harness behind that transport and must not overwrite an actual claim.
+  // **A person stays a person** (14 Oct 2026): an agent session that resumes
+  // somebody's actor (`isocan identity --as` from inside a coding harness)
+  // speaks as them, and does not turn them into an agent. A person's surface
+  // still overwrites an agent's row, which is how a misread actor recovers:
+  // claim yourself from a browser or your own terminal.
+  const keepsPerson = isPersonHarness(registry.harnesses?.[actor.id]) && isAgentHarness(harness);
+  const withHarness: ActorRegistry = harness && harness.toLowerCase() !== "replica" && !keepsPerson
     ? { ...registry, harnesses: { ...(registry.harnesses ?? {}), [actor.id]: harness } }
     : registry;
   const current = registry.names[actor.id];
@@ -535,15 +562,36 @@ export function bindName(
  * pass mints a badge carrying a named claim — "Jordan's tab and her daemon"),
  * so "one actor, one holder" was never going to survive, and the narrower
  * rule is already the shape the pass needs.
+ *
+ * **The machine's person is switched, never dropped** (15 Oct 2026). A claim
+ * that re-points the `home:` key at a DIFFERENT actor — `isocan identity
+ * --home --as <id>`, making a pass-admitted person this machine's default —
+ * keeps the person it displaced as a keyless row, the same shape a pass
+ * hands over (`bindHandoff`). The badge could speak as them a moment ago and
+ * nobody asked it to stop; dropping the row would make the switch one-way,
+ * because coming back is `as`, and `as` without a row on this badge is
+ * refused the moment any other surface still speaks as them. Only the home
+ * key: a coding harness's key re-pointed by `--session --as` still leaves the
+ * abandoned actor a stranger, as above.
  */
 export function bindClaim(
   claims: readonly ActorClaim[],
   envelope: { actor: Actor; ts: string; op: ActorClaimOp },
 ): ActorClaim[] {
   const { actor, ts, op } = envelope;
-  const kept = claims.filter(
-    (row) => row.actorId !== actor.id && row.sessionKey !== op.sessionKey,
-  );
+  const switchesPerson = harnessOf(op.sessionKey) === "home";
+  const kept: ActorClaim[] = [];
+  for (const row of claims) {
+    if (row.actorId === actor.id) continue;
+    if (row.sessionKey !== op.sessionKey) kept.push(row);
+    else if (switchesPerson) {
+      kept.push({
+        actorId: row.actorId,
+        boundAt: row.boundAt,
+        ...(row.canvasId !== undefined ? { canvasId: row.canvasId } : {}),
+      });
+    }
+  }
   kept.push({
     actorId: actor.id,
     boundAt: ts,
@@ -606,8 +654,13 @@ export function bindHandoff(
  * the author", actor-scoped undo — become authorization the moment an actor
  * means something, with the isomorphism contract untouched.
  */
-export function claimsActor(claims: readonly ActorClaim[], actorId: string): boolean {
-  return claims.some((row) => row.actorId === actorId);
+export function claimsActor(
+  claims: readonly ActorClaim[],
+  actorId: string,
+  joined?: ActorJoins,
+): boolean {
+  const target = resolveActor(joined, actorId);
+  return claims.some((row) => resolveActor(joined, row.actorId) === target);
 }
 
 /** The refusal, in one voice wherever the check runs. The honest client's
@@ -637,9 +690,15 @@ export function applyActorColor(
   if (op.color !== null && !isIdentityColor(op.color)) {
     throw new OpValidationError("bad-op", `not a color: ${op.color}`);
   }
+  // A surface still holding a folded actor id (`from -> into`) speaks for the
+  // person it was folded into (`actorColors` reads `resolveActor`), so writing
+  // under `op.actorId` left the person's row untouched and the old colour came
+  // back on reload.
+  const actorId = resolveActor(registry.joined, op.actorId);
   const colors = { ...registry.colors };
-  if (op.color === null) delete colors[op.actorId];
-  else colors[op.actorId] = op.color;
+  if (actorId !== op.actorId) delete colors[op.actorId];
+  if (op.color === null) delete colors[actorId];
+  else colors[actorId] = op.color;
   return { ...registry, colors };
 }
 
@@ -656,10 +715,57 @@ export function applyActorMark(
   if (op.mark !== null && !isFaceMark(op.mark)) {
     throw new OpValidationError("bad-op", `not a single emoji: ${JSON.stringify(op.mark)}`);
   }
+  // Resolve through `joined` before writing, because `actorMarks` reads
+  // `marks[resolveActor(joined, from)]`: setting a mark from a folded surface
+  // must update the person's mark rather than writing a shadowed row under the
+  // old id that `actorMarks` overwrites on the next reload.
+  const actorId = resolveActor(registry.joined, op.actorId);
   const marks = { ...(registry.marks ?? {}) };
-  if (op.mark === null) delete marks[op.actorId];
-  else marks[op.actorId] = op.mark;
+  if (actorId !== op.actorId) delete marks[op.actorId];
+  if (op.mark === null) delete marks[actorId];
+  else marks[actorId] = op.mark;
   return { ...registry, marks };
+}
+
+/**
+ * **May somebody choose the mark of an agent their own surface does not
+ * hold?** Yes, when it is THEIR agent — and "theirs" is read from the claims
+ * table rather than from anything a client says.
+ *
+ * `actor.setMark` asks the presenting badge to claim whose face changes, and
+ * for a person's own face that is the whole rule. An agent is the case it
+ * missed: the machine that enrolled Rover holds Rover's claim, and the
+ * person's browser — the surface where a pointer is actually looked at —
+ * holds only the person. So the rule has a second arm, and it is narrow on
+ * purpose:
+ *
+ * - the target is an AGENT (`actorKinds`, from the harness it claimed with),
+ *   so no person's face can be chosen by somebody else this way; and
+ * - some badge that holds the agent ALSO holds the speaker — the person's
+ *   own other surface is where the agent lives, which is what owning one
+ *   means here (`isocan agent add` mints it on "this machine's badge").
+ *
+ * `holders` is the claim list of every badge holding the target. The speaker
+ * has already been checked against the PRESENTING badge before this runs.
+ */
+export function ownsAgent(
+  holders: readonly (readonly ActorClaim[])[],
+  speakerId: string,
+  targetIsAgent: boolean,
+  /**
+   * **Through joins** (30 Sep 2026, the first real owner it refused): the
+   * machine that enrolled the agent holds its owner under an id that has
+   * since been folded into the one now speaking. They are one person, so
+   * every claim is resolved before it is compared — the same resolution
+   * names, colours and undo already go through.
+   */
+  joined?: ActorJoins,
+): boolean {
+  const self = resolveActor(joined, speakerId);
+  return (
+    targetIsAgent &&
+    holders.some((claims) => claims.some((claim) => resolveActor(joined, claim.actorId) === self))
+  );
 }
 
 /**
@@ -718,9 +824,75 @@ export function notBothActors(from: string, into: string, missing: string): OpVa
   );
 }
 
+/**
+ * **A fold never makes a person an agent** (14 Oct 2026). `isocan identity
+ * --join` folds into whoever the command speaks as, and inside a coding
+ * harness that is the agent's session — so an agent asked to "merge my
+ * identities" folded its person into itself, and the person's every surface
+ * became the agent. Refused at the home before the join is logged (never on
+ * replay: a fold already in a log is history), with the way round in the
+ * words. Null when the fold is fine.
+ */
+export function personIntoAgent(registry: ActorRegistry, op: ActorJoinOp): OpValidationError | null {
+  const kinds = actorKinds(registry);
+  const from = resolveActor(registry.joined, op.from);
+  const into = resolveActor(registry.joined, op.into);
+  const person = Object.entries(registry.harnesses ?? {}).some(
+    ([id, harness]) => resolveActor(registry.joined, id) === from && isPersonHarness(harness),
+  );
+  if (!person || kinds[into] !== "agent") return null;
+  const name = (id: string) => registry.names[id]?.name ?? id;
+  return new OpValidationError(
+    "bad-join",
+    `${name(from)} is a person and ${name(into)} is an agent — folding the person into the agent would ` +
+      `make every surface of ${name(from)} the agent. Fold the other way, from ${name(from)}'s own surface: ` +
+      `the web app's identity menu, or \`isocan identity --home --join ${op.into}\` in their own terminal.`,
+  );
+}
+
+/**
+ * **The refusal for an agent opening a personal canvas** — one sentence for
+ * the bench panel, `isocan bench` and `isocan personal`, since all three show
+ * what the home said. It names who the home thinks is asking, and how to ask
+ * as the person instead.
+ */
+export function personRequired(name: string): string {
+  return (
+    `${name} is recorded at this home as an agent, and a personal canvas belongs to a person. ` +
+    "Switch to your own person — your face's menu in the web app, or `isocan identity --home` in " +
+    "your own terminal — and open your bench as them."
+  );
+}
+
 /** The actors folded into others, old id → new id — the wire shape. */
 export function actorJoins(registry: ActorRegistry): ActorJoins {
   return { ...(registry.joined ?? {}) };
+}
+
+/**
+ * **A home's folds, taken by a replica** — the joins a home sends on every
+ * snapshot, resume and roster, added to the ones this machine holds. The
+ * merged map, or null when nothing arriving is new, so a caller on the roster
+ * path (every cursor beat) writes nothing.
+ *
+ * Additive and first-recorded-wins, because a join is forever: a fold this
+ * machine already holds is never moved by a home saying otherwise. A fold into
+ * itself, or one that would close a loop with what is held, is skipped rather
+ * than refused, since the message carrying it is about everything else too.
+ * The badge check is the home's (`applyActorJoin`'s caller), and it is not
+ * repeated here: the home is the desk that saw both claims, and a replica
+ * already takes names from it on the same terms.
+ */
+export function mergeJoins(held: ActorJoins | undefined, arriving: ActorJoins | undefined): ActorJoins | null {
+  const merged: ActorJoins = { ...(held ?? {}) };
+  let changed = false;
+  for (const [from, into] of Object.entries(arriving ?? {})) {
+    if (merged[from] !== undefined || from === into) continue;
+    if (resolveActor(merged, into) === from) continue;
+    merged[from] = into;
+    changed = true;
+  }
+  return changed ? merged : null;
 }
 
 /** The mark every actor wears, keyed by actor id — the wire shape. A folded
@@ -829,6 +1001,20 @@ function reincarnate(
  * readable as one statement, and so the three refusal reasons sit together
  * where they can be compared.
  */
+/**
+ * **Which refusal of `as` a `name-taken` is**, as `reason` beside the code.
+ * The sentence says it for a person; this says it for a client that has to
+ * act on it (docs/projects/room/design.md, the claim rule, "Dual-held agents").
+ * `held-elsewhere` lasts until the other badge is ended or hands the actor
+ * over. `claimed-just-now` and `live` pass on their own: a claim under another
+ * key on this badge in the last minute, or a live face.
+ */
+export const CLAIM_REFUSAL = {
+  heldElsewhere: "held-elsewhere",
+  claimedJustNow: "claimed-just-now",
+  live: "live",
+} as const;
+
 function admit(
   ctx: ClaimContext,
   op: ActorClaimOp,
@@ -889,17 +1075,20 @@ function admit(
         Date.parse(ctx.now) - Date.parse(row.boundAt) < CLAIM_STANDS_MS,
     );
   if (wornLive || heldElsewhere || otherSession) {
+    // Held elsewhere is named first when it is true: it is the refusal that
+    // does not pass on its own, so it is the one a client must hear.
     throw new OpValidationError(
       "name-taken",
       `${as} is somebody else here (${
-        wornLive
-          ? "live on a canvas"
-          : heldElsewhere
-            ? "another surface already speaks as them"
+        heldElsewhere
+          ? "another surface already speaks as them"
+          : wornLive
+            ? "live on a canvas"
             : "claimed by another session just now"
       }) — becoming them would be one actor wearing two faces. ` +
         "Be handed it by a surface that already is them (`isocan pass`, or “Bring your own " +
         "agent…”), or prove the address they signed in with.",
+      heldElsewhere ? CLAIM_REFUSAL.heldElsewhere : wornLive ? CLAIM_REFUSAL.live : CLAIM_REFUSAL.claimedJustNow,
     );
   }
   const name = op.name ?? known!.name;

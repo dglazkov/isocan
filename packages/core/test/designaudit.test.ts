@@ -48,7 +48,7 @@ describe("which values a screen used that its system never named", () => {
      * colours at all. Reading `var(--ink, #222)` as a stray `#222` would make
      * the most careful screen on the canvas the worst-scoring one.
      */
-    const audit = auditScreen(`<style>a{color:var(--ink, #222);background:var(--paper)}</style>`, SYSTEM);
+    const audit = auditScreen(`<style>:root{--color-ink:#3c4043;--color-paper:#fff}a{color:var(--color-ink, #222);background:var(--color-paper)}</style>`, SYSTEM);
     expect(audit.offSystem).toEqual([]);
     expect(audit.onSystem).toBe(2);
   });

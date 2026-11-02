@@ -66,6 +66,7 @@ export interface DockState {
   agentsPanelOpen: boolean;
   contextPanelOpen: boolean;
   personasPanelOpen: boolean;
+  extensionPanelOpen: boolean;
   trashOpen: boolean;
   marksOpen: boolean;
   panelWidth: number;
@@ -126,6 +127,7 @@ export function dockStateNow(): DockState {
     agentsPanelOpen,
     contextPanelOpen,
     personasPanelOpen,
+    extensionPanelOpen,
     trashOpen,
     marksOpen,
     panelWidth,
@@ -136,6 +138,7 @@ export function dockStateNow(): DockState {
     agentsPanelOpen,
     contextPanelOpen,
     personasPanelOpen,
+    extensionPanelOpen,
     trashOpen,
     marksOpen,
     panelWidth,
@@ -153,7 +156,8 @@ export function railIsOpen(ui: DockState): boolean {
     ui.filesPanelOpen ||
     ui.agentsPanelOpen ||
     ui.contextPanelOpen ||
-    ui.personasPanelOpen
+    ui.personasPanelOpen ||
+    ui.extensionPanelOpen
   );
 }
 
@@ -168,6 +172,8 @@ export function stageRect(
   ui: DockState = useUiStore.getState(),
   win: { innerWidth: number; innerHeight: number } = window,
 ): Stage {
+  const moduleStage = measuredModuleStage();
+  if (moduleStage) return moduleStage;
   const { left, dockRight } = dockEdges(ui);
   // The gutter is a FLOOR on the right reservation, not an addition: an open
   // dock is already deeper than it.
@@ -186,6 +192,14 @@ export function stageRect(
 export function stageInsets(
   ui: DockState = useUiStore.getState(),
 ): { top: number; right: number; bottom: number; left: number } {
+  const moduleStage = measuredModuleStage();
+  if (moduleStage) return { top: moduleStage.y, left: moduleStage.x, right: window.innerWidth - moduleStage.x - moduleStage.width, bottom: window.innerHeight - moduleStage.y - moduleStage.height };
   const { left, dockRight } = dockEdges(ui);
   return { top: TOPBAR_HEIGHT, right: dockRight, bottom: 0, left };
+}
+
+function measuredModuleStage(): Stage | null {
+  if (typeof document === "undefined") return null;
+  const rect = document.querySelector("[data-module-stage]")?.getBoundingClientRect();
+  return rect && rect.width > 0 && rect.height > 0 ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null;
 }

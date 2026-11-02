@@ -6,7 +6,7 @@ import { firstLine } from "../src/components/CommentWhen.tsx";
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
 const when = read("../src/components/CommentWhen.tsx");
 const panel = read("../src/components/MainThreadPanel.tsx");
-const layer = read("../src/components/CommentLayer.tsx");
+const layer = read("../src/components/CommentPopovers.tsx");
 const css = read("../src/styles.css");
 
 /**
@@ -29,7 +29,7 @@ describe("a message folds by its date", () => {
   it("folds in both places a comment is drawn", () => {
     // The Chat panel and the pin popover render the same comment and neither
     // owns the other. Two copies of "what a fold keeps" would drift.
-    for (const [name, src] of [["MainThreadPanel", panel], ["CommentLayer", layer]] as const) {
+    for (const [name, src] of [["MainThreadPanel", panel], ["CommentPopovers", layer]] as const) {
       expect(src, `${name} uses the shared date`).toContain("<CommentWhen comment={comment} />");
       expect(src, `${name} wraps its body in the shared fold`).toContain("<CommentFold comment={comment}>");
       expect(src, `${name} spells no timestamp of its own`).not.toContain(

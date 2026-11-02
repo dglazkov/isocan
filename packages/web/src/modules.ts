@@ -1,9 +1,19 @@
-import type { ComponentType } from "react";
+import { Suspense, createElement, lazy, type ComponentType, type ReactNode } from "react";
 import {
   moduleSlug,
   registerModule,
+  rendererClaims,
+  unregisterModule,
+  type ComposerFacts,
+  type DialogFacts,
+  type FileDropFacts,
+  type FocusFacts,
   type InspectorFacts,
+  type Item,
+  type ItemVersion,
+  type ModuleFocus,
   type ModuleInspector,
+  type ModuleDialog,
   type ModuleDrop,
   type ModulePage,
   type OverlayFacts,
@@ -11,12 +21,29 @@ import {
   type RendererFacts,
   type UnderlayFacts,
   type WebModule,
+  type WorkspaceFacts,
+  type ModuleWorkspace,
+  type Canvas,
+  type CanvasContents,
 } from "@isocan/core";
 import { mindmapWeb } from "@isocan/mindmap/web";
 import { mermaidWeb } from "@isocan/mermaid/web";
 import { documentsWeb } from "@isocan/documents/web";
+import { sandboxWeb } from "@isocan/sandbox/web";
+import { judgeWeb } from "@isocan/judge/web";
+import { competitionActivation } from "@isocan/design-competition/activation";
+import { wireframeActivation } from "@isocan/wireframe/activation";
+import { lottieActivation } from "@isocan/lottie/activation";
 import { useUiStore } from "./stores/uiStore.ts";
-import { experimentOn } from "./lib/experiments.ts";
+
+/**
+ * Is this experiment on? Read outside React — the module list is not a
+ * component. Here rather than beside `EXPERIMENTS` (`lib/experiments.ts`) so
+ * the list's descriptive sentences, which only Settings reads, stay in the
+ * lazy Settings chunk instead of every first visit (Semantic Zoom phase 1
+ * paid for its row that way).
+ */
+const experimentOn = (id: string): boolean => useUiStore.getState().experiments.includes(id);
 
 /**
  * **The modules this app carries** (`docs/projects/modules/design.md`).
@@ -40,10 +67,14 @@ export type ShellModule = WebModule<
   ComponentType<RendererFacts>,
   ComponentType<InspectorFacts>,
   ComponentType<PageFacts>,
-  ComponentType<OverlayFacts>
+  ComponentType<OverlayFacts>,
+  ComponentType<DialogFacts>,
+  ComponentType<WorkspaceFacts<ReactNode>>,
+  ComponentType<ComposerFacts>,
+  ComponentType<FocusFacts>
 >;
 
-const LIST: ShellModule[] = [mindmapWeb, mermaidWeb, documentsWeb];
+const LIST: ShellModule[] = [mindmapWeb, mermaidWeb, documentsWeb, sandboxWeb, judgeWeb];
 
 /**
  * **Modules that are off until a person asks**, by slug (#156, 9 Sep 2026).
@@ -59,7 +90,12 @@ const LIST: ShellModule[] = [mindmapWeb, mermaidWeb, documentsWeb];
  * module that home installed.
  */
 const BEHIND_EXPERIMENT: Record<string, string> = {
+  critique: "critique",
   stickers: "modules.stickers",
+  talk: "modules.talk",
+  anatomy: "modules.anatomy",
+  mood: "moodboard",
+  motion: "motion",
 };
 
 /**
@@ -75,8 +111,104 @@ const BEHIND_EXPERIMENT: Record<string, string> = {
  * because the terminal has no first paint and no byte budget.
  */
 const EXPERIMENT_HALVES: Record<string, () => Promise<{ default: ShellModule }>> = {
+  critique: () => import("@isocan/critique/web") as Promise<{ default: ShellModule }>,
   "modules.stickers": () => import("@isocan/stickers/web") as Promise<{ default: ShellModule }>,
+  "modules.talk": () => import("@isocan/talk/web") as Promise<{ default: ShellModule }>,
+  "modules.anatomy": () => import("@isocan/anatomy/web") as Promise<{ default: ShellModule }>,
+  moodboard: () => import("@isocan/mood/web") as Promise<{ default: ShellModule }>,
+  motion: () => import("@isocan/motion/web") as Promise<{ default: ShellModule }>,
 };
+
+/**
+ * Lightweight slots load their module only when a picker or card is rendered.
+ *
+ * **Underlays and workspaces joined on 13 Sep, for anatomy.** An underlay
+ * differs from every other slot here: it is asked to draw on EVERY canvas, so
+ * a `lazy()` underlay would download the module everywhere and defeat the
+ * point. The activation therefore supplies a predicate — `needed(canvas)`, a
+ * scan of items the shell already holds — and the module is fetched only where
+ * that says yes. A workspace is the opposite and needs no predicate: it is
+ * reachable only at its own `x/<segment>` address, so its component is lazy
+ * and its descriptor (the launcher row, the CLI equivalent, `projectEntry`)
+ * is what stays eager.
+ */
+function deferredModule(
+  activation: {
+    core: ShellModule["core"];
+    actions?: ShellModule["actions"];
+    dialogs?: Omit<ModuleDialog<ComponentType<DialogFacts>>, "component">[];
+    renderers?: { mimes: string[] }[];
+    underlays?: { needed: (canvas: UnderlayFacts["canvas"]) => boolean }[];
+    workspaces?: Omit<ModuleWorkspace<ComponentType<WorkspaceFacts<ReactNode>>>, "component">[];
+    focus?: (Omit<ModuleFocus<ComponentType<FocusFacts>, ComponentType<FocusFacts>>, "view" | "edit"> & {
+      hasView?: boolean;
+      hasEdit?: boolean;
+    })[];
+  },
+  load: () => Promise<{ default: ShellModule }>,
+): ShellModule {
+  let pending: Promise<ShellModule> | undefined;
+  const ensure = () => pending ??= load().then(({ default: full }) => {
+    const index = LIST.findIndex((record) => record.core.name === full.core.name);
+    if (index >= 0) LIST[index] = full;
+    else LIST.push(full);
+    registerModule(full.core);
+    useUiStore.getState().bumpModules();
+    return full;
+  }).catch((error) => { pending = undefined; throw error; });
+  /* The underlay the registry holds is this, not the module's: a predicate and
+     a Suspense boundary. It returns null on a canvas the predicate rejects,
+     which is most canvases, and only there does `ensure()` ever run. */
+  const deferredUnderlay = (index: number, needed: (canvas: UnderlayFacts["canvas"]) => boolean) => {
+    const Real = lazy(async () => {
+      const full = await ensure();
+      return { default: full.underlays![index]! };
+    });
+    /* `createElement` rather than JSX: this file is `.ts`, and every import of
+       it names that extension. A component is worth less than the rename. */
+    return function DeferredUnderlay(facts: UnderlayFacts) {
+      if (!needed(facts.canvas)) return null;
+      return createElement(Suspense, { fallback: null }, createElement(Real, facts));
+    };
+  };
+  return {
+    core: activation.core, ...(activation.actions ? { actions: activation.actions } : {}),
+    ...(activation.dialogs ? { dialogs: activation.dialogs.map((dialog) => ({ ...dialog, component: lazy(async () => {
+      const full = await ensure();
+      return { default: full.dialogs!.find((entry) => entry.id === dialog.id)!.component };
+    }) })) } : {}),
+    ...(activation.renderers ? { renderers: activation.renderers.map((renderer) => ({ ...renderer, component: lazy(async () => {
+      const full = await ensure();
+      return { default: full.renderers!.find((entry) => entry.mimes.some((mime) => renderer.mimes.includes(mime)))!.component };
+    }) })) } : {}),
+    ...(activation.underlays ? { underlays: activation.underlays.map((one, index) => deferredUnderlay(index, one.needed)) } : {}),
+    ...(activation.workspaces ? { workspaces: activation.workspaces.map((workspace) => ({ ...workspace, component: lazy(async () => {
+      const full = await ensure();
+      return { default: full.workspaces!.find((entry) => entry.segment === workspace.segment)!.component };
+    }) })) } : {}),
+    ...(activation.focus ? { focus: activation.focus.map((entry) => ({
+      id: entry.id,
+      matches: entry.matches,
+      ...(entry.priority !== undefined ? { priority: entry.priority } : {}),
+      ...(entry.capabilities ? { capabilities: entry.capabilities } : {}),
+      ...(entry.agentPrompts ? { agentPrompts: entry.agentPrompts } : {}),
+      ...(entry.hasView ? { view: lazy(async () => {
+        const full = await ensure();
+        return { default: full.focus!.find((f) => f.id === entry.id)!.view! };
+      }) } : {}),
+      ...(entry.hasEdit ? { edit: lazy(async () => {
+        const full = await ensure();
+        return { default: full.focus!.find((f) => f.id === entry.id)!.edit! };
+      }) } : {}),
+    })) } : {}),
+  };
+}
+
+LIST.push(deferredModule(competitionActivation, () => import("@isocan/design-competition/web") as Promise<{ default: ShellModule }>));
+// Wireframes: `/wire` opens a dialog and two kept screens draw arrows — both fetch the half (phase 5).
+LIST.push(deferredModule(wireframeActivation, () => import("@isocan/wireframe/web") as Promise<{ default: ShellModule }>));
+// Lottie: player and View/Edit focus studio arrive only when a canvas holds a Lottie animation.
+LIST.push(deferredModule(lottieActivation, () => import("@isocan/lottie/web") as Promise<{ default: ShellModule }>));
 
 const fetched = new Set<string>();
 
@@ -93,6 +225,14 @@ export async function loadExperiments(): Promise<void> {
       fetched.delete(id);
     }
   }
+  for (const m of LIST) {
+    const gate = BEHIND_EXPERIMENT[moduleSlug(m.core.name)];
+    if (gate !== undefined) {
+      if (experimentOn(gate)) registerModule(m.core);
+      else unregisterModule(m.core.name);
+    }
+  }
+  useUiStore.getState().bumpModules();
 }
 
 /**
@@ -136,10 +276,18 @@ export function addModule(record: ShellModule): boolean {
   return true;
 }
 
-/** The renderer a loaded module claims for a mime, ahead of the built-in chain. */
-export function moduleRendererFor(mimeType: string): ComponentType<RendererFacts> | null {
+/** Core's registry changed without a web half arriving — a data-only
+ *  module's contributions, read from its manifest — so the slots that read
+ *  contributions draw again. */
+export function noteRegistryChanged(): void {
+  useUiStore.getState().bumpModules();
+}
+
+/** The renderer a loaded module claims for a mime — and, when the renderer
+ *  names a property, for an item carrying it — ahead of the built-in chain. */
+export function moduleRendererFor(mimeType: string, item?: { properties: Record<string, string> } | null): ComponentType<RendererFacts> | null {
   for (const m of live()) {
-    const hit = (m.renderers ?? []).find((r) => r.mimes.includes(mimeType));
+    const hit = (m.renderers ?? []).find((r) => rendererClaims(r, mimeType, item));
     if (hit) return hit.component;
   }
   return null;
@@ -168,6 +316,25 @@ export function moduleDropFor(types: readonly string[]): { mimeType: string; run
   return null;
 }
 
+/**
+ * Properties loaded modules contribute to a dropped native file, merged in
+ * module registration order (or `undefined` when none claim the drop).
+ */
+export async function moduleFileProperties(
+  facts: FileDropFacts,
+): Promise<Record<string, string> | undefined> {
+  await loadExperiments();
+  let merged: Record<string, string> | undefined;
+  for (const m of live()) {
+    if (!m.fileProperties) continue;
+    const props = await m.fileProperties(facts);
+    if (props && Object.keys(props).length > 0) {
+      merged = { ...(merged ?? {}), ...props };
+    }
+  }
+  return merged;
+}
+
 /** Every page a loaded module adds, in module order. */
 export function modulePages(): ModulePage<ComponentType<PageFacts>>[] {
   return live().flatMap((m) => m.pages ?? []);
@@ -176,4 +343,61 @@ export function modulePages(): ModulePage<ComponentType<PageFacts>>[] {
 /** The page at a segment, or null: a segment nobody owns is a plain 404. */
 export function modulePage(segment: string): ModulePage<ComponentType<PageFacts>> | null {
   return modulePages().find((p) => p.segment === segment) ?? null;
+}
+
+/**
+ * The dialog an `opens` names, or null (proposed: `dialogs`). Ids are unique
+ * within a module and a guard holds them unique across the build, so the
+ * first match in module order is the only match.
+ */
+export function moduleDialog(id: string): ModuleDialog<ComponentType<DialogFacts>> | null {
+  for (const m of live()) {
+    const hit = (m.dialogs ?? []).find((d) => d.id === id);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+/** A workspace uses the page address vocabulary but retains a native viewport. */
+export function moduleWorkspace(segment: string): ModuleWorkspace<ComponentType<WorkspaceFacts<ReactNode>>> | null {
+  return live().flatMap((m) => m.workspaces ?? []).find((w) => w.segment === segment) ?? null;
+}
+
+/** Both addressable module surfaces belong in the same launcher. */
+export function moduleViews(): Array<{ segment: string; label: string; hint?: string }> {
+  return [...modulePages(), ...live().flatMap((m) => m.workspaces ?? [])];
+}
+
+/** Project metadata decides which module doors this canvas should offer. */
+export function moduleProjectViews(project: Canvas, canvas: CanvasContents) {
+  return live().flatMap((m) => (m.workspaces ?? []).flatMap((workspace) => {
+    const entry = workspace.projectEntry?.({ project, canvas });
+    return entry ? [{ ...entry, segment: workspace.segment }] : [];
+  }));
+}
+
+/**
+ * The highest-priority `ModuleFocus` facet matching this item and version among
+ * loaded modules, or null (`docs/projects/node-focus/design.md` §5).
+ *
+ * Modules with a higher `priority` (default 10) win over lower-priority facets;
+ * ties settle in module registration order.
+ */
+export function moduleFocusFor(
+  item: Item,
+  version: ItemVersion,
+): ModuleFocus<ComponentType<FocusFacts>, ComponentType<FocusFacts>> | null {
+  let best: ModuleFocus<ComponentType<FocusFacts>, ComponentType<FocusFacts>> | null = null;
+  let bestPriority = -Infinity;
+  for (const m of live()) {
+    for (const facet of m.focus ?? []) {
+      if (!facet.matches(item, version)) continue;
+      const p = facet.priority ?? 10;
+      if (p > bestPriority) {
+        best = facet;
+        bestPriority = p;
+      }
+    }
+  }
+  return best;
 }

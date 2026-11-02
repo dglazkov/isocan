@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "kind": "optional-web-linter-compatibility-probe",
+  "node": "v24.13.0",
+  "generatedAt": "2026-09-14T22:17:02.187Z",
+  "toolsPrefix": "/tmp/isocan-phase4-conductor-no-web-tools",
+  "tools": {
+    "@axe-core/playwright": {
+      "version": null,
+      "expectedVersion": "4.13.0",
+      "status": "unavailable",
+      "reason": "ENOENT: no such file or directory, open '/tmp/isocan-phase4-conductor-no-web-tools/node_modules/@axe-core/playwright/package.json'"
+    },
+    "html-validate": {
+      "version": null,
+      "expectedVersion": "11.15.0",
+      "status": "unavailable",
+      "reason": "ENOENT: no such file or directory, open '/tmp/isocan-phase4-conductor-no-web-tools/node_modules/html-validate/package.json'"
+    },
+    "playwright": {
+      "version": null,
+      "expectedVersion": "1.63.0",
+      "status": "unavailable",
+      "reason": "ENOENT: no such file or directory, open '/tmp/isocan-phase4-conductor-no-web-tools/node_modules/playwright/package.json'"
+    },
+    "stylelint": {
+      "version": null,
+      "expectedVersion": "17.15.0",
+      "status": "unavailable",
+      "reason": "ENOENT: no such file or directory, open '/tmp/isocan-phase4-conductor-no-web-tools/node_modules/stylelint/package.json'"
+    }
+  },
+  "fixtureLock": {
+    "path": "test/fixtures/design-lint-web/package-lock.json",
+    "sha256": "6f0c8710b7be11dc2b02d8d631c75f4c29c84ffbf884ecb4d137a71796a02c72"
+  },
+  "configIdentityBoundary": "Hashes cover the named fixture configs and dependency lock only; no transitive project-config fingerprint is claimed.",
+  "limits": [
+    "Synthetic fixture compatibility is not an installed isocan adapter or a production repository audit.",
+    "Stylelint checks the configured CSS rules; it does not establish DESIGN.md token membership or computed browser values.",
+    "HTML-validate checks HTML source; it does not execute scripts, validate CSS declarations, or establish the final browser DOM.",
+    "axe checks the currently rendered state at one viewport. Manual accessibility assessment, keyboard usability, task intent and unvisited states remain outside this probe."
+  ],
+  "records": [
+    {
+      "id": "stylelint:dependency",
+      "tool": "stylelint",
+      "status": "unavailable",
+      "reason": "ENOENT: no such file or directory, open '/tmp/isocan-phase4-conductor-no-web-tools/node_modules/stylelint/package.json'"
+    },
+    {
+      "id": "html-validate:dependency",
+      "tool": "html-validate",
+      "status": "unavailable",
+      "reason": "ENOENT: no such file or directory, open '/tmp/isocan-phase4-conductor-no-web-tools/node_modules/html-validate/package.json'"
+    },
+    {
+      "id": "axe:dependency",
+      "tool": "@axe-core/playwright",
+      "status": "unavailable",
+      "reason": "ENOENT: no such file or directory, open '/tmp/isocan-phase4-conductor-no-web-tools/node_modules/playwright/package.json'"
+    },
+    {
+      "id": "dependencies:lock",
+      "status": "unavailable",
+      "reason": "The scratch package-lock.json is missing or differs from the pinned fixture lock."
+    }
+  ],
+  "checks": [
+    {
+      "name": "Fixture source and named configurations remain byte-identical",
+      "passed": true
+    }
+  ],
+  "installedLock": null,
+  "fixtureUnchanged": true,
+  "elapsedMs": 2.82,
+  "proof": {
+    "status": "unavailable",
+    "passed": 1,
+    "failed": 0
+  }
+}

@@ -17,11 +17,13 @@ import { describe, expect, it } from "vitest";
  */
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
 const css = read("../src/styles.css");
+/** The popover's own sheet, loaded with it since 27 Sep 2026 (cleanup phase 6). */
+const addCss = read("../src/components/add-popover.css");
 const itemView = read("../src/components/ItemView.tsx");
 
 describe("the Add popover fits the window", () => {
   it("is placed against the viewport, centred beside the rail, and never taller than the window", () => {
-    const rule = css.slice(css.indexOf(".add-door .add-popover {"), css.indexOf("}", css.indexOf(".add-door .add-popover {")));
+    const rule = addCss.slice(addCss.indexOf(".add-door .add-popover {"), addCss.indexOf("}", addCss.indexOf(".add-door .add-popover {")));
     expect(rule).toContain("position: fixed");
     expect(rule).toContain("top: 50%");
     expect(rule).toContain("transform: translateY(-50%)");
@@ -30,7 +32,7 @@ describe("the Add popover fits the window", () => {
   });
 
   it("lets the list of canvases scroll inside it rather than grow past it", () => {
-    expect(css).toContain(".canvas-picker-list { display: flex; flex-direction: column; gap: 2px; max-height: min(280px, 36vh); overflow: auto; }");
+    expect(addCss).toContain(".canvas-picker-list { display: flex; flex-direction: column; gap: 2px; max-height: min(280px, 36vh); overflow: auto; }");
   });
 });
 
@@ -63,7 +65,7 @@ describe("items that lead away wear a dashed border in their own colour", () => 
 
   it("draws it from one token defined in both themes, dashed, and lit on hover like a slide", () => {
     expect(css).toContain(".item.away { border-style: dashed; border-color: var(--away); }");
-    expect(css).toContain(".item.away:hover { box-shadow: var(--shadow-card), 0 0 0 1px var(--away); }");
+    expect(css).toContain(".item.away:hover { box-shadow: var(--shadow-item), 0 0 0 1px var(--away); }");
     expect((css.match(/^  --away: #[0-9a-f]{6};$/gm) ?? []).length).toBe(2);
   });
 });

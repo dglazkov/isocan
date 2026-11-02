@@ -347,7 +347,7 @@ describe("a phone resumes its person by attestation", () => {
 
   it("refuses a stranger who knows the actor id, and admits the badge that proved the address", async () => {
     const laptop = await mintTestBadge(base);
-    await laptop.speakAs(jordan);
+    await laptop.speakAs(jordan, "home:jordan");
     await prove(laptop, "jordan@acme.test");
 
     // A stranger who read Jordan's actor id off the canvas — they are in every
@@ -381,9 +381,21 @@ describe("a phone resumes its person by attestation", () => {
     expect(after.resumable).toEqual([]);
   });
 
+  it("offers only people in resumable, never agents claimed on the same attested badge", async () => {
+    const laptop = await mintTestBadge(base);
+    await laptop.speakAs(jordan, "home:jordan");
+    await laptop.speakAs({ id: "usr_rover", name: "Rover" }, "claude-code:rover");
+    await prove(laptop, "jordan@acme.test");
+
+    const phone = await mintTestBadge(base);
+    await prove(phone, "jordan@acme.test");
+    const offer = (await (await api(phone, "GET", ATTEST_ROUTE)).json()) as AttestOffer;
+    expect(offer.resumable).toEqual([jordan]);
+  });
+
   it("does not vouch across DIFFERENT addresses", async () => {
     const laptop = await mintTestBadge(base);
-    await laptop.speakAs(jordan);
+    await laptop.speakAs(jordan, "home:jordan");
     await prove(laptop, "jordan@acme.test");
 
     // Somebody who proved an address of their own has proved nothing about
@@ -414,7 +426,7 @@ describe("a phone resumes its person by attestation", () => {
      * phone, end the laptop.
      */
     const laptop = await mintTestBadge(base);
-    await laptop.speakAs(jordan);
+    await laptop.speakAs(jordan, "home:jordan");
     await prove(laptop, "jordan@acme.test");
     const phone = await mintTestBadge(base);
     await prove(phone, "jordan@acme.test");

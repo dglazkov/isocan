@@ -3,7 +3,6 @@ import {
   BROWSER_MIME,
   DRAWING_FILENAME,
   DRAWING_MIME,
-  DRAWING_PROPERTIES,
   DRAWING_TITLE,
   annotationProperties,
   drawingSvg,
@@ -26,8 +25,11 @@ import {
   defaultSize,
 } from "@isocan/core";
 import { uploadBlob } from "./api.ts";
-import { sendEchoed } from "../stores/canvasStore.ts";
+import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
+import { moduleFileProperties } from "../modules.ts";
 import { mimeTypeOf } from "./mime.ts";
+import { changeCanvasGroup, groupsEnabled } from "./canvasgroups.ts";
+import { creationDestination, sendCreatedItem } from "./groupplacement.ts";
 
 const MAX_INITIAL_WIDTH = 480;
 /** Between files dropped together — the canvas's own placement gap, so a row
@@ -115,6 +117,7 @@ export async function addFiles(
   actor: Actor,
   files: File[],
   placement: Placement,
+  destination = creationDestination(),
 ): Promise<string[]> {
   // One drop is one act: however many files, one ⌘Z takes them back.
   const group = newGroupId();
@@ -168,10 +171,18 @@ export async function addFiles(
       : placement;
     offsetX += width + FILE_GAP;
 
+    const extraProps = await moduleFileProperties({
+      file,
+      mimeType,
+      placement: at,
+      destination,
+      items: useCanvasStore.getState().canvas?.items,
+    });
     const itemId = newItemId();
     try {
-      await sendEchoed(canvasId, actor, {
+      await sendCreatedItem(canvasId, actor, {
         type: "item.add",
+        ...destination,
         itemId,
         version: {
           id: newVersionId(),
@@ -183,6 +194,7 @@ export async function addFiles(
         width,
         height,
         placement: at,
+        ...(extraProps ? { properties: extraProps } : {}),
       }, group);
     } catch (err) {
       throw new AddFilesError(
@@ -209,14 +221,16 @@ export async function addBrowserItem(
   actor: Actor,
   rawUrl: string,
   placement: Placement,
+  destination = creationDestination(),
 ): Promise<string> {
   const site = normalizeSiteUrl(rawUrl);
   const filename = siteFilename(site);
   const blob = new Blob([`${site}\n`], { type: BROWSER_MIME });
   const upload = await uploadBlob(canvasId, blob, filename);
   const itemId = newItemId();
-  await sendEchoed(canvasId, actor, {
+  await sendCreatedItem(canvasId, actor, {
     type: "item.add",
+        ...destination,
     itemId,
     version: {
       id: newVersionId(),
@@ -246,11 +260,18 @@ export async function addAreaItem(
   at: { x: number; y: number },
   size: { width: number; height: number },
 ): Promise<string> {
+  const destination = creationDestination();
+  const semantic = groupsEnabled();
   const blob = new Blob(["\n"], { type: AREA_MIME });
   const upload = await uploadBlob(canvasId, blob, AREA_FILENAME);
   const itemId = newItemId();
-  await sendEchoed(canvasId, actor, {
+  if (semantic) {
+    await changeCanvasGroup(canvasId, actor, { kind: "create", group: { id: itemId, title, box: { ...at, ...size }, version: { id: newVersionId(), blobHash: upload.blobHash, mimeType: AREA_MIME, filename: AREA_FILENAME, size: upload.size }, layout: { briefHeight: 0 } }, containerId: destination.containerId ?? null }, destination.originGroupMode);
+    return itemId;
+  }
+  await sendCreatedItem(canvasId, actor, {
     type: "item.add",
+    ...destination,
     itemId,
     version: { id: newVersionId(), blobHash: upload.blobHash, mimeType: AREA_MIME, filename: AREA_FILENAME, size: upload.size },
     ...size,
@@ -273,12 +294,14 @@ export async function addDocumentItem(
   actor: Actor,
   doc: { title: string; markdown: string; filename: string; source: string; syncedAt: string },
   placement: Placement,
+  destination = creationDestination(),
 ): Promise<string> {
   const blob = new Blob([doc.markdown], { type: DOC_MIME });
   const upload = await uploadBlob(canvasId, blob, doc.filename);
   const itemId = newItemId();
-  await sendEchoed(canvasId, actor, {
+  await sendCreatedItem(canvasId, actor, {
     type: "item.add",
+        ...destination,
     itemId,
     version: {
       id: newVersionId(),
@@ -312,13 +335,19 @@ export async function addCanvasItem(
   /** `memory=inherit` on the card: the linked canvas's context joins this
    *  one's (`core/memory.ts`). One property, set at placement. */
   memory: "inherit" | null = null,
+  destination = creationDestination(),
 ): Promise<string> {
+  const { automaticSource } = await import("./personal.ts");
+  const access = await automaticSource(targetCanvasId, canvasItemOf(origin, targetCanvasId).properties.source ?? null, canvasId);
+  if (memory && access.kind !== "ordinary") throw new Error(access.refused);
+  if (access.kind !== "ordinary") title = "Canvas";
   const made = canvasItemOf(origin, targetCanvasId);
   const blob = new Blob([made.blob], { type: made.mimeType });
   const upload = await uploadBlob(canvasId, blob, made.filename);
   const itemId = newItemId();
-  await sendEchoed(canvasId, actor, {
+  await sendCreatedItem(canvasId, actor, {
     type: "item.add",
+        ...destination,
     itemId,
     version: {
       id: newVersionId(),
@@ -347,6 +376,7 @@ export async function addDrawing(
   strokes: InkStroke[],
   /** The item this ink is about, when it was drawn over one. */
   target?: { id: string; x: number; y: number; width: number; height: number } | null,
+  destination = target ? { originGroupMode: creationDestination().originGroupMode } : creationDestination(),
 ): Promise<string> {
   const exact = inkBounds(strokes);
   if (!exact) throw new Error("nothing to place");
@@ -359,40 +389,87 @@ export async function addDrawing(
     maxY: Math.ceil(exact.maxY),
   };
   const svg = drawingSvg(strokes, bounds);
-  const blob = new Blob([svg], { type: DRAWING_MIME });
-  const upload = await uploadBlob(canvasId, blob, DRAWING_FILENAME);
+  /** The colour goes in now because nothing downstream can work it out: the
+   *  strokes are about to become an SVG blob and an `Item` has no colour
+   *  field. One spelling, shared with the live session's `drawing_add`.
+   *
+   *  Fetched here, on the Pen's release, rather than imported at the top: the
+   *  colour names and the contrast maths they stand on are ~2KB a first visit
+   *  never uses. Through the `@isocan/core/colour` subpath, never the barrel —
+   *  a dynamic `import("@isocan/core")` asks for every export and pins all of
+   *  core into the entry (the `runtimeModules.ts` lesson). */
+  const { drawingProperties } = await import("@isocan/core/colour");
+  const born = drawingProperties(strokes);
+  const { upload, stagedBlob } = await uploadOrStageTextBlob(canvasId, svg, DRAWING_MIME, DRAWING_FILENAME);
   const itemId = newItemId();
-  await sendEchoed(canvasId, actor, {
-    type: "item.add",
-    itemId,
-    version: {
-      id: newVersionId(),
-      blobHash: upload.blobHash,
-      mimeType: DRAWING_MIME,
-      filename: DRAWING_FILENAME,
-      size: upload.size,
-    },
-    width: bounds.maxX - bounds.minX,
-    height: bounds.maxY - bounds.minY,
-    // Not `chosen`: ink is where the pen drew it, meaningful by KIND rather
-    // than by gesture, and `positionIsMeaningful` keeps it there on that
-    // ground alone — including for every stroke logged before the flag.
-    placement: { x: bounds.minX, y: bounds.minY },
-    title: DRAWING_TITLE,
-    properties: target
-      ? {
-          ...DRAWING_PROPERTIES,
-          ...annotationProperties(
-            target.id,
-            regionOf(
-              { x: bounds.minX, y: bounds.minY, width: bounds.maxX - bounds.minX, height: bounds.maxY - bounds.minY },
-              target,
+  await sendCreatedItem(
+    canvasId,
+    actor,
+    {
+      type: "item.add",
+      ...destination,
+      itemId,
+      version: {
+        id: newVersionId(),
+        blobHash: upload.blobHash,
+        mimeType: DRAWING_MIME,
+        filename: DRAWING_FILENAME,
+        size: upload.size,
+      },
+      width: bounds.maxX - bounds.minX,
+      height: bounds.maxY - bounds.minY,
+      // Not `chosen`: ink is where the pen drew it, meaningful by KIND rather
+      // than by gesture, and `positionIsMeaningful` keeps it there on that
+      // ground alone — including for every stroke logged before the flag.
+      placement: { x: bounds.minX, y: bounds.minY },
+      title: DRAWING_TITLE,
+      properties: target
+        ? {
+            ...born,
+            ...annotationProperties(
+              target.id,
+              regionOf(
+                { x: bounds.minX, y: bounds.minY, width: bounds.maxX - bounds.minX, height: bounds.maxY - bounds.minY },
+                target,
+              ),
             ),
-          ),
-        }
-      : DRAWING_PROPERTIES,
-  });
+          }
+        : born,
+    },
+    undefined,
+    { allowQueued: true, ...(stagedBlob ? { stagedBlob } : {}) },
+  );
   return itemId;
+}
+
+/**
+ * Upload a deterministic text or SVG blob, or compute its SHA-256 and stage it
+ * locally for the outbox when the daemon cannot be reached offline.
+ */
+export async function uploadOrStageTextBlob(
+  canvasId: string,
+  text: string,
+  mimeType: string,
+  filename: string,
+): Promise<{ upload: { blobHash: string; size: number }; stagedBlob?: import("./replica.ts").StagedBlob }> {
+  const blob = new Blob([text], { type: mimeType });
+  try {
+    return { upload: await uploadBlob(canvasId, blob, filename) };
+  } catch (err) {
+    if (!(err instanceof Error && (err as { offline?: boolean }).offline === true)) throw err;
+    const upload = await sha256OfText(text);
+    return {
+      upload,
+      stagedBlob: { blobHash: upload.blobHash, mimeType, filename, text },
+    };
+  }
+}
+
+async function sha256OfText(text: string): Promise<{ blobHash: string; size: number }> {
+  const bytes = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  const blobHash = Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+  return { blobHash, size: bytes.byteLength };
 }
 
 /** Upload a file as a NEW VERSION of an existing item. */
@@ -401,6 +478,7 @@ export async function addVersionFromFile(
   actor: Actor,
   itemId: string,
   file: File,
+  originGroupMode = creationDestination().originGroupMode,
 ): Promise<void> {
   const mimeType = mimeTypeOf(file);
   const upload = await uploadBlob(canvasId, file, file.name);
@@ -414,5 +492,5 @@ export async function addVersionFromFile(
       filename: file.name,
       size: upload.size,
     },
-  });
+  }, undefined, originGroupMode);
 }

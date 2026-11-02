@@ -2,13 +2,16 @@ import type { CanvasContents } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { type Box, type Viewport, centerOn, fitInto, itemsBounds, revealDelta, zoomAt } from "./viewport.ts";
-import { stageRect } from "./stage.ts";
+import { stageRect, type Stage } from "./stage.ts";
 
 /**
  * The navigation verbs, in one place so the zoom controls, the keyboard
  * shortcuts, and the hold-Z gesture all mean exactly the same thing. Each
  * reads the live stores and hands the camera back to the user via setViewport.
  */
+
+import { currentPresentation } from "./canvasPresentation.ts";
+import { presentedCanvas, presentedItem } from "./presentation.ts";
 
 const cx = () => stageRect().x + stageRect().width / 2;
 const cy = () => stageRect().y + stageRect().height / 2;
@@ -17,6 +20,26 @@ const cy = () => stageRect().y + stageRect().height / 2;
 export const GLIDE_MS = 500;
 
 let gliding = 0;
+let shiftX = 0, shiftY = 0;
+let glideStage: Stage | null = null;
+/** A direct gesture takes the camera back from a navigation animation. */
+export function stopGlide() { cancelAnimationFrame(gliding); gliding = 0; }
+
+/** A pane resize moves the visible center without cancelling initial framing.
+ * Both endpoints of an in-flight glide inherit the shift, so its next frame
+ * cannot put the world back under the sidebar. */
+export function shiftCamera(dx: number, dy: number, stage?: Stage) {
+  if (gliding && stage && glideStage) {
+    // Framing can measure the new stage before ResizeObserver delivers it.
+    // Compare with that measurement to avoid applying the same resize twice.
+    dx = stage.x + stage.width / 2 - glideStage.x - glideStage.width / 2;
+    dy = stage.y + stage.height / 2 - glideStage.y - glideStage.height / 2;
+    glideStage = stage;
+  }
+  if (gliding) { shiftX += dx; shiftY += dy; }
+  const ui = useUiStore.getState();
+  ui.setViewport({ ...ui.viewport, tx: ui.viewport.tx + dx, ty: ui.viewport.ty + dy });
+}
 
 /**
  * Smooth ease transition (cubic ease-in-out).
@@ -36,6 +59,7 @@ export function smoothEase(t: number): number {
  *  wants one of the named moves below, which decide WHERE before gliding. */
 function glideTo(target: Viewport, durationMs = GLIDE_MS): void {
   cancelAnimationFrame(gliding);
+  gliding = 0; shiftX = 0; shiftY = 0; glideStage = stageRect();
   const ui = useUiStore.getState();
   const from = ui.viewport;
   if (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
@@ -47,11 +71,11 @@ function glideTo(target: Viewport, durationMs = GLIDE_MS): void {
     const progress = Math.min(1, (now - started) / durationMs);
     const eased = smoothEase(progress);
     useUiStore.getState().setViewport({
-      tx: from.tx + (target.tx - from.tx) * eased,
-      ty: from.ty + (target.ty - from.ty) * eased,
+      tx: from.tx + (target.tx - from.tx) * eased + shiftX,
+      ty: from.ty + (target.ty - from.ty) * eased + shiftY,
       scale: from.scale + (target.scale - from.scale) * eased,
     });
-    if (progress < 1) gliding = requestAnimationFrame(step);
+    gliding = progress < 1 ? requestAnimationFrame(step) : 0;
   };
   gliding = requestAnimationFrame(step);
 }
@@ -69,8 +93,15 @@ export function glideToPoint(wx: number, wy: number): void {
  * in the files panel. It aims at the visible canvas, so the thing you asked
  * for does not land underneath the list you asked from.
  */
-export function glideToBox(box: Box): void {
-  glideTo(fitOnStage(box));
+export function glideToBox(box: Box, maxScale?: number): void {
+  const target = maxScale === undefined ? fitOnStage(box) : fitInto(box, stageRect(), 24);
+  if (maxScale !== undefined && Number.isFinite(maxScale) && maxScale > 0 && target.scale > maxScale) {
+    const stage = stageRect();
+    target.scale = maxScale;
+    target.tx = stage.x + stage.width / 2 - (box.minX + box.maxX) / 2 * maxScale;
+    target.ty = stage.y + stage.height / 2 - (box.minY + box.maxY) / 2 * maxScale;
+  }
+  glideTo(target);
 }
 
 /** Fit a box into the part of the window the canvas actually has. */
@@ -118,13 +149,15 @@ function boundsOfItems(canvas: CanvasContents | null, ids: string[]): Box | null
 
 /** Fit every item on the canvas (0 / ⇧1). */
 export function zoomToFit(): void {
-  fitBox(itemsBounds(useCanvasStore.getState().canvas!));
+  const canvas = useCanvasStore.getState().canvas;
+  if (canvas) fitBox(itemsBounds(presentedCanvas(canvas, currentPresentation())));
 }
 
 /** Fit the current selection (⇧2). No-op with nothing selected. */
 export function zoomToSelection(): void {
   const ids = useUiStore.getState().selectedItemIds;
-  fitBox(boundsOfItems(useCanvasStore.getState().canvas, ids));
+  const canvas = useCanvasStore.getState().canvas;
+  fitBox(boundsOfItems(canvas ? presentedCanvas(canvas, currentPresentation()) : null, ids));
 }
 
 /**
@@ -148,8 +181,9 @@ const REVEAL_MARGIN = 48;
  * you get the feel of travelling between nodes.
  */
 export function revealItem(itemId: string, durationMs = GLIDE_MS): void {
-  const item = useCanvasStore.getState().canvas?.items[itemId];
-  if (!item) return;
+  const native = useCanvasStore.getState().canvas?.items[itemId];
+  if (!native) return;
+  const item = presentedItem(native, currentPresentation());
   const ui = useUiStore.getState();
   const { viewport } = ui;
   const stage = stageRect();
@@ -166,6 +200,7 @@ export function revealItem(itemId: string, durationMs = GLIDE_MS): void {
 
 /** Fit one item — the hold-Z gesture: hold Z, click a node, land on it. */
 export function zoomToItem(itemId: string): void {
-  const it = useCanvasStore.getState().canvas?.items[itemId];
+  const native = useCanvasStore.getState().canvas?.items[itemId];
+  const it = native ? presentedItem(native, currentPresentation()) : undefined;
   if (it) fitBox({ minX: it.x, minY: it.y, maxX: it.x + it.width, maxY: it.y + it.height });
 }

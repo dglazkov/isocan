@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
-import { spawn } from "node:child_process";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import type { PresenceSession } from "@isocan/core";
-import { startDaemon, type Daemon } from "@isocan/server";
+import { CLIENT_FEATURES_HEADER, type PresenceSession } from "@isocan/core";
+import { type Daemon } from "@isocan/server";
+import { startDaemon } from "@isocan/server/daemon";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
+import { runCli, type Run } from "./cli.ts";
 
 /**
  * `wait` advertises itself as parked. These tests are about the retraction:
@@ -16,7 +16,6 @@ import { mintTestBadge, type TestBadge } from "./badge.ts";
  * a daemon too old to answer `/api/oplog/watch` killed the wait outright.
  */
 
-const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 const nico = { id: "usr_nico", name: "Nico" };
 const dimitri = { id: "usr_dimitri", name: "Dimitri" };
 
@@ -57,6 +56,7 @@ beforeEach(async () => {
       const body = Buffer.concat(chunks);
       const type = req.headers["content-type"];
       const auth = req.headers.authorization;
+      const features = req.headers[CLIENT_FEATURES_HEADER];
       void fetch(`${base}${req.url}`, {
         method: req.method ?? "GET",
         // A proxy forwards the credential. Without this the CLI's badge is
@@ -65,6 +65,8 @@ beforeEach(async () => {
         headers: {
           ...(type ? { "content-type": type } : {}),
           ...(auth ? { authorization: auth } : {}),
+          // The proxy preserves the actual caller's reducer capability too.
+          ...(features ? { [CLIENT_FEATURES_HEADER]: Array.isArray(features) ? features.join(",") : features } : {}),
         },
         ...(body.length > 0 ? { body } : {}),
       })
@@ -110,29 +112,10 @@ function sessions(): Promise<PresenceSession[]> {
   );
 }
 
-interface Run {
-  code: number;
-  stdout: string;
-  stderr: string;
-}
-
 function isocan(...args: string[]): Promise<Run> {
-  const child = spawn(process.execPath, [cliBin, ...args], {
-    env: { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: String(proxyPort) },
-    // Run from the temp home, never the repo root — nothing in the repo
-    // should leak into who these tests park as.
-    cwd: home,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  let stdout = "";
-  let stderr = "";
-  child.stdout.setEncoding("utf8");
-  child.stdout.on("data", (chunk) => (stdout += chunk));
-  child.stderr.setEncoding("utf8");
-  child.stderr.on("data", (chunk) => (stderr += chunk));
-  return new Promise((resolve) =>
-    child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })),
-  );
+  // Run from the temp home, never the repo root — nothing in the repo
+  // should leak into who these tests park as.
+  return runCli(args, { cwd: home, env: { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: String(proxyPort) } });
 }
 
 /** Poll until the predicate holds, so tests never race the parked process. */

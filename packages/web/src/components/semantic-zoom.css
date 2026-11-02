@@ -1,0 +1,56 @@
+/* Semantic Zoom's summary mark and card (an experiment; `SemanticZoom.tsx`).
+   Loaded with the experiment's chunk and never before: a note's box, size
+   and colour are `.text-mark`'s, so a summary sits exactly where the opening
+   words would, and this sheet only says what is different about it. */
+
+/* The words are a model's, not the note's: set in the regular weight, so
+   they never pass for the note's own heading. */
+.sz-gist {
+  font-weight: 400;
+  font-style: italic;
+}
+
+/* "≈" says "approximately this", before the words, in the accent so it
+   reads as a sign rather than as part of the summary. */
+.sz-gist .sz-sign {
+  font-style: normal;
+  font-weight: 600;
+  color: var(--accent-text);
+}
+
+/* Being brought up to date: the old summary stays, with a quiet glyph after
+   it. Quiet by token, not by opacity. */
+.sz-gist .sz-updating {
+  font-style: normal;
+  color: var(--ink-soft);
+}
+
+/* A group's or an area's summary: a card inside the frame, under its title
+   strip (`--sz-top`, world units), as wide as the frame and never taller
+   than what is left of it — the card says what the frame holds, so it never
+   claims more room than the frame has. Its type and inset are screen pixels
+   divided by the world's `--scale`, so it reads at a label's size at any
+   zoom, the way `TEXT_MARK_CSS` does. Not a target: the members under it
+   still take the pointer. */
+.sz-card {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(var(--sz-top) * 1px);
+  max-height: calc((var(--h) - var(--sz-top)) * 1px);
+  box-sizing: border-box;
+  padding: calc(8px / var(--scale)) calc(12px / var(--scale));
+  overflow: hidden;
+  font-size: calc(15px / var(--scale));
+  line-height: 1.35;
+  color: var(--ink);
+  background: var(--card);
+  border-top: calc(1px / var(--scale)) solid var(--line);
+  pointer-events: none;
+}
+
+/* While its card shows, the frame rises over its members — they cannot be
+   read at this zoom, and the card has to be. Clicks still pass through to
+   them: the frame takes none, even where a group's open space would. */
+.item.area.gisted { z-index: 1; }
+.canvas-viewport.own-cursor-on .item.canvas-group.pressable.gisted { pointer-events: none; }

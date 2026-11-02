@@ -6,12 +6,35 @@
 # the same sources the CLI runs from. If the container ran a build output and
 # the CLI ran the sources, they would be two programs.
 #
-# Node 24, not 22. Three reasons, all checkable: `.github/workflows/release.yml`
-# pins node-version 24 and is the gate that decides what ships;
-# @google-cloud/firestore 9 and @google-cloud/storage 8 both declare
-# `engines.node >= 22` and are tested on current LTS; and the machine this was
-# written on runs 24.11. The architecture table still says 22 — that is a
-# lagging line, not a decision, and Phase 5's report says so.
+# Node 24, and `.nvmrc` is where that is SAID — every `setup-node` step reads
+# it, and `test/workflows.test.ts` holds these two `FROM` lines to its major,
+# because a Dockerfile cannot read it. This comment used to carry the argument
+# for 24 on its own and called the architecture table "a lagging line, not a
+# decision"; the table is corrected and the number lives in one file now.
+#
+# **Why 24 and not 26, as of 22 Sep 2026** — the question this comment exists
+# to answer next time somebody asks it. 26 has been Current since May and goes
+# Active LTS in October. @google-cloud/firestore and @google-cloud/storage
+# declare `engines.node >= 22` and are tested on current LTS, and this image is
+# what runs the home, so it follows the LTS line rather than leading it.
+# **Revisit in October**: 24 enters maintenance in the same month 26 leaves
+# Current, so that is a move to make deliberately rather than to drift into.
+#
+# **Pinned to 24.20.0, not the floating `24-slim`, on 23 Sep 2026.** Node
+# 24.21.0 (and 24.15, 24.18) fail to verify every Google Trust Services
+# certificate — isocan.io, isocan.store, google.com — with
+# UNABLE_TO_GET_ISSUER_CERT, while 24.20.0 and 24.5.0 verify them; measured on
+# macOS with `fetch`. A laptop daemon on 24.21 could not reach its home at all.
+# Whether the Linux image is affected was not measured, and a home that calls
+# Google-hosted APIs over HTTPS is the wrong place to find out, so the image
+# follows `.nvmrc` exactly until a newer 24.x is checked the same way.
+#
+# **Moved to 24.22.1 on 21 Oct 2026** for CVE-2026-111497 (Brotli decoder
+# out-of-bounds write; also two TLS hostname-verification bypasses). Checked
+# the same way first: on macOS with `fetch`, 24.22.1 verifies isocan.io,
+# isocan.store and google.com, and so do 24.20.0 and, today, 24.21.0, so
+# the September failure looks like the chain at the time, not Node. The
+# Linux image was again not measured before this change.
 #
 # ---- the two things that would have failed on Cloud Run ----
 #
@@ -34,7 +57,7 @@
 # either library is missing after the prune.
 
 # ============================ builder ============================
-FROM node:24-slim AS builder
+FROM node:24.22.1-slim AS builder
 WORKDIR /app
 
 # Manifests first, sources second: `npm ci` then re-runs only when a dependency
@@ -46,6 +69,10 @@ COPY packages/cloudstore/package.json packages/cloudstore/package.json
 COPY packages/core/package.json       packages/core/package.json
 COPY packages/server/package.json     packages/server/package.json
 COPY packages/web/package.json        packages/web/package.json
+COPY packages/api/package.json        packages/api/package.json
+COPY packages/mcp/package.json        packages/mcp/package.json
+COPY packages/rc/package.json         packages/rc/package.json
+COPY packages/voice-agent/package.json packages/voice-agent/package.json
 # The modules are workspaces too (`packages/modules/*`). With these lines
 # missing `npm ci` does NOT refuse — it quietly plans the tree without them,
 # so no `node_modules/@isocan/<module>` link exists and `npm run build` below
@@ -55,7 +82,17 @@ COPY packages/web/package.json        packages/web/package.json
 COPY packages/modules/mindmap/package.json packages/modules/mindmap/package.json
 COPY packages/modules/mermaid/package.json packages/modules/mermaid/package.json
 COPY packages/modules/documents/package.json packages/modules/documents/package.json
+COPY packages/modules/anatomy/package.json packages/modules/anatomy/package.json
 COPY packages/modules/stickers/package.json packages/modules/stickers/package.json
+COPY packages/modules/sandbox/package.json packages/modules/sandbox/package.json
+COPY packages/modules/design-competition/package.json packages/modules/design-competition/package.json
+COPY packages/modules/talk/package.json packages/modules/talk/package.json
+COPY packages/modules/wireframe/package.json packages/modules/wireframe/package.json
+COPY packages/modules/judge/package.json packages/modules/judge/package.json
+COPY packages/modules/mood/package.json packages/modules/mood/package.json
+COPY packages/modules/motion/package.json packages/modules/motion/package.json
+COPY packages/modules/critique/package.json packages/modules/critique/package.json
+COPY packages/modules/lottie/package.json packages/modules/lottie/package.json
 
 # --ignore-scripts: the root `prepare` (scripts/prepare.mjs) exists to build the
 # web bundle for people installing from git, and it does it by shelling out to
@@ -94,10 +131,21 @@ RUN npm prune --omit=dev --no-audit --no-fund
 # `exports` map does not publish it, and @google-cloud/storage's does not. The
 # workspaces get a filesystem check instead, because their `exports` maps
 # publish only "." and the thing being asserted is the link, not the module.
+#
+# And `sharp` (Semantic Zoom phase 3b, 14 Oct 2026), which is LOADED, not
+# resolved, because what can go missing is not the package but its native
+# half: an optionalDependency of @isocan/server whose libvips arrives as
+# @img/sharp-linux-x64 + @img/sharp-libvips-linux-x64, picked from the lockfile
+# by this image's os, cpu and libc (Debian, glibc). npm skips a failed optional
+# install without a word, and the daemon would then fall back to scaling PNGs
+# only (summary-pictures.ts) — correct, quieter, and nobody would know. No
+# install script runs (--ignore-scripts above), and none is needed: the
+# binaries are plain files in those packages.
 RUN node -e " \
       const fs = require('node:fs'); \
       for (const m of ['@google-cloud/firestore','@google-cloud/storage','tsx']) { \
         require.resolve(m); console.log('kept:', m); } \
+      const sharp = require('sharp'); console.log('kept: sharp', sharp.versions.sharp, 'libvips', sharp.versions.vips); \
       for (const w of ['core','server','cli','cloudstore']) { \
         const p = 'node_modules/@isocan/' + w; \
         if (!fs.existsSync(p + '/package.json')) throw new Error('workspace link lost: ' + p); \
@@ -107,7 +155,7 @@ RUN node -e " \
  && echo 'kept: packages/web/dist/index.html'
 
 # ============================ runtime ============================
-FROM node:24-slim AS runtime
+FROM node:24.22.1-slim AS runtime
 
 # tini as PID 1. Cloud Run sends SIGTERM to drain, `runDaemon` installs a
 # SIGTERM handler that closes the sockets and flushes the backing's debounced

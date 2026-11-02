@@ -1,0 +1,113 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Managed by plates (practice renovate): four lanes, so the queue never holds more than one PR per lane. Why each lane is shaped this way: the practice's README.",
+  "extends": [
+    "config:recommended"
+  ],
+  "ignorePresets": [
+    "group:monorepos",
+    "group:recommended",
+    "workarounds:groupings"
+  ],
+  "timezone": "America/Denver",
+  "schedule": [
+    "before 6am"
+  ],
+  "dependencyDashboard": true,
+  "git-submodules": {
+    "enabled": true
+  },
+  "rangeStrategy": "bump",
+  "labels": [
+    "dependencies"
+  ],
+  "prConcurrentLimit": 4,
+  "ignorePaths": [
+    "**/node_modules/**",
+    "**/fixtures/**"
+  ],
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": [
+      "before 6am on monday"
+    ],
+    "automerge": true,
+    "automergeType": "pr"
+  },
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "groupName": "patch and minor updates",
+    "groupSlug": "patch-minor",
+    "automerge": true,
+    "automergeType": "pr"
+  },
+  "packageRules": [
+    {
+      "description": "The project's own workspace packages (package.json workspaces and name) are source, not dependencies. First, so no lane below turns them back on.",
+      "matchPackageNames": [
+        "@isocan/**",
+        "isocan"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "Daily lane: every patch and minor update, npm and Actions alike, in ONE pull request that merges itself when the checks are green.",
+      "matchUpdateTypes": [
+        "patch",
+        "minor",
+        "digest",
+        "pin"
+      ],
+      "groupName": "patch and minor updates",
+      "groupSlug": "patch-minor",
+      "automerge": true,
+      "automergeType": "pr"
+    },
+    {
+      "description": "Weekly lane: majors change behaviour, so they wait for a person, together, once a week.",
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "groupName": "major updates",
+      "groupSlug": "weekly",
+      "schedule": [
+        "before 6am on monday"
+      ],
+      "automerge": false
+    },
+    {
+      "description": "Vendored git submodules (skills, references) join the weekly lane: someone else's code arriving whole, so a person reads it. A project with no submodules has nothing here.",
+      "matchManagers": [
+        "git-submodules"
+      ],
+      "groupName": "major updates",
+      "groupSlug": "weekly",
+      "schedule": [
+        "before 6am on monday"
+      ],
+      "automerge": false
+    },
+    {
+      "description": "Node moves on its own, weekly, read by a person: .nvmrc, a Dockerfile's FROM node: image and @types/node in ONE pull request, since a project that holds them to one major fails a split one. Last, so it wins over the lanes above.",
+      "matchDepNames": [
+        "node",
+        "@types/node"
+      ],
+      "matchManagers": [
+        "nvm",
+        "npm",
+        "dockerfile"
+      ],
+      "groupName": "Node",
+      "groupSlug": "node",
+      "schedule": [
+        "before 6am on monday"
+      ],
+      "automerge": false,
+      "separateMajorMinor": false
+    }
+  ],
+  "prBodyNotes": [
+    "Review any dependency change that alters a recorded architecture choice or acceptance claim, update its records, and replace this declaration with the actual impact. The check validates the diff regardless of author.\n\n```plates-impact\n{\"version\":1,\"phases\":[],\"decisions\":[],\"supersedes\":[],\"evidence\":[],\"reconciliation\":\"none\",\"reason\":\"Dependency versions, lockfiles, or runtime pins only; this update makes no phase acceptance, next-action, or architecture-decision claim.\"}\n```"
+  ]
+}

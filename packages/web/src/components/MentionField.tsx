@@ -10,7 +10,7 @@ import {
   type RefObject,
   type UIEvent,
 } from "react";
-import type { ItemRefCandidate, MentionCandidate, SlashCommand } from "@isocan/core";
+import type { ItemRefCandidate, MentionCandidate, CommandMetadata } from "@isocan/core";
 import { matchCommands } from "@isocan/core";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { mentionChipStyle, splitChips } from "../lib/chips.ts";
@@ -38,10 +38,12 @@ export function MentionField({
   peers,
   itemCandidates,
   items,
+  bench = [],
   placeholder,
   autoFocus,
   multiline,
   grow,
+  marks,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -49,6 +51,13 @@ export function MentionField({
   peers: MentionPeer[];
   itemCandidates: ItemRefCandidate[];
   items: ItemEntry[];
+  /**
+   * The asker's own bench, so `@Sian join` paints as one chip while it is
+   * being typed (the bench, phase 2). Empty everywhere but the Chat: a
+   * comment popover is a conversation about an item, not a place to bring an
+   * agent to a canvas.
+   */
+  bench?: readonly MentionCandidate[];
   placeholder?: string;
   autoFocus?: boolean;
   multiline?: boolean;
@@ -56,6 +65,12 @@ export function MentionField({
    *  For a composer: at rest it should cost a single line, and while you are
    *  writing you should be able to read what you wrote. */
   grow?: boolean;
+  /**
+   * Ranges of the text to underline in the backdrop — the Chat's vague words
+   * (proactive-agent phase 10). Painted under the real text like a chip, so
+   * the field stays a plain field; the lazy `DesignerWords` sheet draws them.
+   */
+  marks?: readonly { start: number; end: number }[] | undefined;
 }) {
   const fieldRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
@@ -170,7 +185,7 @@ export function MentionField({
   return (
     <div className={`mention-field${multiline ? " multiline" : ""}${grow ? " grow" : ""}`}>
       <div className="mention-backdrop" ref={backdropRef} aria-hidden="true">
-        {paintText(value, candidates, itemCandidates, open ? trigger!.at : null, markerRef)}
+        {paintText(value, candidates, itemCandidates, bench, open ? trigger!.at : null, markerRef, marks)}
         {"​" /* keeps a trailing newline's line box alive */}
       </div>
       {multiline || grow ? (
@@ -218,6 +233,13 @@ interface MenuOption {
   label: string;
   item?: boolean;
   online?: boolean;
+  /**
+   * A word on the row about what picking it would mean — today only *not here
+   * yet*, for a name that is on your bench and not on this canvas (the bench,
+   * phase 2). Without it a bench row reads as somebody who can already hear
+   * you, which is the one thing a mention menu must never say wrongly.
+   */
+  note?: string;
   /** Shown in the card beside the menu: what the command does. */
   hint?: string;
   usage?: string;
@@ -346,6 +368,7 @@ function MentionMenu({
             {option.usage ? <em className="mention-usage"> {option.usage}</em> : null}
           </span>
           {option.online && <span className="mention-live">live</span>}
+          {option.note && <span className="mention-note">{option.note}</span>}
         </button>
       ))}
     </div>
@@ -379,25 +402,34 @@ function paintText(
   value: string,
   candidates: MentionCandidate[],
   itemCandidates: ItemRefCandidate[],
+  bench: readonly MentionCandidate[],
   markAt: number | null,
   markerRef: RefObject<HTMLSpanElement>,
+  marks: readonly { start: number; end: number }[] = [],
 ) {
   const nodes: ReactNode[] = [];
   let offset = 0;
-  for (const piece of splitChips(value, candidates, itemCandidates)) {
+  for (const piece of splitChips(value, candidates, itemCandidates, [], bench)) {
     const start = offset;
     offset += piece.text.length;
-    const props = piece.mention
+    const props = piece.join
+      ? { className: "bench-join" }
+      : piece.mention
       ? { className: "mention", style: cssVars(mentionChipStyle(piece.mention.actorId)) }
       : piece.item
         ? { className: "item-ref" }
         : {};
     if (markAt === null || markAt < start || markAt >= offset) {
-      nodes.push(
-        <span key={start} {...props}>
-          {piece.text}
-        </span>,
-      );
+      // Underlined ranges split the piece; the rest of it paints as before.
+      let at = start;
+      for (const m of marks) {
+        if (m.end <= at || m.start >= offset) continue;
+        if (m.start > at) nodes.push(<span key={at} {...props}>{value.slice(at, m.start)}</span>);
+        const end = Math.min(m.end, offset);
+        nodes.push(<span key={`${Math.max(m.start, at)}-v`} {...props} className="vague-word">{value.slice(Math.max(m.start, at), end)}</span>);
+        at = end;
+      }
+      if (at < offset) nodes.push(<span key={at} {...props}>{value.slice(at, offset)}</span>);
       continue;
     }
     const cut = markAt - start;
@@ -482,12 +514,17 @@ function matchPeers(peers: MentionPeer[], query: string): MenuOption[] {
       return name.startsWith(needle) || name.split(/\s+/).some((w) => w.startsWith(needle));
     })
     .slice(0, MAX_MATCHES)
-    .map((peer) => ({ id: peer.id, label: peer.name, online: peer.online }));
+    .map((peer) => ({
+      id: peer.id,
+      label: peer.name,
+      online: peer.online,
+      ...(peer.note ? { note: peer.note } : {}),
+    }));
 }
 
 /** The commands worth offering — core decides, so the menu and
  * `isocan command list` can never disagree about what exists. */
-function matchSlashCommands(commands: SlashCommand[], query: string): MenuOption[] {
+function matchSlashCommands(commands: CommandMetadata[], query: string): MenuOption[] {
   return matchCommands(commands, query, MAX_COMMANDS).map((command) => ({
     id: command.name,
     label: command.name,
@@ -498,6 +535,8 @@ function matchSlashCommands(commands: SlashCommand[], query: string): MenuOption
     foot:
       command.local === true
         ? "answered here · nothing is posted"
+        : command.source === "module" && command.opens
+          ? "opens here · an agent reading it uses the verbs"
         : command.source === "home"
           ? `yours · ~/.isocan/commands/${command.name}.md`
           : "posted as a comment · an agent does it",

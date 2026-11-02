@@ -4,6 +4,31 @@ The canvas can diverge and cannot converge. `/variation` makes N alternatives
 as siblings; nothing brings the winner home. This proposes the operation that
 does, and argues for the shape that keeps the losers.
 
+**Where this stands, 11 Sep 2026: built 29 Aug as `isocan choose`**
+(`packages/core/src/converge.ts`, 21439553), and it departs from this design
+in three places, each on purpose or on the record:
+
+- **No new op.** Op grouping shipped the day before, so `item.addVersion` plus
+  one `item.delete` per child, all in one group, is one gesture and one undo
+  out of ops that already replay. The inverse this doc worried about is
+  grouping's, and it is atomic.
+- **The losers go to the trash, not onto the stack.** The argument below for
+  keeping every road as a version was not taken: the winner becomes the
+  source's next version, and every child — the winner included — is trashed,
+  recoverable and restored by the one undo. The roads not taken survive as
+  named items in the trash, which is weaker than this doc asked for.
+- **No decision post.** `choose` does not write the decision to the parent's
+  thread. (The web door exists since 24 Sep 2026: the item menu's **Choose
+  this variation** on a variation whose source is still here, through the same
+  `convergePlan` and `convergeOps` as the verb, one group —
+  `packages/web/test/choose.test.ts` holds the two surfaces' ops equal.)
+
+The projects index said from 29 Aug to 11 Sep that `choose` was a different
+convergence from this one. It is not — Scene 8 and this doc both name
+`isocan choose <item>`. What the index was reaching for is Scene 7, keeping an
+atlas current as the system it describes moves, and that is the rebuild loop in
+the journey's "what the scenes force", not this mechanism.
+
 Two independent lines of work reached this gap on the same day: the
 [market survey](../../research/2026-08-23-agents-on-the-canvas.md), looking at
 what the category shipped, and the [atlas journey](journey.md), whose

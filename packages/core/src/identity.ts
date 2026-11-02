@@ -28,6 +28,38 @@ export const IDENTITY_COLORS: ReadonlyArray<{ name: string; value: string }> = [
   { name: "Graphite", value: "#6b7280" },
 ];
 
+/**
+ * The colours an extension may wear on the dock — muted mineral tones that
+ * read on both vellum and graphite grounds and never collide with the seven
+ * `IDENTITY_COLORS` that mean a person is standing there.
+ */
+export const EXTENSION_COLORS: ReadonlyArray<{ name: string; value: string }> = [
+  { name: "Slate", value: "#5b6b7a" },
+  { name: "Copper", value: "#9a5b3e" },
+  { name: "Sage", value: "#4d6f5d" },
+  { name: "Plum", value: "#6e4f77" },
+  { name: "Ochre", value: "#8b6d38" },
+];
+
+/** The prefix every panel extension's actor id wears (`ext_…`), so the colour
+ *  derivation and the desk can tell software in the dock from a person (`usr_…`). */
+export const EXTENSION_ACTOR_PREFIX = "ext_";
+
+/** Is this actor id an extension's (`ext_…`) rather than a person's (`usr_…`)? */
+export function isExtensionActor(actorId: string): boolean {
+  return actorId.startsWith(EXTENSION_ACTOR_PREFIX) && actorId.length > EXTENSION_ACTOR_PREFIX.length;
+}
+
+/** Deterministic extension colour from an item or extension actor id — never in `IDENTITY_COLORS`. */
+export function extensionColor(id: string): string {
+  const key = id.startsWith(EXTENSION_ACTOR_PREFIX) ? `itm_${id.slice(EXTENSION_ACTOR_PREFIX.length)}` : id;
+  let hash = 5381;
+  for (let i = 0; i < key.length; i++) {
+    hash = ((hash << 5) + hash + key.charCodeAt(i)) >>> 0;
+  }
+  return EXTENSION_COLORS[hash % EXTENSION_COLORS.length]!.value;
+}
+
 /** Chosen colors, keyed by actor id — the registry's `colors` map. */
 export type ActorColors = Record<string, string>;
 
@@ -144,6 +176,28 @@ export function markOf(marks: ActorMarks | undefined, actor: { id: string }): st
   return mark ? mark : null;
 }
 
+/** What an agent's pointer wears when nobody chose it anything. */
+export const AGENT_POINTER = "🤖";
+
+/**
+ * **The glyph a remote pointer is drawn as, or null for the arrow** (agent
+ * pointers, 30 Sep 2026).
+ *
+ * A chosen mark always wins — an agent its owner dressed as 🐕 is a dog, a
+ * person who picked ⚓ is an anchor. Failing that an AGENT is a robot (Dion:
+ * *"can we default bots to use an emoji that is a 🤖? Always?"*) and a person
+ * keeps the arrow. The default is decided here, at render time, and never
+ * written as a mark: it costs no op, stores nothing, and an agent whose owner
+ * clears its mark goes back to 🤖 rather than to an arrow.
+ */
+export function pointerMark(
+  marks: ActorMarks | undefined,
+  actor: { id: string },
+  agent: boolean,
+): string | null {
+  return markOf(marks, actor) ?? (agent ? AGENT_POINTER : null);
+}
+
 export function faceMark(
   marks: ActorMarks | undefined,
   actor: { id: string; name: string },
@@ -171,8 +225,10 @@ export function isIdentityColor(value: string): boolean {
 }
 
 /** The color this actor wears: their choice if they made one, else the one
- * their id has always implied. */
+ * their id has always implied. An extension actor (`ext_…`) always wears its
+ * cool mineral tone from `EXTENSION_COLORS`, never a person's `IDENTITY_COLORS`. */
 export function actorColor(actorId: string, colors?: ActorColors): string {
+  if (isExtensionActor(actorId)) return extensionColor(actorId);
   const chosen = colors?.[actorId];
   if (chosen && isIdentityColor(chosen)) return chosen;
   let hash = 0;

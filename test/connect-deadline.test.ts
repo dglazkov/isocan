@@ -65,7 +65,12 @@ describe.skipIf(!darwinOrLinux)("the connect deadline", () => {
     // stopped process until the suite's own timeout — so the assertion below
     // is the only shape a passing run can have.
     expect(failure, "a stopped listener with a full queue cannot answer").not.toBeNull();
-    expect(failure!.message).toMatch(/UND_ERR_CONNECT_TIMEOUT|ETIMEDOUT|ECONNRESET|ECONNREFUSED/);
+    // A kernel that completes the handshake into the full queue and then gives
+    // up on it (Darwin 27) ends the connection under the write: undici says
+    // "other side closed", or the write meets EPIPE.
+    expect(failure!.message + String((failure as { cause?: unknown }).cause ?? "")).toMatch(
+      /UND_ERR_CONNECT_TIMEOUT|ETIMEDOUT|ECONNRESET|ECONNREFUSED|UND_ERR_SOCKET|other side closed|EPIPE/,
+    );
     expect(took, "the retransmit ladder's eight seconds are gone").toBeLessThan(6_500);
     if (/UND_ERR_CONNECT_TIMEOUT/.test(failure!.message)) {
       expect(failure!.message).toMatch(/and [2-9] attempts/);

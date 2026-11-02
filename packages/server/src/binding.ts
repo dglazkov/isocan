@@ -61,30 +61,53 @@ export interface DirBinding extends DirMarker {
 
 export const markerFile = (dir: string) => path.join(dir, ".isocan", "project.json");
 
-export async function readMarker(dir: string): Promise<DirMarker | null> {
-  try {
-    const raw = JSON.parse(await fs.readFile(markerFile(dir), "utf8")) as MarkerFile;
-    // `projectId` is what is on disk; `canvasId` is accepted so a marker written
-    // by a future isocan that drops the old spelling still resolves.
-    const canvasId = raw.projectId ?? raw.canvasId;
-    if (typeof canvasId !== "string" || canvasId.length === 0) return null;
-    // A `home` that is present but not a usable address is a MALFORMED marker,
-    // judged exactly as a malformed `canvasId` is: the whole file is
-    // rejected. Not ignored — ignoring it would silently turn "this canvas
-    // lives at the address I cannot read" into "this canvas lives wherever you
-    // are", which is the one wrong answer, and it would be given quietly. An
-    // ABSENT `home` is a different thing entirely and is fine (see DirMarker).
-    if (raw.home !== undefined && (typeof raw.home !== "string" || raw.home.trim() === "")) {
-      return null;
-    }
-    return {
-      canvasId,
-      ...(typeof raw.title === "string" && raw.title ? { title: raw.title } : {}),
-      ...(typeof raw.home === "string" ? { home: raw.home.trim() } : {}),
-    };
-  } catch {
+function parseMarker(raw: unknown): DirMarker | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as MarkerFile;
+  // `projectId` is what is on disk; `canvasId` is accepted so a marker written
+  // by a future isocan that drops the old spelling still resolves.
+  const canvasId = obj.projectId ?? obj.canvasId;
+  if (typeof canvasId !== "string" || canvasId.length === 0) return null;
+  // A `home` that is present but not a usable address is a MALFORMED marker,
+  // judged exactly as a malformed `canvasId` is: the whole file is
+  // rejected. Not ignored — ignoring it would silently turn "this canvas
+  // lives at the address I cannot read" into "this canvas lives wherever you
+  // are", which is the one wrong answer, and it would be given quietly. An
+  // ABSENT `home` is a different thing entirely and is fine (see DirMarker).
+  if (obj.home !== undefined && (typeof obj.home !== "string" || obj.home.trim() === "")) {
     return null;
   }
+  return {
+    canvasId,
+    ...(typeof obj.title === "string" && obj.title ? { title: obj.title } : {}),
+    ...(typeof obj.home === "string" ? { home: obj.home.trim() } : {}),
+  };
+}
+
+async function readBindings(home: string): Promise<Record<string, MarkerFile>> {
+  try {
+    const raw = JSON.parse(await fs.readFile(paths.bindingsFile(home), "utf8")) as Record<
+      string,
+      MarkerFile
+    >;
+    return raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  } catch {
+    return {};
+  }
+}
+
+export async function readMarker(dir: string, home?: string): Promise<DirMarker | null> {
+  try {
+    const raw = JSON.parse(await fs.readFile(markerFile(dir), "utf8")) as unknown;
+    const inTree = parseMarker(raw);
+    if (inTree) return inTree;
+  } catch {
+    // No readable in-tree marker; try the out-of-tree fallback when `home` is given.
+  }
+  if (!home) return null;
+  const real = await canon(dir);
+  const outOfTree = await readBindings(await canon(home));
+  return parseMarker(outOfTree[real]);
 }
 
 /** A directory the marker must never live in: the user's home directory
@@ -106,10 +129,11 @@ const canon = (p: string) => fs.realpath(p).catch(() => path.resolve(p));
 export async function findBinding(cwd: string, home: string): Promise<DirBinding | null> {
   const isocanHome = await canon(home);
   const userHome = await canon(os.homedir());
+  const outOfTree = await readBindings(isocanHome);
   let dir = await canon(cwd);
   for (;;) {
     if (!excluded(dir, isocanHome, userHome)) {
-      const marker = await readMarker(dir);
+      const marker = (await readMarker(dir)) ?? parseMarker(outOfTree[dir]);
       if (marker) return { root: dir, ...marker };
     }
     const parent = path.dirname(dir);
@@ -156,9 +180,46 @@ interface MarkerFile {
   home?: string;
 }
 
+async function hasVcsMarker(start: string, userHome: string, markerName: string): Promise<boolean> {
+  let dir = start;
+  for (;;) {
+    if (await fs.stat(path.join(dir, markerName)).then(() => true, () => false)) return true;
+    const parent = path.dirname(dir);
+    if (parent === dir || dir === userHome) return false;
+    dir = parent;
+  }
+}
+
+async function preferOutOfTreeBinding(
+  realRoot: string,
+  isocanHome: string,
+  userHome: string,
+  outOfTree: Record<string, MarkerFile>,
+): Promise<boolean> {
+  if (await fs.stat(markerFile(realRoot)).then(() => true, () => false)) return false;
+  if (await hasVcsMarker(realRoot, userHome, ".git")) return false;
+  if (realRoot in outOfTree) return true;
+  if (process.env.ISOCAN_NON_REPO_BINDINGS === "home") return true;
+  try {
+    const cfg = JSON.parse(await fs.readFile(paths.configFile(isocanHome), "utf8")) as {
+      nonRepoBindings?: string;
+    };
+    if (cfg?.nonRepoBindings === "home") return true;
+  } catch {
+    // No readable config.json.
+  }
+  return (
+    (await hasVcsMarker(realRoot, userHome, ".hg")) ||
+    (await hasVcsMarker(realRoot, userHome, ".svn"))
+  );
+}
+
 /** Write (or rewrite) the marker. Returns the file it wrote, for saying so. */
-export async function writeMarker(root: string, marker: DirMarker): Promise<string> {
-  const file = markerFile(root);
+export async function writeMarker(
+  root: string,
+  marker: DirMarker,
+  home?: string,
+): Promise<string> {
   // The old spelling goes to disk (see `DirMarker.canvasId`): a marker this
   // build writes has to be readable by every isocan already installed, and by
   // every clone of the repo it is committed into.
@@ -167,8 +228,43 @@ export async function writeMarker(root: string, marker: DirMarker): Promise<stri
     ...(marker.title !== undefined ? { title: marker.title } : {}),
     ...(marker.home !== undefined ? { home: marker.home } : {}),
   };
+  if (home) {
+    const isocanHome = await canon(home);
+    const userHome = await canon(os.homedir());
+    const realRoot = await canon(root);
+    const outOfTree = await readBindings(isocanHome);
+    if (await preferOutOfTreeBinding(realRoot, isocanHome, userHome, outOfTree)) {
+      outOfTree[realRoot] = onDisk;
+      const file = paths.bindingsFile(isocanHome);
+      await fs.mkdir(isocanHome, { recursive: true });
+      await fs.writeFile(file, `${JSON.stringify(outOfTree, null, 2)}\n`);
+      return file;
+    }
+  }
+  const file = markerFile(root);
   await fs.mkdir(path.dirname(file), { recursive: true });
   await fs.writeFile(file, `${JSON.stringify(onDisk, null, 2)}\n`);
+  return file;
+}
+
+/** Remove a directory's binding (in-tree `.isocan/project.json` or out-of-tree
+ * `bindings.json` row). Returns the file that held the binding. */
+export async function removeMarker(root: string, home?: string): Promise<string> {
+  const file = markerFile(root);
+  const hadInTree = await fs.stat(file).then(() => true, () => false);
+  await fs.rm(file, { force: true }).catch(() => {});
+  if (home) {
+    const isocanHome = await canon(home);
+    const realRoot = await canon(root);
+    const outOfTree = await readBindings(isocanHome);
+    if (realRoot in outOfTree) {
+      delete outOfTree[realRoot];
+      const bindings = paths.bindingsFile(isocanHome);
+      await fs.mkdir(isocanHome, { recursive: true });
+      await fs.writeFile(bindings, `${JSON.stringify(outOfTree, null, 2)}\n`);
+      if (!hadInTree) return bindings;
+    }
+  }
   return file;
 }
 

@@ -35,31 +35,3 @@ export function childrenOf(canvas: CanvasContents, itemId: string): Item[] {
     .filter((item) => parentOf(item) === itemId)
     .sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0));
 }
-
-/**
- * Items nothing was made from — the tops of the trees, in the order they sit
- * on the canvas. A parent that has been deleted leaves its children as roots
- * rather than orphans pointing at nothing: the canvas shows what exists.
- */
-function rootItems(canvas: CanvasContents): Item[] {
-  const items = Object.values(canvas.items);
-  return items
-    .filter((item) => {
-      const parent = parentOf(item);
-      return parent === null || canvas.items[parent] === undefined;
-    })
-    .sort((a, b) => a.x - b.x || a.y - b.y);
-}
-
-/** The whole line of descent under an item, depth first, parents before
- * children. Cycles are impossible to create honestly but trivial to write by
- * hand, so they are cut rather than trusted. */
-function descendantsOf(canvas: CanvasContents, itemId: string, seen = new Set<string>()): Item[] {
-  if (seen.has(itemId)) return [];
-  seen.add(itemId);
-  const out: Item[] = [];
-  for (const child of childrenOf(canvas, itemId)) {
-    out.push(child, ...descendantsOf(canvas, child.id, seen));
-  }
-  return out;
-}

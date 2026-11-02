@@ -1,8 +1,9 @@
 import { useEffect } from "react";
-import { SHORTCUT_GROUPS, shortcutsIn, type SlashCommand } from "@isocan/core";
+import { SHORTCUT_GROUPS, markShortcuts, shortcutsIn, type CommandMetadata } from "@isocan/core";
 import { useUiStore } from "../stores/uiStore.ts";
 import { Modal } from "./Modal.tsx";
 import { useCommands } from "../lib/commands.ts";
+import { GUIDE_CANVASES } from "../lib/guides.ts";
 
 /**
  * What this canvas answers to: the keys, and the work you can ask for.
@@ -48,7 +49,8 @@ export function HelpPanel() {
             {SHORTCUT_GROUPS.map((group) => (
               <section key={group} className="help-group">
                 <h3>{group}</h3>
-                {shortcutsIn(group).map((shortcut) => (
+                {/* A loaded module's marks answer ⇧ and a letter — core's `markShortcuts`, the rows `isocan shortcuts` prints too. */}
+                {[...shortcutsIn(group), ...markShortcuts().filter((s) => s.group === group)].map((shortcut) => (
                   <div className="help-row" key={`${group}-${shortcut.does}`}>
                     <span className="help-keys">
                       {shortcut.keys.map((key) => (
@@ -72,7 +74,7 @@ export function HelpPanel() {
               ordinary comment and an agent carries it out — so the same request works
               from a terminal with <code>isocan comment add</code>.
             </p>
-            {commands.map((command: SlashCommand) => (
+            {commands.map((command: CommandMetadata) => (
               <div className="help-row" key={command.name}>
                 <span className="help-keys">
                   <kbd>/{command.name}</kbd>
@@ -85,6 +87,40 @@ export function HelpPanel() {
               </div>
             ))}
           </section>
+
+          <GuideLinks />
     </Modal>
+  );
+}
+
+/**
+ * The canvases that explain the app, from inside the app.
+ *
+ * The list is `lib/guides.ts`, which the README quotes too — one place to fix
+ * when a canvas moves. Plain anchors that open a new tab: a guide should not
+ * replace the canvas the reader was working on. Its own component, and a pure
+ * one, so `guides.test.ts` can render it without the store: the panel's
+ * open/closed state is read through a store hook that a server render sees
+ * only the initial value of.
+ */
+export function GuideLinks() {
+  return (
+    <section className="help-group help-commands help-guides">
+      <h3>Read more</h3>
+      <p className="help-lede">
+        Canvases about isocan, on isocan — each opens in a new tab and leaves this one where
+        it is.
+      </p>
+      {GUIDE_CANVASES.map((guide) => (
+        <div className="help-row" key={guide.url}>
+          <span className="help-keys">
+            <a href={guide.url} target="_blank" rel="noreferrer">
+              {guide.title}
+            </a>
+          </span>
+          <span className="help-does">{guide.about}</span>
+        </div>
+      ))}
+    </section>
   );
 }

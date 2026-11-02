@@ -1,0 +1,17 @@
+/* Night's rules (living grounds phase 3), beside the ground that draws it, for
+   meadow.css's reason: only lazy chunks render these, so they ship with them.
+   Imported by `night.ts` and `PaintedGround` (the still frame). */
+
+/* The ground's own colour, measured off its still, under the WebGL layer
+   before it draws and under the still before the JPEG arrives. */
+.canvas-theme-night { background-color: var(--theme-night); }
+
+/* **An item a firefly is near catches a faint warm light.** `night.ts` sets
+   `--ground-glow` (0.02–0.55) on the item only when it changes by more than
+   0.02, and removes it when the light has gone — so this matches only items
+   that are lit right now, and touches no other item on any other ground. */
+.item[style*="--ground-glow"] {
+  --ground-glow: 0;  /* the default; the inline value night.ts writes wins */
+  box-shadow: var(--shadow-item), 0 0 calc(var(--ground-glow) * 36px) calc(var(--ground-glow) * 4px)
+    color-mix(in srgb, var(--firefly-glow) calc(var(--ground-glow) * 90%), transparent);
+}

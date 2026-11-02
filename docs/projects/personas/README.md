@@ -44,16 +44,18 @@ You are responsible for whether this still feels fast…
 arrangement the isocan skill already uses. Claude Code sees them as subagents;
 any other harness reads the file directly.
 
-## The eight, and the rule that decided them
+## The ten, and the rule that decided them
 
 | Persona | The lens | Its number |
 | --- | --- | --- |
 | `accessibility` | Usable by somebody not using it the way you are | contrast, names, targets, alt |
 | `architect` | The op vocabulary, boundaries, the isomorphism | core's runtime deps, op types |
-| `copy` | Labels, errors, tooltips, empty states | greppable copy tells |
-| `design-auditor` | Tokens, both themes, the tells of a generated interface | grader checks, colour literals |
+| `copy` | Labels, errors, tooltips, empty states | greppable copy tells, and bench summaries that say something their source does not |
+| `design-auditor` | Tokens, both themes, the tells of a generated interface | grader checks, colour literals, and the share of a bench night's proposals a judge would keep |
+| `journeys` | Whether the app works when somebody opens it and uses it | failing journeys in `scripts/journeys.mjs` |
+| `librarian` | Whether the docs' links still lead somewhere — **the first small persona** (Haiku, $0.05 a run, hands off to `reviewer`) | dead relative links in tracked Markdown |
 | `market-researcher` | What else exists and what to take from it | **none, and it says so** |
-| `performance` | Whether it still feels fast | largest built chunk |
+| `performance` | Whether it still feels fast | entry chunk bytes, and the main-thread time the costliest living ground adds to a frame |
 | `qa-tester` | Whether the tests mean anything | eslint errors |
 | `reviewer` | Whether the code says true things about itself | unused exports, undocumented exports |
 
@@ -125,6 +127,42 @@ or `unanswered`. That is the only thing a run wants from a person. Nothing
 computes a score from it yet, deliberately: an accept rate over five findings
 is noise, and a trust score that governs autonomy before it means anything is a
 way to lose trust in trust.
+
+## The cheap tier: `librarian`
+
+Built 24 Sep 2026 (#205), as phase 1 of
+[`small-personas`](../../research/2026-09-07-small-personas.md): one small
+persona by hand, to learn what the format is missing before changing it.
+
+**What was true before it: the nightly runs no model at all.** `persona-run.mjs`
+executes each goal's command and writes a page; `model: opus` and
+`effort: xhigh` are read only when a person asks Claude Code for the subagent.
+So there was no expensive tier running nine times a night — there was a free
+tier (the instruments) and a by-hand tier (opus, when somebody asks). The
+small persona is the first thing machinery ever hands to a model.
+
+Three keys make a persona small, all parsed by `core/src/persona.ts` and
+printed by `isocan persona show`:
+
+- **`budget:`** — `usd per run` and `turns per run`, rcLimits' shape. The
+  runner passes them to `claude -p` as hard caps, writes the measured cost on
+  the page beside them, and files a finding for a run that went over. **A
+  persona with no budget is never handed to a model by machinery** — which is
+  every one of the other nine.
+- **`escalate:`** — who decides what it could not.
+- **`trigger: idle: machine 15m`** — a second door, `persona-run.mjs --idle`,
+  that runs it when the machine's load has been under a quarter of its cores.
+
+A run, cheapest first: the instrument (free); if the number held, stop — $0.
+If it missed, one bounded Haiku call, handed the offenders and asked for a
+`FIX` or an `ESCALATE` line for each. Fixes go on the page, **proposed and not
+applied**. Every offender without a fix — escalated, skipped, or the whole set
+if the pass failed or overspent — goes under **Escalated to `reviewer`**, the
+finding row names it, and `isocan persona runs reviewer` lists it under
+*handed to*. The hand-off is **recorded, not launched**: `reviewer` declares no
+budget, so nothing starts an opus run for it; the three-day queue is what
+makes somebody (or somebody wearing `reviewer`) answer. The decisions are pure
+functions in `scripts/lib/persona-tier.mjs`, held by `test/persona-tier.test.ts`.
 
 ## Review on push
 

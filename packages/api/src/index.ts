@@ -17,6 +17,21 @@
  * the CLI, which consumes the same resolution and adds argv.
  */
 export * from "./connect.ts";
+export * from "./context-summary.ts";
+export * from "./context-pin.ts";
+export * from "./design-audit.ts";
+export * from "./design-audit-reader.ts";
+export * from "./questionnaire-reader.ts";
+export * from "./questionnaire.ts";
+export * from "./design-request-reader.ts";
+export * from "./design-request.ts";
+export * from "./design-decision-reader.ts";
+export * from "./design-decision.ts";
+export * from "./feedback.ts";
+export * from "./canvas-groups.ts";
+export type { ContextReadOptions, CommentContextOptions, ContextPageOptions, ContextBytesOptions, ContextItemContent } from "./canvas-context.ts";
+export type { CanvasGroupCopyOptions } from "./canvas-groups.ts";
+export * from "./operation-receipt.ts";
 export * from "./routes.ts";
 export * from "./client.ts";
 export * from "./ctx.ts";
@@ -24,3 +39,15 @@ export * from "./identity.ts";
 export * from "./direct.ts";
 export * from "./harness.ts";
 export * from "./export.ts";
+/** The address helpers, from core, for a script or a host beside `connect`:
+ * compose a pass address, read one a person pasted, ask whether a home is
+ * this machine. The same three `isocan/rc` hands a host with no Node. */
+export { canvasUrlWithPass, isLoopbackBase, parseCanvasAddress, type CanvasAddress } from "@isocan/core";
+export * from "./design-system-reader.ts";
+export * from "./design-system.ts";
+export * from "./design-recipes.ts";
+export * from "./design-review.ts";
+export * from "./design-review-node.ts";
+export * from "./design-repair-reader.ts";
+export * from "./design-craft-reader.ts";
+export * from "./design-craft-files.ts";

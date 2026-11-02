@@ -1,3 +1,4 @@
+import { supportsCodexSandbox } from "./codex-sandbox.ts";
 import { spawn, type ChildProcess } from "node:child_process";
 import { harnessVars } from "@isocan/api";
 import type { AdapterSpec } from "./harnesses.ts";
@@ -30,9 +31,10 @@ import type { AdapterSpec } from "./harnesses.ts";
  * - The adapter's shells inherit the ADAPTER's environment and nothing
  *   else — `CLAUDE_CODE_SESSION_ID` is NOT set inside them — so identity
  *   travels by injection: the rc sets `ISOCAN_HARNESS=agent` and
- *   `ISOCAN_SESSION_ID=<name>`, making the CLI inside present exactly the
- *   session key the enrolment claim minted (`agent:<name>`, `main.ts`'s
- *   enrol verb), and `ISOCAN_CANVAS=<canvasId>` so the CLI inside knows
+ *   `ISOCAN_SESSION_ID=<mac>`, making the CLI inside present exactly the
+ *   session key the enrolment claim minted (`agent:<mac>`, derived from the
+ *   agent's name by a secret only this machine holds — `agent-key.ts`), and
+ *   `ISOCAN_CANVAS=<canvasId>` so the CLI inside knows
  *   which canvas the summons is for without a directory binding. A CLI-added agent
  *   needs no rebinding at all; a web-added one needs a single idempotent
  *   `actor.claim { as }` on the machine badge, which the turn verb makes.
@@ -133,12 +135,25 @@ function passes(name: string, extra: string[]): boolean {
  * person's (above), scrubbed of every harness variable (a stale one would
  * misidentify the agent; `CLAUDECODE` trips the adapter's nested-session
  * guard), then the injection that makes the CLI inside speak as the
- * enrolled actor. `pass` is config.json's `adapterEnv` — names, or
- * `PREFIX_*` — and `source` is a parameter so a test can hand it a shell. */
+ * enrolled actor. `agentSession` is the session half of the agent's key
+ * (`agent:<session>`, `agent-key.ts`'s `agentSessionOf`). `pass` is
+ * config.json's `adapterEnv` — names, or `PREFIX_*` — and `source` is a
+ * parameter so a test can hand it a shell.
+ *
+ * `keys` is this machine's keys.json, as `harnesses.ts`'s `storedAgentKeys`
+ * hands it over (keys phase 4, opt-in — empty unless the owner ran `isocan
+ * keys agents on`): handed the passed environment, it answers
+ * the stored keys that environment lacks, under the variable each
+ * provider's harness reads (core's `agentKeyEnv` — `ANTHROPIC_API_KEY`,
+ * `OPENAI_API_KEY`, `GEMINI_API_KEY`); one the environment sets wins. A
+ * function rather than the file so this module, loaded by every CLI start,
+ * does not load the keys vocabulary with it. The rc runs for the
+ * machine's own person, so these are that person's keys paying for that
+ * person's agents — phase 3's owner-only rule, held by construction. */
 export function adapterEnv(
   canvasId: string,
-  agentName: string,
-  options: { pass?: string[]; source?: NodeJS.ProcessEnv } = {},
+  agentSession: string,
+  options: { pass?: string[]; source?: NodeJS.ProcessEnv; keys?: (env: NodeJS.ProcessEnv) => Record<string, string> } = {},
 ): NodeJS.ProcessEnv {
   const source = options.source ?? process.env;
   const extra = options.pass ?? [];
@@ -147,29 +162,15 @@ export function adapterEnv(
     if (value !== undefined && passes(name, extra)) env[name] = value;
   }
   for (const name of [...harnessVars, "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"]) delete env[name];
+  if (options.keys) Object.assign(env, options.keys(env));
   env["ISOCAN_HARNESS"] = "agent";
-  env["ISOCAN_SESSION_ID"] = agentName;
+  env["ISOCAN_SESSION_ID"] = agentSession;
   // Which canvas this summons is FOR travels beside the identity, read by the
   // CLI inside the way `--canvas` is (standing agents, phase 1): one agent may
   // stand on several canvases from one directory, so the working directory's
   // binding can no longer be the answer.
   env["ISOCAN_CANVAS"] = canvasId;
   return env;
-}
-
-/**
- * The session key the injected environment presents — and the exact key the
- * enrol verb claims, which is the whole trick.
- *
- * **Scoped to the NAME, not to a canvas** (standing agents, phase 1). It was
- * `agent:<canvasId>:<name>`, which made "Percy on a second canvas" a second
- * session key on the same badge — refused by the desk as a name already worn,
- * the same gate #89 hit. One machine answers for one Percy: the same key on
- * every canvas resumes the same actor, so enrolling the name elsewhere hands
- * the one Percy back, history intact, with no `as` and no vouch.
- */
-export function enrolmentKey(agentName: string): string {
-  return `agent:${agentName}`;
 }
 
 interface JsonRpcMessage {
@@ -183,9 +184,13 @@ interface JsonRpcMessage {
 
 export interface TurnEvent {
   /** "chunk" carries agent-authored text; the rest are narration beats. */
-  kind: "chunk" | "thought" | "tool" | "permission" | "other";
+  kind: "chunk" | "thought" | "tool" | "permission" | "usage" | "other";
   text?: string;
   detail?: string;
+  /** `usage`: what the session has cost, in dollars, when the adapter's
+   *  `usage_update` carries a USD `cost` — absent when it carries none
+   *  (codex-acp 1.11 sends tokens only). */
+  usd?: number;
 }
 
 /**
@@ -246,12 +251,28 @@ export class AcpAgentProcess {
    * fail loudly, never hang on a process that is gone. */
   private died: ((reason: Error) => void)[] = [];
 
+  private refusePermissions = false;
+  private sessionDirectories: string[] = [];
+
   private constructor(child: ChildProcess) {
     this.child = child;
     child.stdout!.setEncoding("utf8");
     child.stdout!.on("data", (chunk: string) => this.receive(chunk));
     child.on("close", (code) => {
       const err = new Error(`the adapter exited (code ${code ?? "?"}) mid-conversation`);
+      for (const reject of this.died.splice(0)) reject(err);
+    });
+    // With no listener, a child that cannot be spawned — a typo in
+    // `acpAdapters`, a bridge not installed — THREW its `'error'`, out of
+    // `isocan rc` and every canvas it holds, and before `'close'` could reject
+    // anything (cleanup phase 1, TS-4). It is this adapter's failure instead:
+    // what is in flight rejects naming the command, and the turn fails with it.
+    child.on("error", (error) => {
+      const err = new Error(
+        child.pid === undefined
+          ? `the adapter \`${child.spawnfile}\` could not be started: ${error.message}`
+          : `the adapter \`${child.spawnfile}\` failed: ${error.message}`,
+      );
       for (const reject of this.died.splice(0)) reject(err);
     });
   }
@@ -281,10 +302,16 @@ export class AcpAgentProcess {
     relayStderr(child);
     const agent = new AcpAgentProcess(child);
     agent.env = env;
+    agent.refusePermissions = spec.nativeCodexSandbox === true;
+    agent.sessionDirectories = spec.sessionDirectories ?? [];
     const init = await agent.request("initialize", {
       protocolVersion: 1,
       clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false },
     });
+    if (spec.nativeCodexSandbox && !supportsCodexSandbox(init?.agentInfo?.version)) {
+      child.kill();
+      throw new Error("--codex-sandbox requires codex-acp 1.11.0 or newer with a reported version");
+    }
     agent.authMethods = Array.isArray(init?.authMethods) ? init.authMethods : [];
     agent.agentTitle = String(init?.agentInfo?.title ?? init?.agentInfo?.name ?? spec.harness);
     return agent;
@@ -363,7 +390,7 @@ export class AcpAgentProcess {
         msg.params?.options ?? [];
       const title = msg.params?.toolCall?.title ?? "a tool";
       const once = options.find((o) => o.kind === "allow_once");
-      if (once) {
+      if (once && !this.refusePermissions) {
         this.onEvent?.({ kind: "permission", detail: `${title} → ${once.optionId ?? "?"}` });
         this.send({
           jsonrpc: "2.0",
@@ -379,7 +406,7 @@ export class AcpAgentProcess {
       const offered = options.map((o) => o.optionId ?? o.name ?? "?").join(", ") || "nothing";
       this.onEvent?.({
         kind: "permission",
-        detail: `${title} → refused: no allow-once option (offered: ${offered}); a summoned turn grants nothing that outlasts it`,
+        detail: this.refusePermissions ? `${title} → refused: the Codex sandbox cannot be escalated by a summoned turn` : `${title} → refused: no allow-once option (offered: ${offered}); a summoned turn grants nothing that outlasts it`,
       });
       this.send({
         jsonrpc: "2.0",
@@ -403,9 +430,15 @@ export class AcpAgentProcess {
     if (kind === "agent_message_chunk") {
       this.onEvent?.({ kind: "chunk", text: String(update.content?.text ?? "") });
     } else if (kind === "agent_thought_chunk") {
-      this.onEvent?.({ kind: "thought" });
+      this.onEvent?.({ kind: "thought", text: String(update.content?.text ?? "") });
     } else if (kind === "tool_call" || kind === "tool_call_update") {
       this.onEvent?.({ kind: "tool", detail: String(update.title ?? update.toolCallId ?? "") });
+    } else if (kind === "usage_update") {
+      // ACP's context-and-cost beat: `cost` is optional, and only dollars are
+      // something a budget written in dollars can be held to.
+      const cost = update.cost as { amount?: unknown; currency?: unknown } | null | undefined;
+      const usd = cost && cost.currency === "USD" && typeof cost.amount === "number" ? cost.amount : undefined;
+      this.onEvent?.({ kind: "usage", ...(usd !== undefined ? { usd } : {}) });
     } else {
       this.onEvent?.({ kind: "other", detail: kind ?? "" });
     }
@@ -451,7 +484,7 @@ export class AcpAgentProcess {
     if (previous) {
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
-          await this.sessionRequest("session/load", { sessionId: previous, cwd, mcpServers: [] });
+          await this.sessionRequest("session/load", { sessionId: previous, cwd, mcpServers: [], ...(this.sessionDirectories.length ? { additionalDirectories: this.sessionDirectories } : {}) });
           return { sessionId: previous, resumed: true };
         } catch (err) {
           // A login refusal is not the transient scar the retry is for.
@@ -460,7 +493,7 @@ export class AcpAgentProcess {
         }
       }
     }
-    const created = await this.sessionRequest("session/new", { cwd, mcpServers: [] });
+    const created = await this.sessionRequest("session/new", { cwd, mcpServers: [], ...(this.sessionDirectories.length ? { additionalDirectories: this.sessionDirectories } : {}) });
     return { sessionId: created.sessionId as string, resumed: false };
   }
 
@@ -487,6 +520,12 @@ export class AcpAgentProcess {
     } finally {
       this.onEvent = null;
     }
+  }
+
+  /** Stop the running prompt — ACP's `session/cancel`, a notification; the
+   *  prompt then answers `stopReason: "cancelled"`. */
+  cancel(sessionId: string): void {
+    this.send({ jsonrpc: "2.0", method: "session/cancel", params: { sessionId } });
   }
 
   close(): void {

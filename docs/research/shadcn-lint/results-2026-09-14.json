@@ -1,0 +1,147 @@
+{
+  "node": "v24.21.0",
+  "tokens": {
+    "colors": {
+      "primary": "#112233",
+      "background": "#ffffff"
+    },
+    "typography": {
+      "body": {
+        "fontSize": "16px"
+      }
+    },
+    "rounded": {
+      "md": "8px"
+    },
+    "spacing": {
+      "md": "16px"
+    }
+  },
+  "html": {
+    "knownLiteral": {
+      "source": "<p style=\"color:#112233\">Acme</p>",
+      "offSystem": [],
+      "onSystem": 1
+    },
+    "offSystemLiteral": {
+      "source": "<p style=\"color:#ff0000\">Acme</p>",
+      "offSystem": [
+        {
+          "value": "#ff0000",
+          "kind": "colour",
+          "count": 1,
+          "line": 1
+        }
+      ],
+      "onSystem": 0
+    },
+    "undefinedVariable": {
+      "source": "<p style=\"color:var(--missing)\">Acme</p>",
+      "offSystem": [],
+      "onSystem": 1
+    },
+    "undefinedVariableWithFallback": {
+      "source": "<p style=\"color:var(--missing, #ff0000)\">Acme</p>",
+      "offSystem": [],
+      "onSystem": 1
+    },
+    "offSystemSpacing": {
+      "source": "<p style=\"padding:13px\">Acme</p>",
+      "offSystem": [],
+      "onSystem": 0
+    },
+    "offSystemFontShorthand": {
+      "source": "<p style=\"font:13px sans-serif\">Acme</p>",
+      "offSystem": [],
+      "onSystem": 0
+    },
+    "proseOnly": {
+      "source": "<p>The reference string is #ff0000.</p>",
+      "offSystem": [
+        {
+          "value": "#ff0000",
+          "kind": "colour",
+          "count": 1,
+          "line": 1
+        }
+      ],
+      "onSystem": 0
+    }
+  },
+  "upstream": {
+    "version": "0.1.0",
+    "files": {
+      "page.tsx": {
+        "source": "import { Button } from \"./components/ui/button\"; export const Page = () => <Button className=\"p-[13px] bg-[#ff0000] hovr:flex\" />;",
+        "errorCount": 5,
+        "warningCount": 0,
+        "messages": [
+          {
+            "ruleId": "shadcn/no-restyle",
+            "message": "\"p-[13px]\" is not allowed on <Button>: <Button> owns its spacing. Use a size (sm, lg), or margin here or gap on the parent for space around it. Add a size in <fixture>/components/ui/button.tsx only if the design explicitly calls for one.",
+            "line": 1,
+            "column": 94
+          },
+          {
+            "ruleId": "shadcn/no-restyle",
+            "message": "\"bg-[#ff0000]\" is not allowed on <Button>: <Button> owns its color. Add a variant in <fixture>/components/ui/button.tsx only if the design explicitly calls for this treatment.",
+            "line": 1,
+            "column": 94
+          },
+          {
+            "ruleId": "shadcn/no-arbitrary-values",
+            "message": "\"p-[13px]\" hardcodes an off-token value. Use \"p-3.25\" instead (same value, on the scale).",
+            "line": 1,
+            "column": 94
+          },
+          {
+            "ruleId": "shadcn/no-arbitrary-values",
+            "message": "\"bg-[#ff0000]\" hardcodes a color and no declared theme color is close to it. Use one of: brand, or declare --color-<name> in theme.css.",
+            "line": 1,
+            "column": 94
+          },
+          {
+            "ruleId": "shadcn/no-unknown-classes",
+            "message": "\"hovr:flex\" is not a class this project's Tailwind knows, so no CSS is generated for it. Did you mean \"hover:flex\"?",
+            "line": 1,
+            "column": 94
+          }
+        ]
+      },
+      "clean.tsx": {
+        "source": "import { Button } from \"./components/ui/button\"; export const Page = () => <Button size=\"lg\" className=\"mt-4\" />;",
+        "errorCount": 0,
+        "warningCount": 0,
+        "messages": []
+      },
+      "fractional.tsx": {
+        "source": "export const Page = () => <div className=\"p-3.25\">Acme</div>;",
+        "errorCount": 0,
+        "warningCount": 0,
+        "messages": []
+      },
+      "screen.html": {
+        "source": "<!doctype html><html><style>p{color:#ff0000;padding:13px}</style><p>Acme</p></html>",
+        "errorCount": 0,
+        "warningCount": 1,
+        "messages": [
+          {
+            "ruleId": null,
+            "message": "File ignored because no matching configuration was supplied."
+          }
+        ]
+      },
+      "screen.css": {
+        "source": "p { color:#ff0000; padding:13px; }",
+        "errorCount": 0,
+        "warningCount": 1,
+        "messages": [
+          {
+            "ruleId": null,
+            "message": "File ignored because no matching configuration was supplied."
+          }
+        ]
+      }
+    }
+  }
+}

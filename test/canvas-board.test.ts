@@ -7,19 +7,22 @@ import { fileURLToPath } from "node:url";
 
 const repo = fileURLToPath(new URL("..", import.meta.url));
 const board = readFileSync(fileURLToPath(new URL("../scripts/canvas-board.mjs", import.meta.url)), "utf8");
+/** The publish mechanism, shared with the roadmap since 7 Oct 2026. */
+const panel = readFileSync(fileURLToPath(new URL("../scripts/lib/panel.mjs", import.meta.url)), "utf8");
 const hook = readFileSync(fileURLToPath(new URL("../scripts/hooks/post-commit", import.meta.url)), "utf8");
 
 /**
  * **A synchronous exec cannot be interrupted, so its deadline is a wish.**
  *
  * Every child here is spawned with `execFileSync`, which blocks the worker
- * thread — vitest's timer cannot run, so the `120_000` budget on these tests
- * is unenforceable. Measured on 31 Aug under 16 spinners: this file's
- * "NO SIGNAL" test ran for **2,025,845ms, 2,218,012ms and 2,502,849ms** — 34,
- * 37 and 42 minutes — and then reported `Test timed out in 120000ms`, which
- * is true of when the deadline passed and wrong by a factor of seventeen
- * about what happened. Three of four loaded suite runs were dominated by one
- * test nobody could see was running.
+ * thread — vitest's timer cannot run, so the budget on these tests
+ * (`TEST_BUDGET_MS`) is unenforceable. Measured on 31 Aug under 16
+ * spinners: this file's "NO SIGNAL" test ran for **2,025,845ms, 2,218,012ms
+ * and 2,502,849ms** — 34, 37 and 42 minutes — and then reported `Test timed
+ * out in 120000ms` (its budget then), which is true of when the deadline
+ * passed and wrong by a factor of seventeen about what happened. Three of
+ * four loaded suite runs were dominated by one test nobody could see was
+ * running.
  *
  * `lessons.md` #6 names the shape: *a hang that never fails is the thing to
  * avoid, not a slow test that eventually does.* The child gets the deadline
@@ -30,8 +33,27 @@ const hook = readFileSync(fileURLToPath(new URL("../scripts/hooks/post-commit", 
  * Not a speed fix. The passing case still takes ~30s on a saturated machine,
  * and that is honest; what changes is that the failing case stops being
  * unbounded.
+ *
+ * **90 s became 150 s on 14 Oct 2026, because the honest cost moved and the
+ * bound did not.** The bound was set (6e26e9ea9) when `--only build` took
+ * twelve readings; it takes nineteen now (`node scripts/measure.mjs …` for every
+ * persona goal — `unused-exports` and `undocumented-exports` are seven
+ * seconds each alone), about 28 s on an idle laptop. On CI's 4-core shards,
+ * across the release runs of that day, a passing Build render took 44–79 s,
+ * and twice (876e20dc9, b094cd436) the first one in the file crossed 90 s and
+ * was killed as `spawnSync node ETIMEDOUT` — while the very next render in
+ * the same run, the same work, took 62–78 s. That is a bound inside the cost
+ * distribution, which is lessons.md #12's shape, and every render here shares
+ * it, so it moves for all of them at once. #101 warns that a longer limit is
+ * how the next timeout hides, and it would be right if the cost were
+ * contention alone; here the work itself nearly doubled. 150 s still bounds
+ * the 34-minute hang above; making the readings cheaper is the better fix,
+ * and it belongs to the board, not to this file.
  */
-const CHILD_BUDGET_MS = 90_000;
+const CHILD_BUDGET_MS = 150_000;
+/** Above the child's, so a killed child's message — with the command in it —
+ * is what a slow render fails with, never vitest's number. */
+const TEST_BUDGET_MS = CHILD_BUDGET_MS + 30_000;
 
 const git = (...args: string[]) =>
   execFileSync("git", args, { cwd: repo, encoding: "utf8", timeout: 20_000 }).trim();
@@ -125,13 +147,22 @@ const runBoard = (only: string, env: NodeJS.ProcessEnv = ghSaying(allGreen())) =
   }
 };
 
-/** Render a panel without touching a canvas, and hand back its HTML. */
+/** Render a panel without touching a canvas, and retain both observations. */
 const render = (only: string, env: NodeJS.ProcessEnv = ghSaying(allGreen())) => {
   const out = runBoard(only, env);
   const path = out.split("\n").find((l) => l.includes("would publish"))?.split("→ ")[1]?.trim();
   expect(path, `no panel rendered for --only ${only}`).toBeTruthy();
-  return readFileSync(path as string, "utf8");
+  return { stdout: out, html: readFileSync(path as string, "utf8") };
 };
+
+// These cases inspect the same immutable inputs: this checkout's history and
+// one synthetic CI reading. Render each scenario once, lazily so a filtered
+// source-only check starts no children. A different CI reading is a different
+// render; none of the real graders or the board script are mocked out.
+let recentReading: ReturnType<typeof render> | undefined;
+const recent = () => (recentReading ??= render("recent"));
+let greenReading: ReturnType<typeof render> | undefined;
+const greenBuild = () => (greenReading ??= render("build"));
 
 /**
  * The read half of `docs/research/2026-08-30-repo-admin-canvas.md`. Its own
@@ -162,7 +193,7 @@ describe("the board is derived, and says so", () => {
   });
 
   it("tells the reader every panel is regenerated", () => {
-    expect(render("recent")).toContain("Regenerated, never edited here");
+    expect(recent().html).toContain("Regenerated, never edited here");
   });
 });
 
@@ -175,18 +206,21 @@ describe("a run stacks a version, never a second item", () => {
     // Title matching means the first person to rename a panel on the canvas
     // gets a duplicate on the next run. The property survives a rename; the
     // title fallback exists only to adopt panels made before this rule.
-    expect(board).toContain("properties?.board === slug");
-    expect(board).toContain("properties: { board: slug");
+    expect(panel).toContain("properties?.[key] === slug");
+    expect(panel).toContain("properties: { [key]: slug");
+    // And the board publishes under the `board` key, through that one copy.
+    expect(board).toContain('key: "board"');
+    expect(board).toContain('from "./lib/panel.mjs"');
   });
 
   it("writes nothing when the rendered bytes have not changed", () => {
     // Otherwise the version stack is four hundred identical entries, which is
     // not a history of anything.
-    expect(board).toContain("if (current?.blobHash === hash) return;");
+    expect(panel).toContain("if (current?.blobHash === hash) return;");
   });
 
   it("stacks the version through the edit verb — the one the note wrongly said was missing", () => {
-    expect(board).toContain("board.edit(item.id");
+    expect(panel).toContain("canvas.edit(item.id");
   });
 });
 
@@ -198,17 +232,17 @@ describe("a run stacks a version, never a second item", () => {
  */
 describe("Recently reads the actual history", () => {
   it("names the commit at HEAD", () => {
-    const html = render("recent");
+    const html = recent().html;
     expect(html).toContain(git("rev-parse", "--short", "HEAD"));
-  }, 120_000);
+  }, TEST_BUDGET_MS);
 
   it("counts more than one commit when git reports more than one", () => {
     const real = git("rev-list", "--count", "--since=14 days ago", "HEAD");
     if (Number(real) < 2) return; // a fortnight this quiet has nothing to guard
-    const html = render("recent");
+    const html = recent().html;
     expect(html).not.toContain("Nothing landed in the last 14 days");
     expect(Number(html.match(/(\d+) commits in the last 14 days/)![1])).toBeGreaterThan(1);
-  }, 120_000);
+  }, TEST_BUDGET_MS);
 
   it("renders real shas in every row, not whatever fell out of the parse", () => {
     /**
@@ -221,15 +255,15 @@ describe("Recently reads the actual history", () => {
      */
     const known = new Set(git("log", "--since=14 days ago", "--format=%h").split("\n").filter(Boolean));
     if (known.size < 2) return;
-    const rendered = [...render("recent").matchAll(/<td class="num muted" style="width:64px">([^<]*)<\/td>/g)].map(
-      (m) => m[1],
+    const rendered = [...recent().html.matchAll(/<td class="num muted" style="width:64px">([^<]*)<\/td>/g)].map(
+      (m) => m[1] ?? "",
     );
     expect(rendered.length).toBeGreaterThan(1);
     for (const sha of rendered) {
       expect(sha, `"${sha}" is not a commit this repository has`).toMatch(/^[0-9a-f]{7,40}$/);
       expect(known.has(sha), `"${sha}" is not in git log`).toBe(true);
     }
-  }, 120_000);
+  }, TEST_BUDGET_MS);
 
   it("says what it left out rather than truncating silently", () => {
     // A cap is fine. A silent cap reads as "this is all of it".
@@ -265,11 +299,11 @@ describe("measurement is taken once, and only when something asks", () => {
   });
 
   it("does not claim every goal is holding when it measured none", () => {
-    expect(render("recent")).toBeTruthy();
-    const out = runBoard("recent");
+    expect(recent().html).toBeTruthy();
+    const out = recent().stdout;
     expect(out).toContain("no goal measured this run");
     expect(out).not.toContain("every goal holding");
-  }, 120_000);
+  }, TEST_BUDGET_MS);
 });
 
 /**
@@ -280,9 +314,9 @@ describe("measurement is taken once, and only when something asks", () => {
 describe("the Build signal", () => {
   it("prints the rule it is following, on the panel", () => {
     // A light nobody knows the rule for is a light nobody trusts.
-    const html = render("build");
+    const html = greenBuild().html;
     for (const word of ["GREEN", "AMBER", "RED", "NO SIGNAL"]) expect(html).toContain(word);
-  }, 120_000);
+  }, TEST_BUDGET_MS);
 
   it("reports the runs it was given, and does not claim no signal", () => {
     /**
@@ -298,10 +332,10 @@ describe("the Build signal", () => {
      * would have coupled this test to board state on disk that no fixture
      * here controls.
      */
-    const html = render("build", ghSaying(allGreen()));
+    const html = greenBuild().html;
     expect(html, "a supplied reading is not an absent one").not.toContain("no signal");
     for (const workflow of ["release", "review"]) expect(html).toContain(workflow);
-  }, 120_000);
+  }, TEST_BUDGET_MS);
 
   it("shows NO SIGNAL — never GREEN — when CI cannot be reached", () => {
     /**
@@ -321,7 +355,7 @@ describe("the Build signal", () => {
      * What the fixture does control is `gh`, and `c.unknown` alone drives the
      * CI line. That line is the fact under test.
      */
-    const html = render("build", ghSaying("not logged in", 1));
+    const html = render("build", ghSaying("not logged in", 1)).html;
     expect(html, "an unreachable CI must render as absent, not as passing").toContain(
       '<span class="pill grey">no signal</span>',
     );
@@ -329,7 +363,7 @@ describe("the Build signal", () => {
     // The rule this light exists for. GREEN is the lie; AMBER ("still going")
     // would be one too, since nothing was asked.
     expect(["NO SIGNAL", "RED"], `the light said ${shown} with no CI reading`).toContain(shown);
-  }, 120_000);
+  }, TEST_BUDGET_MS);
 
   it("says so when CI ran a different commit than the one you are on", () => {
     // A green for code nobody pushed is the stale-copy bug in miniature.
@@ -361,6 +395,7 @@ describe("the board speaks as the board", () => {
     // The env-var surgery (`boardEnv`) went with the last CLI spawn (iso-api
     // phase 3); what remains is the fact it existed to defend — one stable
     // key, so the board is one actor across every run and every script.
+    // @ts-expect-error — a plain .mjs module with no types.
     const { BOARD_IDENTITY, BOARD_SESSION } = await import("../scripts/board-identity.mjs");
     expect(BOARD_IDENTITY.session).toBe(BOARD_SESSION);
     expect(BOARD_IDENTITY.harness).toBe("board");
@@ -480,7 +515,7 @@ describe("the grid fits however many personas there are", () => {
       ];
       for (let i = 0; i < boxes.length; i++) {
         for (let j = i + 1; j < boxes.length; j++) {
-          const a = boxes[i], b = boxes[j];
+          const a = boxes[i]!, b = boxes[j]!;
           const overlaps =
             a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
           expect(overlaps, `with ${count} personas, panel ${i} and ${j} overlap`).toBe(false);

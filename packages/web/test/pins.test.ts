@@ -152,3 +152,23 @@ describe("the drag threshold, spelled once", () => {
     expect(itemView).not.toMatch(/const DRAG_SLOP\s*=/);
   });
 });
+
+describe("an open thread is not in the bytes a first visit downloads", () => {
+  /**
+   * The pins are eager; the popover a pin opens and the composer ⇧C opens
+   * are not (14 Oct 2026, `CommentPopovers.tsx`) — about six kilobytes of
+   * the entry chunk, drawn only after a click. Asserted on the import, like
+   * `LazyGate`'s guard: a `lazy()` turned back into a static import is what
+   * `bundle-budget` would otherwise report weeks later as unexplained creep.
+   */
+  const read = (rel: string) => readFileSync(new URL(rel, import.meta.url), "utf8");
+  it("reaches the popovers only through import()", () => {
+    const layer = read("../src/components/CommentLayer.tsx");
+    expect(layer).toContain('const popovers = () => import("./CommentPopovers.tsx");');
+    expect(layer).not.toMatch(/from "\.\/CommentPopovers\.tsx"/);
+    expect(layer).not.toMatch(/function (ThreadPopover|ComposePopover)\b/);
+    for (const host of ["../src/components/CanvasViewport.tsx", "../src/pages/CanvasPage.tsx", "../src/components/OnIt.tsx", "../src/lib/mainthread.ts"]) {
+      expect(read(host), host).not.toContain("CommentPopovers");
+    }
+  });
+});

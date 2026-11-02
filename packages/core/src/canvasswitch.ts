@@ -1,6 +1,6 @@
 import type { Canvas } from "./model.ts";
 import { sortCanvases } from "./canvassort.ts";
-import { isShelved } from "./shelf.ts";
+import { inScope, isShelved, type ShelfScope } from "./shelf.ts";
 
 /**
  * **Jumping to another canvas, from wherever you are.**
@@ -37,9 +37,10 @@ export interface SwitchRow {
    *  exists. With a query the ranking is by match and this is a hint; without
    *  one it is the group the row sits in. */
   recent: boolean;
-  /** Whether this one is archived (#194). Only ever true with a query, and
-   *  the row that carries it says so on screen: a canvas somebody put away
-   *  arriving unmarked among the live ones is the shelf failing quietly. */
+  /** Whether this one is archived (#194). Only ever true when the scope
+   *  reached in, and the row that carries it says so on screen: a canvas
+   *  somebody put away arriving unmarked among the live ones is the shelf
+   *  failing quietly. */
   shelved: boolean;
 }
 
@@ -63,8 +64,16 @@ export function fuzzyMatch(query: string, text: string): { score: number; positi
   const needle = query.replace(/\s+/g, "").toLowerCase();
   if (needle.length === 0) return { score: 0, positions: [] };
   const hay = text.toLowerCase();
+  // A contiguous query already has an unambiguous reading. Letting the
+  // word-start fallback jump into a later word can strand its remaining
+  // letters, even when somebody typed the exact title ("Bramble remote").
+  const literal = query.trim().toLowerCase();
+  const exact = needle.length > 1 ? hay.indexOf(literal) : -1;
+  if (exact >= 0) {
+    const positions = Array.from({ length: literal.length }, (_, i) => exact + i).filter((i) => !/\s/.test(hay[i]!));
+    return { score: matchScore(hay, positions), positions };
+  }
   const positions: number[] = [];
-  let score = 0;
   let from = 0;
   for (const ch of needle) {
     const at = hay.indexOf(ch, from);
@@ -82,19 +91,27 @@ export function fuzzyMatch(query: string, text: string): { score: number; positi
         }
       }
     }
-    const previous = positions[positions.length - 1];
-    if (previous !== undefined && pick === previous + 1) score += 4; // together
-    else if (startsWord(hay, pick)) score += 3; // starts a word
-    else score += 1; // present, at least
-    score -= (pick - from) * 0.1; // each letter skipped costs a little
     positions.push(pick);
     from = pick + 1;
   }
-  // A prefix match is what most people mean by "starts typing the name".
+  return { score: matchScore(hay, positions), positions };
+}
+
+/** One scoring rule for the literal reading and the existing abbreviation
+ * fallback. Only the chosen positions differ. */
+function matchScore(hay: string, positions: readonly number[]): number {
+  let score = 0;
+  let from = 0;
+  for (const [i, pick] of positions.entries()) {
+    const previous = positions[i - 1];
+    if (previous !== undefined && pick === previous + 1) score += 4;
+    else if (startsWord(hay, pick)) score += 3;
+    else score += 1;
+    score -= (pick - from) * 0.1;
+    from = pick + 1;
+  }
   if (positions[0] === 0) score += 2;
-  // Shorter titles that fit the same letters are the tighter reading.
-  score -= hay.length * 0.01;
-  return { score, positions };
+  return score - hay.length * 0.01;
 }
 
 function startsWord(text: string, at: number): boolean {
@@ -119,51 +136,59 @@ function startsWord(text: string, at: number): boolean {
  * a canvas deleted, or one whose home is not this origin, is not somewhere
  * this list can take you.
  *
- * ## Archived canvases: out of the list, in reach of a search (#194)
+ * ## Archived canvases: a scope, and the default is not everything (#194)
  *
- * The shelf is a fix for a list that only grows, so **with no query there is
- * no shelf here** — that case IS a list, and it is the one the home screen
- * hides them from. A switcher that kept showing them would have made Archive
- * a change to one list and not the other, which is the same as not working.
+ * `scope` is the same `ShelfScope` the home screen's `Archived` toggle and
+ * `isocan canvas list --archived / --with-archived` pass to `inScope`, so
+ * "archived" cannot come to mean one set in the switcher and another in the
+ * terminal. The switcher offers two of the three: `"live"`, the default, and
+ * `"all"` — its **Include archived** toggle, which is `--with-archived` in the
+ * app's words.
  *
- * **With a query they are all offered, under every live match, marked.** A
- * typed query is a statement of intent, and refusing to find a canvas
- * somebody named is the other half of this feature failing — the issue's own
- * title asks for a search that can reach in. This is the shape the file
- * already uses one paragraph down for descriptions: *a second chance, not a
- * first*. Ordered by a sort key rather than a score penalty, because "below
- * every live match" is the rule, and a penalty large enough to mean that is a
- * number somebody has to keep large enough.
+ * **`"live"` means live whether or not anything is typed.** The shelf is a
+ * fix for a list that only grows, and a search that quietly reached in would
+ * make Archive a change to the list and not to the search — the issue asked
+ * for a search whose default scope is not everything, and for a control that
+ * widens it.
  *
- * So there is no scope control, no toggle and no prefix to learn. What makes
- * that safe is the marking: `shelved` rides on the row, and a surface that
- * draws these must say so, or a canvas somebody put away comes back
- * indistinguishable from one they did not.
+ * **Under `"all"` an archived canvas is ranked like any other, and marked.**
+ * The person asked for the shelf, so it is not a second chance any more: the
+ * one they are most likely looking for is an archived one, and ordering every
+ * weaker live match above it would make the thing they widened the search to
+ * find its last row. One order, a mark on the rows that are away — which is
+ * exactly what `--with-archived` prints, a column in one table rather than a
+ * second table under the first.
+ *
+ * What makes mixing them safe is the marking: `shelved` rides on the row, and
+ * a surface that draws these must say so, or a canvas somebody put away comes
+ * back indistinguishable from one they did not. `"shelved"` works too, and
+ * the switcher uses it only to count what the live scope is hiding.
  */
 export function rankCanvases(
   canvases: readonly Canvas[],
   query: string,
   recentIds: readonly string[],
   except: string | null = null,
+  scope: ShelfScope = "live",
 ): SwitchRow[] {
-  const byId = new Map(canvases.map((canvas) => [canvas.id, canvas]));
+  const candidates = canvases.filter((canvas) => canvas.id !== except && inScope(canvas, scope));
+  const byId = new Map(candidates.map((canvas) => [canvas.id, canvas]));
   const rank = new Map(recentIds.map((id, i) => [id, i]));
-  const candidates = canvases.filter((canvas) => canvas.id !== except);
   const trimmed = query.trim();
   if (trimmed.length === 0) {
+    // Out of scope is out of `byId`, so a canvas visited lately and put away
+    // since cannot come back in through Recent — recency is the strongest
+    // reason a row is offered, and so the likeliest smuggler.
     const recent = recentIds
       .map((id) => byId.get(id))
-      .filter((canvas): canvas is Canvas => canvas !== undefined && canvas.id !== except);
+      .filter((canvas): canvas is Canvas => canvas !== undefined);
     const rest = sortCanvases(
       candidates.filter((canvas) => !rank.has(canvas.id)),
       "recent",
     );
-    // No query is the list case, and the list is where the shelf is the
-    // point: a canvas put away is out of this one too.
-    const live = (canvas: Canvas) => !isShelved(canvas);
     return [
-      ...recent.filter(live).map((canvas) => ({ canvas, positions: [], recent: true, shelved: false })),
-      ...rest.filter(live).map((canvas) => ({ canvas, positions: [], recent: false, shelved: false })),
+      ...recent.map((canvas) => ({ canvas, positions: [], recent: true, shelved: isShelved(canvas) })),
+      ...rest.map((canvas) => ({ canvas, positions: [], recent: false, shelved: isShelved(canvas) })),
     ];
   }
   const hits = candidates.flatMap((canvas) => {
@@ -178,9 +203,6 @@ export function rankCanvases(
   });
   hits.sort(
     (a, b) =>
-      // Archived last, whatever it scored: this is a rule, not a preference,
-      // and a score penalty big enough to be one is a number to keep big.
-      Number(a.shelved) - Number(b.shelved) ||
       b.score - a.score ||
       (rank.get(a.canvas.id) ?? Infinity) - (rank.get(b.canvas.id) ?? Infinity) ||
       b.canvas.updatedAt.localeCompare(a.canvas.updatedAt) ||
@@ -209,4 +231,32 @@ export function litRuns(text: string, positions: readonly number[]): Array<[stri
     else runs.push([text[i]!, on]);
   }
   return runs;
+}
+
+/** Keep Recent intact, then group the remaining unranked rows by visible
+ * space. Membership is a visible space's fact, never a creator-only filter.
+ * Search stays one ranked list. Headings are labels; space ids keep equal
+ * names and a real space named Recent distinct. */
+export function groupSwitchRows(
+  rows: readonly SwitchRow[], spaces: readonly import("./grants.ts").Space[], query: string,
+): Array<{ row: SwitchRow; group: string | null; groupId: string | null }> {
+  if (query.trim()) return rows.map((row) => ({ row, group: null, groupId: null }));
+  const membership = new Map<string, { name: string; id: string }>();
+  for (const space of spaces) {
+    if (space.deletedAt) continue;
+    for (const id of space.canvasIds) membership.set(id, space);
+  }
+  const recent = rows.filter((row) => row.recent).map((row) => ({ row, group: "Recent", groupId: "recent" }));
+  const groups = new Map<string, { name: string; rows: SwitchRow[] }>();
+  for (const row of rows) {
+    if (row.recent) continue;
+    const space = membership.get(row.canvas.id);
+    const id = space?.id ?? "unfiled";
+    const group = groups.get(id) ?? { name: space?.name ?? "No space", rows: [] };
+    group.rows.push(row);
+    groups.set(id, group);
+  }
+  return [...recent, ...[...groups].sort(([a, av], [b, bv]) =>
+    a === "unfiled" ? 1 : b === "unfiled" ? -1 : av.name.localeCompare(bv.name) || a.localeCompare(b),
+  ).flatMap(([groupId, group]) => group.rows.map((row) => ({ row, group: group.name, groupId })))];
 }

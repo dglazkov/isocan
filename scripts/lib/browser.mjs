@@ -17,6 +17,7 @@
  */
 import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -155,10 +156,21 @@ export async function throughTheDoor(b, origin, name, clientId = "browser") {
   })()`);
 }
 
-export async function browser() {
-  const dir = mkdtempSync(path.join(tmpdir(), "isocan-cdp-"));
-  const proc = spawn(chromeOrDie(), ["--headless=new", "--remote-debugging-port=0",
-    `--user-data-dir=${dir}`, "--no-first-run", "--hide-scrollbars", "about:blank"], { stdio: "ignore" });
+/**
+ * `headless: false` omits `--headless=new`, so Chrome opens a visible window.
+ * `args` are extra Chrome switches for a caller that measures something the
+ * default browser cannot — `scripts/local-judge-measure.mjs` asks for WebGPU,
+ * a resolver that reaches nothing but loopback, and a net log. They are
+ * appended after the defaults and never replace them.
+ */
+export async function browser({ proxyServer = null, args = [], headless = true } = {}) {
+  if (proxyServer !== null && !/^http:\/\/127\.0\.0\.1:\d+$/.test(proxyServer)) throw new Error("Browser proxy must be an owned loopback endpoint");
+  // **`ws` before Chrome** (cleanup phase 4, DC-1, 27 Sep 2026). This import
+  // came after the spawn, so on the release tree — which had no `ws` to give
+  // it — every `isocan canvas shot` and PDF export started a headless Chrome,
+  // failed to import, and exited leaving that Chrome running. Nothing can be
+  // left behind by a process that has not been started yet.
+  //
   // Ordinary resolution first, and the explicit path only as the fallback it
   // was meant to be. The hardcoded one alone fails in a git WORKTREE, whose
   // `node_modules` is the main checkout's and not `repo/node_modules` — so the
@@ -167,15 +179,48 @@ export async function browser() {
   const { default: WebSocket } = await import("ws").catch(() =>
     import(new URL("../../node_modules/ws/index.js", import.meta.url).href),
   );
-  let endpoint;
+  const dir = mkdtempSync(path.join(tmpdir(), "isocan-cdp-"));
+  // `headless: false` opens a real window — for a measurement that must not be
+  // taken in headless mode (the local judge's GPU timings). Every other caller
+  // keeps the default.
+  //
+  // **No code-sign clone.** On macOS, Chrome copies itself into a temp folder
+  // at every start and deletes the copy when it quits. A grader that kills
+  // Chrome leaves the copy behind, and each copy that touches the network gets
+  // its own "Google Chrome" row in System Settings' Local Network list — 117
+  // copies and 13 extra rows built up this way before anyone noticed. The
+  // feature only exists to survive an update mid-run, which a throwaway
+  // profile never needs. A caller's own `--disable-features` would replace
+  // this one (Chrome keeps the last), so pass more features here, not there.
+  const proc = spawn(chromeOrDie(), [...(headless ? ["--headless=new"] : []), "--remote-debugging-port=0",
+    `--user-data-dir=${dir}`, "--no-first-run", "--hide-scrollbars", "--disable-features=MacAppCodeSignClone",
+    ...(proxyServer ? [`--proxy-server=${proxyServer}`, "--proxy-bypass-list=<-loopback>", "--disable-quic", "--force-webrtc-ip-handling-policy=disable_non_proxied_udp"] : []),
+    ...args,
+    "about:blank"], { stdio: "ignore" });
+  // **Every failure from here to a working handle takes Chrome with it**
+  // (DC-1). Only the DevTools wait had a cleanup; a socket that would not
+  // open, or a target Chrome would not make, threw past a live browser that
+  // nothing held a handle to any more.
+  const sockets = [];
   try {
-    endpoint = await devtoolsEndpoint(dir, proc);
+    return await drive(proc, dir, WebSocket, sockets);
   } catch (err) {
-    proc.kill(); rmSync(dir, { recursive: true, force: true }); throw err;
+    // A socket still connecting emits `error` when terminated, and with no
+    // listener that would crash the process over the teardown of a failure
+    // already being thrown below — which is the error worth reading.
+    for (const socket of sockets) { socket.on("error", () => {}); socket.terminate(); }
+    proc.kill("SIGKILL");
+    rmSync(dir, { recursive: true, force: true });
+    throw err;
   }
+}
+
+async function drive(proc, dir, WebSocket, sockets) {
+  const endpoint = await devtoolsEndpoint(dir, proc);
   // The browser endpoint, then a page target of our own — created rather than
   // discovered, so nothing depends on which targets happen to exist.
   const browserWs = new WebSocket(endpoint, { maxPayload: 1 << 28 });
+  sockets.push(browserWs);
   await new Promise((r, j) => { browserWs.once("open", r); browserWs.once("error", j); });
   let bid = 0; const bpending = new Map();
   browserWs.on("message", (d) => {
@@ -192,24 +237,40 @@ export async function browser() {
   if (!mine) throw new Error("chrome would not make a page target");
   const wsUrl = endpoint.replace(/\/devtools\/browser\/.*$/, `/devtools/page/${targetId}`);
   const ws = new WebSocket(wsUrl, { maxPayload: 1 << 28 });
+  sockets.push(ws);
   await new Promise((r, j) => { ws.once("open", r); ws.once("error", j); });
   let id = 0; const pending = new Map(); let errors = [];
   /** Callers waiting on a CDP EVENT rather than a reply — see `once`. */
   const waiters = new Map();
+  const listeners = new Map();
   ws.on("message", (d) => {
     const m = JSON.parse(d.toString());
     if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); return; }
+    for (const listener of listeners.get(m.method) ?? []) listener(m.params, m.sessionId);
     if (m.method === "Runtime.exceptionThrown") errors.push((m.params.exceptionDetails?.exception?.description ?? "").split("\n")[0]);
     const w = waiters.get(m.method);
     if (w) { waiters.delete(m.method); w(m.params); }
   });
-  const send = (method, params = {}) => {
-    const mid = ++id; ws.send(JSON.stringify({ id: mid, method, params }));
+  // `sessionId` speaks to a target attached with `Target.setAutoAttach({ flatten: true })` —
+  // a Worker the page started — over this same socket.
+  const send = (method, params = {}, sessionId) => {
+    const mid = ++id; ws.send(JSON.stringify({ id: mid, method, params, ...(sessionId ? { sessionId } : {}) }));
     return new Promise((res, rej) => pending.set(mid, (m) => (m.error ? rej(new Error(JSON.stringify(m.error))) : res(m.result))));
   };
   await send("Page.enable"); await send("Runtime.enable");
+  let closing;
   return {
     send,
+    /** The Chrome process, so a caller can read its process tree's memory. */
+    pid: proc.pid,
+    /** Observe every occurrence, including requests for images and frames.
+     * Return an unsubscribe function so a journey can bound its observation. */
+    on: (method, listener) => {
+      if (!listeners.has(method)) listeners.set(method, new Set());
+      const group = listeners.get(method);
+      group.add(listener);
+      return () => { group.delete(listener); if (group.size === 0 && listeners.get(method) === group) listeners.delete(method); };
+    },
     /**
      * **Arm a listener for one CDP event, BEFORE the thing that causes it.**
      *
@@ -227,11 +288,32 @@ export async function browser() {
       return r.result?.value;
     },
     takeErrors: () => { const e = errors; errors = []; return e; },
-    close: async () => {
-      try { ws.close(); } catch {}
-      proc.kill();
-      await new Promise((r) => { proc.once("exit", r); setTimeout(r, 2000); });
-      try { rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); } catch {}
-    },
+    close: () => closing ??= (async () => {
+      listeners.clear();
+      // The browser control socket keeps Node alive just as the page socket
+      // does. Close both, and terminate a peer that never finishes its close.
+      await Promise.all([ws, browserWs].map((socket) => new Promise((resolve) => {
+        if (socket.readyState === WebSocket.CLOSED) return resolve();
+        const done = () => { clearTimeout(timer); socket.off("close", done); resolve(); };
+        const timer = setTimeout(() => { socket.terminate(); done(); }, 500);
+        socket.once("close", done);
+        try { socket.close(); } catch { socket.terminate(); done(); }
+      })));
+      const alive = () => proc.exitCode === null && proc.signalCode === null;
+      const stop = (signal) => new Promise((resolve) => {
+        if (!alive()) return resolve();
+        const done = () => { clearTimeout(timer); proc.off("exit", done); resolve(); };
+        const timer = setTimeout(done, 2000);
+        proc.once("exit", done);
+        proc.kill(signal);
+      });
+      await stop("SIGTERM");
+      if (alive()) await stop("SIGKILL");
+      if (alive()) throw new Error("the owned Chrome process did not exit");
+      // Several journeys close browsers together. Blocking profile removal can
+      // hold the event loop past another browser’s exit timer, before its queued
+      // exit event is delivered. Await removal without blocking that delivery.
+      await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    })(),
   };
 }

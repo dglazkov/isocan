@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 60" width="320" height="60">
+  <rect x="20" y="50" width="280" height="3" fill="#7a4b1e"/>
+  <text x="160" y="40" text-anchor="middle" font-family="Georgia, serif" font-size="36" fill="#5b3412">Acme Bakery</text>
+</svg>

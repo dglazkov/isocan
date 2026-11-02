@@ -34,8 +34,15 @@ describe("a persona run changes nothing", () => {
     // `@isocan/core` is TypeScript and this is a plain script, so the tempting
     // shortcut is a second little front-matter reader — and then one persona
     // says two things depending on who asked.
-    expect(runner).toMatch(/--json persona ls/);
+    expect(runner).toMatch(/--json persona --root \$\{JSON\.stringify\(repo\)\} ls/);
     expect(runner).not.toContain("splitFrontMatter");
+  });
+
+  it("reads THIS checkout's personas, not the one a worktree is bound to", () => {
+    // From a git worktree the binding answers with the MAIN checkout, so the
+    // run took its numbers against somebody else's bounds and could not see a
+    // persona added in the worktree — `scripts/ratchet.mjs` hit the same.
+    expect(runner).toContain("persona --root");
   });
 
   it("never reads a broken instrument as a zero", () => {
@@ -46,6 +53,22 @@ describe("a persona run changes nothing", () => {
      */
     expect(runner).toContain("instrument broken");
     expect(runner).toContain("expected a number on stdout");
+  });
+
+  it("writes which number a debt is a debt against, through the same instrument", () => {
+    /**
+     * A goal bounded `at most 0` on an overshoot cannot say which ceiling it
+     * overshot, and `scripts/reviews.mjs` read two nights at two ceilings as
+     * one question with one answer standing. The finding carries the basis now.
+     *
+     * Taken through `take` rather than run loose: a basis that could not be
+     * read is a BROKEN INSTRUMENT like any other, because a report that
+     * silently drops which ceiling it is 0-past is exactly the report that was
+     * indistinguishable from the night before.
+     */
+    expect(runner).toContain("basisOf");
+    expect(runner).toMatch(/take\(\{ measuredBy: goal\.against \}\)/);
+    expect(runner).toMatch(/\$\{r\.basis\}/);
   });
 
   it("fails on a broken instrument and NOT on a missed goal", () => {

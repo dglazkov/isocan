@@ -10,8 +10,11 @@
  * answer whenever it highlights what just changed.
  */
 
-import type { CanvasContents } from "./model.ts";
+import type { CanvasContents, Item } from "./model.ts";
+import { inCanvasScope } from "./canvas-scope.ts";
+import { isGroupItem } from "./canvas-groups.ts";
 import type { Operation, OperationType } from "./ops.ts";
+import { groupChangeItemIds } from "./canvas-groups.ts";
 
 /**
  * Every item id this op is about. Comment ops count: a comment ON an item is
@@ -26,14 +29,26 @@ export function itemsTouchedBy(op: Operation, canvas?: CanvasContents | null): s
   };
 
   switch (op.type) {
+    case "design.decide": return [op.decision.basis.target.artifact.itemId, ...anchorOf(op.threadId)];
+    case "design.restore": return [op.effect.item.itemId, ...anchorOf(op.effect.threadId)];
+    case "design.repair": return [op.repair.target.artifact.itemId];
+    case "design.compare":
+    case "design.respond": return anchorOf(op.threadId);
+    case "design.request":
+    case "design.receipt":
+      return op.effect ? itemsTouchedBy(op.effect, canvas) : [op.type === "design.receipt" ? op.itemId : op.action.kind === "start" ? op.action.itemId : op.action.brief.itemId];
+    case "group.change":
+      return groupChangeItemIds(op);
     case "item.add":
     case "item.move":
     case "item.resize":
     case "item.update":
     case "item.addVersion":
+    case "item.edit":
     case "item.setCurrentVersion":
     case "item.removeVersion":
     case "item.restoreVersion":
+    case "item.pruneVersions":
     case "item.delete":
     case "item.restore":
       return [op.itemId];
@@ -46,6 +61,8 @@ export function itemsTouchedBy(op: Operation, canvas?: CanvasContents | null): s
     case "thread.setAnchor":
       return op.anchorItemId ? [op.anchorItemId] : [];
     case "thread.reply":
+    case "questionnaire.ask":
+    case "questionnaire.answer":
     case "thread.delete":
     case "comment.remove":
     case "comment.restore":
@@ -53,8 +70,13 @@ export function itemsTouchedBy(op: Operation, canvas?: CanvasContents | null): s
     case "thread.restore":
       return op.thread.anchorItemId ? [op.thread.anchorItemId] : [];
     default:
-      // Home-scoped and canvas-wide ops (actor.*, project.*, trash.empty,
-      // thread.setMain) are about no item in particular.
+      // Home-scoped and canvas-wide ops (actor.*, agent.*, project.*,
+      // trash.empty, thread.setMain) are about no item in particular. The
+      // agent family is deliberately here rather than listed with an empty
+      // return of its own: `agent.invite` enrols on the canvas, not on any
+      // item, so a `wait --item` watcher has nothing to be woken for — while
+      // `wait --op agent.invite` still matches, because `opTypeMatches` reads
+      // the type and never this table.
       return [];
   }
 }
@@ -72,6 +94,34 @@ export function opTypeMatches(type: OperationType, wanted: readonly string[]): b
     if (pattern.endsWith("*")) return type.startsWith(pattern.slice(0, -1));
     return false;
   });
+}
+
+/**
+ * **Does this op happen inside one of these areas?** (`wait --in`, 11 Sep
+ * 2026 — asked for by the sprint journey's Scene 4, and by a design
+ * competition's fighter parked on its own lane.) Geometry, like area
+ * membership everywhere: an item it touches whose centre is in the area, or a
+ * thread pinned to such an item, or a freestanding thread pinned inside it.
+ *
+ * Judged on the canvas as it is AFTER the op, which is the only canvas a
+ * waiter holds: a move out of the area reads by where the item went, and an
+ * item already gone is in no area. Both are the honest reading of "in".
+ */
+export function opTouchesAreas(op: Operation, areaIds: readonly string[], canvas?: CanvasContents | null): boolean {
+  if (!canvas || areaIds.length === 0) return false;
+  const areas = areaIds.map((id) => canvas.items[id]).filter((a): a is Item => a !== undefined);
+  if (areas.length === 0) return false;
+  const inside = (x: number, y: number) =>
+    areas.some((a) => !isGroupItem(a) && x >= a.x && x < a.x + a.width && y >= a.y && y < a.y + a.height);
+  for (const id of itemsTouchedBy(op, canvas)) {
+    const item = canvas.items[id];
+    if (item && areas.some((area) => (isGroupItem(area) && area.id === item.id) || inCanvasScope(canvas, area, item))) return true;
+  }
+  if (op.type === "thread.create" || op.type === "thread.reply" || op.type === "questionnaire.ask" || op.type === "questionnaire.answer") {
+    const thread = canvas.threads[op.threadId];
+    if (thread && thread.anchorItemId === null && inside(thread.x, thread.y)) return true;
+  }
+  return false;
 }
 
 /** Does this op pass both filters? Items and types narrow independently: an op

@@ -32,14 +32,15 @@
  * for the same reason: "0 contrast failures" and "nothing could be measured"
  * must never render the same. Broken reads amber and says which command failed.
  */
-import { createHash } from "node:crypto";
 import { execSync, execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { register } from "tsx/esm/api";
 import { BOARD_IDENTITY } from "./board-identity.mjs";
+import { panelPublisher } from "./lib/panel.mjs";
+import { unreadOf } from "./lib/reading.mjs";
 
 // The bin's own trick: register tsx so the workspace's TypeScript sources
 // import directly, then load the API. Dynamic, because a static import would
@@ -60,6 +61,9 @@ const ONLY = arg("--only");
 const NOTIFY = has("--notify");
 const LAY_OUT = has("--layout");
 const AS_ME = has("--as-me");
+/** How deep a panel's stack may grow before this generator prunes it — see
+ * `publish`. `--keep-versions <n>` overrides for one run. */
+const KEEP_VERSIONS = Math.max(1, Number(arg("--keep-versions", 14)) || 14);
 
 /** The canvas these panels live on. The marker in this directory names the
  *  repo's OWN canvas, which is not necessarily the board's — so the board's is
@@ -101,7 +105,6 @@ const board = DRY || !CANVAS ? null : await (await homeOnce()).canvas(CANVAS);
 const git = (...args) => execFileSync("git", args, { cwd: repo, encoding: "utf8" }).trimEnd();
 const esc = (s) =>
   String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-const sha256 = (buf) => createHash("sha256").update(buf).digest("hex");
 
 /* ── what the repo says about itself ─────────────────────────────────────── */
 
@@ -144,6 +147,9 @@ function take(goal) {
   try {
     out = execSync(goal.measuredBy, { cwd: repo, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   } catch (err) {
+    // A recorded reading nobody has taken yet (`scripts/lib/reading.mjs`): said, never a number, never broken.
+    const line = unreadOf(err);
+    if (line) return { unread: line };
     return { broken: `the command failed: ${String(err.stderr ?? err.message).trim().slice(0, 240)}` };
   }
   const value = Number(out.trim().split(/\s+/).pop());
@@ -159,7 +165,7 @@ const met = (goal, value) =>
 function verdictOf(readings, goals) {
   if (goals.length === 0) return "grey";
   if (readings.some((r) => r.broken)) return "amber";
-  return readings.every((r) => met(r.goal, r.value)) ? "green" : "red";
+  return readings.every((r) => r.unread || met(r.goal, r.value)) ? "green" : "red";
 }
 
 /** `43 8 * * *` → `daily 08:43`. Anything cleverer than this belongs in a
@@ -355,6 +361,11 @@ function personaPanel(p, readings, verdict, run) {
               <tr><td colspan="4" class="muted" style="font-size:11.5px;padding-top:0;border-bottom:0">
               <span class="mono">${esc(r.goal.measuredBy)}</span> — ${esc(r.broken)}</td></tr>`;
           }
+          if (r.unread) {
+            return `<tr><td>${esc(r.goal.name)}</td><td class="num muted">${esc(target)}</td>
+              <td class="num">—</td><td><span class="pill grey">no reading yet</span></td></tr>
+              <tr><td colspan="4" class="muted" style="font-size:11.5px;padding-top:0;border-bottom:0">${esc(r.unread)}</td></tr>`;
+          }
           const ok = met(r.goal, r.value);
           const was = r.goal.baseline?.value;
           // Against the BASELINE as well as the bound: a number inside its
@@ -458,7 +469,7 @@ function ci() {
  */
 function signal(c, board) {
   const broken = board.some((b) => b.readings.some((r) => r.broken));
-  const missed = board.some((b) => b.readings.some((r) => !r.broken && !met(r.goal, r.value)));
+  const missed = board.some((b) => b.readings.some((r) => !r.broken && !r.unread && !met(r.goal, r.value)));
   if (c.unknown) return { word: broken ? "RED" : "NO SIGNAL", tone: broken ? "red" : "grey" };
   if (c.failed.length || broken) return { word: "RED", tone: "red" };
   if (c.running.length || missed) return { word: "AMBER", tone: "amber" };
@@ -468,7 +479,7 @@ function signal(c, board) {
 function buildPanel(c, board, f) {
   const { word, tone } = signal(c, board);
   const goals = board.flatMap((b) => b.readings);
-  const missed = goals.filter((r) => !r.broken && !met(r.goal, r.value));
+  const missed = goals.filter((r) => !r.broken && !r.unread && !met(r.goal, r.value));
   const broken = goals.filter((r) => r.broken);
 
   const ciLine = c.unknown
@@ -657,7 +668,7 @@ function statusPanel(board, f) {
   const misses = board
     .flatMap((b) =>
       b.readings
-        .filter((r) => !r.broken && !met(r.goal, r.value))
+        .filter((r) => !r.broken && !r.unread && !met(r.goal, r.value))
         .map(
           (r) =>
             `<tr><td>${esc(b.persona.name)}</td><td>${esc(r.goal.name)}</td>
@@ -842,7 +853,7 @@ function briefPanel(commits, board, rm, f, now) {
 
   const misses = board.flatMap((b) =>
     b.readings
-      .filter((r) => !r.broken && !met(r.goal, r.value))
+      .filter((r) => !r.broken && !r.unread && !met(r.goal, r.value))
       .map(
         (r) =>
           `<li><b>${esc(b.persona.name)}</b> — ${esc(r.goal.name)} is ${r.value}, past ${r.goal.bound.value}</li>`,
@@ -892,60 +903,14 @@ function briefPanel(commits, board, rm, f, now) {
 /** Only a dry run renders to disk — the write path hands the daemon the bytes
  *  as a value, so the temp directory the CLI's `add <file>` demanded is gone. */
 const out = DRY ? mkdtempSync(path.join(tmpdir(), "isocan-board-")) : null;
-let existing = DRY || !board ? [] : await board.items();
-const changed = [];
-
 /**
  * One panel onto the canvas: created once, then a new VERSION every time its
- * bytes change — and nothing at all when they have not.
- *
- * **Identity is a property, not the title.** A panel is found by
- * `properties.board === <slug>`, so renaming "Recently" on the canvas to
- * "This week" keeps it the same panel. Title matching is the fallback, used
- * once per panel to adopt one made before this rule existed — and it stamps the
- * property as it goes, so the fallback is needed exactly once.
- *
- * The bytes are compared against the current version's `blobHash`, which is the
- * sha256 of what the canvas is holding. So an unchanged run is genuinely a
- * no-op rather than an identical version stacked on an identical version, and
- * the stack that IS there is the history of the repo's health. The item the
- * comparison needs comes back from the call that created it — the re-list
- * after every create is gone.
+ * bytes change, and nothing at all when they have not — found by
+ * `properties.board`, and its stack bounded at `KEEP_VERSIONS` (every commit
+ * re-publishes these, and 149 versions of `Build` in a fortnight was silt).
+ * The mechanism is `scripts/lib/panel.mjs`, shared with the roadmap.
  */
-async function publish(slug, title, html, place) {
-  if (DRY) {
-    const file = path.join(out, `${slug}.html`);
-    writeFileSync(file, html);
-    console.log(`would publish "${title}" → ${file}`);
-    return;
-  }
-  const hash = sha256(Buffer.from(html));
-  const byProp = existing.find((i) => i.properties?.board === slug);
-  const item = byProp ?? existing.find((i) => i.title === title);
-
-  if (!item) {
-    const made = await board.add({
-      title,
-      content: html,
-      mime: "text/html",
-      filename: `${slug}.html`,
-      ...(place?.at ? { at: place.at } : {}),
-      ...(place?.size ? { size: place.size } : {}),
-      properties: { board: slug, ...(place?.props ?? {}) },
-    });
-    changed.push({ title, what: "created" });
-    existing.push(made);
-    return;
-  }
-  // Adopting a panel from before identity was a property: stamp it once, and
-  // never match this one by title again.
-  if (!byProp) await board.set(item.id, { properties: { board: slug } });
-
-  const current = item.versions.find((v) => v.id === item.currentVersionId);
-  if (current?.blobHash === hash) return;
-  await board.edit(item.id, { content: html, mime: "text/html", filename: `${slug}.html` });
-  changed.push({ title, what: `v${item.versions.length + 1}` });
-}
+const { publish, existing, changed } = await panelPublisher({ canvas: board, dryDir: out, keepVersions: KEEP_VERSIONS, key: "board" });
 
 /* ── the run ─────────────────────────────────────────────────────────────── */
 

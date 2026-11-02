@@ -16,6 +16,8 @@
  * now PRODUCES something the home can recognize later.
  */
 
+import type { EndReach } from "./ended.ts";
+
 // ---- carriers ----
 
 /** The browser's carrier: one HTTP-only cookie at the one origin.
@@ -31,7 +33,7 @@ export const BADGE_COOKIE = "isocan_badge";
  * cookie when both arrive: an explicit credential beats an ambient one, and a
  * request carrying a bearer is by construction not a cookie-driven request,
  * so it needs no Origin check. */
-export const BADGE_SCHEME = "Bearer";
+const BADGE_SCHEME = "Bearer";
 
 /** Which carrier a caller is asking the door for. Stated, never sniffed:
  * `Origin` presence and `Sec-Fetch-Mode` are guessable and wrong at the
@@ -81,6 +83,7 @@ interface DotToken {
   secret: string;
 }
 
+/** The one writer of the `<id>.<secret>` shape `parseDotToken` reads back. */
 export function formatDotToken(id: string, secret: string): string {
   return `${id}.${secret}`;
 }
@@ -103,10 +106,12 @@ interface BadgeToken {
   secret: string;
 }
 
+/** A badge's token, in the shared dot shape — the field name says which kind of id it is. */
 export function formatBadgeToken(badgeId: string, secret: string): string {
   return formatDotToken(badgeId, secret);
 }
 
+/** A presented badge token, or null when it is not one — refused the same as a missing one. */
 export function parseBadgeToken(raw: string | undefined | null): BadgeToken | null {
   const parsed = parseDotToken(raw);
   return parsed ? { badgeId: parsed.id, secret: parsed.secret } : null;
@@ -114,6 +119,7 @@ export function parseBadgeToken(raw: string | undefined | null): BadgeToken | nu
 
 // ---- the door ----
 
+/** What a caller tells the door about itself: which carrier, and whether it is framed. */
 export interface DoorRequest {
   /** Default `bearer`. */
   carrier?: BadgeCarrier;
@@ -136,6 +142,7 @@ export interface DoorRequest {
   framed?: boolean;
 }
 
+/** What the door hands back: the new badge's id, and its secret only for a bearer. */
 export interface DoorResponse {
   badgeId: string;
   /**
@@ -149,15 +156,121 @@ export interface DoorResponse {
 /** Where a caller with no badge goes to get one. */
 export const DOOR_ROUTE = "/api/door";
 
-// ---- refusal ----
+/**
+ * One badge, as `identity.json`'s `auth` block holds it.
+ *
+ * Keyed by home address in that block, which is what makes a second badge
+ * free: a machine holds its badge at `http://127.0.0.1:4441` (its own daemon)
+ * AND its badge at `https://isocan.io` (the daemon's home) in the same file,
+ * under two keys, with neither aware of the other.
+ *
+ * **From phase 10.3 the key is NORMALIZED** (`normalizeHomeUrl`), and here
+ * rather than at each call site — house rule 4's ordinary argument, sharpened
+ * by what this file already says: two answers to "which credential is in that
+ * file" on one machine is the divergence the module exists to prevent, and a
+ * trailing slash would have been exactly that. A daemon holds one badge per
+ * home now, so an address that spelled itself two ways would knock on one
+ * door twice and hold two badges, of which only one carries the admissions.
+ *
+ * **No on-disk migration, and that is measured rather than assumed.** The
+ * `auth` block was already keyed per address, and the only spellings that
+ * CHANGE under normalization are a trailing slash and a mixed-case host. A
+ * machine whose config carried one re-badges exactly once: the fresh badge
+ * holds no admissions, the local half of the sweep keeps every canvas, and the
+ * machine is let back in by a pass. That cost belongs in 10.5's upgrade doc,
+ * not in engineering around it.
+ */
+export interface StoredBadge {
+  badgeId: string;
+  secret: string;
+  at: string;
+}
 
 /**
- * Why a request was refused, as `ApiError.code`. The distinction is not
- * decoration — it is the recovery branch. `no-badge` means "get one";
- * `bad-badge` means "throw away what you stored and get a new one" (a home
- * that was wiped, and in phase 9 a badge that was killed).
+ * Where a holder keeps its badge, as the two verbs the route surface uses. On
+ * the laptop that is `identity.json` (`fileBadgeStore` in `@isocan/server`); a
+ * host with no disk keeps it wherever it keeps things.
  */
-type BadgeRefusal = "no-badge" | "bad-badge" | "bad-origin";
+export interface BadgeStore {
+  /** True when an upstream proxy injects Authorization (ISOCAN_BADGE_UPSTREAM=1):
+   * the client sends no Authorization of its own and never knocks on the door. */
+  readonly upstream?: boolean;
+  read(): Promise<StoredBadge | null>;
+  keep(badge: StoredBadge): Promise<void>;
+}
+
+/**
+ * What the door said, refusal and all — the same knock, with the answer kept
+ * instead of flattened to null.
+ *
+ * **Why this exists** (phase 13.7). The door is metered now, and a `null`
+ * here becomes, one frame up the stack, the ORIGINAL 401 the caller was
+ * recovering from: *"a badge is required — ask the door for one."* Told to a
+ * person whose knock was just refused 429, that is this codebase's oldest
+ * failure — the cheerful wrong answer — delivered as advice to do the one
+ * thing that cannot work. So the refusal travels.
+ *
+ * `knockOnDoor` keeps its null contract for the callers whose recovery is
+ * genuinely "give up quietly" (`HomeLink.ensureBadge`, where the replica's
+ * next attempt is the retry), and the CLI takes this form because its caller
+ * is a person reading a terminal.
+ */
+export type DoorAnswer =
+  | { badge: StoredBadge }
+  | { refused: { status: number; error: string; code?: string } };
+
+/**
+ * Knock on the door at `base` for a bearer badge, and keep the refusal if there is one:
+ * never throws, and an unreachable door is a refusal with status 0.
+ */
+export async function askTheDoor(
+  base: string,
+  timeoutMs = 10_000,
+  signal?: AbortSignal,
+  fetchFn: typeof fetch = fetch,
+): Promise<DoorAnswer> {
+  try {
+    const res = await fetchFn(`${base}${DOOR_ROUTE}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ carrier: "bearer" }),
+      signal: AbortSignal.any([AbortSignal.timeout(timeoutMs), ...(signal ? [signal] : [])]),
+    });
+    const body = (await res.json().catch(() => null)) as (DoorResponse & Refused) | null;
+    if (!res.ok) {
+      return {
+        refused: {
+          status: res.status,
+          error: body?.error ?? `the door refused: HTTP ${res.status}`,
+          ...(body?.code ? { code: body.code } : {}),
+        },
+      };
+    }
+    if (!body?.secret) {
+      // 200 with no secret is the door answering a caller it already knows —
+      // which this function's caller, by construction, is not. Nothing to
+      // keep, and nothing a retry improves.
+      return { refused: { status: res.status, error: "the door handed back no secret" } };
+    }
+    return { badge: { badgeId: body.badgeId, secret: body.secret, at: new Date().toISOString() } };
+  } catch (err) {
+    return { refused: { status: 0, error: `could not reach the door at ${base}: ${(err as Error).message}` } };
+  }
+}
+
+/** This file's `{error, code}` — the shape every refusal in `http.ts` uses. */
+interface Refused {
+  error?: string;
+  code?: string;
+}
+
+/** `Authorization: Bearer <badgeId>.<secret>` — the one place that spelling
+ * is written, so a holder cannot get the separator wrong on its own. */
+export function bearerHeader(badge: StoredBadge): Record<string, string> {
+  return { Authorization: `${BADGE_SCHEME} ${formatBadgeToken(badge.badgeId, badge.secret)}` };
+}
+
+// ---- refusal ----
 
 /** A CLI from before the door, talking to a daemon that has one, gets 401 on
  * everything. That is an accepted break — the two ship as one build — but a
@@ -168,6 +281,10 @@ export const BADGE_RESTART_HINT =
 
 /** WebSocket close codes, continuing ws.ts's 4400/4404/4500 convention. */
 export const WS_NO_BADGE = 4401;
+/**
+ * The socket was opened from an origin this daemon does not serve — a 403, and nothing a
+ * new badge would fix, so a client must not answer it by knocking.
+ */
 export const WS_BAD_ORIGIN = 4403;
 /**
  * There is no canvas at that address — the socket half of a 404, and the one
@@ -216,9 +333,6 @@ export interface ActorClaim {
    * at claim time (#60). Informational — which canvas this agent is of. */
   canvasId?: string;
 }
-
-/** badgeId → that badge's claims. */
-type ClaimTable = Record<string, ActorClaim[]>;
 
 // ---- attestations: what a badge has PROVED about its holder (phase 9) ----
 
@@ -313,6 +427,7 @@ export interface BadgeSummary {
   attested?: string[];
 }
 
+/** `GET /api/badges`: every surface that shares the caller's identity. */
 export interface BadgesResponse {
   badges: BadgeSummary[];
 }
@@ -326,6 +441,7 @@ export interface BadgesResponse {
  * laptop is not in one room, it is in all of them.
  */
 export const BADGES_ROUTE = "/api/badges";
+/** One badge's route under `BADGES_ROUTE` — the target of the stolen-laptop `DELETE`. */
 export const badgeRoute = (badgeId: string): string =>
   `${BADGES_ROUTE}/${encodeURIComponent(badgeId)}`;
 
@@ -339,6 +455,15 @@ export const badgeRoute = (badgeId: string): string =>
 export interface KillBadgeResponse {
   killed: BadgeSummary;
   swept: SweepReport;
+  /**
+   * **What the end reached at the moment it happened** (operator phase 4):
+   * the dead badge's own sockets closed with `ended`, and the waits it held
+   * woken. Before this, a kill ended recognition and reached nothing the
+   * badge was holding — the sweep reports only the badges `badgesIn` still
+   * returns, and a dead one is not among them. Optional, so a client reading
+   * an older home gets `undefined` rather than a crash.
+   */
+  reached?: EndReach;
 }
 
 /**

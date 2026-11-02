@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
+import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 /**
  * The repo is the package: `npx github:dglazkov/isocan#release` and
@@ -15,24 +16,164 @@ const readJson = async (rel: string) =>
   JSON.parse(await fs.readFile(path.join(repo, rel), "utf8"));
 
 describe("installable straight from git", () => {
-  it("the root package is the CLI: a bin, and the deps a git install must resolve", async () => {
+  it("the root package is the CLI's bin, and declares only what its own files import", async () => {
     const pkg = await readJson("package.json");
     expect(pkg.bin?.isocan).toBe("packages/cli/bin/isocan.js");
-    // A git install resolves the ROOT package's dependencies only, so what
-    // the CLI needs at runtime has to be listed here too.
-    const cli = await readJson("packages/cli/package.json");
-    const server = await readJson("packages/server/package.json");
-    for (const dep of Object.keys({ ...cli.dependencies, ...server.dependencies })) {
-      if (dep.startsWith("@isocan/")) continue; // resolved by path, see below
-      expect(pkg.dependencies, `${dep} is missing from the root package`).toHaveProperty(dep);
+    /**
+     * **Not a copy of the CLI's dependencies any more** (cleanup phase 4,
+     * DC-2, 27 Sep 2026). That copy existed because a git install of `main`
+     * resolves the root package's dependencies only — and git installs of
+     * `main` stopped: npm installs an empty directory from it (#47), and the
+     * release branch's bundled CLI declares none of them. Kept, the copy was
+     * nine packages nothing at the root imports, each one a second place a
+     * range could drift.
+     *
+     * So a root dependency is here because a root file imports it, because
+     * the release manifest declares it, or because it is named below with why.
+     */
+    // @ts-expect-error — a plain .mjs module with no types.
+    const { RELEASE_DEPENDENCIES } = await import("../scripts/release.mjs");
+    const kept: Record<string, string> = {
+      "@types/css-tree":
+        "dropping it makes it dev-only in the lockfile, and the Dockerfile's `npm prune --omit=dev` would take it out of the home image",
+    };
+    const { withoutComments } = await import("./source.ts");
+    // The root's own files: everything outside the workspaces, their builds,
+    // node_modules, and the dot-directories (worktrees live under `.claude`).
+    const rootFiles: string[] = [];
+    const walk = async (dir: string): Promise<void> => {
+      for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
+        if (entry.name === "node_modules" || entry.name === "dist" || entry.name.startsWith(".")) continue;
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          if (full !== path.join(repo, "packages")) await walk(full);
+        } else if (/\.(m?js|cjs|tsx?)$/.test(entry.name)) rootFiles.push(full);
+      }
+    };
+    await walk(repo);
+    const code = (await Promise.all(rootFiles.map((file) => fs.readFile(file, "utf8"))))
+      .map(withoutComments)
+      .join("\n");
+    const imported = (name: string) =>
+      new RegExp(`(?:from|import\\(|require\\()\\s*["'\`]${name.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")}(?:["'\`/])`).test(code);
+    const unexplained = Object.keys(pkg.dependencies).filter(
+      (name) => !imported(name) && !(name in RELEASE_DEPENDENCIES) && !(name in kept),
+    );
+    expect(unexplained, "declared at the root, imported by nothing at the root").toEqual([]);
+    // And a name kept on purpose is still a root dependency — a stale
+    // exception is a rule nobody can read.
+    for (const name of Object.keys(kept)) expect(pkg.dependencies).toHaveProperty(name);
+  });
+
+  it("every workspace declares its runtime imports and carries no unused dependencies", async () => {
+    const { withoutComments } = await import("./source.ts");
+    const moduleDir = path.join(repo, "packages/modules");
+    const moduleNames = new Set(
+      await Promise.all(
+        (await fs.readdir(moduleDir)).map(async (d) => {
+          const p = path.join(moduleDir, d, "package.json");
+          return (await fs.stat(p).then(() => true, () => false))
+            ? (await readJson(`packages/modules/${d}/package.json`)).name
+            : null;
+        }),
+      ).then((names) => names.filter((n): n is string => Boolean(n))),
+    );
+
+    const workspaceDirs = [
+      ...(await fs.readdir(path.join(repo, "packages")))
+        .filter((d) => d !== "modules")
+        .map((d) => `packages/${d}`),
+      ...(await fs.readdir(moduleDir)).map((d) => `packages/modules/${d}`),
+    ];
+
+    const pkgNameOf = (spec: string) =>
+      spec.startsWith("@") ? spec.split("/").slice(0, 2).join("/") : spec.split("/")[0]!;
+
+    const walkFiles = async (dir: string): Promise<string[]> => {
+      const found: string[] = [];
+      if (!(await fs.stat(dir).then((s) => s.isDirectory(), () => false))) return found;
+      for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
+        if (entry.name === "node_modules" || entry.name === "dist") continue;
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) found.push(...(await walkFiles(full)));
+        else if (/\.(m?js|cjs|tsx?)$/.test(entry.name)) found.push(full);
+      }
+      return found;
+    };
+
+    const missing: string[] = [];
+    const unused: string[] = [];
+
+    for (const relDir of workspaceDirs) {
+      const manifestPath = path.join(repo, relDir, "package.json");
+      if (!(await fs.stat(manifestPath).then(() => true, () => false))) continue;
+      const pkg = await readJson(`${relDir}/package.json`);
+      const runtimeDeclared = new Set([
+        ...Object.keys(pkg.dependencies ?? {}),
+        ...Object.keys(pkg.peerDependencies ?? {}),
+        // Optional: imported with `await import()` and a fallback when absent (the server's `sharp`).
+        ...Object.keys(pkg.optionalDependencies ?? {}),
+      ]);
+
+      const runtimeFiles = [
+        ...(await walkFiles(path.join(repo, relDir, "src"))),
+        ...(await walkFiles(path.join(repo, relDir, "bin"))),
+      ];
+      const allFiles = await walkFiles(path.join(repo, relDir));
+
+      const runtimeImports = new Set<string>();
+      for (const file of runtimeFiles) {
+        const text = withoutComments(await fs.readFile(file, "utf8"));
+        if (file.endsWith(".tsx") && /<\/[A-Za-z>]|<[A-Za-z][^>\n]*\/>/.test(text)) runtimeImports.add("react");
+        for (const m of text.matchAll(
+          /^\s*(?:import|export)\s+(?!type\b)(?:[^"'\n;]*?\s+from\s+)?["']([^"'./][^"']*)["']|\bimport\(\s*["']([^"'./][^"']*)["']\s*\)/gm,
+        )) {
+          const spec = m[1] ?? m[2];
+          if (!spec || spec.startsWith("node:")) continue;
+          runtimeImports.add(pkgNameOf(spec));
+        }
+      }
+
+      for (const imp of runtimeImports) {
+        if (imp === pkg.name) continue;
+        // @isocan/server reaches @isocan/cloudstore by dynamic import only on Cloud Run (tested below).
+        if (pkg.name === "@isocan/server" && imp === "@isocan/cloudstore") continue;
+        // Build-time modules are coupled exclusively by the two module lists (test/modules.test.ts).
+        if ((pkg.name === "@isocan/web" || pkg.name === "@isocan/cli") && moduleNames.has(imp)) continue;
+        if (!runtimeDeclared.has(imp)) {
+          missing.push(`${relDir}/package.json is missing runtime dependency "${imp}"`);
+        }
+      }
+
+      const anyReferenced = new Set<string>(runtimeImports);
+      for (const file of allFiles) {
+        const text = withoutComments(await fs.readFile(file, "utf8"));
+        if (file.endsWith(".tsx") && /<\/[A-Za-z>]|<[A-Za-z][^>\n]*\/>/.test(text)) anyReferenced.add("react");
+        for (const m of text.matchAll(
+          /^\s*(?:import|export)\s+(?:type\s+)?(?:[^"'\n;]*?\s+from\s+)?["']([^"'./][^"']*)["']|\bimport\(\s*["']([^"'./][^"']*)["']\s*\)/gm,
+        )) {
+          const spec = m[1] ?? m[2];
+          if (!spec || spec.startsWith("node:")) continue;
+          anyReferenced.add(pkgNameOf(spec));
+        }
+      }
+
+      for (const dep of runtimeDeclared) {
+        if (!anyReferenced.has(dep)) {
+          unused.push(`${relDir}/package.json declares unused dependency "${dep}"`);
+        }
+      }
     }
+
+    expect(missing, missing.join("\n")).toEqual([]);
+    expect(unused, unused.join("\n")).toEqual([]);
   });
 
   it("keeps the cloud backing's 43 MiB out of the CLI install, in both directions", async () => {
     // The two-way guard, and the direction that matters is the SECOND one.
-    // The test above says "what a workspace needs at runtime must be in the
-    // root manifest too", and @google-cloud/firestore and @google-cloud/storage
-    // are the first dependencies that must NOT be — 156 packages and ~43 MiB
+    // The root manifest once carried a copy of what the CLI needs at runtime
+    // (DC-2 removed it), and @google-cloud/firestore and @google-cloud/storage
+    // were the first dependencies that must NOT be — 156 packages and ~43 MiB
     // onto every `npm i -g github:dglazkov/isocan#release`, for a daemon that
     // runs FileStore and never loads a line of it. So they live in a fourth
     // workspace nobody installs, `daemon.ts` reaches it by dynamic import, and
@@ -100,6 +241,10 @@ describe("installable straight from git", () => {
     const strays: string[] = [];
     for (const file of await sourceFiles(path.join(repo, "packages"))) {
       if (file.endsWith(path.join("core", "src", "address.ts"))) continue; // the definition
+      // SKILL.md verbatim, generated (scripts/rc-skill.mjs) and held equal to
+      // it by packages/rc/test/skill.test.ts — and SKILL.md's specs are
+      // swept for #release in the doc loop at the end of this test.
+      if (file.endsWith(path.join("rc", "src", "skill.ts"))) continue;
       const text = await fs.readFile(file, "utf8");
       for (const [i, line] of text.split("\n").entries()) {
         if (line.includes("github:dglazkov/isocan")) {
@@ -161,6 +306,7 @@ describe("installable straight from git", () => {
     // the package must be built before use — which is where the empty install
     // comes from. main needs `prepare` and `workspaces`; the branch we hand
     // out must have shed both, and that is scripts/release.mjs's one job.
+    // @ts-expect-error — a plain .mjs module with no types.
     const { releaseManifest, PREPARATION_KEYS } = await import("../scripts/release.mjs");
     const pkg = await readJson("package.json");
     const released: Record<string, any> = releaseManifest(pkg, "abc1234");
@@ -170,8 +316,28 @@ describe("installable straight from git", () => {
       expect(value, `${key} survived into the release manifest`).toBeUndefined();
     }
     // What an install DOES need: the bin it links, and the deps it resolves.
-    expect(released.bin).toEqual(pkg.bin);
-    expect(released.dependencies).toEqual(pkg.dependencies);
+    //
+    // The bin is NOT main's. main's is `packages/cli/bin/isocan.js`, which
+    // registers tsx and imports 297 `.ts` files through it on every command —
+    // seconds, in the hosted sandbox of #332. The release's is the bundle
+    // `buildCliBundle` writes, and this asserts the two halves of that are
+    // one: the manifest names the file the builder produces
+    // (`docs/projects/first-minute/design.md`).
+    // @ts-expect-error — a plain .mjs module with no types.
+    const { CLI_BUNDLE, RELEASE_DEPENDENCIES } = await import("../scripts/release.mjs");
+    expect(released.bin).toEqual({ isocan: CLI_BUNDLE });
+    expect(pkg.bin.isocan).toBe("packages/cli/bin/isocan.js");
+
+    // And the deps are NOT main's either, since phase 2: they are inlined
+    // into that bundle, so a git install resolves nothing. What survives is
+    // named one by one in `RELEASE_DEPENDENCIES` with the reason — the test
+    // above ("the root package is the CLI") still holds main's manifest to
+    // carrying everything a workspace needs at runtime, which is what the
+    // bundler reads.
+    expect(Object.keys(released.dependencies)).toEqual(Object.keys(RELEASE_DEPENDENCIES));
+    for (const [name, range] of Object.entries(released.dependencies)) {
+      expect(range, `${name} must be the range main declares`).toBe(pkg.dependencies[name]);
+    }
     expect(released["//"]).toContain("abc1234");
   });
 
@@ -181,6 +347,7 @@ describe("installable straight from git", () => {
     // the release ships `types/` (release.mjs's emitTypes) and its manifest
     // must aim the editor there. The default stays the loader-registering
     // entry: runtime still runs the sources.
+    // @ts-expect-error — a plain .mjs module with no types.
     const { releaseManifest } = await import("../scripts/release.mjs");
     const pkg = await readJson("package.json");
     const shipped = releaseManifest(pkg).exports["."];
@@ -190,7 +357,164 @@ describe("installable straight from git", () => {
     });
   });
 
-  it("releases from CI on every commit, with the history a push needs", async () => {
+  it("the release manifest aims every export's types at declarations the release emits", async () => {
+    // Room phase 0 added `./rc` beside `.`. The script once rewrote `.` alone,
+    // so a second export would have shipped a `types` path into `.ts` sources
+    // an installed editor cannot read. Every `types` entry maps the same way,
+    // and the workspace it names is one emitTypes compiles.
+    // @ts-expect-error — a plain .mjs module with no types.
+    const { releaseManifest, RELEASE_TYPE_ROOTS } = await import("../scripts/release.mjs");
+    const pkg = await readJson("package.json");
+    const shipped = releaseManifest(pkg).exports;
+    expect(Object.entries(shipped["./rc"])).toEqual([
+      ["types", "./types/rc/src/index.d.ts"],
+      ["browser", "./packages/rc/dist/index.mjs"],
+      ["default", "./rc.mjs"],
+    ]);
+    expect(RELEASE_TYPE_ROOTS).toContain("packages/rc/src");
+    for (const [key, entry] of Object.entries(pkg.exports as Record<string, { types?: string }>)) {
+      if (typeof entry !== "object" || !entry.types) continue;
+      const workspace = /^\.\/(packages\/[^/]+\/src)\//.exec(entry.types)?.[1];
+      expect(RELEASE_TYPE_ROOTS, `${key}'s types live in a workspace the release never compiles`).toContain(workspace);
+      expect(shipped[key].types).toBe(entry.types.replace(/^\.\/packages\//, "./types/").replace(/\.ts$/, ".d.ts"));
+    }
+  });
+
+  it("the emitted declarations include isocan/rc, self-contained", async () => {
+    // The emit itself, into a scratch directory: about two seconds of tsc,
+    // cheap enough that the manifest's claim is checked against real files.
+    // @ts-expect-error — a plain .mjs module with no types.
+    const { emitTypes, releaseManifest } = await import("../scripts/release.mjs");
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-types-"));
+    try {
+      await emitTypes(out);
+      const shipped = releaseManifest(await readJson("package.json")).exports;
+      for (const key of [".", "./rc"]) {
+        const declared = path.join(out, shipped[key].types.replace(/^\.\/types\//, ""));
+        await expect(fs.access(declared), `${key}: ${declared}`).resolves.toBeUndefined();
+      }
+      const helpers = await fs.readFile(path.join(out, "rc/src/helpers.d.ts"), "utf8");
+      expect(helpers).not.toMatch(/"@isocan\//);
+      expect(helpers).toContain('"../../core/src/index.js"');
+      // The entry re-exports the route surface a host constructs by a
+      // workspace subpath an install cannot resolve, so
+      // the emit must have rewritten it into the tree, at a file that exists.
+      const index = await fs.readFile(path.join(out, "rc/src/index.d.ts"), "utf8");
+      expect(index).not.toMatch(/"@isocan\//);
+      expect(index).toContain('"../../api/src/routes.js"');
+      const routes = await fs.readFile(path.join(out, "api/src/routes.d.ts"), "utf8");
+      expect(routes).toContain("export declare class DaemonRoutes");
+      expect(routes).not.toMatch(/"@isocan\//);
+      expect(routes).toContain('"../../core/src/design-request.js"');
+      // All emitted declarations must be standalone, including lazy subpaths
+      // whose export name differs from their source filename (design-audit).
+      const declarations = await fs.readdir(out, { recursive: true });
+      for (const file of declarations.filter(name => name.endsWith(".d.ts"))) {
+        const full = path.join(out, file), text = await fs.readFile(full, "utf8");
+        expect(text, file).not.toMatch(/"@isocan\//);
+        for (const match of text.matchAll(/(?:from\s+|import\s*\(\s*)"(\.[^"]+)"/g)) {
+          const target = path.resolve(path.dirname(full), match[1]!.replace(/\.js$/, ".d.ts"));
+          expect(path.relative(out, target).startsWith(".."), `${file}: ${match[1]} escapes the declarations`).toBe(false);
+          await expect(fs.access(target), `${file}: ${match[1]} has no declaration`).resolves.toBeUndefined();
+        }
+      }
+      // And both entries hand over core's address helpers, re-exported from core's own declarations inside the tree.
+      const apiIndex = await fs.readFile(path.join(out, "api/src/index.d.ts"), "utf8");
+      for (const declared of [index, apiIndex]) {
+        expect(declared).toMatch(/export \{[^}]*canvasUrlWithPass[^}]*isLoopbackBase[^}]*parseCanvasAddress[^}]*\} from "\.\.\/\.\.\/core\/src\/index\.js"/);
+      }
+      expect(apiIndex).not.toMatch(/"@isocan\//);
+      const address = await fs.readFile(path.join(out, "core/src/address.d.ts"), "utf8");
+      expect(address).toContain("export declare function parseCanvasAddress(raw: string): CanvasAddress | null;");
+    } finally {
+      await fs.rm(out, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
+  });
+
+  it("an installed isocan/rc bundles for the browser: the release manifest and bundle, as a host installs them", async () => {
+    // Room phase 4, journey 3 inside the suite. Measured against release at
+    // e4af490: `esbuild --platform=browser` over an installed `isocan/rc`
+    // resolved `rc.mjs`, which registers tsx, and failed on `node:module`,
+    // `node:crypto` and `@isocan/rc`. The boundary test bundled the source
+    // entry and never saw it. So this lays out what an install is, and only
+    // that: the manifest releaseManifest writes, the bundle buildBrowserBundles
+    // writes, and `rc.mjs` (so that a manifest without the `browser`
+    // condition fails the way an install did, on `node:module`, rather than on
+    // a missing file). No sources, no workspace links, no tsx to fall back on.
+    // @ts-expect-error — a plain .mjs module with no types.
+    const { releaseManifest, buildBrowserBundles } = await import("../scripts/release.mjs");
+    const { build } = await import("esbuild");
+    const rootPkg = await readJson("package.json");
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-host-"));
+    try {
+      const installed = path.join(tmp, "node_modules", "isocan");
+      await fs.mkdir(installed, { recursive: true });
+      const [bundle] = await buildBrowserBundles(installed);
+      await fs.copyFile(path.join(repo, "rc.mjs"), path.join(installed, "rc.mjs"));
+      await fs.writeFile(path.join(tmp, "entry.mjs"), 'import "isocan/rc";\n');
+      // The host's one-line bundle, through whatever manifest is installed:
+      // no `external`, so a `node:` import anywhere is a resolve error.
+      const bundleThrough = async (manifest: Record<string, unknown>) => {
+        await fs.writeFile(path.join(installed, "package.json"), JSON.stringify(manifest, null, 2) + "\n");
+        return build({
+          absWorkingDir: tmp,
+          entryPoints: ["entry.mjs"],
+          bundle: true,
+          platform: "browser",
+          format: "esm",
+          write: false,
+          metafile: true,
+          logLevel: "silent",
+        }).then(
+          (result) => ({ result, errors: "" }),
+          (err: { errors?: { text: string; location?: { file: string } | null }[] }) => ({
+            result: null,
+            errors: (err.errors ?? []).map((e) => `${e.location?.file ?? ""}: ${e.text}`).join("\n") || String(err),
+          }),
+        );
+      };
+
+      const released = releaseManifest(rootPkg, "abc1234");
+      const { result, errors } = await bundleThrough(released);
+      expect(errors, "the installed isocan/rc must bundle for the browser platform").toBe("");
+      expect(result!.outputFiles[0]!.text).not.toMatch(/node:/);
+      // What the host's bundler read: the entry and the release's bundle,
+      // nothing else, so no `node:` import could have been left external.
+      expect(Object.keys(result!.metafile.inputs).sort()).toEqual(
+        ["entry.mjs", "node_modules/isocan/packages/rc/dist/index.mjs"].sort(),
+      );
+      expect(path.join(installed, released.exports["./rc"].browser)).toBe(bundle);
+
+      // Falsified by the manifest an install had before this phase: the
+      // bundler takes `default`, reads `rc.mjs`, and stops on `node:module`.
+      const { browser: _browser, ...withoutBrowser } = released.exports["./rc"];
+      const before = await bundleThrough({ ...released, exports: { ...released.exports, "./rc": withoutBrowser } });
+      expect(before.result).toBeNull();
+      expect(before.errors).toContain('Could not resolve "node:module"');
+
+      // The bundle is a real module too: node-free ESM runs in Node, and its
+      // exports are the package's runtime surface, name for name.
+      const surface = await import(pathToFileURL(bundle!).href);
+      const source = await import("../packages/rc/src/index.ts");
+      expect(Object.keys(surface).sort()).toEqual(Object.keys(source).sort());
+      expect(typeof surface.runRoom).toBe("function");
+      // And the client a host constructs, inlined
+      // into the same node-free bundle rather than left to a Node entry.
+      expect(typeof surface.DaemonRoutes).toBe("function");
+      // And core's address helpers, in the same bundle.
+      expect(surface.parseCanvasAddress("https://acme.example/p/prj_acme#pas_acme.s3cret")).toEqual({
+        origin: "https://acme.example",
+        canvasId: "prj_acme",
+        pass: "pas_acme.s3cret",
+      });
+      expect(surface.isLoopbackBase("http://127.0.0.1:4441")).toBe(true);
+      expect(surface.COLLAB_SKILL).toBe(source.COLLAB_SKILL);
+    } finally {
+      await fs.rm(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
+  });
+
+  it("tests every commit for release, with the history and publication lock a push needs", async () => {
     // Nobody remembers to release by hand, and an unreleased commit is one
     // nobody can install. Two things the workflow cannot get wrong: full
     // history (the release commit names two parents by sha, and a shallow

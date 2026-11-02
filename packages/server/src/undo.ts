@@ -80,8 +80,14 @@ export class UndoStacks {
       // one (it changed state the redo chain assumed). Other actors' redo
       // branches survive; if theirs became inapplicable, the skip policy
       // handles it at redo time.
-      stacks.redo = [];
-      if (entry.group !== undefined) this.groupOf.set(entry.seq, entry.group);
+      const op = entry.envelope.op;
+      const migration = op.type === "group.change" && op.action.kind === "apply" && op.action.change.intent === "migrate";
+      // Conversion installs an explicit boundary for every actor. Keep the
+      // converter's older redo candidates too, so refusal never erases them.
+      if (!migration) stacks.redo = [];
+      // A conversion is its own boundary even if a caller reused a gesture
+      // label. Otherwise its undo could absorb the older, forbidden action.
+      if (entry.group !== undefined && !migration) this.groupOf.set(entry.seq, entry.group);
       if (entry.inverse !== null) stacks.undo.push(entry.seq);
     }
   }
@@ -106,6 +112,14 @@ export class UndoStacks {
   nextUndoTarget(who: string | readonly string[]): number | null {
     const undo = this.merged(who, "undo");
     return undo.length > 0 ? undo[undo.length - 1]! : null;
+  }
+
+  /** Migration rollback audits every actor's retained group-dependent history. */
+  dependencyTargets(): Array<{ seq: number; kind: "undo" | "redo" }> {
+    return [...this.byActor.values()].flatMap((stacks) => [
+      ...stacks.undo.map((seq) => ({ seq, kind: "undo" as const })),
+      ...stacks.redo.map((seq) => ({ seq, kind: "redo" as const })),
+    ]);
   }
 
   /**
@@ -154,9 +168,8 @@ export class UndoStacks {
         if (this.groupOf.get(redo[i]!) !== group) break;
         seqs.push(redo[i]!);
       }
-      // Undone newest-first, so the redo stack holds them newest-last; put
-      // them back in the order they were written.
-      seqs.reverse();
+      // Undo pushed newest-first. Walking the stack from its end already
+      // yields original oldest-first order, including dependent edits.
     }
     const out: { targetSeq: number; undoSeq: number }[] = [];
     for (const targetSeq of seqs) {

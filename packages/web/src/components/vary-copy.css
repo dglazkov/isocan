@@ -1,0 +1,9 @@
+/* Vary the copy… (copy-edit phase 2) — loaded with the dialog, never on first paint. Tokens only, so both themes hold. */
+.vary-copy { display: flex; flex-direction: column; gap: 14px; padding: 20px; }
+.vary-copy > label { display: block; font-size: 13px; color: var(--ink); }
+.vary-copy input { display: block; margin-top: 6px; width: 100%; padding: 8px; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 6px; }
+.vary-copy input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.vary-copy-note { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--ink-muted); }
+.vary-copy-optional { color: var(--ink-muted); }
+.vary-copy-error { margin: 0; font-size: 12.5px; line-height: 1.4; color: var(--danger); }
+.vary-copy-actions { display: flex; gap: 8px; }

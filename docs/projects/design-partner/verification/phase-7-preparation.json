@@ -1,0 +1,1137 @@
+{
+  "recordedAt": "2026-09-15T11:36:56.812Z",
+  "scope": "Preparation only; no generated design, provider call or human quality result.",
+  "baselineSource": {
+    "sourceRevision": "304346276dbabd3b7c10dff3f55070dbcff10ab2",
+    "directory": "/tmp/isocan-design-partner-execution/phase7-frozen-baseline",
+    "archiveSha256": "048b71fe2c6aa17fa4a560af0a97058df7353a69ff98ac9034e671626175843c",
+    "selectedFileCount": 1273,
+    "dependencies": {
+      "lockSha256": "2a3f6add6d3fff24d765e50c9bcbd37b3dc642b2958f76b039c762a0e4318151",
+      "identicalToCandidateLock": true,
+      "externalPackagesFrom": "/Users/dionalmaer/code/isocan-design-partner/node_modules",
+      "localWorkspaceBindings": [
+        {
+          "package": "@isocan/core",
+          "source": "packages/core"
+        },
+        {
+          "package": "@isocan/web",
+          "source": "packages/web"
+        },
+        {
+          "package": "@isocan/cloudstore",
+          "source": "packages/cloudstore"
+        },
+        {
+          "package": "@isocan/server",
+          "source": "packages/server"
+        },
+        {
+          "package": "@isocan/mcp",
+          "source": "packages/mcp"
+        },
+        {
+          "package": "@isocan/cli",
+          "source": "packages/cli"
+        },
+        {
+          "package": "@isocan/api",
+          "source": "packages/api"
+        },
+        {
+          "package": "@isocan/voice-agent",
+          "source": "packages/voice-agent"
+        },
+        {
+          "package": "@isocan/rc",
+          "source": "packages/rc"
+        },
+        {
+          "package": "@isocan/stickers",
+          "source": "packages/modules/stickers"
+        },
+        {
+          "package": "@isocan/anatomy",
+          "source": "packages/modules/anatomy"
+        },
+        {
+          "package": "@isocan/sandbox",
+          "source": "packages/modules/sandbox"
+        },
+        {
+          "package": "@isocan/mermaid",
+          "source": "packages/modules/mermaid"
+        },
+        {
+          "package": "@isocan/mindmap",
+          "source": "packages/modules/mindmap"
+        },
+        {
+          "package": "@isocan/documents",
+          "source": "packages/modules/documents"
+        },
+        {
+          "package": "@isocan/design-competition",
+          "source": "packages/modules/design-competition"
+        }
+      ]
+    },
+    "providerCalls": 0,
+    "qualityEvidence": false,
+    "status": "source-and-runtime-independently-verified",
+    "statusNote": "The original source-only record was followed by the actualRuntime proof below; neither is a generated design."
+  },
+  "sourceFileCount": 1273,
+  "actualRuntime": {
+    "kind": "design-partner-baseline-runtime-proof",
+    "sourceRevision": "304346276dbabd3b7c10dff3f55070dbcff10ab2",
+    "sourceDirectory": "/tmp/isocan-design-partner-execution/phase7-frozen-baseline",
+    "sourceFilesVerified": 1273,
+    "dependencyLockSha256": "2a3f6add6d3fff24d765e50c9bcbd37b3dc642b2958f76b039c762a0e4318151",
+    "workspaceBindings": [
+      {
+        "package": "@isocan/core",
+        "source": "packages/core"
+      },
+      {
+        "package": "@isocan/web",
+        "source": "packages/web"
+      },
+      {
+        "package": "@isocan/cloudstore",
+        "source": "packages/cloudstore"
+      },
+      {
+        "package": "@isocan/server",
+        "source": "packages/server"
+      },
+      {
+        "package": "@isocan/mcp",
+        "source": "packages/mcp"
+      },
+      {
+        "package": "@isocan/cli",
+        "source": "packages/cli"
+      },
+      {
+        "package": "@isocan/api",
+        "source": "packages/api"
+      },
+      {
+        "package": "@isocan/voice-agent",
+        "source": "packages/voice-agent"
+      },
+      {
+        "package": "@isocan/rc",
+        "source": "packages/rc"
+      },
+      {
+        "package": "@isocan/stickers",
+        "source": "packages/modules/stickers"
+      },
+      {
+        "package": "@isocan/anatomy",
+        "source": "packages/modules/anatomy"
+      },
+      {
+        "package": "@isocan/sandbox",
+        "source": "packages/modules/sandbox"
+      },
+      {
+        "package": "@isocan/mermaid",
+        "source": "packages/modules/mermaid"
+      },
+      {
+        "package": "@isocan/mindmap",
+        "source": "packages/modules/mindmap"
+      },
+      {
+        "package": "@isocan/documents",
+        "source": "packages/modules/documents"
+      },
+      {
+        "package": "@isocan/design-competition",
+        "source": "packages/modules/design-competition"
+      }
+    ],
+    "build": {
+      "entry": "index-k3a2TSzf.js",
+      "bytes": 762574,
+      "sha256": "75945c5fe067994f380c4dd265204ce1023bf728f0373c637fb89c9bf7b6c6cb",
+      "exitCode": 0
+    },
+    "runtime": {
+      "base": "http://127.0.0.1:50821",
+      "canvasId": "prj_662nOXZc5q",
+      "actualBrowser": "Chrome/152.0.7977.84",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "cliIdentity": "same browser person, independently read by CLI",
+      "checks": [
+        "source file hashes unchanged",
+        "actual built entry served byte-for-byte",
+        "browser identity and canvas navigation",
+        "API item mutation and snapshot",
+        "actual baseline CLI command surface"
+      ]
+    },
+    "output": "/var/folders/63/4k_ydj554mz6_56j2hpg7jcr0000gn/T/isocan-design-request-conductor-T35kKm",
+    "providerCalls": 0,
+    "qualityEvidence": false,
+    "scope": "Separately built baseline engineering runtime, not a generated-design or partnership result."
+  },
+  "nativeReadOnlyPreflight": {
+    "recordedAt": "2026-09-15T11:36:56.812Z",
+    "providerCalls": 0,
+    "scope": "Read-only native version/help/authentication check reused from existing isolated preflight. Not a full-workflow profile or generation/cap enforcement proof.",
+    "preflight": {
+      "available": true,
+      "version": "2.1.269 (Claude Code)",
+      "helpSha256": "ae85d661e9c086f05637ebcd868f5702b477ff6e55e2e65b8ada7807cd51a4b6",
+      "model": {
+        "model": "claude-sonnet-5",
+        "outputTokens": 8192,
+        "effort": "high",
+        "maxTurns": 1,
+        "retries": 0,
+        "tools": [],
+        "maxCalls": 72
+      },
+      "auth": {
+        "available": true,
+        "loggedIn": true,
+        "authMethod": "claude.ai",
+        "apiProvider": "firstParty",
+        "subscriptionType": "max",
+        "exitCode": 0
+      },
+      "isolation": {
+        "flags": [
+          "--tools",
+          "",
+          "--safe-mode",
+          "--strict-mcp-config",
+          "--mcp-config",
+          "{\"mcpServers\":{}}",
+          "--setting-sources",
+          "",
+          "--disable-slash-commands",
+          "--no-chrome",
+          "--no-session-persistence",
+          "--permission-mode",
+          "dontAsk"
+        ],
+        "environmentKeys": [
+          "CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS",
+          "CLAUDE_CODE_AUTO_CONNECT_IDE",
+          "CLAUDE_CODE_DISABLE_ADVISOR_TOOL",
+          "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+          "CLAUDE_CODE_EFFORT_LEVEL",
+          "CLAUDE_CODE_MAX_OUTPUT_TOKENS",
+          "CLAUDE_CODE_MAX_RETRIES",
+          "CLAUDE_CODE_MAX_TURNS",
+          "CLAUDE_CODE_SAFE_MODE",
+          "CLAUDE_CODE_SKIP_PROMPT_HISTORY",
+          "HOME",
+          "LANG",
+          "LC_ALL",
+          "PATH",
+          "TMPDIR",
+          "USER"
+        ],
+        "workingDirectory": "fresh empty scratch"
+      },
+      "contextBoundary": "Safe mode disables local customizations; admin-managed provider policy may still apply. Ordinary OS USER/HOME discovery is preserved; credentials are not copied or retained in evidence.",
+      "budgetBoundary": "CLI-reported estimated/API-equivalent token cost; admin-managed modelPricing can affect rates. Not billing evidence. Actual provider cap enforcement remains unmeasured."
+    },
+    "binary": {
+      "path": "/Users/dionalmaer/.local/share/claude/versions/2.1.269",
+      "sha256": "c942e1228b93cb4d52183b3dfbc77f28264f35aa947acd9c0853d029164cf450"
+    }
+  },
+  "providerCalls": 0,
+  "updatedAt": "2026-09-15T14:23:26.733332+00:00",
+  "isolatedAuthentication": {
+    "recordedAt": "2026-09-15T11:56:41.038Z",
+    "scope": "Read-only authentication discovery under an owned empty configuration directory; no credential copying, login, native model session or tool-isolation claim.",
+    "auth": {
+      "available": true,
+      "loggedIn": false,
+      "authMethod": "none",
+      "apiProvider": "firstParty",
+      "subscriptionType": null,
+      "exitCode": 1
+    },
+    "owned": "/var/folders/63/4k_ydj554mz6_56j2hpg7jcr0000gn/T/isocan-phase7-auth-isolation-NC4hoY",
+    "args": [
+      "--restricted",
+      "--tools",
+      "",
+      "--strict-mcp-config",
+      "--mcp-config",
+      "{\"mcpServers\":{}}",
+      "--setting-sources",
+      "",
+      "--settings",
+      "{\"disableAllHooks\":true,\"autoMemoryEnabled\":false,\"claudeMdExcludes\":[\"**\"]}",
+      "--disable-slash-commands",
+      "--no-chrome",
+      "--permission-mode",
+      "dontAsk",
+      "auth",
+      "status",
+      "--json"
+    ],
+    "environmentKeys": [
+      "CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS",
+      "CLAUDE_CODE_AUTO_CONNECT_IDE",
+      "CLAUDE_CODE_DISABLE_ADVISOR_TOOL",
+      "CLAUDE_CODE_DISABLE_AUTO_MEMORY",
+      "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+      "CLAUDE_CODE_SKIP_PROMPT_HISTORY",
+      "CLAUDE_CONFIG_DIR",
+      "HOME",
+      "LANG",
+      "LC_ALL",
+      "PATH",
+      "TMPDIR",
+      "USER"
+    ],
+    "apiKeyPresent": false,
+    "providerCalls": 0,
+    "executionProfileNote": "The proposed full workflow uses native --bare API-key authentication. This alternate owned-config OAuth probe did not authenticate; the earlier normal-login preflight does not establish availability for either isolated profile."
+  },
+  "partnershipInstruments": {
+    "recordedAt": "2026-09-15T12:03:21.948Z",
+    "status": "passed",
+    "studySha256": "8075389c3f1b69d33cfca61956c4b9048e31a33da3bb0c7c2938da0907e33cbe",
+    "output": "/var/folders/63/4k_ydj554mz6_56j2hpg7jcr0000gn/T/isocan-phase7-study-proof-UNYMJo",
+    "serverUrl": "http://127.0.0.1:54239",
+    "checks": [
+      "Six unassigned role/task cards reference exact frozen bytes; condition order and each content variant are balanced across A/B within each pair; no outcomes or ratings are filled.",
+      "Both receiving and scheduling task variants use actual supplied records/availability; no fixture content was changed.",
+      "Actual owned repository server returns both study SKU quantities/shelves and an empty no-result search while keeping the original overview route. No generated app or visual-quality claim."
+    ],
+    "providerCalls": 0,
+    "participantsRecruited": 0,
+    "qualityEvidence": false
+  },
+  "publicDev": {
+    "scope": "Public read-only dev home health and exact served web entry; no authenticated canvas, hosted agent or acceptance journey.",
+    "url": "https://dev.isocan.io",
+    "health": {
+      "ok": true,
+      "pid": 11,
+      "startedAt": "2026-09-15T11:55:46.662Z",
+      "version": "0.1.0",
+      "root": "/app",
+      "codeAt": "2026-09-15T11:53:23.000Z",
+      "commit": "08bbf10",
+      "builtAt": "2026-09-15T05:43:50-06:00"
+    },
+    "entry": {
+      "path": "packages/web/dist/assets/index-DEF98bII.js",
+      "sha256": "ca5c47e5d19ff5901d1c6e9b96e43240e4b2884ca87c2275cf9a21eb7de3cdaa",
+      "size": 742315
+    },
+    "entryMatched": true,
+    "providerCalls": 0,
+    "hostedAcceptance": false
+  },
+  "publicDevBrowser": {
+    "recordedAt": "2026-09-15T12:07:14.980Z",
+    "url": "https://dev.isocan.io/",
+    "browser": {
+      "protocolVersion": "1.3",
+      "product": "Chrome/152.0.7977.84",
+      "revision": "@4334922f44c77b1208072c4deac29db3af39bbea",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.0.0 Safari/537.36",
+      "jsVersion": "15.2.124.21"
+    },
+    "errors": [],
+    "scope": "Fresh owned browser, public navigation only. No identity entered, sign-in or canvas action. Not an authenticated hosted acceptance journey.",
+    "providerCalls": 0,
+    "hostedAcceptance": false
+  },
+  "localRollback": {
+    "result": "passed",
+    "output": "/var/folders/63/4k_ydj554mz6_56j2hpg7jcr0000gn/T/isocan-design-request-conductor-2EdgsM",
+    "checks": [
+      {
+        "name": "adapted-guidance-uses-the-existing-two-repair-allowance-and-refuses-a-third"
+      },
+      {
+        "name": "actual-application-evidence-retains-tool-revision-through-existing-receipt-with-honest-missing-browser-draft"
+      },
+      {
+        "name": "exact-canonical-completion-preserves-current-saved-craft-context-and-refuses-forged-or-unavailable-attribution",
+        "packetId": "534e1f139f20cdd9e5217115ac29d0154b220ac3e8a67b06031a96dab8e5a16c",
+        "missingAttributionControl": "Deliberately omitted original version from the snapshot read port; actual canonical request/history remained on the daemon."
+      },
+      {
+        "name": "actual-daemon-restart-and-browser-refresh-preserve-resumed-work-under-off-policy",
+        "build": {
+          "path": "packages/web/dist/assets/index-DEF98bII.js",
+          "sha256": "ca5c47e5d19ff5901d1c6e9b96e43240e4b2884ca87c2275cf9a21eb7de3cdaa",
+          "size": 742315
+        },
+        "browser": {
+          "protocolVersion": "1.3",
+          "product": "Chrome/152.0.7977.84",
+          "revision": "@4334922f44c77b1208072c4deac29db3af39bbea",
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.0.0 Safari/537.36",
+          "jsVersion": "15.2.124.21"
+        }
+      },
+      {
+        "name": "actual-off-adaptive-unknown-off-policy-on-both-entrances-preserves-answers-choices-drafts-receipts-and-allows-explicit-start-and-resume",
+        "policyChecks": [
+          {
+            "entrance": "canvas-chat",
+            "policy": "off",
+            "admission": "automatic",
+            "status": "refused"
+          },
+          {
+            "entrance": "external-agent",
+            "policy": "off",
+            "admission": "automatic",
+            "status": "refused"
+          },
+          {
+            "entrance": "canvas-chat",
+            "policy": "adaptive-v1",
+            "admission": "automatic",
+            "status": "accepted"
+          },
+          {
+            "entrance": "external-agent",
+            "policy": "adaptive-v1",
+            "admission": "automatic",
+            "status": "accepted"
+          },
+          {
+            "entrance": "canvas-chat",
+            "policy": "unsupported",
+            "admission": "automatic",
+            "status": "refused"
+          },
+          {
+            "entrance": "external-agent",
+            "policy": "unsupported",
+            "admission": "automatic",
+            "status": "refused"
+          },
+          {
+            "entrance": "canvas-chat",
+            "policy": "off",
+            "admission": "automatic",
+            "status": "refused"
+          },
+          {
+            "entrance": "external-agent",
+            "policy": "off",
+            "admission": "automatic",
+            "status": "refused"
+          },
+          {
+            "entrance": "canvas-chat",
+            "policy": "off",
+            "admission": "explicit",
+            "status": "accepted"
+          },
+          {
+            "entrance": "external-agent",
+            "policy": "off",
+            "admission": "explicit",
+            "status": "accepted"
+          }
+        ],
+        "answerId": "response_conductor_0022",
+        "resumedEpoch": 2
+      }
+    ],
+    "providerCalls": 0,
+    "qualityEvidence": false,
+    "receipt": {
+      "status": "draft",
+      "fidelity": "wireframe",
+      "requiredBrowserTaskResult": "unavailable",
+      "falseReadyClaim": false
+    }
+  },
+  "generatedDesigns": 0,
+  "participantsObserved": 0,
+  "independentRatings": 0,
+  "hostedAcceptance": false,
+  "qualityEvidence": false,
+  "candidateInspection": {
+    "recordedAt": "2026-09-15T12:21:10.140Z",
+    "source": "08bbf1017213b2d7a24b269384e1861481958ae7",
+    "sourceFiles": 831,
+    "sourceSha256": "b74609ee72388e0fb0f989bebe24a696492cf08c5e953a7943e77220cf32187c",
+    "workspaceBindings": 16,
+    "lock": "2a3f6add6d3fff24d765e50c9bcbd37b3dc642b2958f76b039c762a0e4318151",
+    "build": {
+      "entry": "index-DEF98bII.js",
+      "bytes": 742315,
+      "sha256": "ca5c47e5d19ff5901d1c6e9b96e43240e4b2884ca87c2275cf9a21eb7de3cdaa",
+      "indexSha256": "5299b29d9d1224699eac4ad1a28de26056bec956b1cc8660dd2f62bac071f24c"
+    },
+    "scope": "Conductor inspection of actual candidate source/workspace/built bytes; no daemon/materialization/model or design-quality claim.",
+    "providerCalls": 0,
+    "qualityEvidence": false
+  },
+  "mcpInstrumentation": {
+    "recordedAt": "2026-09-15T13:31:43.105Z",
+    "result": "passed",
+    "output": "/var/folders/63/4k_ydj554mz6_56j2hpg7jcr0000gn/T/isocan-design-request-conductor-HHq4Uk",
+    "sources": [
+      {
+        "path": "scripts/lib/browser.mjs",
+        "sha256": "a607099a0513a3085ea89b5bb97d5c3453e1b0343a621c66d14f12be22f687fd"
+      },
+      {
+        "path": "scripts/lib/design-partner-mcp.mjs",
+        "sha256": "a7736c3bf06e2dbb732f7e5970422dd92f60c280beb866d13c44b3531ee45448"
+      },
+      {
+        "path": "scripts/lib/design-partner-tools.mjs",
+        "sha256": "38fbcea01d908c219a995907495f8344c4898c1b25f89726be35e167a89da432"
+      },
+      {
+        "path": "scripts/lib/design-partner-proxy.mjs",
+        "sha256": "9c93e77e3d86d9c705b9ac62b6d4d69c32d0a6093e8a2c97895c13b96840c106"
+      },
+      {
+        "path": "scripts/lib/design-partner-runtime.mjs",
+        "sha256": "7debc0ec9d12d2abc0084783115a96c91b4a4728d69ed2d1fe42673b38161331"
+      }
+    ],
+    "checks": [
+      "Concurrent actual MCP add/write preserved the checked canvas bytes before a queued unsafe source edit",
+      "Actual MCP CLI refused transitive local-asset escape, extra screenshot browser and external export",
+      "Native Enter submitted a real form; authenticated canvas browser navigation explicitly refused while bound CLI remained usable",
+      "Actual MCP stdio client received bound frozen CLI guide and read actual daemon canvas item",
+      "Actual owned Chrome at 390x844 saved and corrected the shipped receiving reference through native pointer/keyboard tools",
+      "Screenshot was delivered as MCP image content with exact stored-byte hash; supplied PNG read returned those same image bytes",
+      "Traversal into evaluator configuration refused; one pending synthetic question resumed after explicit frozen-fact disposition without evaluator identity leakage"
+    ],
+    "image": {
+      "sha256": "7cb1476d0f37cac50870d6f767a398f1bc51a595c796261c021f36d271902bdc",
+      "bytes": 45798,
+      "mimeType": "image/png"
+    },
+    "tools": [
+      "cli",
+      "read_file",
+      "write_file",
+      "list_files",
+      "review_phase",
+      "browser",
+      "question"
+    ],
+    "providerCalls": 0,
+    "realParticipants": 0,
+    "qualityEvidence": false,
+    "scope": "Instrumentation and authored-reference interaction only. No native Claude initialization/model run, independent human rating or generated-design eligibility."
+  },
+  "browserProxy": {
+    "sources": [
+      {
+        "path": "scripts/lib/browser.mjs",
+        "sha256": "a607099a0513a3085ea89b5bb97d5c3453e1b0343a621c66d14f12be22f687fd"
+      },
+      {
+        "path": "scripts/lib/design-partner-proxy.mjs",
+        "sha256": "9c93e77e3d86d9c705b9ac62b6d4d69c32d0a6093e8a2c97895c13b96840c106"
+      },
+      {
+        "path": "scripts/lib/design-partner-runtime.mjs",
+        "sha256": "7debc0ec9d12d2abc0084783115a96c91b4a4728d69ed2d1fe42673b38161331"
+      }
+    ],
+    "recordedAt": "2026-09-15T13:12:00.327Z",
+    "result": "passed",
+    "output": "/var/folders/63/4k_ydj554mz6_56j2hpg7jcr0000gn/T/isocan-phase7-conductor-proxy-AOhekL",
+    "browser": "Chrome/152.0.7977.84",
+    "checks": [
+      "Actual Chrome received contained task HTML through its proxy",
+      "Native pointer created popup; image, frame, fetch, WebSocket and popup requests never reached outside owned sentinel",
+      "Redirect target revalidated; fixed repository GET forwarded and authenticated canvas refused",
+      "Traversal and symlink task files refused without private sentinel bytes"
+    ],
+    "forwarded": [
+      "/api/stock",
+      "/favicon.ico",
+      "/assets/redirect"
+    ],
+    "outsideHits": [],
+    "providerCalls": 0,
+    "qualityEvidence": false,
+    "scope": "Actual HTTP(S)/WebSocket proxy and file-boundary negative controls. Not a general OS network sandbox or model-generated quality proof.",
+    "deniedCount": 32
+  },
+  "materialization": {
+    "recordedAt": "2026-09-15T13:12:50.217Z",
+    "result": "passed",
+    "output": "/private/var/folders/63/4k_ydj554mz6_56j2hpg7jcr0000gn/T/isocan-phase7-conductor-materialization-7DKdPO",
+    "sources": [
+      {
+        "path": "scripts/lib/design-partner-runtime.mjs",
+        "sha256": "7debc0ec9d12d2abc0084783115a96c91b4a4728d69ed2d1fe42673b38161331"
+      },
+      {
+        "path": "scripts/lib/design-partner-runtime-child.mjs",
+        "sha256": "d101d2ef4371854a4d63a2a7c3a5fbe07cd57fac0b593f79241d18ae9814a1db"
+      }
+    ],
+    "maps": [
+      {
+        "condition": "A",
+        "path": "/tmp/isocan-design-partner-execution/phase7-conductor-materialized-a-v2/materialization.json",
+        "sha256": "9cfb83c98c446e216ab720c2e9e0de526dfe5cb4c7a3f2c12af0c86a5f7d6903"
+      },
+      {
+        "condition": "B",
+        "path": "/tmp/isocan-design-partner-execution/phase7-conductor-materialized-b-v2/materialization.json",
+        "sha256": "9bf187874cc20c9469181f2a5d73a8161e4cd72f48c47f09306d8f2f66e7b75d"
+      }
+    ],
+    "checks": [
+      "48 actual CLI/API materialized cells retain frozen bytes, exact original summons/instruction and matched harness notice",
+      "Four connected fixture preparations start real npm/API/Chrome; requested feature remains unimplemented",
+      "Fresh baseline and candidate daemons each contain only one selected canvas with exact policy and snapshot",
+      "A privately copied seed with changed stored bytes refused before run directory or daemon creation"
+    ],
+    "providerCalls": 0,
+    "qualityEvidence": false
+  },
+  "accounting": {
+    "recordedAt": "2026-09-15T13:12:01.445Z",
+    "result": "passed",
+    "output": "/private/var/folders/63/4k_ydj554mz6_56j2hpg7jcr0000gn/T/isocan-phase7-conductor-accounting-QLYv7k",
+    "sources": [
+      {
+        "path": "scripts/lib/design-partner-execution.mjs",
+        "sha256": "131cbec10206d5bffd506c12e0a2b64a6a106175500571c0a4c997be9711e991"
+      },
+      {
+        "path": "scripts/lib/design-partner-native.mjs",
+        "sha256": "9e504d94a14af377c1b0201b04783e4466168e24e7514d2b2eaee6cce861065f"
+      }
+    ],
+    "checks": [
+      "Chunked evolving usage counted 58 tokens once, one turn; model/tools/MCP/cost/turn/missing/decreasing-accounting negatives refused",
+      "Durable eight-dollar reservation preceded launch and serialized contenders; unknown charges and duplicate run refused",
+      "Known first cost retained and insufficient full headroom refused next run",
+      "Actual canned Node child completed and remained synthetic; another owned child ended at the250ms deadline with unknown accounting"
+    ],
+    "providerCalls": 0,
+    "qualityEvidence": false,
+    "scope": "Durable journal, parser and real synthetic process controls only; no native provider cap or quality conclusion."
+  },
+  "finalCollection": {
+    "recordedAt": "2026-09-15T13:32:39.543Z",
+    "result": "passed",
+    "output": "/private/var/folders/63/4k_ydj554mz6_56j2hpg7jcr0000gn/T/isocan-phase7-conductor-collection-EkAMt5",
+    "sources": [
+      {
+        "path": "scripts/design-partner-execute.mjs",
+        "sha256": "b8a744c6eaeedc7e0f8cfb5b20077978ebf1ccd9395bc1c687f2e73e6247c27c"
+      },
+      {
+        "path": "scripts/lib/design-partner-results.mjs",
+        "sha256": "f93d788ea00031b1a6bbbbf3c5c1a5dc267ec7a7f5699918641e4c1dbcb2b0ef"
+      },
+      {
+        "path": "scripts/lib/design-partner-result-child.mjs",
+        "sha256": "b6559dd09d29cc535fe79bdb5e9ebe39cbeeeeb69d86241606d36d68b7c59be3"
+      },
+      {
+        "path": "scripts/lib/design-partner-tools.mjs",
+        "sha256": "38fbcea01d908c219a995907495f8344c4898c1b25f89726be35e167a89da432"
+      }
+    ],
+    "checks": [
+      "Actual entry CLI captured source-bound canvas final bytes plus support CSS and unchanged connected repository",
+      "Independent actual Chrome plans observed every frozen step at both widths, including failed controls and correction states",
+      "Every task step retained its exact screenshot; source edits after capture did not change final bytes",
+      "Declared script callbacks refused; complete synthetic observations stayed ineligible for generated-design quality"
+    ],
+    "observations": [
+      {
+        "fixture": "inventory",
+        "artifactSha256": "bd623ffc7d59bac16a9e340bf96feb797dd185c41c89528ea402e13f8a7bdfe2",
+        "kind": "canvas-item",
+        "viewports": [
+          {
+            "width": 390,
+            "height": 844
+          },
+          {
+            "width": 1280,
+            "height": 900
+          }
+        ],
+        "observedSteps": 10,
+        "screenshots": 14,
+        "steps": [
+          {
+            "viewport": {
+              "width": 390,
+              "height": 844
+            },
+            "stepIndex": 0,
+            "result": "passed"
+          },
+          {
+            "viewport": {
+              "width": 390,
+              "height": 844
+            },
+            "stepIndex": 1,
+            "result": "passed"
+          },
+          {
+            "viewport": {
+              "width": 390,
+              "height": 844
+            },
+            "stepIndex": 2,
+            "result": "passed"
+          },
+          {
+            "viewport": {
+              "width": 390,
+              "height": 844
+            },
+            "stepIndex": 3,
+            "result": "passed"
+          },
+          {
+            "viewport": {
+              "width": 390,
+              "height": 844
+            },
+            "stepIndex": 4,
+            "result": "failed"
+          },
+          {
+            "viewport": {
+              "width": 1280,
+              "height": 900
+            },
+            "stepIndex": 0,
+            "result": "passed"
+          },
+          {
+            "viewport": {
+              "width": 1280,
+              "height": 900
+            },
+            "stepIndex": 1,
+            "result": "passed"
+          },
+          {
+            "viewport": {
+              "width": 1280,
+              "height": 900
+            },
+            "stepIndex": 2,
+            "result": "passed"
+          },
+          {
+            "viewport": {
+              "width": 1280,
+              "height": 900
+            },
+            "stepIndex": 3,
+            "result": "passed"
+          },
+          {
+            "viewport": {
+              "width": 1280,
+              "height": 900
+            },
+            "stepIndex": 4,
+            "result": "failed"
+          }
+        ],
+        "eligible": false,
+        "assessmentPath": "/private/var/folders/63/4k_ydj554mz6_56j2hpg7jcr0000gn/T/isocan-phase7-conductor-collection-EkAMt5/inventory/assessment/assessment.json"
+      },
+      {
+        "fixture": "brand-extension",
+        "artifactSha256": "fb98ad2af423f2c2a5846e2df80a14eff9bc1c9c4d71b88db9da608b87afb6bd",
+        "kind": "repository",
+        "viewports": [
+          {
+            "width": 390,
+            "height": 844
+          },
+          {
+            "width": 1280,
+            "height": 900
+          }
+        ],
+        "observedSteps": 10,
+        "screenshots": 14,
+        "steps": [
+          {
+            "viewport": {
+              "width": 390,
+              "height": 844
+            },
+            "stepIndex": 0,
+            "result": "passed"
+          },
+          {
+            "viewport": {
+              "width": 390,
+              "height": 844
+            },
+            "stepIndex": 1,
+            "result": "passed"
+          },
+          {
+            "viewport": {
+              "width": 390,
+              "height": 844
+            },
+            "stepIndex": 2,
+            "result": "failed"
+          },
+          {
+            "viewport": {
+              "width": 390,
+              "height": 844
+            },
+            "stepIndex": 3,
+            "result": "failed"
+          },
+          {
+            "viewport": {
+              "width": 390,
+              "height": 844
+            },
+            "stepIndex": 4,
+            "result": "failed"
+          },
+          {
+            "viewport": {
+              "width": 1280,
+              "height": 900
+            },
+            "stepIndex": 0,
+            "result": "passed"
+          },
+          {
+            "viewport": {
+              "width": 1280,
+              "height": 900
+            },
+            "stepIndex": 1,
+            "result": "passed"
+          },
+          {
+            "viewport": {
+              "width": 1280,
+              "height": 900
+            },
+            "stepIndex": 2,
+            "result": "failed"
+          },
+          {
+            "viewport": {
+              "width": 1280,
+              "height": 900
+            },
+            "stepIndex": 3,
+            "result": "failed"
+          },
+          {
+            "viewport": {
+              "width": 1280,
+              "height": 900
+            },
+            "stepIndex": 4,
+            "result": "failed"
+          }
+        ],
+        "eligible": false,
+        "assessmentPath": "/private/var/folders/63/4k_ydj554mz6_56j2hpg7jcr0000gn/T/isocan-phase7-conductor-collection-EkAMt5/brand-extension/assessment/assessment.json"
+      }
+    ],
+    "providerCalls": 0,
+    "qualityEvidence": false,
+    "scope": "Collection and assessment instrumentation only; synthetic HTML and original unimplemented connected fixture are not model outputs."
+  },
+  "blindedReview": {
+    "recordedAt": "2026-09-15T13:32:17.524Z",
+    "result": "passed",
+    "output": "/private/var/folders/63/4k_ydj554mz6_56j2hpg7jcr0000gn/T/isocan-phase7-conductor-review-B30Frs",
+    "sources": [
+      {
+        "path": "scripts/lib/design-partner-review.mjs",
+        "sha256": "6c2ef17e1edfd09aa2f0ba50580eaf43b740b7bbc6656a8306da0d5c2bab8831"
+      },
+      {
+        "path": "scripts/lib/design-partner-results.mjs",
+        "sha256": "f93d788ea00031b1a6bbbbf3c5c1a5dc267ec7a7f5699918641e4c1dbcb2b0ef"
+      },
+      {
+        "path": "scripts/lib/design-partner-execution.mjs",
+        "sha256": "131cbec10206d5bffd506c12e0a2b64a6a106175500571c0a4c997be9711e991"
+      }
+    ],
+    "checks": [
+      "Three neutral actual served reviewer packets retain eight missing pairs each and show frozen task/context",
+      "Real browser keyboard/pointer changes downloaded exact synthetic scores and separate defect lines; human attestation stayed false",
+      "Private key/unlisted routes refused; changing an immutable brief refused",
+      "All missing/synthetic evidence stayed ineligible with sixteen missing runs retained, no rollout claim",
+      "Six participant instruments stayed unassigned and unobserved; whole-brief uncertainty retained expected -1/+1 interval under duplicate within-brief observations"
+    ],
+    "browser": "Chrome/152.0.7977.84",
+    "plannedRuns": 16,
+    "providerCalls": 0,
+    "realParticipants": 0,
+    "humanRatings": 0,
+    "qualityEvidence": false,
+    "scope": "Real review UI/export and mathematical/provenance preparation controls only; synthetic inputs cannot supply a quality result."
+  },
+  "executionProposal": {
+    "recordedAt": "2026-09-15T13:34:29.875Z",
+    "result": "passed",
+    "output": "/var/folders/63/4k_ydj554mz6_56j2hpg7jcr0000gn/T/isocan-phase7-conductor-proposal-A5XPQD",
+    "proposal": {
+      "files": [
+        {
+          "path": "/tmp/isocan-design-partner-execution/phase7-current-dry-smoke.json",
+          "sha256": "8107ccdf85ab1c4b80816edff6c0851d653b2c2cba6ac05682b8d4587c74f4cc"
+        },
+        {
+          "path": "/tmp/isocan-design-partner-execution/phase7-native-profile-final-2.json",
+          "sha256": "50ad428cd25a98e20a16d150547d17e6a56da70baa76db7b48c9c34a3c9283b8"
+        },
+        {
+          "path": "/tmp/isocan-design-partner-execution/phase7-proposed-limits.json",
+          "sha256": "9ad41ca206d83b104c51211e6afe39f14de6b72dd7e4baae4c3a63331804fcde"
+        },
+        {
+          "path": "/tmp/isocan-design-partner-execution/phase7-proposed-execution-final-2.json",
+          "sha256": "6807dc376cf0711aedf4f56e8524c161c3fa2594888c6868782b055a4b4375c4"
+        }
+      ],
+      "identity": "45ea28467799159504ccedf40188faf804341c0377f1ef031f5d90c59abd3dd0",
+      "plannedRuns": 16,
+      "authorization": null,
+      "providerCalls": 0,
+      "authentication": {
+        "available": false,
+        "mode": "bare-api-key",
+        "reason": "The isolated --bare profile has no API key. Existing OAuth/keychain login does not authenticate this profile."
+      },
+      "sourceFrozen": true,
+      "distChanged": false
+    },
+    "observed": {
+      "valid": true,
+      "executionAuthorized": false,
+      "manifestSha256": "45ea28467799159504ccedf40188faf804341c0377f1ef031f5d90c59abd3dd0",
+      "plannedRuns": 16,
+      "comparisonEligible": false,
+      "qualityEvidence": false,
+      "providerCalls": 0
+    },
+    "checks": [
+      "Actual entry validated source, runtime, map, native/tool and frozen task identities",
+      "Unsupported manifest fields and altered browser capability refused",
+      "Missing/null approval refused before runtime/journal/process creation",
+      "Reused materialization, proxy and accounting proof source hashes still match frozen implementation"
+    ],
+    "refusals": [
+      "Invalid or unsupported execution manifest fields",
+      "Browser network capability changed",
+      "--authorization is required",
+      "No explicit matching execution authorization supplied"
+    ],
+    "providerCalls": 0,
+    "qualityEvidence": false
+  },
+  "engineeringPreparation": "verified; phase 7 PART-DONE awaiting provision and people",
+  "executionAuthorized": false,
+  "rolloutPolicy": "opt-in",
+  "repositoryGates": {
+    "fast": {
+      "command": "npm test",
+      "exitCode": 0,
+      "summary": "570 files, 5,742 tests pass; 108 skips, 161.53 s",
+      "log": "/tmp/isocan-design-partner-execution/phase7-final-fast-serial.log"
+    },
+    "typecheck": {
+      "command": "npm run typecheck",
+      "exitCode": 0,
+      "summary": "All workspaces pass",
+      "log": "/tmp/isocan-design-partner-execution/phase7-frozen-typecheck.log"
+    },
+    "build": {
+      "command": "npm run build",
+      "exitCode": 0,
+      "summary": "Pass in 5.54 s; rebuilt entry remains 742,315 bytes with the exact phase-6 hash",
+      "log": "/tmp/isocan-design-partner-execution/phase7-final-build.log"
+    },
+    "strict": {
+      "command": "npm run test:ci -- --maxWorkers=6",
+      "exitCode": 0,
+      "summary": "626 files, 6,315 tests pass; 3 existing skips, 462.98 s; actual owned Java 21 Firestore emulator and required deep/bundle gates",
+      "log": "/tmp/isocan-design-partner-execution/phase7-final-strict.log",
+      "wrapperLog": "/tmp/isocan-design-partner-execution/phase7-final-strict-wrapper.log"
+    }
+  },
+  "postRecordChecks": {
+    "documentationTests": 34,
+    "documentationFiles": 7,
+    "durationSeconds": 4.64,
+    "exitCode": 0,
+    "relativeLinks": 395,
+    "markdownFiles": 15,
+    "sourceFiles": 20,
+    "conductorLint": "clean",
+    "lessons": 84,
+    "lessonCollisions": 0,
+    "frozenCorpus": "unchanged"
+  },
+  "landingIntegration": {
+    "incomingRevision": "5ca33e3ecb40db71fefa3c6fb03ff880e6b37c19",
+    "incomingFailedRelease": "https://github.com/dglazkov/isocan/actions/runs/34976543716",
+    "independentProofs": {
+      "before": {
+        "recordedAt": "2026-09-15T14:01:00.923Z",
+        "source": "/tmp/isocan-design-partner-execution/phase7-prepared-candidate",
+        "sourceRevision": "08bbf1017213b2d7a24b269384e1861481958ae7",
+        "badgeStoreSha256": "80fd2c8865e2d4397219740612f4e5a0456ca93122d0ed6d34a86fa837698648",
+        "output": "/var/folders/63/4k_ydj554mz6_56j2hpg7jcr0000gn/T/isocan-conductor-identity-before-JFVXoI",
+        "events": [
+          "first process held its stale identity read",
+          "second process reached its stale identity read"
+        ],
+        "setupCode": 0,
+        "originalLocalBadgeId": "bdg_NYSkne4QfU",
+        "afterSetupLocalBadgeId": null,
+        "nextCommandCode": 1,
+        "custodyRefused": true,
+        "privateFieldPreserved": true,
+        "providerCalls": 0,
+        "result": "before-failure-reproduced"
+      },
+      "after": {
+        "recordedAt": "2026-09-15T14:07:46.401Z",
+        "source": "/Users/dionalmaer/code/isocan-design-partner",
+        "badgeStoreSha256": "616dcb21ebdeed3a01b2e910d90108a85bd72021689857196f736189ce9be4c0",
+        "output": "/private/var/folders/63/4k_ydj554mz6_56j2hpg7jcr0000gn/T/isocan-conductor-identity-after-aiS9My",
+        "events": [
+          "first process held its stale identity read",
+          "second process reached actual lock contention",
+          "conductor released the first writer",
+          "second process read identity after acquiring the lock"
+        ],
+        "protectedReads": [
+          [
+            "http://127.0.0.1:51396"
+          ]
+        ],
+        "setupCode": 0,
+        "localBadgeRetained": true,
+        "homeBadgeRetained": true,
+        "nextCommand": {
+          "code": 0,
+          "actorId": "usr_acme_owner",
+          "recordAtHome": true
+        },
+        "afterBothDaemonsRestart": {
+          "code": 0,
+          "actorId": "usr_acme_owner",
+          "recordAtHome": true
+        },
+        "privateFieldPreserved": true,
+        "ownedLockReleased": true,
+        "providerCalls": 0,
+        "qualityEvidence": false,
+        "result": "after-proof-passed"
+      },
+      "errors": {
+        "recordedAt": "2026-09-15T14:09:55.688Z",
+        "result": "passed",
+        "output": "/private/var/folders/63/4k_ydj554mz6_56j2hpg7jcr0000gn/T/isocan-conductor-identity-errors-kVWPFY",
+        "sources": [
+          {
+            "path": "packages/server/src/badge-store.ts",
+            "sha256": "616dcb21ebdeed3a01b2e910d90108a85bd72021689857196f736189ce9be4c0"
+          },
+          {
+            "path": "packages/server/src/index.ts",
+            "sha256": "a3adf5303a0aa1da1281db9bf12441807ef48e196c1fbd1322e11aa72000cd79"
+          },
+          {
+            "path": "packages/api/src/identity.ts",
+            "sha256": "b1c72d7163f78c06137072666f88ca86245c1d42664bdd429d6f38e1f6f6ae79"
+          }
+        ],
+        "checks": [
+          "Actual five-second contention refused without stealing a foreign lock or changing identity",
+          "Four malformed/unsupported contents and an actual filesystem read error preserved original state and released owned locks",
+          "Later actual badge/name updates preserved person ID, credential, private field and0640 mode"
+        ],
+        "waitMs": 5010,
+        "providerCalls": 0,
+        "qualityEvidence": false
+      }
+    },
+    "focusedTests": 48,
+    "finalRepositoryGates": {
+      "fast": {
+        "command": "npm test",
+        "exitCode": 0,
+        "summary": "570 files, 5,757 tests pass; 108 skips, 164.63 s",
+        "log": "/tmp/isocan-design-partner-execution/phase7-identity-final-fast.log"
+      },
+      "typecheck": {
+        "command": "npm run typecheck",
+        "exitCode": 0,
+        "summary": "All workspaces pass",
+        "log": "/tmp/isocan-design-partner-execution/phase7-identity-final-typecheck.log"
+      },
+      "build": {
+        "command": "npm run build",
+        "exitCode": 0,
+        "summary": "Pass in 6.01 s; exact 742,340-byte landing entry remains below the unchanged ceiling",
+        "log": "/tmp/isocan-design-partner-execution/phase7-identity-final-build.log"
+      },
+      "strict": {
+        "command": "npm run test:ci -- --maxWorkers=6",
+        "exitCode": 0,
+        "summary": "626 files, 6,332 tests pass; 3 existing skips, 448.83 s; owned Java 21 Firestore emulator and required deep/bundle gates",
+        "log": "/tmp/isocan-design-partner-execution/phase7-identity-final-strict.log",
+        "wrapperLog": "/tmp/isocan-design-partner-execution/phase7-identity-final-strict-wrapper.log"
+      }
+    },
+    "sourceManifest": "phase-7-identity-sources.json",
+    "studyRuntimeRevisionsUnchanged": true,
+    "providerCalls": 0,
+    "qualityEvidence": false,
+    "postRecordChecks": {
+      "tests": 34,
+      "files": 7,
+      "durationSeconds": 4.6,
+      "exitCode": 0,
+      "relativeLinks": 42,
+      "markdownFiles": 4,
+      "conductorLint": "clean",
+      "lessonCollisions": 0
+    }
+  }
+}

@@ -1,4 +1,6 @@
-import type { Actor, Comment, CommentThread, ItemVersion, VisualFace } from "./model.ts";
+import type { TextAnchor } from "./text-anchor.ts";
+import type { GroupAction, GroupCell, GroupPlacementPolicy } from "./canvas-group-types.ts";
+import type { Actor, Comment, CommentThread, ItemVersion, NamedFaceId, VisualFace } from "./model.ts";
 
 /**
  * The operation vocabulary — the isomorphism contract. Every mutation the web
@@ -10,7 +12,13 @@ import type { Actor, Comment, CommentThread, ItemVersion, VisualFace } from "./m
  * first-class inverse.
  */
 
+/**
+ * A version as an op carries it: the blob is already uploaded, so the op names it by hash
+ * and the reducer stamps who and when — which is why this is `ItemVersion` minus those.
+ */
 export interface NewVersion {
+  /** Canonical writer output only; new public item/version writes cannot forge design admission. */
+  designRecord?: import("./design-record.ts").DesignRecordMarker;
   id: string;
   blobHash: string;
   mimeType: string;
@@ -18,6 +26,8 @@ export interface NewVersion {
   size: number;
   /** Optional visual face (canvas iframe presentation, visualizer, inlined HTML). */
   visual?: VisualFace;
+  /** Optional named fidelity faces (`wireframe`, `mid-fi`, `hi-fi`, `prototype`). */
+  faces?: Partial<Record<NamedFaceId, VisualFace>>;
 }
 
 /**
@@ -47,15 +57,42 @@ export type Placement =
     }
   | { anchorItemId: string };
 
+/**
+ * A comment as an op carries it, before the reducer stamps its author and time. The client
+ * resolves mentions and #references at authoring time, against what its author could see.
+ */
 export interface NewComment {
   id: string;
   body: string;
   /** Resolved @-mentions (actor ids); see Comment.mentions. */
   mentions?: string[];
+  /** A record rather than an ask, which summons nobody — or a roll-call
+   * line's kind; see Comment.record. */
+  record?: true | import("./roll.ts").RollKind;
+  /** A prototype click; see Comment.click. */
+  click?: import("./prototype-click.ts").PrototypeClick;
+  /** A deleted proposal's id; see Comment.deleted. */
+  deleted?: string;
+  /** The critic a lead's note is worn as; see Comment.persona. */
+  persona?: string;
+  /** A goodnight turn; see Comment.goodnight. */
+  goodnight?: import("./model.ts").GoodnightMark;
+  /** Picked readings of vague words; see Comment.readings. */
+  readings?: Array<{ word: string; reading: string }>;
+  /** A moment in the item, in seconds; see Comment.at. */
+  at?: number;
   /** Resolved #item-references (item ids); see Comment.items. */
   items?: string[];
+  /** Public attachment intent; the home resolves it at one canvas revision. */
+  contextRequest?: import("./canvas-group-context.ts").ContextRequest;
+  /** Canonical writer output only; public callers cannot supply retained metadata. */
+  context?: import("./canvas-group-context.ts").ContextManifest;
 }
 
+/**
+ * A change to a title, description or properties. `properties` MERGES, so taking a key
+ * away is `removeProperties` — leaving a value out of the merge would leave it set forever.
+ */
 export interface MetaPatch {
   title?: string;
   description?: string;
@@ -64,6 +101,10 @@ export interface MetaPatch {
   removeProperties?: string[];
 }
 
+/**
+ * Every mutation there is, as one union. Adding a case here is adding a user-visible act
+ * to both surfaces at once — see the header above, and `AGENTS.md`'s "done on both surfaces".
+ */
 export type Operation =
   // ---- actors ----
   | {
@@ -196,6 +237,7 @@ export type Operation =
   | {
       type: "project.create";
       canvasId: string;
+      groupMode?: "groups" | "legacy";
       title: string;
       description?: string;
       properties?: Record<string, string>;
@@ -203,8 +245,20 @@ export type Operation =
   | { type: "project.update"; patch: MetaPatch }
   | { type: "project.delete" } // soft: dir moved aside; NOT undoable
   // ---- items ----
+  | { type: "design.repair"; repair: import("./design-repair.ts").DesignRepairInput; effect?: Extract<Operation, { type: "item.edit" }>; canonical?: import("./design-repair.ts").DesignRepairCanonical }
+  | { type: "design.compare"; threadId: string; commentId: string; comparison: import("./design-decision.ts").DesignComparison; canonicalComment?: Comment }
+  | { type: "design.respond"; threadId: string; commentId: string; response: import("./design-decision.ts").DesignComparisonResponse; canonicalComment?: Comment }
+  | { type: "design.decide"; threadId: string; commentId: string; decision: import("./design-decision.ts").DesignDecisionInput; effect?: import("./design-decision.ts").DesignDecisionEffect }
+  | { type: "design.restore"; effect: import("./design-decision.ts").DesignRestoreEffect }
+  | { type: "design.request"; action: import("./design-request.ts").DesignRequestAction; effect?: import("./design-record.ts").DesignRecordEffect }
+  | { type: "design.receipt"; itemId: string; versionId: string; receipt: import("./design-partner.ts").DesignReceipt; placement?: Placement; width?: number; height?: number; title?: string; effect?: import("./design-record.ts").DesignRecordEffect }
+  | { type: "group.change"; action: GroupAction }
   | {
       type: "item.add";
+      /** Explicit destination on group canvases; attached ink inherits its target's parent. */
+      containerId?: string | null;
+      cell?: GroupCell;
+      groupPlacement?: GroupPlacementPolicy;
       itemId: string;
       version: NewVersion;
       width: number;
@@ -238,6 +292,13 @@ export type Operation =
   | { type: "item.resize"; itemId: string; width: number; height: number }
   | {
       type: "item.update";
+      /** Saved group brief reservation; omitted lets the home inspect the brief bytes. */
+      briefHeight?: number;
+      /** A group metadata edit and resize share one resolved content/geometry change. */
+      size?: { width: number; height: number };
+      containerId?: string | null;
+      cell?: GroupCell;
+      groupPlacement?: GroupPlacementPolicy;
       itemId: string;
       patch: MetaPatch;
       /** Rename the file under the CURRENT version too. Renaming an item and
@@ -245,15 +306,47 @@ export type Operation =
        * filename is a property of the version, which is why it rides here
        * rather than in the patch (which canvases share). */
       filename?: string;
+      /** Attach, update, or remove (when `null`) named fidelity faces on the
+       * current version without minting a new version history entry. */
+      faces?: Partial<Record<NamedFaceId, VisualFace | null>>;
     }
-  | { type: "item.addVersion"; itemId: string; version: NewVersion }
-  | { type: "item.setCurrentVersion"; itemId: string; versionId: string }
+  | { type: "item.addVersion"; itemId: string; version: NewVersion; briefHeight?: number }
+  | {
+      /** Replace content and its metadata as one conditional, undoable act.
+       * A distinct type makes older daemons refuse instead of ignoring a
+       * precondition they do not implement. Geometry remains independent. */
+      type: "item.edit";
+      itemId: string;
+      version: NewVersion;
+      patch: MetaPatch;
+      expectedVersionId: string;
+      expectedMetadata?: { title: string; properties: Record<string, string> };
+    }
+  | { type: "item.setCurrentVersion"; itemId: string; versionId: string; briefHeight?: number }
+  /**
+   * **Keep only the newest `keep` versions of one item.** The rest leave the
+   * stack for good — like `trash.empty`, NOT undoable, and confirmation-gated
+   * at every surface that offers it.
+   *
+   * Why an op and not maintenance beside `gc`: a replica folds the log, and a
+   * stack shortened at the home outside the log would leave every replica
+   * carrying versions the home has forgotten — two copies of one item that
+   * disagree about its history. In the log, it replays.
+   *
+   * Newest by stack order, which is creation order. The CURRENT version is
+   * always kept, even when it is older than the cut: pruning is about size,
+   * and must never change what an item shows. Bytes are the collector's
+   * business — the versions' blobs become unreachable once the entries that
+   * introduced them fall past the undo horizon, and `gc` sweeps them then.
+   */
+  | { type: "item.pruneVersions"; itemId: string; keep: number }
   | {
       // internal: inverse of item.addVersion only
       type: "item.removeVersion";
       itemId: string;
       versionId: string;
       prevCurrentVersionId: string;
+      patch?: MetaPatch;
     }
   | {
       // internal: inverse of item.removeVersion (redo of addVersion) — carries
@@ -261,6 +354,7 @@ export type Operation =
       type: "item.restoreVersion";
       itemId: string;
       version: ItemVersion;
+      patch?: MetaPatch;
     }
   | { type: "item.delete"; itemId: string } // → trash, all versions travel with it
   | { type: "item.restore"; itemId: string } // ← trash
@@ -273,6 +367,7 @@ export type Operation =
   // ---- comments ----
   | {
       type: "thread.create";
+      textAnchor?: TextAnchor | null;
       threadId: string;
       x: number;
       y: number;
@@ -286,10 +381,34 @@ export type Operation =
     }
   | { type: "thread.reply"; threadId: string; comment: NewComment }
   | {
+      /** Publishes typed questions as one comment; the writer resolves retained metadata. */
+      type: "questionnaire.ask";
+      threadId: string;
+      commentId: string;
+      questions: import("./design-partner.ts").DesignQuestionSet;
+      legacySource?: import("./questionnaire.ts").LegacyQuestionSource;
+      contextRequest?: import("./canvas-group-context.ts").ContextRequest;
+      /** Canonical writer output only; public callers cannot supply retained metadata. */
+      context?: import("./canvas-group-context.ts").ContextManifest;
+      retainedReferences?: import("./questionnaire.ts").QuestionnaireRetainedReference[];
+    }
+  | {
+      /** Records the named respondent's typed outcomes as one comment and one undo step. */
+      type: "questionnaire.answer";
+      threadId: string;
+      commentId: string;
+      response: import("./design-partner.ts").DesignResponse;
+      /** Canonical writer output only; public callers cannot supply retained metadata. */
+      context?: import("./canvas-group-context.ts").ContextManifest;
+      retainedReferences?: import("./questionnaire.ts").QuestionnaireRetainedReference[];
+    }
+  | {
       // Re-pin a thread: to an item (x,y become an offset from its top-left)
       // or freestanding (x,y become world coordinates). Lets a thread that
       // started before its item existed be anchored to it after the fact.
       type: "thread.setAnchor";
+      /** Omission clears a previous text selector, preserving old item-pin clients. */
+      textAnchor?: TextAnchor | null;
       threadId: string;
       anchorItemId: string | null;
       x: number;
@@ -318,9 +437,20 @@ export type Operation =
       /** Re-resolved for the new body; see NewComment. */
       mentions?: string[];
       items?: string[];
+      contextRequest?: import("./canvas-group-context.ts").ContextRequest;
+      /** Null is an exact inverse restoring a comment with no prior context. */
+      context?: import("./canvas-group-context.ts").ContextManifest | null;
     }
   | {
-      // internal: inverse of thread.reply
+      /**
+       * Take one message out of a thread. The inverse of `thread.reply`, and
+       * since 24 Sep 2026 also a public op: the Chat's clean-up and
+       * `isocan comment rm <thread> <comment>` send it. Its author may remove
+       * their own message; the canvas's owner may remove anybody's — the home
+       * checks that at `/api/ops` (`mayRemoveComment` in `chatclean.ts`),
+       * since only the home knows who owns. The words stay in the log: this
+       * hides, and its inverse carries the whole comment back.
+       */
       type: "comment.remove";
       threadId: string;
       commentId: string;
@@ -331,17 +461,25 @@ export type Operation =
       type: "comment.restore";
       threadId: string;
       comment: Comment;
+      /**
+       * Where it stood in the thread when it was removed. A removal from the
+       * MIDDLE of a thread (a clean-up) must come back in place, not at the
+       * end; absent on inverses written before this existed, which append as
+       * they always did. Clamped to the thread's length.
+       */
+      index?: number;
     }
   | {
       // internal: inverse of thread.delete
       type: "thread.restore";
       thread: CommentThread;
     }
-  // ---- standing agents (agents-on-demand phase 2) ----
+  // ---- standing agents (agents-on-demand phase 2; `agent.invite`, bench
+  // phase 1) ----
   //
-  // An agent is a durable record; a session is an instance. These two ops are
-  // the record's home half — WHICH agents answer on THIS canvas — living in
-  // canvas state because everything that must see it already reads canvas
+  // An agent is a durable record; a session is an instance. These three ops
+  // are the record's home half — WHICH agents answer on THIS canvas — living
+  // in canvas state because everything that must see it already reads canvas
   // state: `@Sian` resolves through `mentions.ts`, the web tray reads the
   // snapshot, a parked `isocan rc` hears the op land, and the record survives
   // anything because the oplog does. The rc half (harness, cwd, sessionId) is
@@ -368,23 +506,80 @@ export type Operation =
       rules?: unknown;
     }
   | {
+      /**
+       * **Bring an agent you already have to this canvas** (the bench,
+       * journey 2). `agent.enroll` plus provenance: enroll says *this actor
+       * answers here*; invite says *this actor answers here, and here is the
+       * bench that vouched for it*.
+       *
+       * **Why a distinct type rather than a field on enroll.** The same
+       * argument `item.pruneVersions` made against a loop of
+       * `item.removeVersion` (14 Sep): a daemon that does not implement the
+       * provenance half must REFUSE the operation rather than accept it and
+       * silently drop `from`. A flag on an existing op is ignored by an old
+       * daemon; a new type is rejected by it. The difference is a stale
+       * client that stops versus one that quietly writes a record with the
+       * provenance missing — and provenance that is *sometimes* there is
+       * worse than none, because nothing can rely on it.
+       *
+       * **It confers only standing here.** The reducer keeps whatever rules
+       * the record already carried and stamps `writtenBy` only on a row it
+       * creates, so joining never widens who may summon and never rewrites
+       * whose word the rc honours. It does not start a turn and it touches no
+       * other canvas: a bench row confers nothing by itself.
+       */
+      type: "agent.invite";
+      agent: Actor;
+      /** The bench canvas the row was read from — the canvas that vouched.
+       * Recorded, never resolved by a reader here: it is somebody's private
+       * canvas, and the only claim it makes is where the invitation came
+       * from. */
+      from: string;
+    }
+  | {
       /** Take the standing back. The enrolment row goes; the log keeps the
        * whole story, which is journey 8's "history untouched". */
       type: "agent.withdraw";
       actorId: string;
+    }
+  | {
+      /**
+       * **A ceiling on one agent's standing here** (critique phase 2): with
+       * `note`, the only ops the home accepts from that actor on this canvas
+       * are an item-anchored `thread.create`, a `thread.reply` and an
+       * `item.react` (`ceilingRefusal`); `null` lifts it. Set by `isocan
+       * critique` when it enrols a critic, lifted by `isocan critic release`
+       * — and by `agent.withdraw`, whose row it lives on.
+       *
+       * A distinct type rather than a field on `agent.enroll`, for
+       * `agent.invite`'s reason: a home that does not know ceilings must
+       * REFUSE this op, not accept an enrolment and drop the field — a
+       * critic left uncapped without anyone being told is the one outcome
+       * the ceiling exists to prevent. Not undoable, like every standing op.
+       */
+      type: "agent.ceiling";
+      actorId: string;
+      ceiling: "note" | null;
     };
 
+/**
+ * The discriminant every op-branching table keys on — `INTERNAL_OP_TYPES` below, the activity words.
+ */
 export type OperationType = Operation["type"];
 
 /** Ops the engine accepts directly from clients (everything non-internal). */
 export const INTERNAL_OP_TYPES: ReadonlySet<OperationType> = new Set([
+  "design.restore",
   "item.removeVersion",
   "item.restoreVersion",
-  "comment.remove",
   "comment.restore",
   "thread.restore",
 ]);
 
+/**
+ * An op as it travels and as the log holds it: the op, who did it, which canvas, and the
+ * daemon's timestamp. The id doubles as a client-supplied idempotency key (`isOpId`).
+ */
 export interface OpEnvelope {
   /** Op id (nanoid). */
   id: string;
@@ -399,6 +594,10 @@ export interface OpEnvelope {
   op: Operation;
 }
 
+/**
+ * One line of a canvas's oplog: the envelope as normalized, its sequence number, and the
+ * inverse computed before it applied — the whole of what undo needs, stored rather than re-derived.
+ */
 export interface LogEntry {
   /** Monotonic per canvas. */
   seq: number;

@@ -2,14 +2,17 @@
 status: designed
 since: 2026-08-29
 issue: 140
+note: who may retire an actor without it becoming a way to take somebody's name. Recommends no retire verb at all — a claim that is stale AND not live stops holding its name, so nothing is added that anyone could point at another person — with a verb scoped to your own sessions only if still wanted afterwards. Not built; `allocateName` still reads no claim ages
 ---
 # Retiring a name
 
 **25 August 2026.** Every measurement here was taken from this home's own desk
-
-**Where this stands, 29 Aug 2026: not built.**
 and oplogs on that date. Where something is inference rather than evidence, it
 says so.
+
+**Where this stands, 11 Sep 2026: not built.** `allocateName`
+(`core/src/claims.ts`) still takes no claim age into account, and there is no
+`isocan retire`.
 
 The question that started it: *who is allowed to retire an actor, and how do we
 stop that becoming a way to take somebody's name?*

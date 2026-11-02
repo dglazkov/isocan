@@ -7,7 +7,7 @@ import type { Capability, GrantResponse, ServerMessage, WatchLogResponse } from 
 import { grantsRoute, NOT_ADMITTED, WITHDRAWN, WS_NOT_ADMITTED } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
 import { sweepCanvas } from "../src/sweep.ts";
-import { mintTestBadge, type TestBadge } from "./badge.ts";
+import { currentSocketUrl, mintTestBadge, type TestBadge } from "./badge.ts";
 
 /**
  * **A change reaches the room** (roles design, "Reaching an open socket";
@@ -79,7 +79,7 @@ interface Tap {
 }
 
 async function open(badge: TestBadge): Promise<Tap> {
-  const ws = new WebSocket(`${base.replace("http:", "ws:")}/ws?canvasId=${CANVAS}`, {
+  const ws = new WebSocket(currentSocketUrl(`${base.replace("http:", "ws:")}/ws?canvasId=${CANVAS}`), {
     headers: badge.headers,
   });
   const heard: ServerMessage[] = [];
@@ -262,7 +262,7 @@ describe("withdrawn", () => {
     // A watch never refuses a badge that simply cannot hear a canvas — the
     // canvas is not in the answer — so the socket is where the plain refusal
     // shows.
-    const tap = new WebSocket(`${base.replace("http:", "ws:")}/ws?canvasId=${CANVAS}`, {
+    const tap = new WebSocket(currentSocketUrl(`${base.replace("http:", "ws:")}/ws?canvasId=${CANVAS}`), {
       headers: sam.headers,
     });
     const closed = await new Promise<{ code: number; reason: string }>((resolve, reject) => {

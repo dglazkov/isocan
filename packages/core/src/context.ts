@@ -1,9 +1,14 @@
-import { ago } from "./elapsed.ts";
 import { type CanvasContents, type Item, mainThread } from "./model.ts";
 import { designSystem } from "./designsystem.ts";
 
 import { moduleContextPieces } from "./modules.ts";
-import { excludedItems, pinnedItems } from "./contextmark.ts";
+import { excludedItems } from "./contextmark.ts";
+import { ambientContextItems } from "./canvas-group-context.ts";
+import { copiedContextItems, type ContextSource } from "./context-source.ts";
+import type { RecapHeadResponse } from "./recap-head.ts";
+
+// Preserve direct imports while keeping terminal formatting outside Context assembly.
+export { contextReport, formatContextSource } from "./context-report.ts";
 
 /**
  * **What an agent will actually read when it starts work here.**
@@ -33,6 +38,8 @@ export interface ContextPiece {
   /** Which canvas it was borrowed from, when it is inherited (`memory.ts`).
    *  Absent on this canvas's own pieces. */
   from?: { canvasId: string; title: string };
+  /** A bounded authoritative history head, distinct from source content or frozen context. */
+  recap?: RecapHeadResponse;
   /** Present but beaten by this canvas's own — "this canvas's wins" — so
    *  the view shows it struck rather than hiding what a link would have
    *  contributed. */
@@ -47,6 +54,13 @@ export interface ContextPiece {
   stale?: string;
   /** What to do about it, when there is something. */
   fix?: string;
+  /** Local items copied from a source, each with where it came from
+   *  (`context-pin.ts`). A copy does not follow its source, so the source is
+   *  a durable fact about these bytes rather than a link to fetch — and it is
+   *  shown BESIDE the piece, because a pin whose origin is invisible is how
+   *  somebody ends up editing "the team's checklist" believing the team will
+   *  see it. */
+  copied?: Array<{ itemId: string; title: string; source: ContextSource }>;
 }
 
 /** Facts only the machine running the CLI can know. The web has none of them,
@@ -73,7 +87,6 @@ export function markedItems(canvas: CanvasContents): Item[] {
 export function contextPieces(
   canvas: CanvasContents,
   extras: ContextExtras = {},
-  nowMs: number = Date.now(),
 ): ContextPiece[] {
   const pieces: ContextPiece[] = [];
   const items = Object.values(canvas.items);
@@ -140,7 +153,7 @@ export function contextPieces(
    * nothing else existed — collapsing them now that both do would lose exactly
    * the distinction stage 2 was asked for.
    */
-  const pinned = pinnedItems(canvas);
+  const pinned = ambientContextItems(canvas);
   pieces.push({
     name: "Pinned items",
     source: "canvas",
@@ -149,6 +162,21 @@ export function contextPieces(
       ? { size: pinned.map((item) => item.title).join(", ") }
       : { fix: "`isocan context pin <item>` to say what an agent should read first" }),
   });
+
+  /**
+   * Only when there are any, for the same reason "Excluded items: 0" is not a
+   * row: this is news on the canvases that have it and noise everywhere else.
+   */
+  const copied = copiedContextItems(canvas);
+  if (copied.length > 0) {
+    pieces.push({
+      name: "Copied from a source",
+      source: "canvas",
+      present: true,
+      size: `${copied.length} item${copied.length === 1 ? "" : "s"}`,
+      copied: copied.map(({ item, source }) => ({ itemId: item.id, title: item.title, source })),
+    });
+  }
 
   const marked = markedItems(canvas);
   pieces.push({
@@ -221,23 +249,4 @@ export function contextPieces(
   }
 
   return pieces;
-}
-
-/** The list as a terminal prints it — one line a piece, and the reasons under
- *  the pieces that have them. */
-export function contextReport(pieces: ContextPiece[], nowMs: number = Date.now()): string {
-  const lines: string[] = [];
-  const width = Math.max(...pieces.map((p) => p.name.length)) + 2;
-  for (const piece of pieces) {
-    const mark = piece.present ? (piece.stale ? "!" : " ") : "·";
-    const when = piece.updatedAt ? ` · ${ago(piece.updatedAt, nowMs)}` : "";
-    const size = piece.present ? (piece.size ?? "yes") : "not here";
-    const beaten = piece.overridden ? ` (${piece.overridden})` : "";
-    lines.push(`${mark} ${piece.name.padEnd(width)}${size}${when}${beaten}`);
-    if (piece.stale) lines.push(`  ${" ".repeat(width)}${piece.stale}`);
-    if (piece.fix && (piece.stale || !piece.present)) {
-      lines.push(`  ${" ".repeat(width)}→ ${piece.fix}`);
-    }
-  }
-  return lines.join("\n");
 }

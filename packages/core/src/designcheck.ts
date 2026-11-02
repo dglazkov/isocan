@@ -1,5 +1,7 @@
+import { compileDesignContract } from "./design-contract.ts";
 import { CONTRAST_BODY, CONTRAST_UI, contrastRatio, parseHex } from "./contrast.ts";
-import { DESIGN_SECTIONS, unresolvedReferences, type DesignDoc } from "./designmd.ts";
+import { readDesignDirection } from "./design-direction.ts";
+import { DESIGN_SECTIONS, DESIGN_SURFACES, unresolvedReferences, type DesignDoc } from "./designmd.ts";
 
 /**
  * Is this design system usable, or just written down?
@@ -34,12 +36,42 @@ function omittedSections(doc: DesignDoc): Set<string> {
   return out;
 }
 
-export function checkDesign(doc: DesignDoc): DesignFinding[] {
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function isValidSourcesMap(value: unknown): value is Record<string, string> {
+  if (!isPlainObject(value)) return false;
+  return Object.entries(value).every(
+    ([key, item]) => key.trim().length > 0 && typeof item === "string" && item.trim().length > 0,
+  );
+}
+
+/**
+ * **Read board tile citations from `tokens.isocan.sources`** (moodboard phase 3,
+ * design §5) — maps token paths (`colors.<name>`) and direction fields
+ * (`direction.<field>`, `direction.treatments.<name>`) to the `itemId` of the
+ * kept or reference tile each came from. Returns `{}` when absent or malformed.
+ */
+export function readDesignSources(doc: DesignDoc | undefined | null): Record<string, string> {
+  if (!doc?.tokens || !isPlainObject(doc.tokens.isocan)) return {};
+  const raw = doc.tokens.isocan.sources;
+  if (!isValidSourcesMap(raw)) return {};
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(raw)) out[key] = value.trim();
+  return out;
+}
+
+export function checkDesign(doc: DesignDoc, options?: { boardTileIds?: ReadonlySet<string> }): DesignFinding[] {
   const findings: DesignFinding[] = [];
   const { tokens } = doc;
 
   for (const problem of doc.problems) {
     findings.push({ severity: "error", where: "front matter", what: problem });
+  }
+
+  for (const problem of compileDesignContract(tokens).problems) {
+    findings.push({ severity: "error", where: problem.path, what: problem.message });
   }
 
   if (!tokens.name) {
@@ -105,6 +137,16 @@ export function checkDesign(doc: DesignDoc): DesignFinding[] {
     }
   }
 
+  // A surface nobody draws is read as flat — said, so a typo is not a silent downgrade.
+  if (tokens.surface !== undefined && !(DESIGN_SURFACES as readonly string[]).includes(String(tokens.surface).trim().toLowerCase())) {
+    findings.push({
+      severity: "warning",
+      where: "surface",
+      what: `"${tokens.surface}" is not a surface this canvas draws — it is read as flat`,
+      fix: DESIGN_SURFACES.join(", "),
+    });
+  }
+
   // Typography: a level with no size is a level nothing can be set in.
   for (const [name, level] of Object.entries(tokens.typography ?? {})) {
     if (!level.fontSize) {
@@ -166,6 +208,77 @@ export function checkDesign(doc: DesignDoc): DesignFinding[] {
       what: "sections are out of the spec's order",
       fix: DESIGN_SECTIONS.join(" → "),
     });
+  }
+
+  // Board-derived systems cite their kept tiles in `isocan.sources` (moodboard phase 3, design §5).
+  if (isPlainObject(tokens.isocan) && tokens.isocan.sources !== undefined) {
+    if (!isValidSourcesMap(tokens.isocan.sources)) {
+      findings.push({
+        severity: "error",
+        where: "isocan.sources",
+        what: "isocan.sources must map token and direction paths to nonempty tile itemIds",
+      });
+    } else {
+      const sources = readDesignSources(doc);
+      const dirRead = readDesignDirection(doc);
+      const rationale = dirRead.status === "valid" ? dirRead.direction.rationale.toLowerCase() : "";
+
+      for (const [name, value] of Object.entries(tokens.colors ?? {})) {
+        if (!sources[`colors.${name}`]) {
+          const nameLower = name.toLowerCase();
+          const valueLower = String(value).trim().toLowerCase();
+          const explained =
+            rationale.includes(nameLower) ||
+            (valueLower.length > 0 && rationale.includes(valueLower));
+          if (!explained) {
+            findings.push({
+              severity: "error",
+              where: `colors.${name}`,
+              what: "uncited palette token — cite a kept tile in isocan.sources or explain it in direction.rationale",
+            });
+          }
+        }
+      }
+
+      if (dirRead.status === "valid") {
+        for (const field of ["layout", "density", "typography", "palettePurpose"] as const) {
+          const cited = sources[`direction.${field}`] ?? sources[field];
+          if (!cited) {
+            const lower = field.toLowerCase();
+            const spaced = field.replace(/([A-Z])/g, " $1").toLowerCase();
+            if (!rationale.includes(lower) && !rationale.includes(spaced)) {
+              findings.push({
+                severity: "error",
+                where: `direction.${field}`,
+                what: "uncited direction field — cite a kept tile in isocan.sources or explain it in direction.rationale",
+              });
+            }
+          }
+        }
+        for (const treatment of dirRead.direction.treatments) {
+          const cited = sources[`direction.treatments.${treatment.name}`] ?? sources["direction.treatments"];
+          if (!cited && !rationale.includes(treatment.name.toLowerCase())) {
+            findings.push({
+              severity: "error",
+              where: `direction.treatments.${treatment.name}`,
+              what: "uncited direction field — cite a kept tile in isocan.sources or explain it in direction.rationale",
+            });
+          }
+        }
+      }
+
+      if (options?.boardTileIds) {
+        for (const [path, itemId] of Object.entries(sources)) {
+          if (!options.boardTileIds.has(itemId)) {
+            findings.push({
+              severity: "error",
+              where: `isocan.sources.${path}`,
+              what: `cites ${itemId}, which is not a kept or reference tile on the Mood board`,
+            });
+          }
+        }
+      }
+    }
   }
 
   return findings;

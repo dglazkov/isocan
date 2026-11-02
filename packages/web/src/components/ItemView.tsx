@@ -1,6 +1,10 @@
-import { Suspense, lazy, memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { groupContentBox, groupCellBox, groupGridNeedsRoom, groupChildren, groupAncestors, groupScopedRoot, groupDropTarget, groupDropPolicy, groupTransformClosure, groupStackBox, isGroupItem, reachHeld } from "@isocan/core";
+import { frameGap, groupsEnabled, enterCanvasGroup, scopedHit } from "../lib/canvasgroups.ts";
+import { Suspense, lazy, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { CanvasActivation } from "../lib/canvasActivation.ts";
+import { pressSelection } from "../lib/press.ts";
 import { Markdown } from "../lib/markdown.tsx";
-import type { Actor, Item, Neighbour, Operation } from "@isocan/core";
+import type { Actor, Item, ItemVersion, Neighbour } from "@isocan/core";
 import {
   backingOf,
   isDesignSystem,
@@ -15,7 +19,7 @@ import {
   isArea,
   isCanvasItem,
   canvasIdOf,
-  KIND_MARK_MIN,
+  automaticCanvasTarget,
   sourceOf,
   areaGrid,
   areaInner,
@@ -24,52 +28,76 @@ import {
   AREA_TITLE_HEIGHT,
   isDrawingItem,
   isSlide,
+  moduleMarks,
   noteTarget,
   isTextItem,
   reactionPointsOf,
   SLIDE_EMOJI,
   textFaceOf,
   textDrawSize,
-  textIsLegible,
   textStyleOf,
-  textMarkSize,
-  TEXT_FACE_STACK,
+  textStackOf,
+  textInkOf,
+  textFontOf,
+  textColourOf,
   parseUriList,
   renamedFilename,
   titleRoom,
   paperOf,
+  FACE_PROP,
+  NAMED_FACE_IDS,
+  activeFaceIdOf,
+  faceLabel,
+  newGroupId,
   visualFaceOf,
+  warmFacesOf,
+  clickFromMessage,
+  type ItemFaceId,
+  type NamedFaceId,
 } from "@isocan/core";
 import { blobUrl, readBlobText } from "../lib/api.ts";
+import { loadTextFont } from "../lib/textfont.ts";
 import { useOnScreen } from "../lib/onscreen.ts";
+import { useLookahead } from "../lib/lookahead.ts";
 import { useContentOrigin } from "../lib/contentBase.ts";
 import { itemFrame, useFrameSrc } from "../lib/frame.ts";
+import { readabilityBand, showsLiveFrame, useHtmlSnapshot } from "../lib/htmlsnapshot.ts";
+import { sendPrototypeClick } from "../lib/prototypeclick.ts";
+import { takeLiveFlip } from "../lib/deckflip.ts";
+import { FrameAnchor, anchored, anchorFromMessage, nextSpot, type FrameSpot } from "../lib/frameanchor.ts";
 import { fetchBlobText, peekBlobText, type TextLoad } from "../lib/blobtext.ts";
-import { DesignSystemView } from "./DesignSystemView.tsx";
+const DesignSystemView = lazy(() => import("./DesignSystemView.tsx").then((module) => ({ default: module.DesignSystemView })));
 import { useUiStore } from "../stores/uiStore.ts";
-import { sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
+import { useGistStore } from "../stores/gistStore.ts";
+import { publishDrag, sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { snapBox, unionBox } from "../lib/snap.ts";
-import { counterScale, hasRoomForChrome, titleRow, underRow, underRowSpellsItOut, underSlotFor } from "../lib/chrome.ts";
+import { COUNTER_SCALED_CSS, nameRoomCss, TEXT_MARK_CSS, UNDER_ROW_CSS, underSlotFor, Z_GIST, Z_ICON, Z_LEGIBLE, Z_MARK, Z_NAME, Z_ROOMY, Z_SPELL, zoomDecisions, type ZoomHeld } from "../lib/chrome.ts";
 import { useNavigate } from "react-router-dom";
-import { itemPath } from "@isocan/core";
+import { itemPath, nodeCapabilitiesFor, workbenchItemPath } from "@isocan/core";
 /**
  * **A canvas placed on a canvas is rare, so it is not in every first visit.**
  * The card pulls the other canvas's snapshot, lays out its items as blocks and
  * refreshes on a timer — a real component for a gesture most canvases never
  * use. It arrives when one is actually on screen.
  */
+const CanvasPreviewBoundary = lazy(() => import("./CanvasPreviewBoundary.tsx").then((m) => ({ default: m.CanvasPreviewBoundary })));
 const CanvasCard = lazy(() => import("./CanvasCard.tsx").then((m) => ({ default: m.CanvasCard })));
+// A group band's Stack button, or a stacked group's whole pile (phase 4).
+const GroupBand = lazy(() => import("./GroupBand.tsx"));
 import { iconKindFor, kindNoun } from "../lib/kinds.ts";
 import { moduleRendererFor } from "../modules.ts";
 import { fileMarkTip } from "../lib/backing.ts";
+import { ItemBoundary } from "./ItemBoundary.tsx";
 import { KindIcon } from "./KindIcon.tsx";
 import { Reactions } from "./Reactions.tsx";
 import { actorNameIn, sessionName, useActorNames } from "../lib/names.ts";
-import { useOnWall, useSprint, useVotesHiddenOn, voteMark } from "../lib/sprint.ts";
+import { useOnWall, useRoundMarks, useSprint, useVotesHiddenOn, voteMark } from "../lib/sprint.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
+import { beginGroupGesture } from "../lib/groupgestures.ts";
 import { DRAG_SLOP } from "../lib/gesture.ts";
 import { useCanEdit } from "../lib/capability.ts";
+import { glideToBox } from "../lib/zoomactions.ts";
 
 /** Two presses this close together are one double-press. */
 const DOUBLE_PRESS_MS = 450;
@@ -78,6 +106,8 @@ const ARRIVAL_MS = 1500;
 // How close an edge has to come before it snaps, in SCREEN pixels — the same
 // pull at every zoom. Holding Shift mid-drag widens it: the same gesture, more
 // magnetic, for when you are aiming at a line rather than a place.
+/** A control inside an item keeps its press and its click to itself. One function, ten callers. */
+const stop = (e: { stopPropagation(): void }) => e.stopPropagation();
 const SNAP_PX = 6;
 const SNAP_PX_MAGNETIC = 18;
 const MIN_W = 80;
@@ -92,12 +122,57 @@ const EXPAND = (
   </svg>
 );
 
+const EDIT_ICON = (
+  <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden fill="none"
+       stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M11.5 2.5l2 2L5 13H3v-2L11.5 2.5z" />
+  </svg>
+);
+
+const ENTER_ICON = (
+  <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden fill="none"
+       stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 3l7 7M10 5v5H5M13 3v10H3" />
+  </svg>
+);
+
+const LEAVE_ICON = (
+  <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden fill="none"
+       stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M10 10L3 3M3 8V3h5M13 3v10H3" />
+  </svg>
+);
+
+const FIT_ICON = (
+  <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden fill="none"
+       stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M2 5V2h3M11 2h3v3M14 11v3h-3M5 14H2v-3" />
+    <circle cx="8" cy="8" r="1.5" />
+  </svg>
+);
+
 /** The title row's height on screen: 11px type at 1.4 line height, as the
  *  stylesheet sets it. Used to work out the world band a name occupies. */
 const TITLE_STRIP_PX = 16;
 /** Clear space left before whatever the name stopped for, so a reaching name
  *  does not touch the thing it yielded to. */
 const TITLE_GAP_PX = 8;
+/**
+ * **The canvas ON SCREEN**, which while the scrubber stands in the past is the
+ * past (cleanup RP-5, 27 Sep 2026). A selector describing what an item DRAWS
+ * asks this one, never `s.canvas`: the live replica keeps streaming under the
+ * past, so it disagrees about anything changed since — and for anything
+ * deleted since, core's `groupAncestors` throws `unknown-item`, which is how
+ * scrubbing back past a deletion drew a blank page.
+ */
+const shown = (s: ReturnType<typeof useCanvasStore.getState>) => s.past?.canvas ?? s.canvas;
+
+import { usePresentation, currentPresentation } from "../lib/canvasPresentation.ts";
+import { presentedItem, presentedCanvas, presentedOffset } from "../lib/presentation.ts";
+
+const DesignRecordFace = lazy(() => import("./DesignRecordFace.tsx").then((module) => ({ default: module.DesignRecordFace })));
+
+
 
 function ItemViewInner({
   item,
@@ -119,6 +194,10 @@ function ItemViewInner({
   settling?: boolean;
 }) {
   const navigate = useNavigate();
+  const activateItem = useContext(CanvasActivation);
+  const presentation = usePresentation();
+  const detail = presentation?.items[item.id]?.detail;
+  const display = presentedItem(item, presentation);
   /**
    * **A live item is only live while it is somewhere near the window** (the
    * 6 September freeze, second half).
@@ -134,7 +213,9 @@ function ItemViewInner({
    * canvas you arrive somewhere by panning, and content should be there when
    * you get there rather than appearing after you stop.
    */
-  const { ref: liveRef, onScreen: nearWindow } = useOnScreen<HTMLDivElement>("800px");
+  const { ref: liveRef, onScreen: observedNearWindow } = useOnScreen<HTMLDivElement>("800px");
+  const inLookahead = useLookahead(item.id);
+  const nearWindow = observedNearWindow || inLookahead;
   const colors = useActorColors();
   const names = useActorNames();
   // The curtain applies to the WALL — the Vote sheet's contents — and only
@@ -145,16 +226,31 @@ function ItemViewInner({
   // On the wall during a vote: where a dot may be placed.
   const wall = useOnWall(item);
   const onWall = mark !== null && wall;
+  // Every mark that draws as a dot here: the sprint's, and a module round's.
+  const roundMarks = useRoundMarks(item);
+  const dotMarks = useMemo(
+    () => (mark === null ? roundMarks : [mark, ...roundMarks.filter((m) => m !== mark)]),
+    [mark, roundMarks],
+  );
   const selected = useUiStore((s) => s.selectedItemIds.includes(item.id));
   const soleSelection = useUiStore(
     (s) => s.selectedItemIds.length === 1 && s.selectedItemIds[0] === item.id,
   );
+  const parentSelected = useUiStore(
+    (s) => Boolean(item.containerId && s.selectedItemIds.length === 1 && s.selectedItemIds[0] === item.containerId),
+  );
   const drag = useUiStore((s) => (s.drag?.itemIds.includes(item.id) ? s.drag : null));
+  // Held, not merely carried: see `DragState.lift` and `.item.lifted`.
+  const lifted = useUiStore((s) => !!(s.drag?.lift?.includes(item.id) || s.groupPreview?.lift?.includes(item.id)));
   const resize = useUiStore((s) => (s.resize?.itemId === item.id ? s.resize : null));
+  const groupBox = useUiStore((s) => s.groupPreview?.boxes.get(item.id));
+  const dropTarget = useUiStore((s) => s.groupDropTargetId === item.id);
+  const dropOut = useUiStore((s) => s.groupDropOutId === item.id);
+  // What a press here would take (core `groupAim`), never CSS `:hover`.
+  const aimed = useUiStore((s) => s.aim?.itemId === item.id ? " hover-target" : s.aim?.inside === item.id ? " reach-inside" : item.containerId && s.aim?.among === item.containerId ? " reach-among" : "");
   const entered = useUiStore((s) => s.enteredItemId === item.id);
   const renaming = useUiStore((s) => s.renamingItemId === item.id);
   const peeked = useUiStore((s) => s.peekedItemId === item.id);
-  const scale = useUiStore((s) => s.viewport.scale);
   const commentMode = useUiStore((s) => s.commentMode);
   const canEdit = useCanEdit();
   /**
@@ -172,25 +268,66 @@ function ItemViewInner({
     return holder ? holder.actor.id : null;
   });
   const worker = useWorkingSession(item.id);
+  const seenVersion = useRef(item.currentVersionId);
+  const [contentChanged, setContentChanged] = useState(false);
+  useEffect(() => {
+    const changed = seenVersion.current !== item.currentVersionId;
+    seenVersion.current = item.currentVersionId;
+    if (changed && item.updatedBy.id !== actor.id) setContentChanged(true);
+  }, [item.currentVersionId, item.updatedBy.id, actor.id]);
+  useEffect(() => {
+    if (!contentChanged) return;
+    const timer = setTimeout(() => setContentChanged(false), 2400);
+    return () => clearTimeout(timer);
+  }, [contentChanged, item.currentVersionId]);
   // When the label was last pressed, for spotting a double-press on it.
   const labelPress = useRef(0);
 
-  const x = (drag ? item.x + drag.dx : item.x) + (resize?.dx ?? 0);
-  const y = (drag ? item.y + drag.dy : item.y) + (resize?.dy ?? 0);
-  const width = resize?.width ?? item.width;
-  const height = resize?.height ?? item.height;
+  const x = groupBox?.x ?? display.x + (drag?.dx ?? 0) + (resize?.dx ?? 0);
+  const y = groupBox?.y ?? display.y + (drag?.dy ?? 0) + (resize?.dy ?? 0);
+  // A stacked group is drawn as one card at its own origin; its frame is kept.
+  const stackBox = groupStackBox(item);
+  const width = stackBox?.width ?? groupBox?.width ?? resize?.width ?? display.width;
+  const height = stackBox?.height ?? groupBox?.height ?? resize?.height ?? display.height;
   const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0]!;
+  const inheritedFace = useCanvasStore((s) => {
+    if (item.properties[FACE_PROP]) return item.properties[FACE_PROP];
+    const c = shown(s);
+    if (!c || !item.containerId) return null;
+    for (const ancestor of groupAncestors(c, item.id)) {
+      if (ancestor.properties[FACE_PROP]) return ancestor.properties[FACE_PROP];
+    }
+    return null;
+  });
+  const activeFaceId = (inheritedFace as ItemFaceId | null) ?? activeFaceIdOf(item, current);
+  const visual = visualFaceOf(current, activeFaceId);
   const stackDepth = Math.min(item.versions.length - 1, 2);
   // An item's chrome — its name and its version count — is UI, not content:
   // it should stay the size of a label however far out you zoom, the way the
   // comment pins do. Inside the scaled world that means counter-scaling.
-  const chrome = counterScale(scale);
-  const roomy = hasRoomForChrome(width, height, scale);
-  // Screen pixels available to the name, once the star at the other end and
-  // the row's own inset are taken off the top. Constant across selection.
-  // The rule lives in lib/chrome.ts so a test can reach it without a browser —
-  // there is no floor, and chrome.test.ts is where that is held.
-  const row = titleRow(width, scale);
+  // Counter-scaled by CSS from the world's `--scale`, so zooming moves it
+  // without a render — see `zoomDecisions`.
+  const chrome = COUNTER_SCALED_CSS;
+  // What each zoom rule answered last render, for core's hysteresis
+  // (`holdsAtZoom`): an item resting on a threshold keeps what it has rather
+  // than blinking it on every sub-pixel wobble. Per item, never global.
+  const held = useRef<ZoomHeld>({}).current;
+  // The zoom, as the decisions it drives here and nothing finer — so this item
+  // re-renders when one of them flips, not on every step of a zoom.
+  // Semantic Zoom's summary of this item, when the experiment's chunk put one
+  // here: a text node's mark, or a group's or an area's card with its
+  // members' type size, which the zoom turns into `Z_GIST`.
+  const gistEntry = useGistStore((s) => s[item.id]);
+  const zoom = useUiStore((s) => zoomDecisions(item, width, height, s.viewport.scale, held, gistEntry?.px));
+  const roomy = (held.r = (zoom & Z_ROOMY) !== 0);
+  // The members cannot be read: the summary card shows inside the frame, and
+  // the frame rises over them (`.gisted`). Never for a stacked group's card.
+  const gisted = !stackBox && !(held.g = (zoom & Z_GIST) === 0);
+  // Which of the icon and the name the title row keeps. The rule lives in
+  // lib/chrome.ts (`titleRow`) so a test can reach it without a browser — there
+  // is no floor, and chrome.test.ts is where that is held. The ROOM the name
+  // gets is CSS, from `--w` and `--scale` (`nameRoomCss`).
+  const row = { icon: (zoom & Z_ICON) !== 0, name: (zoom & Z_NAME) !== 0 };
 
   /**
    * **A hovered name reaches into the empty space beside it.**
@@ -225,16 +362,19 @@ function ItemViewInner({
    */
   const manySelected = useUiStore((st) => st.selectedItemIds.length > 1);
   const mayReach = !renaming && !manySelected && (hovered || selected);
+  // The one or two items that may reach follow the raw scale; the rest do not.
+  const reachScale = useUiStore((st) => (mayReach ? st.viewport.scale : 1));
   const reach = useCanvasStore((st) => {
     if (!mayReach) return null;
-    const all = st.canvas?.items;
+    // The neighbours DRAWN beside it, which in the past are the past's.
+    const all = shown(st)?.items;
     if (!all) return null;
     const chosen = useUiStore.getState().selectedItemIds;
     // The title row's height in world units. The row is counter-scaled, so
     // its SCREEN height is fixed (11px type at 1.4 line height) and the world
     // band it covers grows as you zoom out — which is exactly when labels
     // start reaching across neighbours, so the conversion matters.
-    const strip = TITLE_STRIP_PX / scale;
+    const strip = TITLE_STRIP_PX / reachScale;
     const others: Neighbour[] = [];
     for (const other of Object.values(all)) {
       if (other.id === item.id) continue;
@@ -251,7 +391,7 @@ function ItemViewInner({
         titled: chosen.includes(other.id),
       });
     }
-    return titleRoom(item, others, strip, TITLE_GAP_PX / scale);
+    return titleRoom(item, others, strip, TITLE_GAP_PX / reachScale);
   });
   const kind = iconKindFor(item);
   /**
@@ -286,6 +426,8 @@ function ItemViewInner({
   // apart by kind: it is a picture of a place, not a live frame, and it
   // opens in a tab rather than being entered (`core/canvasitem.ts`).
   const isCanvas = isCanvasItem(item);
+  // Whether that canvas's context is read here (memory phase 3), asked once.
+  const memory = memoryOf(item);
   const isBrowser = current.mimeType === BROWSER_MIME && !isCanvas;
   const source = sourceOf(item);
   // A doorway: this item points somewhere else — a canvas card, a live site, a
@@ -298,6 +440,16 @@ function ItemViewInner({
   const docId = source && current.mimeType === DOC_MIME ? googleDocId(source) : null;
   const liveDoc = useUiStore((s) => docId !== null && s.liveDocs.includes(item.id));
   const setDocLive = useUiStore((s) => s.setDocLive);
+  // An HTML screen renders its own small WebP snapshot (`useHtmlSnapshot`)
+  // when zoomed out — its small form IS the signal, like `picture` above, so
+  // it keeps its preview while near the window and needs no `.kind-mark`.
+  const htmlScreen =
+    visual.mimeType === "text/html" &&
+    !item.properties.canvas &&
+    !current.designRecord &&
+    !liveDoc &&
+    !moduleRendererFor(visual.mimeType);
+  const caps = useMemo(() => nodeCapabilitiesFor(item, current), [item, current]);
   // What the strip under the item says right now. The rule lives in
   // lib/chrome.ts, where it is argued and tested.
   const underSlot = underSlotFor({
@@ -313,25 +465,28 @@ function ItemViewInner({
   // node IS its words, so a card around them would be a card around a
   // sentence somebody typed onto a canvas.
   const isText = isTextItem(item);
-  /**
-   * The kinds whose body is a real document rather than drawn markup — the
-   * ones worth standing down when they are nowhere near the window. `liveDoc`
-   * joins them: a Google Doc shown live is somebody else's page in a frame.
-   *
-   * Off `kind` above rather than a second `itemKind` call, which also means a
-   * module whose icon is a screen stands down too — conservative in the
-   * direction that costs a reload rather than a gigabyte.
-   */
-  const heavy = kind === "screen" || kind === "site" || kind === "canvas" || liveDoc;
   // A speaker note names its slide on the canvas (core/slides.ts).
   const noteTargetId = noteTarget(item);
-  const noteSlideTitle = useCanvasStore((s) => (noteTargetId ? (s.canvas?.items[noteTargetId]?.title ?? "a slide") : null));
+  const noteSlideTitle = useCanvasStore((s) => (noteTargetId ? (shown(s)?.items[noteTargetId]?.title ?? "a slide") : null));
   // Paper turns a caption into an object: see `core/textnode.ts`.
   const paper = isText ? paperOf(item) : null;
   // An area is a sheet things are placed ON: drawn behind everything, and
   // transparent to the pointer except for its title strip and handles, so a
   // tool used inside it still reaches the canvas. See `core/area.ts`.
-  const isAreaItem = isArea(item);
+  const isCanvasGroup = isGroupItem(item);
+  const isAreaItem = isArea(item) || isCanvasGroup;
+  const displayedGroup = isCanvasGroup ? { ...item, x, y, width, height } : item;
+  const groupContent = isCanvasGroup ? groupContentBox(displayedGroup) : null;
+  // Both of the canvas on screen — see `shown`. Only a sheet has members or
+  // a depth worth asking for, and nothing else reads them.
+  const memberCount = useCanvasStore((s) => { const c = shown(s); return c && isCanvasGroup ? groupChildren(c, item.id).length : 0; });
+  const groupDepth = useCanvasStore((s) => { const c = shown(s); return isCanvasGroup && c?.items[item.id] ? groupAncestors(c, item.id).length : 0; });
+  // The scope you stand in, and every frame around it, is floor: its open
+  // space takes a selection box. Any other frame's open space is the group.
+  const floor = useUiStore((s) => {
+    const c = isCanvasGroup && s.activeGroupId ? useCanvasStore.getState().canvas : null;
+    return !!c?.items[s.activeGroupId!] && (s.activeGroupId === item.id || groupAncestors(c, s.activeGroupId!).some((up) => up.id === item.id));
+  });
   /** See `picture` above: the mark appears once the chrome has gone, and only
    *  for the kinds whose small form no longer says what they are. A sheet is
    *  excluded because it is a place rather than a thing, and it keeps its own
@@ -351,8 +506,7 @@ function ItemViewInner({
    * it the honest thing to draw is nothing — the minimap is the view that
    * answers "what is where" at that scale, and it answers it better.
    */
-  const markPx = textMarkSize(width, height, scale);
-  const kindMark = !roomy && !isText && !picture && !isAreaItem && markPx >= KIND_MARK_MIN;
+  const kindMark = !roomy && !isText && !picture && !htmlScreen && !isAreaItem && (zoom & Z_MARK) !== 0;
   const tint = isAreaItem ? areaTint(item) : null;
   const grid = isAreaItem ? areaGrid(item) : null;
   const inner = isAreaItem ? areaInner(item) : null!;
@@ -364,7 +518,13 @@ function ItemViewInner({
   // the control promised. The composer measures with the same number, so the
   // node lands the shape it looked while being typed.
   const textSize = isText ? textDrawSize(item) : 0;
-  const textLegible = !isText || textIsLegible(textSize, scale);
+  // A named font's file is asked for once, and only because a node on this canvas
+  // names it (`lib/textfont.ts`). Idempotent, so safe in render.
+  if (isText) loadTextFont(textFontOf(item));
+  const textLegible = !isText || (held.t = (zoom & Z_LEGIBLE) !== 0);
+  // Semantic Zoom's summary, drawn in the opening words' place — only where
+  // the words cannot be read, and only when the experiment's chunk put one here.
+  const gist = textLegible ? null : gistEntry?.node;
   // Ink about something paints over it — a mark under the thing it marks is
   // not a mark.
   const isMark = isAnnotation(item);
@@ -392,7 +552,42 @@ function ItemViewInner({
   // Does the under-item line have room to spell the button out beside the
   // icon? Marks count against the room — they share the line — so a marked
   // item drops to the icon sooner instead of running the row off its edge.
-  const spellItOut = underRowSpellsItOut(width, scale, Object.keys(item.reactions ?? {}).length);
+  const spellItOut = (held.s = (zoom & Z_SPELL) !== 0);
+  // Computed and shown only when this item is the sole selection and at close
+  // zoom (`spellItOut`), so unselected cards pay nothing for group face scans
+  // and never clutter the canvas when zoomed out.
+  const groupFacesKey = useCanvasStore((s) => {
+    if (!isCanvasGroup || !soleSelection || !spellItOut) return "";
+    const c = shown(s);
+    if (!c) return "";
+    const found = new Set<string>();
+    for (const child of groupChildren(c, item.id)) {
+      const ver = child.versions.find((v) => v.id === child.currentVersionId) ?? child.versions[0];
+      if (!ver?.faces) continue;
+      for (const faceId of NAMED_FACE_IDS) {
+        if (ver.faces[faceId]) found.add(faceId);
+      }
+    }
+    return NAMED_FACE_IDS.filter((f) => found.has(f)).join(",");
+  });
+  const toggleableFaces: NamedFaceId[] =
+    !soleSelection || !spellItOut
+      ? []
+      : isCanvasGroup
+        ? groupFacesKey
+          ? (groupFacesKey.split(",") as NamedFaceId[])
+          : []
+        : NAMED_FACE_IDS.filter((f) => current?.faces?.[f] !== undefined);
+  const currentToggleFace: ItemFaceId = isCanvasGroup
+    ? ((item.properties[FACE_PROP] as ItemFaceId | undefined) ?? (inheritedFace as ItemFaceId | null) ?? toggleableFaces[0] ?? "visual")
+    : activeFaceId;
+  // Warm alternate faces only for the selected item (or children of a selected group)
+  // at close zoom, so non-selected items keep `warm=0` and can swap to static SVG
+  // snapshots when zoomed out or panning.
+  const warmFaces = useMemo(
+    () => ((soleSelection || parentSelected) && spellItOut ? warmFacesOf(current, visual.blobHash) : []),
+    [soleSelection, parentSelected, spellItOut, current, visual.blobHash],
+  );
 
   function onPointerDown(e: React.PointerEvent) {
     if (e.button !== 0) return;
@@ -400,7 +595,9 @@ function ItemViewInner({
     if (
       target.closest(".resize-handle") ||
       target.closest(".version-badge") ||
-      target.closest(".browser-reload")
+      target.closest(".browser-reload") ||
+      target.closest(".item-focus-strip") ||
+      target.closest(".item-face-toggle")
     )
       return;
     if (entered) return; // entered content owns the pointer
@@ -410,6 +607,12 @@ function ItemViewInner({
     // bubbles to the viewport — Hand pans, Zoom fits this item, the Pen draws
     // over it — even though it started here.
     if (ui.activeTool === "hand" || ui.activeTool === "zoom" || ui.activeTool === "pen") return;
+    // ⌘ (Ctrl off a Mac) reaches the ONE item under the pointer, at any depth
+    // (groups-by-hand phase 2). Over a frame's open space it is a selection
+    // box among the members instead — and only Select takes a frame by its
+    // open space at all — so those presses go on to the canvas.
+    const reachOne = reachHeld(e) && groupsEnabled();
+    if (isCanvasGroup && !stackBox && frameGap(target) && (reachOne || ui.activeTool !== "select" || commentMode || ui.stamp)) return;
     /**
      * **Placing a dot** (sprint phase 4). While a mark is being placed, a
      * press on a sketch ON THE WALL puts the mark where the press landed, as
@@ -433,7 +636,7 @@ function ItemViewInner({
     if (commentMode) {
       // Anchored comment: store the click as an offset from the item origin.
       const world = screenToWorldPoint(e.clientX, e.clientY);
-      ui.setPendingComment({ x: world.x - item.x, y: world.y - item.y, anchorItemId: item.id });
+      ui.setPendingComment({ ...presentedOffset(item, currentPresentation(), world, true), anchorItemId: item.id });
       ui.setCommentMode(false);
       return;
     }
@@ -449,6 +652,8 @@ function ItemViewInner({
     // The count is kept by hand: a pointerdown carries no click count (detail
     // is 0 on pointer events), so the pair has to be recognized by the clock.
     if (canEdit && target.closest(".item-titlebar")) {
+      const labelCanvas = useCanvasStore.getState().canvas;
+      if (!labelCanvas || groupScopedRoot(labelCanvas, item.id, ui.activeGroupId) === item.id) {
       const now = Date.now();
       if (now - labelPress.current < DOUBLE_PRESS_MS) {
         labelPress.current = 0;
@@ -460,38 +665,33 @@ function ItemViewInner({
         return;
       }
       labelPress.current = now;
+      }
     }
 
-    if (e.shiftKey) {
-      // Shift-click toggles membership; no drag from a shift press.
-      ui.toggleSelect(item.id);
-      return;
-    }
-
+    const stackCanvas = useCanvasStore.getState().canvas;
+    const stackScope = ui.activeGroupId;
+    const stack = e.altKey && stackCanvas ? [...new Set(itemsUnder(e.clientX, e.clientY).map((id) => groupScopedRoot(stackCanvas, id, stackScope)).filter((id): id is string => id !== null))] : [];
+    if (e.altKey && stackCanvas && stack.length === 0) return;
+    const selectionId = e.altKey ? (stack[0] ?? item.id) : reachOne ? item.id : scopedHit(item.id);
+    // ⌘ stands in the reached item's group, as if you had stepped in; Esc
+    // steps out the way it always has.
+    if (reachOne && !e.altKey && (item.containerId ?? null) !== ui.activeGroupId) ui.setActiveGroup(item.containerId ?? null);
+    const was = useUiStore.getState().selectedItemIds;
+    const from = stack.findIndex((id) => was.includes(id));
+    const targetId = stack.length > 1 ? stack[(from + 1) % stack.length]! : selectionId;
     if (!canEdit) {
-      // A reader selects; nothing moves under their hand. Selection stays
-      // because it is how the context panel, the versions and full screen
-      // are reached, and none of those write.
-      ui.select(item.id);
+      // A reader selects; nothing moves under their hand.
+      // So Shift can toggle at the press. Selection stays available for
+      // context, navigation and group inspection.
+      e.shiftKey ? ui.toggleSelect(targetId) : ui.select(targetId);
       return;
     }
 
-    // ⌥-click reaches past whatever is on top. It matters most for drawings:
-    // a chromeless sketch is a big invisible rectangle, so a stack of them
-    // (or ink laid over a note) would otherwise hand every click to the same
-    // topmost box. Each ⌥-click steps one layer deeper, then wraps around.
-    const stack = e.altKey ? itemsUnder(e.clientX, e.clientY) : [];
-    // Step from whatever is selected, not from the item that caught the event:
-    // selecting raises an item's z-index, so paint order would ping-pong
-    // between the top two and never reach the third.
-    const from = stack.findIndex((id) => ui.selectedItemIds.includes(id));
-    const anchor = from >= 0 ? from : stack.indexOf(item.id);
-    const targetId = stack.length > 1 ? stack[(anchor + 1) % stack.length]! : item.id;
-
-    // Dragging a selected item moves the whole selection; dragging an
-    // unselected one selects it alone first.
-    const wasInSelection = ui.selectedItemIds.includes(targetId);
-    const chosen = wasInSelection ? ui.selectedItemIds : [targetId];
+    // Dragging a selected item moves the whole selection, Shift or not;
+    // a Shift-press adds an unselected one and drags the lot; a plain press
+    // selects it alone. Taking a selected item OUT waits for a release that
+    // never moved — `lib/press.ts` has the rule and the bug it fixes.
+    const chosen = reachOne && !e.shiftKey ? [targetId] : pressSelection(was, targetId, e.shiftKey);
     // What is drawn on a thing travels with it. Otherwise dragging a screen
     // leaves the X you drew on it behind, which is the moment the mark stops
     // meaning anything.
@@ -499,96 +699,112 @@ function ItemViewInner({
     // An area carries what is on it, the way it carries its annotations: the
     // sheet is the handle for everything placed there, and membership is
     // read off geometry at the moment of the grab (`core/area.ts`).
-    const dragIds = canvasNow
-      ? [
-          ...new Set(
-            chosen.flatMap((id) => {
-              const one = canvasNow.items[id];
-              return [
-                id,
-                ...annotationsOf(canvasNow, id).map((mark) => mark.id),
-                ...(one && isArea(one) ? itemsIn(canvasNow, one).map((held) => held.id) : []),
-              ];
-            }),
-          ),
-        ]
+    const semantic = groupsEnabled() ? beginGroupGesture(chosen) : null;
+    // What a chosen area is carrying: its contents ride along flat.
+    const carried = (id: string) => {
+      const one = canvasNow?.items[id];
+      return one && isArea(one) ? itemsIn(canvasNow!, one).map((held) => held.id) : [];
+    };
+    const dragIds = semantic ? groupTransformClosure(semantic.start.canvas, semantic.roots) : canvasNow
+      ? [...new Set(chosen.flatMap((id) => [id, ...annotationsOf(canvasNow, id).map((mark) => mark.id), ...carried(id)]))]
       : chosen;
-    if (!wasInSelection) ui.select(targetId);
+    if (chosen !== was) ui.setSelection(chosen);
+    // What the hand holds — the chosen items, less anything a chosen area is
+    // carrying (its contents ride along flat, the way a group's members do).
+    const inside = new Set(semantic ? [] : chosen.flatMap(carried));
+    const lift = semantic ? semantic.roots : chosen.filter((id) => !inside.has(id));
 
     const frame = e.currentTarget as HTMLElement;
     frame.setPointerCapture(e.pointerId);
     const start = { x: e.clientX, y: e.clientY };
     let moved = false;
+    const draggingIds = new Set(dragIds);
+    const capturedItems = semantic?.start.canvas.items;
+    const capturedMoving = capturedItems ? unionBox(dragIds.map((id) => capturedItems[id]).filter((one) => one !== undefined)) : null;
+    const capturedOthers = capturedItems ? Object.values(capturedItems).filter((other) => !draggingIds.has(other.id)) : null;
 
-    function onMove(ev: PointerEvent) {
+    // The last move, so ⌘ going down or up under a still hand re-reads the
+    // destination at once, the way Shift's snapping already does.
+    let last: PointerEvent | null = null;
+    function onKey(ev: KeyboardEvent) {
+      if (last && moved && (ev.key === "Meta" || ev.key === "Control")) onMove({ clientX: last.clientX, clientY: last.clientY, shiftKey: last.shiftKey, altKey: last.altKey, metaKey: ev.metaKey, ctrlKey: ev.ctrlKey });
+    }
+    function onMove(ev: Pick<PointerEvent, "clientX" | "clientY" | "shiftKey" | "altKey" | "metaKey" | "ctrlKey">) {
       const ui = useUiStore.getState();
+      if (ev instanceof PointerEvent) last = ev;
+      if (semantic && !semantic.active()) return;
       const scale = ui.viewport.scale;
       if (!moved && Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < DRAG_SLOP) return;
+      if (!moved) semantic?.lift();
       moved = true;
       let dx = (ev.clientX - start.x) / scale;
       let dy = (ev.clientY - start.y) / scale;
 
       // Align to what is already on the canvas. Shift is read from the MOVE,
-      // not the press — a shift-press is "add to selection", so the magnet has
-      // to be something you reach for mid-gesture.
-      const items = useCanvasStore.getState().canvas?.items ?? {};
-      const dragging = dragIds.map((id) => items[id]).filter((one) => one !== undefined);
-      const moving = unionBox(dragging);
+      // not the press — Shift at the press is selection (`lib/press.ts`), so
+      // Shift held through a drag of the selection moves it AND snaps harder.
+      const snapshot = useCanvasStore.getState().canvas;
+      const presented = snapshot ? presentedCanvas(snapshot, currentPresentation()).items : {};
+      const items = capturedItems ?? presented;
+      const moving = semantic
+        ? capturedMoving
+        : unionBox(dragIds.flatMap((id) => items[id] ?? []));
       if (moving) {
-        const others = Object.values(items).filter((other) => !dragIds.includes(other.id));
+        const others = capturedOthers ?? Object.values(items).filter((other) => !draggingIds.has(other.id));
         const threshold = (ev.shiftKey ? SNAP_PX_MAGNETIC : SNAP_PX) / scale;
         const snap = snapBox({ ...moving, x: moving.x + dx, y: moving.y + dy }, others, threshold);
         dx += snap.dx;
         dy += snap.dy;
         ui.setGuides(snap.guides, snap.spacing);
       }
-      ui.setDrag({ itemIds: dragIds, dx, dy, moved });
+      let destination: string | null | undefined;
+      if (semantic) {
+        const point = screenToWorldPoint(ev.clientX, ev.clientY);
+        const target = ev.altKey ? null : groupDropTarget(semantic.start.canvas, point, semantic.roots);
+        const from = semantic.roots.map((id) => semantic.start.canvas.items[id]?.containerId ?? null);
+        // Plain: staying outside the current parent grows it; only a named
+        // different destination deliberately changes the relationship. ⌘:
+        // the pointer decides, and open canvas (null) is a destination too —
+        // the one deliberate way out of a group.
+        const to = reachHeld(ev) && !ev.altKey ? (target?.id ?? null) : target?.id;
+        destination = to !== undefined && from.some((parent) => parent !== to) ? to : undefined;
+        ui.setGroupDropTarget(destination ?? null, destination === null ? from.find((parent) => parent !== null) ?? null : null);
+        semantic.move(dx, dy, destination, destination && target ? groupDropPolicy(target, point) : undefined);
+      } else ui.setDrag({ itemIds: dragIds, dx, dy, moved, lift });
+      // Everyone else on the canvas sees it move (groups-by-hand phase 3).
+      publishDrag(lift, dx, dy, destination);
     }
     function onUp(ev: PointerEvent) {
-      if (frame.hasPointerCapture(ev.pointerId)) frame.releasePointerCapture(ev.pointerId);
-      frame.removeEventListener("pointermove", onMove);
-      frame.removeEventListener("pointerup", onUp);
-      frame.removeEventListener("pointercancel", onUp);
+      publishDrag();
       const state = useUiStore.getState();
+      // A Shift-click that never became a drag: now it takes the item out.
+      if (e.shiftKey && chosen === was && !moved && ev.type === "pointerup") state.toggleSelect(targetId);
+      if (semantic) {
+        if (ev.type === "pointercancel" || !moved) semantic.cancel();
+        else void semantic.commit(canvasId, actor);
+        return;
+      }
       state.setGuides([]); // the lines belong to the gesture, not the canvas
+      // One op per gesture — a group drag is a single undo step. Nothing for
+      // a gesture the browser took away, or a press that never moved.
       const final = state.drag;
-      if (!moved || !final) {
-        state.setDrag(null);
-        return;
-      }
-      // One op per gesture — a group drag is a single undo step.
       const canvas = useCanvasStore.getState().canvas;
-      if (!canvas) {
-        state.setDrag(null);
-        return;
-      }
-      const moves = final.itemIds
-        .map((itemId) => canvas.items[itemId])
-        .filter((dragged) => dragged !== undefined)
-        .map((dragged) => ({
-          itemId: dragged.id,
-          x: Math.round(dragged.x + final.dx),
-          y: Math.round(dragged.y + final.dy),
-        }));
-      const op: Operation | null =
-        moves.length === 1
-          ? { type: "item.move", ...moves[0]! }
-          : moves.length > 1
-            ? { type: "items.move", moves }
-            : null;
-      if (op) {
-        // Fold the final position into the replica BEFORE dropping the drag
-        // override — otherwise the item flashes at its old position until the
-        // WS echo lands.
-        void sendEchoed(canvasId, actor, op);
-      }
+      const moves = ev.type === "pointerup" && moved && final && canvas
+        ? final.itemIds.flatMap((itemId) => {
+            const dragged = canvas.items[itemId];
+            return dragged ? [{ itemId, x: Math.round(dragged.x + final.dx), y: Math.round(dragged.y + final.dy) }] : [];
+          })
+        : [];
+      // Fold the final position into the replica BEFORE dropping the drag
+      // override — otherwise the item flashes at its old position until the
+      // WS echo lands.
+      if (moves.length) void sendEchoed(canvasId, actor, moves.length === 1 ? { type: "item.move", ...moves[0]! } : { type: "items.move", moves });
       state.setDrag(null);
     }
-    frame.addEventListener("pointermove", onMove);
-    frame.addEventListener("pointerup", onUp);
     // A gesture the browser takes away must not leave guides on screen or an
-    // item frozen mid-drag.
-    frame.addEventListener("pointercancel", onUp);
+    // item frozen mid-drag: pointercancel ends it too (`follow`).
+    const signal = follow(frame, onMove, onUp);
+    if (semantic) { window.addEventListener("keydown", onKey, { signal }); window.addEventListener("keyup", onKey, { signal }); }
   }
 
   function onResizeDown(corner: "nw" | "ne" | "sw" | "se", e: React.PointerEvent) {
@@ -596,6 +812,23 @@ function ItemViewInner({
     e.stopPropagation();
     const handle = e.currentTarget as HTMLElement;
     handle.setPointerCapture(e.pointerId);
+    const semantic = groupsEnabled() ? beginGroupGesture([item.id]) : null;
+    if (semantic) {
+      const startPoint = { x: e.clientX, y: e.clientY };
+      const original = semantic.start.canvas.items[item.id]!;
+      const sx = corner.includes("w") ? -1 : 1;
+      const sy = corner.includes("n") ? -1 : 1;
+      const anchor = ({ nw: "se", ne: "sw", sw: "ne", se: "nw" } as const)[corner];
+      function move(ev: PointerEvent) {
+        const scale = useUiStore.getState().viewport.scale;
+        semantic!.resize(item.id, original.width + (ev.clientX - startPoint.x) / scale * sx, original.height + (ev.clientY - startPoint.y) / scale * sy, anchor, ev.shiftKey);
+      }
+      follow(handle, move, (ev) => {
+        if (ev.type === "pointercancel") semantic!.cancel();
+        else void semantic!.commit(canvasId, actor);
+      });
+      return;
+    }
     const start = { x: e.clientX, y: e.clientY, width: item.width, height: item.height };
     // Sign multipliers: which way the pointer delta affects width/height.
     const sx = corner === "nw" || corner === "sw" ? -1 : 1;
@@ -614,12 +847,9 @@ function ItemViewInner({
       useUiStore.getState().setResize({ itemId: item.id, width: newW, height: newH, dx, dy });
     }
     function onUp(ev: PointerEvent) {
-      handle.releasePointerCapture(ev.pointerId);
-      handle.removeEventListener("pointermove", onMove);
-      handle.removeEventListener("pointerup", onUp);
       const state = useUiStore.getState();
       const final = state.resize;
-      if (final && (final.width !== item.width || final.height !== item.height)) {
+      if (ev.type !== "pointercancel" && final && (final.width !== item.width || final.height !== item.height)) {
         const resizeOp = {
           type: "item.resize",
           itemId: item.id,
@@ -640,8 +870,7 @@ function ItemViewInner({
       }
       state.setResize(null);
     }
-    handle.addEventListener("pointermove", onMove);
-    handle.addEventListener("pointerup", onUp);
+    follow(handle, onMove, onUp);
   }
 
   /**
@@ -678,19 +907,25 @@ function ItemViewInner({
       height,
       style: textStyleOf(item),
       face: textFaceOf(item),
+      colour: textColourOf(item.properties),
+      font: textFontOf(item)?.name ?? null,
       // The paper too, or a yellow note re-opens as a white field over its
       // own square — a card on a card, and not the note you double-clicked.
       paper,
     });
   }
 
-  function onDoubleClick() {
+  function onDoubleClick(e: React.MouseEvent) {
     const ui = useUiStore.getState();
     // Two quick dots from the Pen are ink, not a request to enter the item.
     if (ui.activeTool === "pen") return;
     // The pointer capture above hands us the label's double-click too; naming
     // a thing is not the same as stepping inside it.
     if (ui.renamingItemId === item.id) return;
+    const hitId = scopedHit(item.id);
+    const hit = useCanvasStore.getState().canvas?.items[hitId];
+    if (hit && isGroupItem(hit)) { enterCanvasGroup(hit.id); e.stopPropagation(); return; }
+    if (activateItem?.(item.id)) return;
     // A canvas is a place you go, not a thing you step inside of: the same
     // gesture opens it in a tab. Never in place — a canvas inside a canvas
     // inside a canvas is a maze, and a tab is where a place belongs.
@@ -706,6 +941,10 @@ function ItemViewInner({
       // A reader cannot re-open the composer on a text node: the words are
       // the whole of it, so there is nothing to step inside of either.
       if (canEdit) void openTextEditor();
+      return;
+    }
+    if (!caps.enter) {
+      if (caps.view) navigate(itemPath(canvasId, item.id));
       return;
     }
     ui.setEntered(item.id);
@@ -740,8 +979,21 @@ function ItemViewInner({
 
   return (
     <div
-      className={`item${selected ? " selected" : ""}${entered ? " entered" : ""}${drag ? " dragging" : ""}${isInk ? " ink" : ""}${isText ? " textnode" : ""}${paper ? ` paper paper-${paper}` : ""}${isAreaItem ? " area" : ""}${tint ? ` paper-${tint}` : ""}${isMark ? " annotation" : ""}${renaming ? " renaming" : ""}${peeked ? " peeked" : ""}${settling ? " settling" : ""}${reach !== null ? " reaching" : ""}${isSlide(item) ? " slide" : ""}${away ? " away" : ""}${arrived.current ? " arrived" : ""}`}
+      className={`item${selected ? " selected" : ""}${entered ? " entered" : ""}${drag ? " dragging" : ""}${lifted ? " lifted" : ""}${isInk ? " ink" : ""}${isText ? " textnode" : ""}${paper ? ` paper paper-${paper}` : ""}${isAreaItem ? " area" : ""}${gisted ? " gisted" : ""}${isCanvasGroup ? ` canvas-group${floor ? "" : " pressable"}${stackBox ? " stacked" : ""}` : ""}${dropTarget ? " group-drop-target" : ""}${aimed}${tint ? ` paper-${tint}` : ""}${isMark ? " annotation" : ""}${renaming ? " renaming" : ""}${peeked ? " peeked" : ""}${settling ? " settling" : ""}${reach !== null ? " reaching" : ""}${isSlide(item) ? " slide" : ""}${away ? " away" : ""}${arrived.current ? " arrived" : ""}`}
       data-item-id={item.id}
+      data-group-id={isCanvasGroup ? item.id : undefined}
+      data-presentation={detail}
+      data-content-changed={contentChanged || undefined}
+      data-emphasis={presentation?.items[item.id]?.emphasis || undefined}
+      tabIndex={detail ? (detail === "marker" ? -1 : 0) : undefined}
+      aria-label={detail ? `Explore ${item.title}` : undefined}
+      title={detail === "marker" ? item.title : undefined}
+      onKeyDown={detail ? (event) => {
+        if (event.target !== event.currentTarget) return;
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault(); event.stopPropagation(); activateItem?.(item.id);
+        }
+      } : undefined}
       /* One id in the store rather than a flag per item: moving the pointer
          across a canvas re-renders the two items whose state changed, not
          every item on screen. */
@@ -752,12 +1004,18 @@ function ItemViewInner({
         )
       }
       style={{
+        ...(isCanvasGroup && !stackBox && !gisted ? { zIndex: -10000 + groupDepth } : {}),
         left: x,
         top: y,
         width,
         height,
+        // The box in world units, for the chrome's CSS to size itself from
+        // against the world's `--scale` (`nameRoomCss`, `UNDER_ROW`).
+        ...({ "--w": width, "--h": height } as React.CSSProperties),
         ...(remoteHolder && !selected
-          ? { outline: `2px dashed ${actorColorIn(colors, remoteHolder)}`, outlineOffset: "1px" }
+          ? // Counter-scaled like every other ring on an item, and on the
+            // same line as selection, so their selection reads as yours does.
+            { outline: `calc(2px / var(--scale, 1)) dashed ${actorColorIn(colors, remoteHolder)}`, outlineOffset: "calc(-1px / var(--scale, 1))" }
           : {}),
         ...(worker
           ? ({ "--work-color": actorColorIn(colors, worker.actorId) } as React.CSSProperties)
@@ -765,15 +1023,19 @@ function ItemViewInner({
         ...(isText
           ? ({
               "--text-size": `${textSize}px`,
-              "--text-face": TEXT_FACE_STACK[textFaceOf(item)],
+              // The named font first, its face's stack behind it.
+              "--text-face": textStackOf(item),
+              "--text-ink": textInkOf(item),
             } as React.CSSProperties)
           : {}),
       }}
       onPointerDown={onPointerDown}
       onDoubleClick={onDoubleClick}
     >
-      {stackDepth >= 1 && <span className="ply" style={{ transform: "translate(5px, 5px)", opacity: 0.75 }} />}
-      {stackDepth >= 2 && <span className="ply" style={{ transform: "translate(10px, 10px)", opacity: 0.45 }} />}
+      {detail && (worker || remoteHolder) && <span className="presentation-presence">{worker?.name ?? names[remoteHolder!] ?? "Viewing"}</span>}
+      {/* The look and the offset live in CSS (`.ply-1`, `.ply-2`): both depend on the zoom and on selection. */}
+      {stackDepth >= 1 && <span className="ply ply-1" />}
+      {stackDepth >= 2 && <span className="ply ply-2" />}
       {item.versions.length > 1 && roomy && (
         <button
           className="version-badge version-badge-ne"
@@ -789,7 +1051,7 @@ function ItemViewInner({
           ×{item.versions.length}
         </button>
       )}
-      {isAreaItem && grid && (
+      {isAreaItem && !isCanvasGroup && grid && (
         /* The grid (sprint phase 5): guides between cells and a name per row
            and column, in world units inside the sheet's inner region — the
            storyboard's fifteen frames, the test wall's people × frames. No
@@ -829,36 +1091,132 @@ function ItemViewInner({
           ))}
         </div>
       )}
-      {isAreaItem && (
+      {isAreaItem && !stackBox && (
         /* The strip is the area's name AND its handle — the one part of the
            sheet that takes the pointer, so it can be grabbed at any zoom
            while the sheet itself lets tools through to the canvas. */
         <div
           className="area-title"
-          style={{ height: AREA_TITLE_HEIGHT, fontSize: Math.round(AREA_TITLE_HEIGHT * 0.6) }}
+          style={{ height: isCanvasGroup ? (item.groupLayout?.titleHeight ?? 56) : AREA_TITLE_HEIGHT, fontSize: isCanvasGroup ? 24 : Math.round(AREA_TITLE_HEIGHT * 0.6) }}
           title={item.title}
         >
-          {item.title}
+          {item.title}{isCanvasGroup && <small className="group-member-count">{memberCount} items</small>}
         </div>
       )}
-      {mark !== null && reactionPointsOf(item, mark).length > 0 && (
+      {gisted && gistEntry!.node}
+      {isCanvasGroup && <>
+        {dropTarget && <span className="group-drop-label" role="status">Add to {item.title}</span>}
+        {dropOut && <span className="group-drop-label out" role="status">Out of {item.title}</span>}
+        <Suspense fallback={null}><GroupBand item={item} canvasId={canvasId} actor={actor} lifted={lifted} /></Suspense>
+        {!stackBox && <>
+        <GroupGrid item={displayedGroup} />
+        {["north", "south", "east", "west"].map((side) => <span key={side} className={`group-border ${side}`} />)}
+        {(item.groupLayout?.briefHeight ?? 0) > 0 && <div className="group-brief" style={{ top: item.groupLayout?.titleHeight ?? 56, height: item.groupLayout?.briefHeight, left: groupContent!.x - x, right: item.groupLayout?.inset ?? 24 }}><GroupBrief canvasId={canvasId} blobHash={current.blobHash} /></div>}
+        </>}
+      </>}
+      {dotMarks.some((m) => reactionPointsOf(item, m).length > 0) && (
         /* The heat map: the mark, drawn where each person put it. Under the
            curtain only YOUR dot shows — you may see where you voted, not
            where anyone else did — and at the bell all of them. Fractions of
-           the box, so a dot stays on the part of the sketch it was put on. */
+           the box, so a dot stays on the part of the sketch it was put on.
+           The sprint's mark, and every mark of a module's vote round this
+           item sits in (proposed: `rounds`) — one heat map, two callers. */
         <div className="vote-dots" aria-hidden>
-          {reactionPointsOf(item, mark)
+          {dotMarks
+            .flatMap((m) => reactionPointsOf(item, m).map((dot) => ({ ...dot, mark: m })))
             .filter((dot) => !votesHidden || dot.actorId === actor.id)
             .map((dot) => (
               <span
-                key={dot.actorId}
+                key={`${dot.mark}:${dot.actorId}`}
                 className={`vote-dot${dot.actorId === actor.id ? " mine" : ""}`}
                 style={{ left: `${dot.x * 100}%`, top: `${dot.y * 100}%` }}
                 title={votesHidden ? "your dot" : (names[dot.actorId] ?? dot.actorId)}
               >
-                {mark}
+                {dot.mark}
               </span>
             ))}
+        </div>
+      )}
+      {roomy && !resize && (soleSelection || entered) && (caps.view || (caps.edit && canEdit) || caps.enter) && (
+        <div
+          className="item-focus-strip item-focus-strip-nw"
+          style={{ ...chrome, transformOrigin: "left bottom" }}
+          role="toolbar"
+          aria-label={`${item.title} focus actions`}
+          onPointerDown={stop}
+          onDoubleClick={stop}
+        >
+          {caps.view && (
+            <button
+              type="button"
+              className={`focus-strip-btn${spellItOut ? "" : " compact"}`}
+              data-tip={spellItOut ? "Enter — Esc comes back" : "View — Enter, Esc comes back"}
+              aria-label="View"
+              onPointerDown={stop}
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(itemPath(canvasId, item.id));
+              }}
+            >
+              {EXPAND}
+              {spellItOut && <span>View</span>}
+            </button>
+          )}
+          {caps.edit && canEdit && (
+            <button
+              type="button"
+              className={`focus-strip-btn${spellItOut ? "" : " compact"}`}
+              data-tip={spellItOut ? "E — Esc comes back" : "Edit — E, Esc comes back"}
+              aria-label="Edit"
+              onPointerDown={stop}
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(workbenchItemPath(canvasId, item.id));
+              }}
+            >
+              {EDIT_ICON}
+              {spellItOut && <span>Edit</span>}
+            </button>
+          )}
+          {caps.enter && (
+            <button
+              type="button"
+              className={`focus-strip-btn${entered ? " active" : ""}${spellItOut ? "" : " compact"}`}
+              data-tip={
+                entered
+                  ? spellItOut
+                    ? "Esc"
+                    : "Leave — Esc"
+                  : spellItOut
+                    ? "Double-click"
+                    : "Enter — double-click"
+              }
+              aria-label={entered ? "Leave item" : "Enter item"}
+              aria-pressed={entered}
+              onPointerDown={stop}
+              onClick={(e) => {
+                e.stopPropagation();
+                useUiStore.getState().setEntered(entered ? null : item.id);
+              }}
+            >
+              {entered ? LEAVE_ICON : ENTER_ICON}
+              {spellItOut && <span>{entered ? "Leave" : "Enter"}</span>}
+            </button>
+          )}
+          <button
+            type="button"
+            className={`focus-strip-btn${spellItOut ? "" : " compact"}`}
+            data-tip={spellItOut ? "F — fit to screen" : "Fit — F"}
+            aria-label="Fit"
+            onPointerDown={stop}
+            onClick={(e) => {
+              e.stopPropagation();
+              glideToBox({ minX: x, minY: y, maxX: x + width, maxY: y + height });
+            }}
+          >
+            {FIT_ICON}
+            {spellItOut && <span>Fit</span>}
+          </button>
         </div>
       )}
       <div className="item-titlebar" style={roomy ? undefined : { display: "none" }}>
@@ -880,11 +1238,11 @@ function ItemViewInner({
                `nameRoom`: hovering must not shrink a label. */
             maxWidth:
               reach === null
-                ? row.nameRoom
+                ? nameRoomCss(row)
                 : /* Nothing in the way: no limit, said as `none` rather than
                      as a very large pixel count. */
                   Number.isFinite(reach)
-                  ? Math.max(row.nameRoom, reach * scale)
+                  ? `max(${nameRoomCss(row)}, calc(${reach}px * var(--scale)))`
                   : "none",
             // The row is here if anything in it is. Which of the icon and the
             // name survive at this size is `titleRow`'s call, and they do NOT
@@ -918,6 +1276,8 @@ function ItemViewInner({
             {SLIDE_EMOJI}
           </span>
         )}
+        {/* A module's marks (`ModuleMark`) — the wireframe's 📐 keep. */}
+        {moduleMarks().map((m) => item.properties?.[m.property] && <span className="slide-mark" key={m.property} title={m.title}>{m.emoji}</span>)}
         {renaming ? (
           <NameInput title={item.title} onDone={rename} />
         ) : row.name ? (
@@ -942,8 +1302,8 @@ function ItemViewInner({
             target="_blank"
             rel="noopener noreferrer"
             title={`Open in a new tab — ${source}`}
-            onClick={(e) => e.stopPropagation()}
-            onPointerDown={(e) => e.stopPropagation()}
+            onClick={stop}
+            onPointerDown={stop}
           >
             ↗
           </a>
@@ -954,22 +1314,26 @@ function ItemViewInner({
              the switch — `memory=inherit` on, `removeProperties` off, the same
              patch `isocan context inherit | uninherit` writes. */
           <button
-            className={`memory-mark${memoryOf(item) === "inherit" ? " active" : ""}`}
+            className={`memory-mark${memory === "inherit" ? " active" : ""}`}
             title={
-              memoryOf(item) === "inherit"
+              memory === "inherit"
                 ? "Inherited here — its design system and pins are read as part of this canvas's context. Click to stop."
                 : "Not inherited — click to read its design system and pins as part of this canvas's context."
             }
-            aria-pressed={memoryOf(item) === "inherit"}
+            aria-pressed={memory === "inherit"}
             onClick={(e) => {
               e.stopPropagation();
-              void sendEchoed(canvasId, actor, {
-                type: "item.update",
-                itemId: item.id,
-                patch: memoryPatch(memoryOf(item) === "inherit" ? null : "inherit"),
-              });
+              void (async () => {
+                if (memory === "personal") throw new Error("Use Context to unlink your personal canvas.");
+                if (memory !== "inherit") {
+                  const { automaticSource } = await import("../lib/personal.ts");
+                  const access = await automaticSource(canvasIdOf(item)!, source, canvasId);
+                  if (access.kind !== "ordinary") throw new Error(access.refused);
+                }
+                await sendEchoed(canvasId, actor, { type: "item.update", itemId: item.id, patch: memoryPatch(memory === "inherit" ? null : "inherit") });
+              })().catch((error) => setNotice(error.message ?? String(error)));
             }}
-            onPointerDown={(e) => e.stopPropagation()}
+            onPointerDown={stop}
           >
             memory
           </button>
@@ -987,7 +1351,7 @@ function ItemViewInner({
               e.stopPropagation();
               setDocLive(item.id, !liveDoc);
             }}
-            onPointerDown={(e) => e.stopPropagation()}
+            onPointerDown={stop}
           >
             {liveDoc ? "Words" : "Live"}
           </button>
@@ -1042,45 +1406,41 @@ function ItemViewInner({
           {SLIDE_EMOJI} Notes for {noteSlideTitle}
         </span>
       )}
-      {["text/markdown", "text/plain"].includes(current.mimeType) && !isDesignSystem(item) && (
-        <button type="button" className="btn item-read" aria-label={entered ? "Done reading" : `Read ${item.title} and select text`}
-          onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); useUiStore.getState().setEntered(entered ? null : item.id); }}>
-          {entered ? "Done reading" : "Read / select text"}
-        </button>
-      )}
-      <div ref={liveRef} className={`item-content${entered ? "" : " inert"}`}>
+      {!isCanvasGroup && <div ref={liveRef} className={`item-content${entered ? "" : " inert"}`}>
         {/**
-         * Too far away to read: draw the mark, not the words.
+         * Too far away to read: draw the opening words big enough to read,
+         * not the words at their own size.
          *
          * The node keeps its box — its place and footprint on the canvas are
-         * still true — and what changes is that forty illegible shapes become
-         * one legible one. The mark is sized never to exceed the node it
-         * stands for (`textMarkSize`), because a glyph bigger than its own
-         * node would misdescribe the canvas, and at the zoom where dozens of
-         * nodes are marks that is the same smear in a different hat.
+         * still true. Inside it, its first line (its title) is set at a size
+         * a person can read and clipped to the box, so a node far away still
+         * says what it is about. It used to be a single "T", which said only
+         * that it was text (Dion, 13 Oct 2026: "show SOME of the text"). The
+         * size is still `textMarkSize`, so the words never claim more room
+         * than the node they stand for.
          */}
-        {isText && !textLegible ? (
-          <span
-            className="text-mark"
-            aria-label={item.title}
-            style={{ fontSize: `${textMarkSize(width, height, scale) / scale}px` }}
-          >
-            T
+        {detail === "marker" ? <span className="presentation-marker" aria-hidden>◈</span> : detail === "compact" && !moduleRendererFor(current.mimeType, item) ? <div className="presentation-compact">{item.title}</div> : isText && !textLegible ? (
+          gist ?? <span className="text-mark" style={{ fontSize: TEXT_MARK_CSS }}>
+            {item.title}
           </span>
-        ) : heavy && !nearWindow ? (
+        ) : !isText && !isInk && !picture && !/^(image|video)\//.test(visual.mimeType) && !(htmlScreen && nearWindow) && !entered && !(nearWindow && roomy) ? (
           /**
            * Far away, or the tab is in the background: the box stays exactly
            * where it is and what it holds stands down.
            *
-           * Only the three kinds that mount a REAL document — a screen, a
-           * framed site, a canvas on a canvas. Markdown, images and text are
-           * left alone deliberately: they cost little, the browser already
-           * manages decoded images for us, and tearing them down on every pan
-           * would trade a memory problem for a flicker one.
+           * This includes Markdown: a thousand tiny cards previously mounted
+           * a thousand parsers and attention trees. The shell, title, marks
+           * and pointer handlers remain; readable nearby content mounts as
+           * the camera approaches. HTML screens keep their lightweight WebP
+           * snapshot (`snapshotOnly`) while near the window or inside the
+           * moving camera's directional lookahead corridor so zoomed-out and
+           * fast-panned boards show actual screens instead of blank shells.
+           * The observer's margin/grace avoids churn, and `roomy` is the
+           * chrome's own HELD answer (core's `holdsAtZoom`), so a preview
+           * cannot remount on a zoom wobble the chrome sat through.
            */
           <span className="item-standby" aria-hidden="true" />
         ) : (() => {
-          const visual = visualFaceOf(current);
           return (
             <VersionContent
               canvasId={canvasId}
@@ -1090,13 +1450,19 @@ function ItemViewInner({
               entered={entered}
               itemId={item.id}
               versionId={current.id}
+              designVersion={current}
+              actor={entered ? actor : undefined}
               designSystem={isDesignSystem(item)}
               textNode={isText}
-              canvasOf={canvasIdOf(item)}
+              canvasOf={item.properties.canvas ?? null}
               canvasSource={source}
               size={{ width, height }}
+              picture
+              warm={warmFaces}
               reloadToken={reloadToken}
               liveDoc={liveDoc && docId ? googleDocPreviewUrl(docId) : null}
+              snapshotOnly={(!roomy || !observedNearWindow) && !entered}
+              eagerSnapshot={inLookahead}
             />
           );
         })()}
@@ -1111,13 +1477,13 @@ function ItemViewInner({
           <span
             className="kind-mark"
             aria-hidden
-            style={{ "--mark": `${markPx / scale}px` } as React.CSSProperties}
+            style={{ "--mark": TEXT_MARK_CSS } as React.CSSProperties}
           >
             <KindIcon kind={kind} />
           </span>
         )}
         {worker && <div className="work-sheen" />}
-      </div>
+      </div>}
       {/* ONE row under the item, and everything that wants to be there.
           
           Marks, the `+`, the full-screen button and the size all live on this
@@ -1140,7 +1506,7 @@ function ItemViewInner({
           are dragging a corner, the live number is the point, and
           "double-click to interact" is something you have already read. */}
       {roomy && !entered && (underSlot !== null || reactionRow) && (
-        <div className="item-under" style={underRow(width, scale)}>
+        <div className="item-under" style={UNDER_ROW_CSS}>
           {/* Persistent, and therefore first: a mark is something the item is
               wearing, where the rest of the row is about your current gesture. */}
           <Reactions
@@ -1151,50 +1517,59 @@ function ItemViewInner({
             // already worn stay visible either way; this is just the `+`.
             visible={selected}
           />
-          {underSlot === "size" && (
-            <div className={`item-hint size under-right${resize ? " live" : ""}`}>
-              {/* The click path into full screen, in the one place there is
-                  room for a word. It sits beside the size rather than up in
-                  the title row because that row's width is the name's, and a
-                  control there would cost the name at every zoom for a button
-                  you want twice a session. Every kind gets it, not just the
-                  interactive ones: a picture worth opening big is as ordinary
-                  as a screen worth clicking through.
-                  
-                  "Full screen", not "Open" — which was the first label and
-                  said nothing. Open in what? A new tab, a menu, an editor?
-                  Worse, this product already uses the word: `isocan open`
-                  means "open the canvas in your browser", and you are ALREADY
-                  in the browser when you press this. The button says the state
-                  it puts you in, which is what the shortcut list calls it.
-                  
-                  Not while a corner is being dragged: your pointer is busy,
-                  the button would be under it, and the number beside it is the
-                  thing you are actually reading. */}
-              {!resize && (
+          {soleSelection && spellItOut && toggleableFaces.length >= 2 && canEdit && (
+            <div className="item-face-toggle" role="group" aria-label="Active face" onPointerDown={stop}>
+              {toggleableFaces.map((faceId) => (
                 <button
-                  className={`fullscreen-btn${spellItOut ? "" : " compact"}`}
-                  // The tooltip is the label, and it is drawn rather than
-                  // handed to `title`: the native one waits about a second,
-                  // arrives at the pointer instead of at the button, and
-                  // cannot be styled. `aria-label` still carries it for
-                  // anyone not hovering anything.
-                  // The tip repeats no ink: the labeled form already says
-                  // "Full screen", so its tip carries only the keys; the
-                  // compact form's face is a glyph, so its tip carries the
-                  // name too.
-                  data-tip={spellItOut ? "Enter — Esc comes back" : "Full screen — Enter, Esc comes back"}
-                  aria-label="Full screen"
-                  onPointerDown={(e) => e.stopPropagation()}
+                  key={faceId}
+                  type="button"
+                  className={`item-face-btn${currentToggleFace === faceId ? " active" : ""}`}
+                  aria-pressed={currentToggleFace === faceId}
                   onClick={(e) => {
                     e.stopPropagation();
-                    navigate(itemPath(canvasId, item.id));
+                    const c = shown(useCanvasStore.getState());
+                    if (isCanvasGroup && c) {
+                      const groupId = newGroupId();
+                      void sendEchoed(
+                        canvasId,
+                        actor,
+                        {
+                          type: "item.update",
+                          itemId: item.id,
+                          patch: { properties: { [FACE_PROP]: faceId } },
+                        },
+                        groupId,
+                      );
+                      for (const child of groupChildren(c, item.id)) {
+                        if (child.properties[FACE_PROP] !== undefined) {
+                          void sendEchoed(
+                            canvasId,
+                            actor,
+                            {
+                              type: "item.update",
+                              itemId: child.id,
+                              patch: { removeProperties: [FACE_PROP] },
+                            },
+                            groupId,
+                          );
+                        }
+                      }
+                    } else {
+                      void sendEchoed(canvasId, actor, {
+                        type: "item.update",
+                        itemId: item.id,
+                        patch: { properties: { [FACE_PROP]: faceId } },
+                      });
+                    }
                   }}
                 >
-                  {EXPAND}
-                  {spellItOut && <span>Full screen</span>}
+                  {faceLabel(faceId)}
                 </button>
-              )}
+              ))}
+            </div>
+          )}
+          {underSlot === "size" && (
+            <div className={`item-hint size under-right${resize ? " live" : ""}`}>
               <span>
                 {Math.round(width)} × {Math.round(height)}
               </span>
@@ -1212,11 +1587,9 @@ function ItemViewInner({
         </div>
       )}
       {soleSelection && !entered && canEdit && (
+        !detail &&
         <>
-          <span className="resize-handle resize-handle-nw" onPointerDown={(e) => onResizeDown("nw", e)} />
-          <span className="resize-handle resize-handle-ne" onPointerDown={(e) => onResizeDown("ne", e)} />
-          <span className="resize-handle resize-handle-sw" onPointerDown={(e) => onResizeDown("sw", e)} />
-          <span className="resize-handle resize-handle-se" onPointerDown={(e) => onResizeDown("se", e)} />
+          {(["nw", "ne", "sw", "se"] as const).map((corner) => <span key={corner} className={`resize-handle resize-handle-${corner}`} onPointerDown={(e) => onResizeDown(corner, e)} />)}
         </>
       )}
     </div>
@@ -1263,8 +1636,8 @@ function NameInput({ title, onDone }: { title: string; onDone: (next: string) =>
       value={draft}
       onFocus={(e) => e.currentTarget.select()}
       onChange={(e) => setDraft(e.target.value)}
-      onPointerDown={(e) => e.stopPropagation()}
-      onDoubleClick={(e) => e.stopPropagation()}
+      onPointerDown={stop}
+      onDoubleClick={stop}
       onBlur={() => finish(draft)}
       onKeyDown={(e) => {
         e.stopPropagation(); // the canvas's shortcuts are not for this field
@@ -1335,6 +1708,26 @@ function itemsUnder(x: number, y: number): string[] {
     .filter((id) => hit.has(id));
 }
 
+/**
+ * A pointer gesture's listeners on the element that captured it: moves go to
+ * `move`; a release — or a gesture the browser takes away — lets go of the
+ * capture, takes every listener off at once, and goes to `end`. The signal
+ * comes back so a gesture can hang more listeners on the same lifetime.
+ */
+export function follow(el: HTMLElement, move: (ev: PointerEvent) => void, end: (ev: PointerEvent) => void): AbortSignal {
+  const off = new AbortController();
+  const { signal } = off;
+  const done = (ev: PointerEvent) => {
+    if (el.hasPointerCapture(ev.pointerId)) el.releasePointerCapture(ev.pointerId);
+    off.abort();
+    end(ev);
+  };
+  el.addEventListener("pointermove", move, { signal });
+  el.addEventListener("pointerup", done, { signal });
+  el.addEventListener("pointercancel", done, { signal });
+  return signal;
+}
+
 function screenToWorldPoint(sx: number, sy: number): { x: number; y: number } {
   const { viewport } = useUiStore.getState();
   return { x: (sx - viewport.tx) / viewport.scale, y: (sy - viewport.ty) / viewport.scale };
@@ -1353,7 +1746,13 @@ function BlobError({ reason }: { reason: string }) {
   );
 }
 
-export function VersionContent({
+/** Source facts gate every face, including screenshots and module renderers. */
+export function VersionContent(props: Parameters<typeof VersionFace>[0]) {
+  if (automaticCanvasTarget(props.canvasOf, props.canvasSource).kind !== "none") return <Suspense><CanvasPreviewBoundary canvasId={props.canvasOf} source={props.canvasSource} destinationCanvasId={props.canvasId}><VersionFace {...props} /></CanvasPreviewBoundary></Suspense>;
+  return <VersionFace {...props} />;
+}
+
+function VersionFace({
   canvasId,
   blobHash,
   mimeType,
@@ -1369,8 +1768,26 @@ export function VersionContent({
   size,
   warm,
   liveDoc,
+  designVersion,
+  actor,
+  picture = false,
+  snapshotOnly,
+  eagerSnapshot,
 }: {
   canvasId: string;
+  designVersion?: ItemVersion | undefined;
+  /** On the canvas, where an HTML screen too small to read may show a still
+   *  picture instead of its live page (`showsLiveFrame`). Everywhere else —
+   *  full screen, the stage, the viewer — a screen is always its live page. */
+  picture?: boolean;
+  /** Mounted ahead of motion (`!observedNearWindow`) or too small on screen
+   *  for chrome (`!roomy`): render the cached WebP picture alone and never
+   *  mount a live `<iframe>`. */
+  snapshotOnly?: boolean | undefined;
+  /** Inside the camera's directional lookahead corridor: decode the WebP
+   *  picture without waiting for panning to stop. */
+  eagerSnapshot?: boolean | undefined;
+  actor?: Actor | undefined;
   blobHash: string;
   mimeType: string;
   filename: string;
@@ -1379,9 +1796,9 @@ export function VersionContent({
   liveDoc?: string | null;
   /** A canvas placed here: the id of the canvas to draw small and live,
    *  instead of framing the address the blob carries (`core/canvasitem.ts`). */
-  canvasOf?: string | null;
+  canvasOf: string | null;
   /** The address the canvas item points at — which home it is at. */
-  canvasSource?: string | null;
+  canvasSource: string | null;
   /** The item's box, for content that lays itself out to it (the canvas card). */
   size?: { width: number; height: number };
   entered: boolean;
@@ -1399,12 +1816,15 @@ export function VersionContent({
    *  than as the text that declares them. */
   designSystem?: boolean;
 }) {
+  const presentation = usePresentation();
   const url = blobUrl(canvasId, blobHash);
   // Stable per blob, so a module renderer keying an effect on it does not
   // refetch on every shell render (see modules/mermaid/src/diagram.tsx).
   const readText = useCallback(() => readBlobText(canvasId, blobHash), [canvasId, blobHash]);
+  const moduleItem = useCanvasStore((s) => itemId ? shown(s)?.items[itemId] : undefined);
   // A runtime module that arrived after first paint may own this mime now.
   useUiStore((s) => s.modulesGeneration);
+  if (designVersion?.designRecord) return <Suspense fallback={<div className="file-view">Reading design record…</div>}><DesignRecordFace key={JSON.stringify([canvasId, designVersion.id, actor?.id])} canvasId={canvasId} version={designVersion} actor={actor} /></Suspense>;
   if (liveDoc) {
     // The doc as Google draws it, in the same item. A private doc shows
     // Google's own sign-in here, which is honest: the frame is Google's,
@@ -1415,10 +1835,12 @@ export function VersionContent({
   // the mimes its kind claims, and is handed facts rather than a blob path
   // (`core/modules.ts`, `RendererFacts`). With the module gone the same
   // version falls through to the chain below — a diagram reads as text.
-  const ModuleRenderer = moduleRendererFor(mimeType);
+  const ModuleRenderer = moduleRendererFor(mimeType, moduleItem);
   if (ModuleRenderer) {
     return (
-      <ModuleRenderer
+      <Suspense fallback={null}><ModuleRenderer
+        item={moduleItem}
+        presentation={itemId ? presentation?.items[itemId] : undefined}
         canvasId={canvasId}
         blobHash={blobHash}
         mimeType={mimeType}
@@ -1426,11 +1848,11 @@ export function VersionContent({
         entered={entered}
         url={url}
         readText={readText}
-      />
+      /></Suspense>
     );
   }
   if (designSystem && (mimeType === "text/markdown" || mimeType === "text/plain")) {
-    return <DesignSystemView canvasId={canvasId} blobHash={blobHash} />;
+    return <Suspense fallback={<p>Reading design system…</p>}><DesignSystemView canvasId={canvasId} blobHash={blobHash} author={designVersion?.createdBy} /></Suspense>;
   }
   if (mimeType === "text/markdown" || mimeType === "text/plain") {
     return (
@@ -1457,6 +1879,7 @@ export function VersionContent({
       <Suspense fallback={null}>
       <CanvasCard
         canvasId={canvasOf}
+        destinationCanvasId={canvasId}
         width={size?.width ?? 800}
         height={size?.height ?? 600}
         // A screenshot version, when one was taken: the picture that
@@ -1472,7 +1895,20 @@ export function VersionContent({
   }
   if (mimeType === "text/html") {
     return (
-      <HtmlItemView canvasId={canvasId} blobHash={blobHash} filename={filename} warm={warm ?? []} />
+      <HtmlItemView
+        canvasId={canvasId}
+        blobHash={blobHash}
+        filename={filename}
+        warm={warm ?? []}
+        itemId={itemId}
+        actor={actor}
+        entered={entered}
+        picture={picture}
+        width={size?.width}
+        height={size?.height}
+        snapshotOnly={snapshotOnly}
+        eagerSnapshot={eagerSnapshot}
+      />
     );
   }
   return (
@@ -1487,6 +1923,10 @@ export function VersionContent({
  *  through a run of slides never reloads one, small enough that a long deck
  *  does not keep a hundred live documents in memory. */
 const KEEP_FRAMES = 6;
+/** How long a frame over its picture may stay unseen waiting for `load`. */
+const ARRIVE_BY_MS = 1200;
+/** How long an un-warmed frame switch waits for `load` before showing in place. */
+const FACE_ARRIVE_BY_MS = 180;
 /** One frozen empty set, so the initial state is not a new object per render. */
 const EMPTY: ReadonlySet<string> = new Set();
 
@@ -1566,46 +2006,198 @@ function HtmlItemView({
   blobHash,
   filename,
   warm,
+  itemId,
+  actor,
+  entered,
+  picture,
+  width,
+  height,
+  snapshotOnly = false,
+  eagerSnapshot = false,
 }: {
   canvasId: string;
   blobHash: string;
   filename: string;
   warm: readonly string[];
+  /** Both present only where a person can press things in the page: an
+   *  entered item or full screen. Then a prototype click is delivered. */
+  itemId?: string | undefined;
+  actor?: Actor | undefined;
+  entered: boolean;
+  /** May a still picture stand in for the page — see `showsLiveFrame`. */
+  picture: boolean;
+  width?: number | undefined;
+  height?: number | undefined;
+  snapshotOnly?: boolean | undefined;
+  eagerSnapshot?: boolean | undefined;
 }) {
-  const origin = useContentOrigin(canvasId, [blobHash, ...warm]);
+  const stack = useRef<HTMLDivElement>(null);
+  // Full screen's `#…`, for a document that opens somewhere inside itself (lib/frameanchor.ts).
+  const anchor = useContext(FrameAnchor);
+  const [heldSpot, setSpot] = useState<FrameSpot>({ itemId, blobHash, reported: null, carried: null });
+  const spot = nextSpot(heldSpot, itemId, blobHash);
+  if (spot !== heldSpot) setSpot(spot);
+  const warmAnchor = spot.carried ?? spot.reported ?? anchor;
+  // Booleans and a band, never the raw zoom: a selector that returned the
+  // scale would re-render every screen on every step of a zoom.
+  const band = useUiStore((s) => (picture ? readabilityBand(s.viewport.scale) : 2));
+  const panning = useUiStore((s) => picture && s.panning);
+  const snapshotUrl = useHtmlSnapshot(
+    canvasId,
+    blobHash,
+    width ?? 880,
+    height ?? 640,
+    picture || snapshotOnly || eagerSnapshot,
+    eagerSnapshot,
+  );
+  const [readySnapshotUrl, setReadySnapshotUrl] = useState<string | null>(null);
+  const proxyReady = snapshotUrl !== null && readySnapshotUrl === snapshotUrl;
+  const [live, setLive] = useState(!snapshotOnly);
+  const wantLive =
+    !snapshotOnly &&
+    showsLiveFrame({
+      picture,
+      entered: entered || Boolean(actor),
+      warm: warm.length,
+      pictureReady: proxyReady && snapshotUrl !== null,
+      band,
+      panning,
+      wasLive: live,
+    });
+  if (wantLive !== live) setLive(wantLive);
+  const origin = useContentOrigin(canvasId, wantLive ? [blobHash, ...warm] : []);
   // `useFrameSrc`, not `itemFrame` directly: a loaded frame keeps the src it
-  // loaded with. A renewed signature is for the same bytes, and swapping it
-  // in would reload the document for nothing — see `frame.ts`.
-  const frame = useFrameSrc(origin, canvasId, blobHash);
-  if (!frame) return <div className="html-view" />;
+  // loaded with while it stays live. When `wantLive` drops, the held src is
+  // released so the next mount uses a fresh signature — see `frame.ts`.
+  const frame = useFrameSrc(origin, canvasId, blobHash, wantLive);
+  const src = wantLive && frame ? anchored(frame.src, spot.carried ?? anchor) : null;
+  useEffect(() => {
+    if (!itemId || !actor) return;
+    const hear = (e: MessageEvent) => {
+      const frames = stack.current?.querySelectorAll("iframe") ?? [];
+      const from = [...frames].find((frame) => frame.contentWindow === e.source);
+      if (!from) return;
+      const click = clickFromMessage(e.data, itemId);
+      if (click) sendPrototypeClick(canvasId, actor, click);
+      // Only the frame of the version on screen says where this item is: the
+      // pool also holds the slides either side and the version just replaced.
+      const at = anchorFromMessage(e.data);
+      if (at !== null && from.getAttribute("src") === src) {
+        setSpot((was) => (was.itemId === itemId ? { ...was, reported: at } : was));
+      }
+    };
+    window.addEventListener("message", hear);
+    return () => window.removeEventListener("message", hear);
+  }, [canvasId, itemId, actor, src]);
+  // A motion's player (motion phase 2): it says where a person paused it, so
+  // a comment left then remembers the moment; and opening a comment pinned
+  // to this item at a time scrubs it there — now, and again once a frame
+  // that was still loading says it is ready.
+  const openThreadId = useUiStore((s) => s.openThreadId);
+  const openAt = useCanvasStore((s) => {
+    const thread = openThreadId ? s.canvas?.threads[openThreadId] : undefined;
+    return thread && thread.anchorItemId === itemId ? (thread.comments.find((c) => c.at !== undefined)?.at ?? null) : null;
+  });
+  useEffect(() => {
+    if (!itemId) return;
+    const frames = () => [...(stack.current?.querySelectorAll("iframe") ?? [])];
+    // Lazy: a canvas with no motion on it never fetches the half that answers.
+    const hear = (e: MessageEvent) => {
+      const from = frames().find((f) => f.contentWindow === e.source);
+      if (from && /^isocan:motion-/.test(String((e.data as { type?: unknown } | null)?.type))) {
+        void import("../lib/motionframe.ts").then((m) => m.heardFromMotion(itemId, e.data, from.contentWindow, openAt));
+      }
+    };
+    window.addEventListener("message", hear);
+    if (openAt !== null) void import("../lib/motionframe.ts").then((m) => m.seekMotion(frames().map((f) => f.contentWindow), openAt));
+    return () => window.removeEventListener("message", hear);
+  }, [itemId, openAt, src]);
+  if (!snapshotUrl && (!wantLive || !src || !frame)) return <div className="html-view" />;
   return (
-    <HtmlView
-      src={frame.src}
-      sandbox={frame.sandbox}
-      title={filename}
-      warm={warm
-        .map((hash) => itemFrame(origin, canvasId, hash)?.src)
-        .filter((src): src is string => src !== undefined)}
-    />
+    <div className={`html-view-surface${proxyReady ? " has-snapshot" : ""}`}>
+      {snapshotUrl && (
+        <img
+          className="html-snapshot"
+          src={snapshotUrl}
+          alt=""
+          decoding="sync"
+          draggable={false}
+          onLoad={() => requestAnimationFrame(() => setReadySnapshotUrl(snapshotUrl))}
+        />
+      )}
+      {wantLive && src && frame && (
+        <HtmlView
+          stackRef={stack}
+          // Over its picture, a frame arrives the way a slide does: unseen
+          // until its document has loaded, so what is under it shows until
+          // then rather than a white card (or a page half drawn).
+          overPicture={proxyReady}
+          src={src}
+          sandbox={frame.sandbox}
+          title={filename}
+          warm={warm
+            .map((hash) => {
+              const f = itemFrame(origin, canvasId, hash);
+              return f ? anchored(f.src, warmAnchor) : undefined;
+            })
+            .filter((s): s is string => s !== undefined)}
+        />
+      )}
+    </div>
   );
 }
 
 function HtmlView({
+  stackRef,
   src,
   sandbox,
   title,
   warm = [],
+  overPicture = false,
 }: {
+  stackRef?: React.Ref<HTMLDivElement>;
   src: string;
   sandbox: string;
   title: string;
   warm?: readonly string[];
+  /** A picture of this page is underneath: the first frame arrives too,
+   *  instead of being shown white while it loads. */
+  overPicture?: boolean;
 }) {
   const [mounted, setMounted] = useState<string[]>([src]);
   const [loaded, setLoaded] = useState<ReadonlySet<string>>(EMPTY);
-  const [shown, setShown] = useState<ReadonlySet<string>>(() => new Set([src]));
+  const [shown, setShown] = useState<ReadonlySet<string>>(() => (overPicture ? EMPTY : new Set([src])));
   const [visible, setVisible] = useState(src);
   const warmKey = warm.join("\u0000");
+  /**
+   * **The deck's transition, played on the pages themselves.**
+   *
+   * A flip between two screens cannot ride a view transition — a frame
+   * photographs blank (`flipTo`) — but it does not need to: the slide being
+   * left and the slide arriving are both mounted right here. So when a flip
+   * left a note (`takeLiveFlip`) and this pool promotes the next frame, both
+   * frames are marked for the length of the motion — `deck-out` and
+   * `deck-in` — and the CSS moves the two LIVE documents (styles.css, "the
+   * deck flip"). Nothing is re-run, nothing re-fetched, and the 3D motions
+   * turn a real page rather than a picture of one.
+   *
+   * Only a stage that presents a deck takes the note, so a screen on the
+   * canvas underneath that happens to promote a frame mid-flip cannot steal
+   * the motion meant for the slide.
+   */
+  const [motion, setMotion] = useState<{ from: string; to: string; dir: "next" | "prev"; transition: string; ms: number } | null>(null);
+  const own = useRef<HTMLDivElement | null>(null);
+  const visibleNow = useRef(visible);
+  visibleNow.current = visible;
+  const setStack = useCallback(
+    (el: HTMLDivElement | null) => {
+      own.current = el;
+      if (typeof stackRef === "function") stackRef(el);
+      else if (stackRef) (stackRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+    },
+    [stackRef],
+  );
+  const leaving = motion?.from ?? null;
 
   useEffect(() => {
     const neighbours = warmKey === "" ? [] : warmKey.split("\u0000");
@@ -1618,28 +2210,63 @@ function HtmlView({
        * supposed to remove one. So the order never changes; `z-index` decides
        * what is on top instead.
        */
-      const want = new Set([visible, src, ...neighbours]);
+      // The slide on its way out stays until it has finished leaving.
+      const want = new Set([visible, src, ...neighbours, ...(leaving ? [leaving] : [])]);
       const kept = was.filter((one) => want.has(one) || one === visible);
       const added = [...want].filter((one) => !kept.includes(one));
       const next = [...kept, ...added];
       const trimmed =
         next.length > KEEP_FRAMES
-          ? next.filter((one, i) => one === visible || one === src || i >= next.length - KEEP_FRAMES)
+          ? next.filter((one, i) => one === visible || one === src || one === leaving || i >= next.length - KEEP_FRAMES)
           : next;
       return was.length === trimmed.length && was.every((one, i) => one === trimmed[i])
         ? was
         : trimmed;
     });
-  }, [src, visible, warmKey]);
+  }, [src, visible, warmKey, leaving]);
+
+  // A frame's `load` waits for every image and font in it, and a slide of
+  // full-size photographs can take long enough that the page under the picture
+  // looked like it was never coming (Dion, 14 Oct 2026). Past this, the frame
+  // is shown loading — its words are there long before its last photograph.
+  useEffect(() => {
+    if (loaded.has(src)) return;
+    if (!overPicture && warmKey === "") return;
+    const waitMs = overPicture && shown.size === 0 ? ARRIVE_BY_MS : FACE_ARRIVE_BY_MS;
+    const late = setTimeout(() => setLoaded((was) => (was.has(src) ? was : new Set(was).add(src))), waitMs);
+    return () => clearTimeout(late);
+  }, [src, overPicture, warmKey, loaded, shown.size]);
 
   useEffect(() => {
     if (!loaded.has(src)) return;
+    const from = visibleNow.current;
+    if (from !== src) {
+      const presenting = own.current?.closest(".fullscreen-stage") != null;
+      const flip = presenting ? takeLiveFlip() : null;
+      setMotion(flip && flip.ms > 0 ? { from, to: src, ...flip } : null);
+    }
     setVisible(src);
     setShown((was) => (was.has(src) ? was : new Set(was).add(src)));
   }, [src, loaded]);
 
+  // The motion ends when the arriving page has finished arriving
+  // (`onAnimationEnd` below). The timer is only the floor under that — a
+  // frame the browser never painted fires no event, and the outgoing page
+  // must not be held on the glass forever because of it.
+  useEffect(() => {
+    if (!motion) return;
+    const done = setTimeout(() => setMotion(null), motion.ms * 2 + 500);
+    return () => clearTimeout(done);
+  }, [motion]);
+
   return (
-    <div className="html-view-stack">
+    <div
+      className={`html-view-stack${motion ? " deck-moving" : ""}`}
+      ref={setStack}
+      data-flip={motion?.dir}
+      data-transition={motion?.transition}
+      style={motion ? ({ "--deck-ms": `${motion.ms}ms` } as React.CSSProperties) : undefined}
+    >
       {mounted.map((one) => (
         <iframe
           key={one}
@@ -1650,13 +2277,14 @@ function HtmlView({
            * rather than over the ground. There is no moment where the two of
            * them together add up to less than one slide.
            */
-          className={`html-view${shown.has(one) ? "" : " arriving"}`}
+          className={`html-view${shown.has(one) ? "" : " arriving"}${motion?.from === one ? " deck-out" : motion?.to === one ? " deck-in" : ""}`}
           style={{ zIndex: one === visible ? 2 : 1 }}
           src={one}
           sandbox={sandbox}
           title={title}
           aria-hidden={one === visible ? undefined : true}
           onLoad={() => setLoaded((was) => (was.has(one) ? was : new Set(was).add(one)))}
+          onAnimationEnd={motion?.to === one ? () => setMotion((was) => (was?.to === one ? null : was)) : undefined}
         />
       ))}
     </div>
@@ -1705,6 +2333,8 @@ function BrowserView({
   if ("failed" in load) return <BlobError reason={load.failed} />;
   const site = parseUriList(load.text);
   if (site === null) return <BlobError reason="not a link" />;
+  const target = automaticCanvasTarget(null, site);
+  if (target.kind !== "none") return <Suspense><CanvasCard canvasId={target.kind === "canvas" ? target.canvasId : ""} destinationCanvasId={canvasId} source={site} width={800} height={600} /></Suspense>;
   return <SiteFrame key={reloadToken} site={site} />;
 }
 
@@ -1741,7 +2371,7 @@ function SiteFrame({ site }: { site: string }) {
       {state === "slow" && (
         <div className="browser-slow" role="status">
           <span>Still loading after a while — some sites refuse to be shown in a frame, and a browser does not say which.</span>
-          <a href={site} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+          <a href={site} target="_blank" rel="noopener noreferrer" onClick={stop} onPointerDown={stop}>
             Open it in a tab ↗
           </a>
         </div>
@@ -1816,7 +2446,11 @@ function MarkdownViewInner({
  * Measured, three runs each: pan p90 **33.4ms → 9.9ms**, frames over 32ms
  * **21/143 → 0/201**, script time 2.9s → 1.8s.
  */
-export const ItemView = memo(ItemViewInner);
+export const ItemView = memo(function ItemView(props: Parameters<typeof ItemViewInner>[0]) {
+  // Every item draws inside its own boundary: one that throws is one gap on
+  // the canvas, not a blank page. See `ItemBoundary`.
+  return <ItemBoundary item={props.item}><ItemViewInner {...props} /></ItemBoundary>;
+});
 
 /**
  * **And the body separately**, because the item's CHROME legitimately depends
@@ -1831,3 +2465,44 @@ export const ItemView = memo(ItemViewInner);
  * A p90 hid that; the worst frame is what showed it.
  */
 const MarkdownView = memo(MarkdownViewInner);
+
+/** The saved current brief is the one source for CLI, canvas preview and full-screen editing. */
+function GroupBrief({ canvasId, blobHash }: { canvasId: string; blobHash: string }) {
+  const [text, setText] = useState("");
+  useEffect(() => {
+    let live = true;
+    fetchBlobText(canvasId, blobHash).then((text) => { if (live) setText(text); }).catch(() => { if (live) setText("Brief unavailable"); });
+    return () => { live = false; };
+  }, [canvasId, blobHash]);
+  // Markdown, as the CLI's help promises ("the group's Markdown brief") — it drew its asterisks literally until phase 8 of wireframes.
+  return <Markdown breaks>{text}</Markdown>;
+}
+
+/** Saved grid gutters use the same cell boxes as placement; labels never cover cell contents. */
+function GroupGrid({ item }: { item: Item }) {
+  const layout = item.groupLayout;
+  const rows = layout?.rowCount ?? layout?.rows?.length ?? 1;
+  const columns = layout?.columnCount ?? layout?.columns?.length ?? 1;
+  if (!layout || (rows === 1 && columns === 1 && !layout.rows?.length && !layout.columns?.length)) return null;
+  // Historical snapshots can predate the writer's grid-size constraint.
+  // Keep the frame reachable for repair instead of crashing the canvas.
+  try { groupCellBox(item, 1, 1); }
+  catch { return <span className="group-drop-label">Grid needs more room</span>; }
+  return <>
+    {groupGridNeedsRoom(item) && <span className="group-drop-label">Grid needs more room</span>}
+    <div className="area-grid group-grid" aria-hidden>
+    {Array.from({ length: columns }, (_, index) => {
+      const cell = groupCellBox(item, 1, index + 1);
+      return <span key={`column-${index}`} className="group-column-label" style={{ left: cell.x - item.x, top: cell.y - item.y - (layout.columnGutter ?? 32), width: cell.width, height: layout.columnGutter ?? 32 }}>{layout.columns?.[index] ?? ""}</span>;
+    })}
+    {Array.from({ length: rows }, (_, index) => {
+      const cell = groupCellBox(item, index + 1, 1);
+      return <span key={`row-${index}`} className="group-row-label" style={{ left: cell.x - item.x - (layout.rowGutter ?? 120), top: cell.y - item.y, width: layout.rowGutter ?? 120, height: cell.height }}>{layout.rows?.[index] ?? ""}</span>;
+    })}
+    {Array.from({ length: rows * columns }, (_, index) => {
+      const cell = groupCellBox(item, Math.floor(index / columns) + 1, index % columns + 1);
+      return <span className="group-grid-cell" key={index} style={{ left: cell.x - item.x, top: cell.y - item.y, width: cell.width, height: cell.height }} />;
+    })}
+    </div>
+  </>;
+}

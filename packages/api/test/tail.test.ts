@@ -4,7 +4,8 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { newCanvasId } from "@isocan/core";
-import { startDaemon, stopDaemons, type Daemon } from "@isocan/server";
+import { type Daemon } from "@isocan/server";
+import { startDaemon, stopDaemons } from "@isocan/server/daemon";
 import { ApiError, DaemonClient, connect, harnessVars, type CanvasHandle, type TailEntry } from "@isocan/api";
 
 /**

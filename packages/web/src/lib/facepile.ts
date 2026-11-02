@@ -42,7 +42,11 @@ export interface Face {
    * working on has stopped meaning anything, which is the whole value of
    * presence being honest. A boolean had nowhere to put that.
    */
-  presence: "here" | "available" | "away";
+  presence: "here" | "available" | "enrolled" | "away";
+  /** Whether this face is actively working right now (`session.activity != null`).
+   *  The ring thickness ladder's top rung (`enrolled` hairline -> `available` 1px ->
+   *  `here` 2px -> `working` 3px, and only `working` animates). */
+  working: boolean;
   /** The rung their connection holds, when the server said one — `read`
    * for somebody looking over your shoulder (roles design, "Presence says
    * the rung"). Null for an editor, and for anyone without a session. */
@@ -55,7 +59,29 @@ export interface Face {
   cursor: { x: number; y: number } | null;
   unread: number;
   self: boolean;
+  /**
+   * **Whose agent this is — and, by being null, that it is a person.**
+   *
+   * One field answers both questions the pile could not answer before ("is
+   * that a human?", "whose is it?"), which is why it is one field rather than
+   * an `agent` boolean beside an `owner`. An agent IS a thing somebody owns;
+   * a person is not owned by anybody. Two fields could disagree, and the day
+   * they did, the face would say one thing and the card another.
+   *
+   * It is the live policy's owner where an rc is answering, falling back to
+   * the enrolment's `writtenBy`, and null when neither is known. Null is
+   * always safe: the face then draws exactly as it did before there was an
+   * owner to draw, which is the right failure for an unknown rather than a
+   * guess at one.
+   */
+  owner: { id: string; name: string } | null;
 }
+
+/** Whose agent an actor is, or null for a person — what `facesFor` asks so
+ * the pile can colour a ring and the card can name a name. Deliberately not
+ * exported: callers pass a plain function and TypeScript matches it
+ * structurally, so exporting it would be a promise to nobody. */
+type OwnerOf = (actorId: string) => { id: string; name: string } | null;
 
 /** A quiet agent is still here — say so, and say for how long — but never
  * invent an activity it didn't claim. */
@@ -117,13 +143,27 @@ export function facesFor(
    * it has never opened is neither present nor absent.
    */
   answerable: Actor[] = [],
+  /**
+   * Whose agent each actor is. Asked HERE, once per face, rather than at the
+   * four places a face is pushed: every one of them would have had to ask the
+   * same question, and the fifth — whenever somebody adds a fifth state — would
+   * have forgotten to. A face with no owner is a person, and that is the only
+   * way a face becomes a person, so there is no path that leaves it unset.
+   */
+  ownerOf: OwnerOf = () => null,
+  /**
+   * Enrolled on this canvas with no rc currently holding for them — the
+   * lightness and ring-thickness ladders' lowest standing rung (`enrolled`:
+   * 0.6 opacity, hairline dashed ring).
+   */
+  enrolled: Actor[] = [],
 ): Face[] {
   const faces: Face[] = [];
   const seen = new Set<string>();
-  const push = (face: Face) => {
+  const push = (face: Omit<Face, "owner">) => {
     if (seen.has(face.actor.id)) return;
     seen.add(face.actor.id);
-    faces.push(face);
+    faces.push({ ...face, owner: ownerOf(face.actor.id) });
   };
 
   for (const session of sessions) {
@@ -136,6 +176,7 @@ export function facesFor(
       sessionId: session.sessionId,
       label: session.label ?? session.actor.name,
       presence: "here",
+      working: session.activity != null,
       capability: session.capability ?? null,
       kind: session.kind,
       harness: session.harness,
@@ -166,6 +207,7 @@ export function facesFor(
       sessionId: null,
       label: actor.name,
       presence: "available",
+      working: false,
       capability: null,
       kind: null,
       harness: null,
@@ -178,12 +220,36 @@ export function facesFor(
     });
   }
 
+  /**
+   * Then whoever is ENROLLED here with no rc listening right now — still in the
+   * room as a standing record, distinct from somebody who left a comment and
+   * wandered off (`away`), and wearing the lightness (0.6) and hairline ring
+   * (`docs/research/2026-09-15-reading-the-facepile.md`).
+   */
+  for (const actor of enrolled) {
+    push({
+      actor,
+      sessionId: null,
+      label: actor.name,
+      presence: "enrolled",
+      working: false,
+      capability: null,
+      kind: null,
+      harness: null,
+      status: "enrolled here — no rc is listening right now",
+      cursor: null,
+      unread: unreadBy.get(actor.id)?.count ?? 0,
+      self: false,
+    });
+  }
+
   for (const [, { actor: author, count }] of unreadBy) {
     push({
       actor: author,
       sessionId: null,
       label: author.name,
       presence: "away",
+      working: false,
       capability: null,
       kind: null,
       harness: null,
@@ -204,6 +270,7 @@ export function facesFor(
       sessionId: null,
       label: self.name,
       presence: "here",
+      working: false,
       capability: null,
       kind: "web",
       harness: null,
@@ -214,4 +281,37 @@ export function facesFor(
     });
   }
   return faces;
+}
+
+function pileRank(face: Face, isMe: (actorId: string) => boolean): 0 | 1 | 2 | 3 {
+  return face.self ? 3 : face.owner === null ? 0 : isMe(face.owner.id) ? 2 : 1;
+}
+
+/**
+ * **The pile's order, left to right: other people, other agents, your pets,
+ * you** (2 Oct 2026). A pet is an agent whose owner `isMe` says is you — the
+ * caller passes the join-aware test, so an agent a folded identity enrolled is
+ * still yours. Stable within each group, so the order a group arrived in holds.
+ */
+export function pileOrder(faces: readonly Face[], isMe: (actorId: string) => boolean): Face[] {
+  return [...faces].sort((a, b) => pileRank(a, isMe) - pileRank(b, isMe));
+}
+
+/**
+ * **Where the hairline divider stands** — between other people, other agents,
+ * and your own `(pets + you)` cluster. Your pets tuck directly under your own
+ * face (`(dog(me)`) with no divider between them; when no agents are in the
+ * room, other people and you stay one human pile.
+ */
+export function pileSeparatorBefore(
+  prev: Face,
+  curr: Face,
+  isMe: (actorId: string) => boolean,
+): boolean {
+  const a = pileRank(prev, isMe);
+  const b = pileRank(curr, isMe);
+  if (a === b) return false;
+  if (a === 2 && b === 3) return false;
+  if (a === 0 && b === 3) return false;
+  return true;
 }

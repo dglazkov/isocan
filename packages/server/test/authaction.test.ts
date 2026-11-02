@@ -34,7 +34,7 @@ import { startDaemon, type Daemon } from "../src/daemon.ts";
 /** The measured link, taken apart. Kept as its five parts rather than one
  * string so a case can vary one of them and leave the rest verbatim. */
 const MEASURED = {
-  apiKey: "AIzaSyTESTONLY0000000000000000000000000000",
+  apiKey: "FAKE-firebase-web-key-TESTONLY",
   mode: "signIn",
   oobCode: "vPzzTESTONLY0000000000000000000000000000000AAAGgNYlqbA",
   continueUrl: "https://dev.isocan.io/p/prj_TESTONLY01",

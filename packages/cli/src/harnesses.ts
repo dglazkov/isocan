@@ -5,8 +5,8 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { promisify } from "node:util";
 import { builtinHarnesses } from "@isocan/api";
+import type { KeyEnv } from "@isocan/core/keys";
 import { readConfigFile, updateConfigFile } from "@isocan/server";
-import { SHEEP_HARNESS, placeLine, sheepPlaceFor } from "./sheep.ts";
 
 /**
  * **Which harness runs an agent that named none** (decided 2026-09-04).
@@ -48,14 +48,43 @@ export async function passedEnv(home: string): Promise<string[]> {
   return declared.filter((rule): rule is string => typeof rule === "string" && /^[A-Za-z_][A-Za-z0-9_]*\*?$/.test(rule));
 }
 
+/**
+ * **This machine's stored model keys, for the agents an rc summons** (keys
+ * phase 4) — keys.json under `home`, read at every spawn like `passedEnv`, so
+ * a key set at noon reaches the 12:01 summons. **Opt-in**: nothing is handed
+ * over unless the owner turned on keys.json's `giveToAgents` (`isocan keys
+ * agents on`), because a harness given an API key may bill it instead of the
+ * person's login. The answer is `adapterEnv`'s `keys`: handed the agent's
+ * environment, the stored keys it lacks (core's `agentKeyEnv`), or nothing
+ * when the switch is off. A file refused for its mode, or not JSON, is said on
+ * stderr — its path and why, never a value — and the agent is summoned
+ * without stored keys rather than not at all.
+ */
+export async function storedAgentKeys(home: string): Promise<(env: KeyEnv) => Record<string, string>> {
+  const [{ readKeyFile }, { agentKeyEnv }] = await Promise.all([import("@isocan/core/keystore"), import("@isocan/core/keys")]);
+  const file = await readKeyFile(home).catch((err: Error) => {
+    console.error(`[isocan] stored model keys not handed to the agent: ${err.message}`);
+    return null;
+  });
+  const stored = file?.agents ? file.keys : {};
+  return (env) => agentKeyEnv(stored, env);
+}
+
 export interface AdapterSpec {
   harness: string;
   command: string;
   args: string[];
+  /** Pin this adapter spawn to a specific model identifier when the enrolled
+   * agent row carries one (`docs/projects/antigravity/design.md`). */
+  model?: string | null | undefined;
   /** Variables the bridge itself needs, laid over the person's environment
    * at spawn — a builtin's knowledge of its own harness, never a person's
    * setting. */
   env?: Record<string, string>;
+  /** Reject permission escalation and require the measured Codex ACP contract. */
+  nativeCodexSandbox?: boolean;
+  /** Additional writable roots passed on both creation and resume. */
+  sessionDirectories?: string[];
   /** Make sure the bridge is here before spawning — a builtin fetched on
    * first use rather than shipped. Narrates through the callback, and
    * returns the command and args the registry says NOW, which the caller
@@ -100,6 +129,63 @@ export const REGISTRY_IDS: Record<string, string> = {
 const BUILTIN_ENV: Record<string, Record<string, string>> = {
   codex: { INITIAL_AGENT_MODE: "agent-full-access", NO_BROWSER: "1" },
 };
+
+/** How a pinned model (`--model <id>`, `docs/projects/antigravity/design.md`)
+ * reaches a harness that is known to read one — laid beside `ISOCAN_MODEL`,
+ * which every spawn gets. Only variables the harness itself documents belong
+ * here: a guessed name is a pin that silently does nothing. Codex is not a
+ * variable but a key in its bridge's `CODEX_CONFIG` overrides (see
+ * `codexModelConfig`), and anything else takes the model through `{model}`
+ * in its `acpAdapters` declaration. */
+const HARNESS_MODEL_ENV: Record<string, string> = {
+  "claude-code": "ANTHROPIC_MODEL",
+};
+
+/** Codex's bridge reads its config overrides from `CODEX_CONFIG` (the same
+ * JSON `codexSandboxSpec` extends), and `model` is one of them — so a pin is
+ * merged into whatever overrides the spawn would already carry. */
+function codexModelConfig(model: string, inherited: string | undefined): string {
+  let parsed: unknown = null;
+  try {
+    parsed = JSON.parse(inherited ?? "{}");
+  } catch {
+    // Reported below, in the words `codexSandboxSpec` uses for the same file.
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("CODEX_CONFIG must be a JSON object");
+  }
+  return JSON.stringify({ ...parsed, model });
+}
+
+/** A declared adapter's arguments with `{model}` filled in. With no model
+ * pinned, an argument that names `{model}` is left out rather than handed to
+ * the harness as the literal text — and when it is a bare `{model}` after a
+ * flag (`--model {model}`), the flag goes with it. */
+function modelArgs(args: string[], model: string | null): string[] {
+  if (model) return args.map((arg) => arg.replaceAll("{model}", model));
+  const out: string[] = [];
+  for (const arg of args) {
+    if (!arg.includes("{model}")) {
+      out.push(arg);
+      continue;
+    }
+    if (arg === "{model}" && out.length > 0 && out[out.length - 1]!.startsWith("-")) out.pop();
+  }
+  return out;
+}
+
+/** Whether a pinned model reaches this harness itself, through the doors
+ * `adapterFor` opens: `HARNESS_MODEL_ENV`'s variable, Codex's
+ * `CODEX_CONFIG`, or `{model}` in a declared adapter's arguments. False
+ * means a pin would ride `ISOCAN_MODEL` alone while the harness runs its
+ * own default — which is what `isocan harness --json` says with
+ * `pinsModel`, so nobody compares two "pinned" agents that are not. */
+function modelReaches(raw: HarnessConfig, name: string): boolean {
+  if (Object.hasOwn(HARNESS_MODEL_ENV, name) || name === "codex") return true;
+  const declared = raw.acpAdapters?.[name];
+  const args = typeof declared === "string" ? declared.split(/\s+/) : Array.isArray(declared) ? declared : [];
+  return args.some((arg) => typeof arg === "string" && arg.includes("{model}"));
+}
 
 export interface RegistryBinary {
   archive: string;
@@ -368,11 +454,11 @@ export interface HarnessRow {
   /** Could run here: a declared adapter (deliberate, so believed as is), or
    * a builtin one whose harness is not known to be absent. */
   runnable: boolean;
+  /** Whether `--model` reaches the harness itself (`modelReaches`), rather
+   * than riding `ISOCAN_MODEL` past a harness that runs its own default. */
+  pinsModel: boolean;
   /** The one an agent that named no harness runs on. */
   default: boolean;
-  /** Where its sessions live, for a harness whose sessions are not on this
-   * machine: sheep's, the home its kennel names. */
-  home?: string;
 }
 
 export interface HarnessScan {
@@ -401,26 +487,24 @@ export async function onPath(bin: string, env: NodeJS.ProcessEnv): Promise<boole
 function declaredAdapter(
   raw: HarnessConfig,
   name: string,
+  model?: string | null | undefined,
 ): Omit<AdapterSpec, "harness"> | null {
   const declared = raw.acpAdapters?.[name];
+  const pinned = model?.trim() || null;
   if (typeof declared === "string" && declared.trim()) {
     const [command, ...args] = declared.trim().split(/\s+/);
-    return { command: command!, args };
+    return { command: command!, args: modelArgs(args, pinned) };
   }
   if (Array.isArray(declared) && declared.length > 0 && declared.every((p) => typeof p === "string")) {
-    return { command: declared[0]!, args: declared.slice(1) };
+    return { command: declared[0]!, args: modelArgs(declared.slice(1), pinned) };
   }
   return null;
 }
 
 /** Everything this machine could run, and which one it runs by default.
  * A fact about the machine — no daemon is consulted. `env` is a parameter
- * so a test can hand it a PATH; `cwd` is where sheep's kennel walk starts. */
-export async function scanHarnesses(
-  home: string,
-  env: NodeJS.ProcessEnv = process.env,
-  cwd: string = process.cwd(),
-): Promise<HarnessScan> {
+ * so a test can hand it a PATH. */
+export async function scanHarnesses(home: string, env: NodeJS.ProcessEnv = process.env): Promise<HarnessScan> {
   const raw = await readConfigFile<HarnessConfig>(home);
   const names = new Set<string>([
     ...builtinHarnesses,
@@ -428,26 +512,13 @@ export async function scanHarnesses(
     ...Object.keys(raw.acpAdapters ?? {}),
     ...Object.keys(raw.harnessVars ?? {}),
   ]);
-  names.delete(SHEEP_HARNESS);
   const rows: HarnessRow[] = [];
   for (const name of names) {
     const installed = await installedProbe(home, name, env);
     const adapter = declaredAdapter(raw, name) ? "config" : (await builtinAdapter(home, name)) ? "builtin" : null;
     const runnable = adapter === "config" || (adapter === "builtin" && installed !== false);
-    rows.push({ name, installed, adapter, runnable, default: false });
+    rows.push({ name, installed, adapter, runnable, pinsModel: modelReaches(raw, name), default: false });
   }
-  // sheep is not an ACP bridge but a herding command, found the same way:
-  // `sheep` on the PATH, and a kennel that names a home.
-  const sheepInstalled = await onPath("sheep", env);
-  const place = sheepInstalled ? sheepPlaceFor(cwd, env) : null;
-  rows.push({
-    name: SHEEP_HARNESS,
-    installed: sheepInstalled,
-    adapter: "builtin",
-    runnable: place !== null,
-    default: false,
-    ...(place ? { home: placeLine(place) } : {}),
-  });
   const runnable = rows.filter((r) => r.runnable);
   const wanted = typeof raw.defaultHarness === "string" ? raw.defaultHarness.trim() : "";
   const chosen = wanted ? runnable.find((r) => r.name === wanted) ?? null : null;
@@ -469,22 +540,33 @@ export async function setDefaultHarness(home: string, name: string): Promise<voi
 /** The adapter for a harness — config first, then builtin — or, for a null
  * harness ("not yet said"), the machine's default. Null when nothing can
  * answer; the caller owes a refusal, and `noDefaultLine` words the null
- * case. */
+ * case. A pinned `model` always rides `ISOCAN_MODEL`, and reaches the harness
+ * itself only where it has a known door: `HARNESS_MODEL_ENV`'s variable,
+ * `model` in Codex's `CODEX_CONFIG`, or `{model}` in a declared adapter's
+ * arguments. Anywhere else the harness runs its own default. */
 export async function adapterFor(
   home: string,
   harness: string | null,
   env: NodeJS.ProcessEnv = process.env,
+  model?: string | null | undefined,
 ): Promise<AdapterSpec | null> {
   const wanted = harness ?? (await scanHarnesses(home, env)).default?.name ?? null;
   if (!wanted) return null;
-  // A harness that is not an ACP bridge but a herding command: its
-  // sessions are cells at a sheep home, and `sheep.ts` drives it.
-  if (wanted === SHEEP_HARNESS) {
-    return (await onPath("sheep", env)) ? { harness: wanted, command: "sheep", args: [] } : null;
-  }
   const raw = await readConfigFile<HarnessConfig>(home);
-  const spec = declaredAdapter(raw, wanted) ?? (await builtinAdapter(home, wanted)) ?? null;
-  return spec ? { harness: wanted, ...spec } : null;
+  const pinned = model?.trim() || null;
+  const spec = declaredAdapter(raw, wanted, pinned) ?? (await builtinAdapter(home, wanted)) ?? null;
+  if (!spec) return null;
+  if (!pinned) return { harness: wanted, ...spec };
+  const modelVar = Object.hasOwn(HARNESS_MODEL_ENV, wanted) ? HARNESS_MODEL_ENV[wanted] : undefined;
+  const modelEnv: Record<string, string> = {
+    ...(spec.env ?? {}),
+    ISOCAN_MODEL: pinned,
+    ...(modelVar ? { [modelVar]: pinned } : {}),
+    ...(wanted === "codex"
+      ? { CODEX_CONFIG: codexModelConfig(pinned, spec.env?.CODEX_CONFIG ?? env.CODEX_CONFIG) }
+      : {}),
+  };
+  return { harness: wanted, ...spec, model: pinned, env: modelEnv };
 }
 
 /** One line for the rc's start, saying what an unnamed harness means here. */

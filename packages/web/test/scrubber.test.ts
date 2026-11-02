@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { rules, withoutComments } from "./cssrules.ts";
+import { loadedWith, rules } from "./cssrules.ts";
 import { applyOperation } from "@isocan/core";
 import type { CanvasState, OpEnvelope, Operation } from "@isocan/core";
 
@@ -140,7 +140,7 @@ describe("the write door, while somebody is in the past", () => {
 });
 
 describe("the track's stylesheet", () => {
-  const scrub = rules(withoutComments()).filter((r) => /\.scrub|\.in-past/.test(r.selector));
+  const scrub = rules(loadedWith("scrubber.css")).filter((r) => /\.scrub|\.in-past/.test(r.selector));
 
   it("exists", () => {
     expect(scrub.length).toBeGreaterThan(0);

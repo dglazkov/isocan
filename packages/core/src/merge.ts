@@ -1,4 +1,4 @@
-import { INK_PADDING, drawingViewBox, type InkBounds } from "./drawing.ts";
+import { drawingViewBox, type InkBounds } from "./drawing.ts";
 
 /**
  * Several drawings into one.

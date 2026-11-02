@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { shortcut } from "@isocan/core";
 import type { Actor } from "@isocan/core";
 import { OfflineError, redo, undo } from "../lib/api.ts";
 import { setNotice } from "../stores/canvasStore.ts";
@@ -46,7 +47,7 @@ export function ZoomControls({ canvasId, actor }: { canvasId: string; actor: Act
 
   return (
     <div
-      className="zoom-controls"
+      className="zoom-controls floats"
       onPointerDown={(e) => e.stopPropagation()}
       // Chrome you can turn off, door 2: the cluster's empty left edge offers
       // undo/redo back once they are hidden.
@@ -61,7 +62,7 @@ export function ZoomControls({ canvasId, actor }: { canvasId: string; actor: Act
           {!undoHidden && (
             <button
               className="btn icon"
-              title="Undo (⌘Z)"
+              title={`Undo (${shortcut("Z")})`}
               onClick={() => void undo(canvasId, actor).catch(sayWhy)}
               onContextMenu={(e) => hideMenu(e, "zoom.undo")}
             >
@@ -71,7 +72,7 @@ export function ZoomControls({ canvasId, actor }: { canvasId: string; actor: Act
           {!undoHidden && (
             <button
               className="btn icon"
-              title="Redo (⇧⌘Z)"
+              title={`Redo (${shortcut("Z", { shift: true })})`}
               onClick={() => void redo(canvasId, actor).catch(sayWhy)}
               onContextMenu={(e) => hideMenu(e, "zoom.undo")}
             >

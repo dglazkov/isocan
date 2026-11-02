@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { FileDesk } from "../src/file-desk.ts";
 import { ParkCursors, parkCursorsFile } from "../src/park.ts";
 
 /**
@@ -22,7 +23,7 @@ const seedAt = (seq: number) => async () => seq;
 
 beforeEach(async () => {
   home = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-park-"));
-  park = new ParkCursors(home);
+  park = new ParkCursors(new FileDesk(home));
 });
 
 afterEach(async () => {
@@ -41,7 +42,7 @@ describe("the row's life", () => {
     await park.delivered("prj_1", "usr_a", claim.parkId, 5);
     // A fresh store reading the same file: what survives the process is the
     // whole point.
-    const later = await new ParkCursors(home).claim("prj_1", "usr_a", {
+    const later = await new ParkCursors(new FileDesk(home)).claim("prj_1", "usr_a", {
       seed: seedAt(99),
       actorSpoke: spoke(false),
     });

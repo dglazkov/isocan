@@ -1,9 +1,9 @@
 ---
-status: designed
-since: 2026-09-05
+status: noted
+since: 2026-09-13
 issue: 182
 see: multi-identity, workbench, on-demand, ui-refresh
-note: measured 5 Sep on a 375×812 viewport — the canvas cannot be moved with a finger, the chrome overlaps, the Chat fits by accident and the deck fits on purpose; the field draws one line (a phone views, comments and presents; a tablet edits); recommends touch physics for every coarse pointer, a phone face built from the Chat, the viewer and the deck, and no native app. Nothing built
+note: measured touch and layout debt on 5 Sep; Chat-first decided 11 Sep; the 13 Sep node-walk design supplies directional navigation and the revised stage-1 ladder. Current implementation and acceptance live in docs/projects/mobile
 ---
 
 # Mobile web: a phone talks to the canvas
@@ -11,6 +11,16 @@ note: measured 5 Sep on a 375×812 viewport — the canvas cannot be moved with 
 **5 September 2026.** Tracked as
 [#182](https://github.com/dglazkov/isocan/issues/182), which holds the
 decisions this note leaves open.
+
+**The continuation now lives in [the mobile project](../projects/mobile/).** Its journey and phases carry current implementation status and acceptance; the dated measurement below is preserved.
+
+**Where this stood, 11 Sep 2026: partly built.** Stage 0's touch half and two
+of its three chrome fixes shipped 7 Sep (5ad7e68b, cffeaf6c) — see "What the
+touch half shipped" below — and the minimap's fold below 460px followed on
+11 Sep (#265); the 44px targets, the rail fold and long-press have not. The first open question is answered: **the phone face is Chat-first** (D1,
+Dion, 11 Sep). Stages 1–4 are not built. **The node walk** below (13 Sep) is
+the interaction model stage 1 never had, and it splits stage 1 into three
+rungs; three further questions go to #182 with it.
 
 The question, as asked: *canvases are hard on mobile, so how do we make
 this experience responsive? Do we make it just the chat experience? Think
@@ -190,6 +200,90 @@ the stage editor stays a desktop instrument and the phone face never offers
 it. A second, mobile document model: the phone reads the same log through
 the same reducer, or it is not isocan.
 
+## The node walk — the model stage 1 was missing
+
+**13 September 2026.** Stage 1 above says *what surfaces* the phone face is
+made of and never says *how a person moves around a canvas on it*. The Canvas
+tab, as written, is the stage-0 canvas — a plane you pan with a finger — plus a
+sheet listing what is on it. Panning is the thing a phone is worst at, and a
+list is not a canvas. This section is the missing half, and almost all of it is
+already built for the desktop.
+
+**The model: on a phone the canvas is a graph you walk, not a plane you pan.**
+You stand in one item, full-bleed. The four edges of the screen are live in
+exactly the directions there is something to go to. Swipe, or tap the edge, and
+you are standing in that one. The plane is what you pinch out to, not what you
+fight.
+
+**The rule that makes it honest is already written.** `findNextItem(current,
+candidates, direction)` in `packages/web/src/lib/spatialnav.ts` is the walk
+`⌘←` `⌘→` `⌘↑` `⌘↓` take in full screen: nearest in that direction, scored by
+projected distance with an orthogonal penalty, so "the next one that way" means
+what a person means by it. `NeighbourPad` renders an arrow **if and only if**
+that direction would move, and its comment says why — the pad and the keystroke
+are the same function asked four times, so no hand-kept list of neighbours can
+drift from the behaviour it advertises. The phone gets the same guarantee for
+free: an edge that glows is a place you can go, and a dead edge is the canvas
+telling you it ends here.
+
+**Why edges rather than a next/back bar.** A bar says there is a next thing. An
+edge says *which way the canvas actually goes* — which is the one piece of
+information a phone throws away when it crops a plane to 375 points. It also
+means the gesture teaches the layout: after a minute of stepping, somebody has
+a map in their head they never panned to build. That is the closest thing to
+"seeing the canvas" a phone can honestly offer.
+
+**What it is assembled from**, all of it existing: the walk (`spatialnav.ts`)
+and its rule (`NeighbourPad`); the frame (`FullScreen`, `Viewer`, which already
+go full-bleed and rest their chrome when still); the peek (`CardPeek`, and the
+live miniature a canvas card draws); the thread (`MainThreadPanel`, measured at
+320 of 375 points on 5 Sep, with comments anchored to items and quoted comments
+since 11 Sep); the news (seen-marks, 12 Sep, which records `(person, canvas) →
+seq, at` on every visit); and the physics (7 Sep). **No new op, and no new
+stored fact, for the first three rungs below.**
+
+### The ladder, revised
+
+Stage 1 splits into three rungs and the rest keeps its order. Each is usable
+alone.
+
+**1a — standing in a node.** Tap an item and it fills the screen. Swipe or tap
+an edge to step; a dead edge neither glows nor moves. Pull up for this node's
+thread, composer above the keyboard. Pinch out for the plan, with the node you
+were in still marked and every card tappable. *Needs: touch bindings on the
+existing walk, the edge affordance, a thread sheet.*
+
+**1b — the Chat carries its pictures.** Chat-first, as D1 decided, and every
+message that MADE something carries a live card of what it made — the
+lane-and-tether relationship the desktop already draws, folded into a message
+row at phone width. Tap the card to stand in it; reply from inside. This is the
+bridge the phone face is for: you read the conversation and the visuals come
+with it, rather than switching tabs to find out what "done" meant. *Needs: the
+card inside a message row.*
+
+**1c — while you were away.** Opening a canvas on a phone leads with what has
+changed since your last visit — comments, items, who was here — each row
+stepping into the node it is about. This is the phone's best job, and it is why
+seen-marks records a seq as well as a time. *Needs: the digest view; the fold
+the lens already does.*
+
+**Then, unchanged in substance:** peek before you step (hold an edge, the
+destination leans in — `CardPeek`, placed; the one affordance a keyboard never
+needed), stage 2's present-from-a-phone (which is the same gesture as 1a, so it
+comes nearly free afterwards), stage 3's handoff, stage 4's share target.
+
+**Recommended order: 1a → 1c → stage 2 → 1b → peek.** 1a makes the rest
+coherent, 1c is what makes a phone worth opening at all, stage 2 is the
+smallest and has an audience today. A demo next week reorders this in one move.
+
+### What the walk does not change
+
+The refusals above stand, and one gains a reason: **the phone does not
+arrange.** Dragging items into a layout on 375 points produces a mess somebody
+else tidies, and the walk is the argument for why it never needs to — moving
+*between* things is navigation, not editing. The phone reads, comments,
+answers, presents, and adds one thing at a time.
+
 ## What the touch half shipped, and what it decided
 
 **7 September 2026.** `pinch` in `web/lib/viewport.ts` and the pointer
@@ -232,21 +326,31 @@ the row already knows when it has run out, and a breakpoint is a second
 opinion about the same fact in pixels that stop being true when somebody adds
 a button here.
 
-**The minimap and the zoom row overlapped by 27 pixels.** They stack now below
-460px. Two things worth keeping:
+**The minimap and the zoom row overlapped by 27 pixels.** Below 460px the map
+is folded now. Three things worth keeping:
 
-- **Stacking, not folding.** This note recommends folding the map, and the
-  fold writes `isocan.minimap` to localStorage — so a WIDTH would decide a
-  PREFERENCE, which then follows the person to their desktop as a setting they
-  never chose and cannot connect to anything they did. Stacking is CSS, holds
-  no state, and comes back on rotation.
+- **Stacked first, folded since.** This note recommends folding the map, and
+  on 7 Sep the fold wrote `isocan.minimap` to localStorage — so a WIDTH would
+  have decided a PREFERENCE, which then follows the person to their desktop as
+  a setting they never chose. The map was stacked above the zoom row instead.
+  On 11 Sep the fold and the preference became two facts
+  (`web/lib/minimapfold.ts`): below 460 the width folds the map for display
+  and writes nothing, and the stored choice comes back the moment the window
+  widens. The stack survives only for a map somebody taps open on a phone.
+- **A phone's unfold is for the visit.** Tapping the handle below 460 opens
+  the map until the page is left, across rotations, and is never written —
+  neither over the desktop's choice (the original failure, backwards) nor
+  under a narrow-only key, because the phone face is to be Chat-first (decided
+  11 Sep) and a stored narrow-window minimap preference would be a setting
+  minted for a layout about to be replaced. The next visit starts folded.
 - **460 is arithmetic, and it is approximate on purpose.** The two meet around
   405 — around, because the zoom row is as wide as the percentage it happens to
   be showing, so "100%" and "25%" collide at different widths, and a breakpoint
   set at the collision would be set at one of them. 460 clears the widest
   reading with 51 measured pixels to spare. Not this note's 640: between 405
   and 640 the clusters sit 231px apart, and moving chrome there is chrome
-  moving for no reason.
+  moving for no reason. The fold and the sheet's lift read the one number
+  (`NARROW_MINIMAP_PX`), held together by `minimapnarrow.test.ts`.
 
 **Not fixed: the touch targets.** Fourteen controls are still under the 44px
 floor, the smallest 20×20. That is not one declaration — at 375px you cannot
@@ -262,6 +366,7 @@ Written up as the decisions in #182:
 1. **Chat-first or canvas-first.** The recommendation puts the Chat on the
    first tab. It is the one choice here that changes what a person sees
    first, and it is a product decision rather than a measurement.
+   *Decided 11 Sep: Chat-first — D1 below.*
 2. **Width or capability.** Layout by width (`max-width: 640px`, tldraw's
    TABLET_SM line), physics by pointer (`pointer: coarse`), is the
    recommendation; an iPad in portrait at 768–834px sits on the line and
@@ -270,6 +375,30 @@ Written up as the decisions in #182:
    Stages 1–4 only matter where a phone can reach a canvas, which is
    isocan.io, dev, or a pass; the strongest argument for #91 in a while is a
    phone in a pocket and a laptop that is closed.
+
+4. **Is the walk the Canvas tab, or the phone face?** Stage 1 gives the phone
+   three tabs and makes the walk what the Canvas tab *is*. The bolder reading
+   makes the walk the primary surface, demotes the plan to a pinch-out and the
+   tabs to a sheet. The second reads better on a small screen and is a product
+   call, not a measurement. *(13 Sep)*
+5. **Does a step move everyone, or only you?** Stepping is navigation, so
+   almost certainly only you — but presence already broadcasts where people are
+   looking, and a phone stepping beside somebody on a laptop is the first time
+   *follow me* means anything on mobile. Cheap either way; the question is
+   whether it is on by default. *(13 Sep)*
+6. **What does the walk order by inside an area or a group?** Spatial nearness
+   is right on an open plane, but a sprint board and a canvas group each carry a
+   structure the geometry only implies. Walking group-first inside a group and
+   spatially outside it is one line in the candidate list — and a decision about
+   what the canvas means, not a heuristic. *(13 Sep)*
+
+## Decisions
+
+**D1. The phone face is Chat-first.** Dion, 11 Sep 2026, answering the first
+open question above. The Chat is the first tab of stage 1's face, as the
+recommendation argued: it is what a phone is for here, and an agent's "done"
+in it is the link to the card. The Canvas and Agents tabs follow it. Decided,
+not built.
 
 ## What was not measured
 

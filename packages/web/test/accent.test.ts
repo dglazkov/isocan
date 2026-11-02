@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { sheets } from "./cssrules.ts";
 
 /**
  * The accent has two jobs, and only one of them is readable.
@@ -27,6 +28,10 @@ import { describe, expect, it } from "vitest";
 
 const css = readFileSync(fileURLToPath(new URL("../src/styles.css", import.meta.url)), "utf8");
 const rules = css.replace(/\/\*[\s\S]*?\*\//g, "");
+/** Every sheet the page loads, for the ratchet below — not `styles.css` alone
+ * (BC-6/BC-4, 27 Sep 2026): the sheets beside the components and the modules'
+ * were read by no guard, and two module labels were painting in the fill. */
+const everySheet = sheets.map((s) => s.text.replace(/\/\*[\s\S]*?\*\//g, "")).join("\n");
 
 /** A token's value inside one `:root` block. */
 function token(block: RegExp, name: string): string {
@@ -93,7 +98,7 @@ describe("the accent is a fill, not an ink", () => {
  */
 function paintsAccentText(): string[] {
   const out: string[] = [];
-  for (const rule of rules.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+  for (const rule of everySheet.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
     const body = rule[2] ?? "";
     if (!/(^|[;{\s])color:\s*var\(--accent\)\s*(;|$)/.test(body)) continue;
     if (/(^|[;{\s])background(-color)?:\s*var\(--accent-ink\)/.test(body)) continue;
@@ -105,11 +110,16 @@ function paintsAccentText(): string[] {
 /**
  * Fourteen rules, measured at 2.5–2.9:1 in dark. Shrink this list; do not add
  * to it. `var(--accent)` -> `var(--accent-text)` is the whole fix.
+ *
+ * `.main-glyph, .main-pill-glyph` and `.shelf-glyph` left it on 27 Sep 2026
+ * without being fixed: nothing rendered them any more, and BC-3 deleted the
+ * rules (`deadrules.test.ts`).
+ *
+ * `.item.selected .item-titlebar` left it fixed (smart-contrast phase 0), and
+ * `groundaccent.test.ts` now holds every name on the ground to the same rule.
  */
 const KNOWN_UNREADABLE_IN_DARK = [
-  ".item.selected .item-titlebar",
   ".thread-popover .thread-actions button.promote",
-  ".main-glyph, .main-pill-glyph",
   ".mt-glyph",
   ".mention-dot.command-dot",
   ".command-card b",
@@ -118,7 +128,6 @@ const KNOWN_UNREADABLE_IN_DARK = [
   ".files-glyph",
   ".files-row.active .files-kind",
   ".files-size em",
-  ".shelf-glyph",
   ".drop-overlay",
 ];
 

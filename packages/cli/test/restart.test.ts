@@ -4,17 +4,16 @@ import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { stopDaemons } from "@isocan/server";
+import { stopDaemons } from "@isocan/server/daemon";
 import { reservePort } from "../../../test/ports.ts";
 import { nodeModulesDir } from "./deps.ts";
+import { runCli, type Run } from "./cli.ts";
 
 /**
  * Upgrading the CLI leaves the daemon behind: `ensureDaemon` only starts one
  * when the port is silent, so yesterday's build keeps serving until something
  * says otherwise. These drive the real binary against a real daemon.
  */
-
-const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 
 let home: string;
 let work: string;
@@ -34,21 +33,8 @@ afterEach(async () => {
   await fs.rm(work, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
-function isocan(...args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
-  const child = spawn(process.execPath, [cliBin, ...args], {
-    cwd: work,
-    env: { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: String(port) },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  let stdout = "";
-  let stderr = "";
-  child.stdout.setEncoding("utf8");
-  child.stdout.on("data", (chunk) => (stdout += chunk));
-  child.stderr.setEncoding("utf8");
-  child.stderr.on("data", (chunk) => (stderr += chunk));
-  return new Promise((resolve) =>
-    child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })),
-  );
+function isocan(...args: string[]): Promise<Run> {
+  return runCli(args, { cwd: work, env: { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: String(port) } });
 }
 
 /**
@@ -69,7 +55,7 @@ async function startOtherCopy(): Promise<{ root: string; stop: () => Promise<voi
   // location through /private/var/…, and the daemon reports the latter.
   const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "isocan-other-copy-")));
   await fs.cp(path.join(repo, "package.json"), path.join(root, "package.json"));
-  for (const pkg of ["api", "core", "server", "cli"]) {
+  for (const pkg of ["api", "core", "server", "cli", "rc"]) {
     await fs.cp(path.join(repo, "packages", pkg), path.join(root, "packages", pkg), {
       recursive: true,
     });

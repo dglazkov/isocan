@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "canvasId": "acme-eval-field-task",
+  "title": "Mobile field task",
+  "groups": [
+    {
+      "id": "primary",
+      "title": "Acme product"
+    }
+  ],
+  "selectedItemIds": [],
+  "items": [
+    {
+      "id": "field-task-reference",
+      "versionId": "field-task-reference-v1",
+      "path": "reference.md",
+      "mime": "text/markdown",
+      "scope": "primary"
+    },
+    {
+      "id": "field-task-checklist",
+      "versionId": "field-task-checklist-v1",
+      "path": "checklist.json",
+      "mime": "application/json",
+      "scope": "primary"
+    }
+  ],
+  "decisions": [],
+  "repository": null
+}

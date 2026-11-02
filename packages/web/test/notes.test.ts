@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { loadedWith } from "./cssrules.ts";
 
 /**
  * **Speaker notes on the three surfaces the app has for a deck.** On the
@@ -15,7 +16,8 @@ const fullScreen = read("../src/components/FullScreen.tsx");
 const deckPrint = read("../src/components/DeckPrint.tsx");
 const menu = read("../src/lib/menuentries.tsx");
 const notes = read("../src/lib/notes.ts");
-const css = read("../src/styles.css");
+/** `styles.css`, then the deck's own sheet (`deck-print.css`, since 27 Sep 2026). */
+const css = loadedWith("deck-print.css");
 const store = read("../src/stores/uiStore.ts");
 
 describe("speaker notes", () => {

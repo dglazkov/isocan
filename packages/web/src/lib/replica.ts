@@ -45,8 +45,18 @@ export interface StoredReplica {
   canvas: CanvasContents;
   lastSeq: number;
   queue: StoredWrite[];
+  /** Cutover-refused work remains reviewable across visits until explicitly dismissed. */
+  migrationRefusals?: import("./writequeue.ts").RefusedWrite[];
   /** ISO, for a human reading the database in devtools. */
   savedAt: string;
+}
+
+/** Small deterministic text content (such as an offline SVG drawing) staged alongside a queued write so its blob uploads before the operation on reconnect. */
+export interface StagedBlob {
+  blobHash: string;
+  mimeType: string;
+  filename: string;
+  text: string;
 }
 
 /** A write this tab made and the home has not confirmed. */
@@ -61,9 +71,15 @@ export interface StoredWrite {
    * than re-minted, because a flush is a RE-send: a revise that was three ops
    * under one group must still be one undo after a reconnect. */
   group?: string;
+  /** Meaning at the original gesture, kept through reload and migration. */
+  originGroupMode?: "legacy" | "groups";
   /** Set once the home has answered with a seq; the write retires when the
    * confirmed cursor reaches it. */
   seq?: number;
+  /** Writer-resolved effects are replayed verbatim while their ordered tail is still in flight. */
+  accepted?: import("@isocan/core").OpEnvelope;
+  /** Staged text blob to upload before sending `op` when draining the offline queue. */
+  stagedBlob?: StagedBlob;
 }
 
 /**

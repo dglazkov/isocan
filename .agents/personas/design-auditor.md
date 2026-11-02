@@ -14,6 +14,28 @@ goal:
     at most: 55
     measured by: node scripts/measure.mjs colour-literals
     baseline: 55, 2026-08-29, cc085f0
+  # **Proposals a designer would keep** (proactive-agent phase 11, 14 Oct
+  # 2026). The proactive agent leaves design work beside a person's screens
+  # overnight, and a proposal a designer deletes on sight is the tell of a
+  # generated interface arriving on somebody's canvas: this persona's lens,
+  # applied to what an agent makes rather than to what the app draws.
+  #
+  # `night.mjs --yes` runs a real lead for one night on a synthetic Acme canvas
+  # (a scratch daemon) and `judge.mjs --yes` asks the cheapest tier, per
+  # proposal, whether a designer would keep it given its source, its cite and
+  # its why; the number is the whole percent kept. It is a READING, like
+  # `summary-unfaithful`: both runs spend money and wait on Dion's yes, so
+  # neither happens on a push. Until the first judged night the command prints
+  # "no reading yet" and exits 3, counted as neither held nor missed.
+  #
+  # `at least 60%` is the goal's own words, set before any reading: three of a
+  # night's five. A delete costs one key, so a rate under 100 is the design
+  # working; under 60 the morning stops earning the return. The judge is a
+  # model's opinion of taste, which this persona otherwise refuses to trade
+  # in: the person's own Keep and Delete (the verify walk) outrank it.
+  - name: bench night proposals a designer would keep
+    at least: 60%
+    measured by: node scripts/measure.mjs proposal-keep-rate
 runs: docs/reviews/
 trigger:
   cron: 43 8 * * *

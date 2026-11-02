@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Acme additional details</title></head>
+<body>
+  <main>
+    <h1>Acme additional details</h1>
+    <button id="reveal" type="button" aria-controls="details" aria-expanded="false">Show details</button>
+    <section id="details" hidden aria-label="Additional details"><input id="late-field" type="text"></section>
+  </main>
+  <script>
+    document.querySelector('#reveal').addEventListener('click', () => {
+      document.querySelector('#details').hidden = false;
+      document.querySelector('#reveal').setAttribute('aria-expanded', 'true');
+    });
+  </script>
+</body>
+</html>

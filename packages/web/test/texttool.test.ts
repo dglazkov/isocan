@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { PAPERS, TEXT_FACES, TEXT_STYLES, paperLabel, textFaceLabel } from "@isocan/core";
+import { PAPERS, TEXT_COLOURS, TEXT_FACES, TEXT_FONTS, TEXT_STYLES, paperLabel, textFaceLabel } from "@isocan/core";
 
 import { textToolMenu } from "../src/lib/textmenu.ts";
 import { useUiStore } from "../src/stores/uiStore.ts";
@@ -33,7 +33,9 @@ describe("what the next text node will look like", () => {
     const rows = (name: string) =>
       (menu.find((e) => "label" in e && e.label === name) as { submenu?: { label: string }[] } | undefined)
         ?.submenu?.map((s) => s.label ?? "—") ?? [];
-    expect(rows("Font")).toEqual(TEXT_FACES.map(textFaceLabel));
+    expect(rows("Face")).toEqual(TEXT_FACES.map(textFaceLabel));
+    expect(rows("Font")).toEqual(["Plain face", "—", ...TEXT_FONTS.map((f) => f.name)]);
+    expect(rows("Colour")).toEqual(["Auto", "—", ...TEXT_COLOURS.map((c) => c.charAt(0).toUpperCase() + c.slice(1))]);
     // The "—" is the separator between "None" and the five papers: a rule,
     // because no paper and a paper are two kinds of answer rather than six of
     // one.
@@ -51,7 +53,7 @@ describe("what the next text node will look like", () => {
     const before = useUiStore.getState().lastTextFace;
     const other = TEXT_FACES.find((f) => f !== before)!;
     const menu = textToolMenu();
-    const font = menu.find((e) => "label" in e && e.label === "Font") as {
+    const font = menu.find((e) => "label" in e && e.label === "Face") as {
       submenu: { label: string; run: () => void }[];
     };
     font.submenu.find((r) => r.label === textFaceLabel(other))!.run();
@@ -61,12 +63,29 @@ describe("what the next text node will look like", () => {
 
   it("ticks what is current, so the menu says what you are about to get", () => {
     const { lastTextFace } = useUiStore.getState();
-    const font = textToolMenu().find((e) => "label" in e && e.label === "Font") as {
+    const font = textToolMenu().find((e) => "label" in e && e.label === "Face") as {
       value?: string;
       submenu: { label: string; checked?: boolean }[];
     };
     expect(font.value).toBe(textFaceLabel(lastTextFace));
     expect(font.submenu.filter((r) => r.checked).map((r) => r.label)).toEqual([textFaceLabel(lastTextFace)]);
+  });
+});
+
+describe("the next node's colour and font, from the same menu", () => {
+  it("writes the colour and font the composer opens with, and a font brings its face", () => {
+    const before = useUiStore.getState();
+    const row = (name: string) =>
+      textToolMenu().find((e) => "label" in e && e.label === name) as { submenu: { label?: string; run: () => void }[] };
+    row("Colour").submenu.find((r) => r.label === "Blue")!.run();
+    row("Font").submenu.find((r) => r.label === "Fraunces")!.run();
+    const after = useUiStore.getState();
+    expect(after.lastTextColour).toBe("blue");
+    expect(after.lastTextFont).toBe("Fraunces");
+    expect(after.lastTextFace).toBe("serif");
+    expect((textToolMenu().find((e) => "label" in e && e.label === "Font") as { value?: string }).value).toBe("Fraunces");
+    after.setLastTextInk(before.lastTextColour, before.lastTextFont);
+    after.setLastText(before.lastTextStyle, before.lastTextFace, before.lastPaper);
   });
 });
 

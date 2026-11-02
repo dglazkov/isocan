@@ -1,10 +1,14 @@
+import type { CursorSignal, GroupAim, GroupBox, TextAnchor } from "@isocan/core";
 import { create } from "zustand";
-import type { AddKind, InkPoint, InkStroke, TextFace, TextStyle, Paper } from "@isocan/core";
-import { TEXT_FACES, TEXT_STYLES, isPaper } from "@isocan/core";
+import { shallow } from "zustand/shallow";
+import type { AddKind, InkPoint, InkStroke, TextFace, TextStyle, Paper, TextColourValue } from "@isocan/core";
+import { TEXT_FACES, TEXT_STYLES, isPaper, textFontFrom, textInk } from "@isocan/core";
 import type { Clipboard } from "../lib/clipboard.ts";
 import type { MenuEntry } from "../components/ContextMenu.tsx";
 import type { Guide, SpacingGuide } from "../lib/snap.ts";
 import type { Viewport } from "../lib/viewport.ts";
+import { chooseMinimap, minimapShown, narrowNow, type MinimapFold } from "../lib/minimapfold.ts";
+import { readChatAt, type ChatAt } from "../lib/chatplace.ts";
 
 /** The pointer tools on the right rail. */
 export type Tool = "select" | "hand" | "comment" | "zoom" | "pen" | "text";
@@ -19,6 +23,10 @@ export interface DragState {
   dx: number;
   dy: number;
   moved: boolean;
+  /** What the hand is holding — the items that wear the lift (`.item.lifted`).
+   * The roots of the drag, not everything riding it: an area's contents and
+   * an item's marks travel along but stay flat. */
+  lift?: readonly string[];
 }
 
 /** Live rubber-band rectangle in world coordinates (unnormalized corners). */
@@ -41,6 +49,8 @@ export interface ResizeState {
 
 /** A text node being typed — before it exists, or while it is re-worded. */
 export interface PendingText {
+  /** The scope at composition start, retained through async upload and later navigation. */
+  containerId?: string | null;
   /** World coordinates of the node's top-left. */
   x: number;
   y: number;
@@ -75,9 +85,15 @@ export interface PendingText {
   /** The paper being typed on, or null/absent for a plain caption — local
    *  until it commits, like the step and the face. */
   paper?: Paper | null;
+  /** The words' colour and named font (`core/textcolour.ts`, `TEXT_FONTS`),
+   *  null/absent for the theme's ink and the plain face. */
+  colour?: TextColourValue | null;
+  font?: string | null;
 }
 
 export interface PendingComment {
+  /** A quote captured before the composer takes focus. */
+  textAnchor?: TextAnchor;
   /** World coordinates of the click. */
   x: number;
   y: number;
@@ -93,6 +109,18 @@ interface UiStore {
   fannedItemId: string | null;
   drag: DragState | null;
   resize: ResizeState | null;
+  /** A group gesture's live boxes. `lift` is set by a pointer drag once the
+   * press has become one — the gesture's roots, so a dragged group lifts its
+   * frame and not its members. A resize or a keyboard nudge never lifts. */
+  groupPreview: { id: string; boxes: ReadonlyMap<string, GroupBox>; lift?: readonly string[] } | null;
+  groupDropTargetId: string | null;
+  /** A ⌘-drag that would put its items on the open canvas: the group they
+   * leave, which wears the *Out of …* pill. Cleared with the drop target. */
+  groupDropOutId: string | null;
+  /** What a press here would take — the dashed outline — and, with ⌘, the
+   * group around it or the members a selection box would reach. One answer,
+   * `groupAim` in core, read by the hover and the press alike. */
+  aim: GroupAim | null;
   marquee: MarqueeState | null;
   /** Alignment guides for the drag in hand: the lines the dragged box has
    * settled onto. World coordinates; empty when nothing is aligned. */
@@ -102,6 +130,9 @@ interface UiStore {
   /** Item whose content owns the pointer (entered by double-click): an HTML
    * document or a projected browser item. */
   enteredItemId: string | null;
+  /** Membership scope; separate from an embedded document owning the pointer. */
+  activeGroupId: string | null;
+  groupDialog: { kind: "create" | "add" | "inspect" | "migrate"; itemIds: string[]; groupId?: string; at?: { x: number; y: number } } | null;
   /** Item whose name is being edited in place — double-clicking the label, or
    * F2 on the selection. */
   renamingItemId: string | null;
@@ -127,10 +158,13 @@ interface UiStore {
    *  times — the same argument that remembers the step. The DEFAULT is still
    *  no paper; this only remembers what you chose last. */
   lastPaper: Paper | null;
+  /** The colour and font too, remembered on the same terms (30 Sep 2026). */
+  lastTextColour: TextColourValue | null;
+  lastTextFont: string | null;
   /** Ink drawn with the Pen that has not landed as an item YET. It lives in
    * world coordinates and is local for the moment between lifting the pen and
    * the settle timer firing, when `commitSketch` turns it into an ordinary
-   * item (lib/sketch.ts). */
+   * item (lib/sketchplace.ts). */
   sketch: InkStroke[];
   /** Why the last attempt to place a drawing failed, if it did. The ink stays
    * on screen and the bar offers a retry — a dropped daemon must not eat it. */
@@ -140,6 +174,8 @@ interface UiStore {
   penSession: boolean;
   /** The help panel (?): what the canvas answers to. */
   helpOpen: boolean;
+  /** Your design vocabulary (`/vocabulary`, proactive-agent phase 10), drawn above the Chat's composer. */
+  vocabularyOpen: boolean;
   /** The Pen's color, or null for "whatever color I am" — the identity color
    * worn by your cursor and your face in the pile. Remembered per browser. */
   inkColor: string | null;
@@ -149,6 +185,11 @@ interface UiStore {
    * comment code already reads — the two never disagree. */
   activeTool: Tool;
   commentMode: boolean;
+  /** True while the "/" inline cursor-chip input is open. */
+  cursorSignalEditing: boolean;
+  /** Active 20-second cursor signal replacing the username on your cursor. */
+  cursorSignal: CursorSignal | null;
+  setCursorSignalState: (state: { cursorSignalEditing?: boolean; cursorSignal?: CursorSignal | null }) => void;
   /** The mark being PLACED: while set, a click on a sketch on the wall puts
    *  this emoji where the click landed (sprint phase 4's heat map). Local,
    *  like a tool; Escape clears it. Null is the ordinary pointer. */
@@ -167,9 +208,20 @@ interface UiStore {
   /** The docked main-thread panel (pill when closed). Persisted per canvas
    * by openMainPanel in MainThreadPanel — set only through it. */
   mainPanelOpen: boolean;
-  /** The minimap, which folds away into its corner. Remembered per browser:
-   * someone who put it away wants it away tomorrow too. */
+  /** Where this viewer keeps the Chat (`lib/chatplace.ts`). At the bottom the
+   *  dock never holds it, so `mainPanelOpen` stays false there. */
+  chatAt: ChatAt;
+  /** The bottom bar showing its messages, rather than just the composer.
+   *  Both are set with `setState`: a setter each is entry bytes for a
+   *  feature most visits never touch. */
+  chatBarOpen: boolean;
+  /** Whether the minimap is drawn open NOW — what every control reads. The
+   * choice behind it is remembered per browser (someone who put it away wants
+   * it away tomorrow too), but below 460px the width folds it without
+   * touching that choice: see `lib/minimapfold.ts` (#182). */
   minimapOpen: boolean;
+  /** The three facts `minimapOpen` is derived from; only `kept` is stored. */
+  minimapFold: MinimapFold;
   /** Whether the dot grid lights up under the pointer. */
   cursorGlow: boolean;
   /** Full screen shows the slide's speaker note to the presenter (N). A
@@ -183,6 +235,10 @@ interface UiStore {
   agentsPanelOpen: boolean;
   contextPanelOpen: boolean;
   personasPanelOpen: boolean;
+  /** Whether a canvas-carried panel extension occupies the left dock. */
+  extensionPanelOpen: boolean;
+  /** Item id of the open canvas-carried panel extension, or null. */
+  extensionPanelId: string | null;
   /** Whose WORK the camera follows: the agent whose new items it flies to,
    *  or null. Off by default — this moves the canvas on somebody's behalf, so
    *  it is a mode they choose rather than one they discover happening to
@@ -247,6 +303,12 @@ interface UiStore {
    *  3), so the slots that read the module list re-render. Never stored. */
   modulesGeneration: number;
   bumpModules: () => void;
+  /** The module dialog open over the canvas, if any (proposed: `dialogs`):
+   *  which one, and what followed the slash command that opened it. One at a
+   *  time, by construction. Never stored. */
+  moduleDialog: { id: string; args: string } | null;
+  openModuleDialog: (id: string, args?: string) => void;
+  closeModuleDialog: () => void;
   /** Google Doc items this browser shows LIVE — the `/preview` frame in
    *  place of the words (Google Docs stage 4). A mode you flip, remembered
    *  per person, never a second item. */
@@ -281,9 +343,14 @@ interface UiStore {
   setFanned: (itemId: string | null) => void;
   setDrag: (drag: DragState | null) => void;
   setResize: (resize: ResizeState | null) => void;
+  setGroupPreview: (preview: UiStore["groupPreview"]) => void;
+  setGroupDropTarget: (itemId: string | null, outOf?: string | null) => void;
+  setAim: (aim: GroupAim | null) => void;
   setMarquee: (marquee: MarqueeState | null) => void;
   setGuides: (guides: Guide[], spacing?: SpacingGuide[]) => void;
   setEntered: (itemId: string | null) => void;
+  setActiveGroup: (itemId: string | null) => void;
+  setGroupDialog: (dialog: UiStore["groupDialog"]) => void;
   setRenaming: (itemId: string | null) => void;
   setOpenThread: (threadId: string | null) => void;
   setPendingComment: (pending: PendingComment | null) => void;
@@ -291,6 +358,7 @@ interface UiStore {
   setClipboard: (clipboard: Clipboard | null) => void;
   setContextMenu: (menu: { at: { x: number; y: number }; entries: MenuEntry[] } | null) => void;
   setLastText: (style: TextStyle, face: TextFace, paper: Paper | null) => void;
+  setLastTextInk: (colour: TextColourValue | null, font: string | null) => void;
   setSketchError: (message: string | null) => void;
   setPenSession: (open: boolean) => void;
   setHelpOpen: (open: boolean) => void;
@@ -311,7 +379,11 @@ interface UiStore {
   setIdentityOpen: (open: boolean) => void;
   setShareOpen: (open: boolean) => void;
   setMainPanelOpen: (open: boolean) => void;
+  /** A person folding or unfolding the map. Written to storage only on a
+   *  wide window; on a narrow one it holds for this visit. */
   setMinimapOpen: (open: boolean) => void;
+  /** The width crossing 460px, from the media query. Never stored. */
+  setMinimapNarrow: (narrow: boolean) => void;
   /**
    * **The cursor glow, off if you want it off.**
    *
@@ -327,6 +399,8 @@ interface UiStore {
   setAgentsPanelOpen: (open: boolean) => void;
   setContextPanelOpen: (open: boolean) => void;
   setPersonasPanelOpen: (open: boolean) => void;
+  setExtensionPanelOpen: (open: boolean) => void;
+  setExtensionPanelId: (itemId: string | null) => void;
   setFollowingActor: (actorId: string | null) => void;
   setMarksOpen: (open: boolean) => void;
   setHistoryOpen: (open: boolean) => void;
@@ -499,6 +573,34 @@ function writeFlag(key: string, value: boolean): void {
 const TEXT_STEP_KEY = "isocan.text.style";
 const TEXT_FACE_KEY = "isocan.text.face";
 const TEXT_PAPER_KEY = "isocan.text.paper";
+const TEXT_COLOR_KEY = "isocan.text.color";
+const TEXT_FONT_KEY = "isocan.text.font";
+
+/** A remembered colour or font, checked against what core will draw — a stale
+ *  key opens the composer in the theme's ink and the plain face, never in
+ *  something that no longer exists. */
+function readTextInk(): { lastTextColour: TextColourValue | null; lastTextFont: string | null } {
+  try {
+    const colour = localStorage.getItem(TEXT_COLOR_KEY);
+    return {
+      lastTextColour: textInk(colour, false) ? (colour as TextColourValue) : null,
+      lastTextFont: textFontFrom(localStorage.getItem(TEXT_FONT_KEY) ?? "")?.name ?? null,
+    };
+  } catch {
+    return { lastTextColour: null, lastTextFont: null };
+  }
+}
+
+function writeTextInk(colour: string | null, font: string | null): void {
+  try {
+    for (const [key, value] of [[TEXT_COLOR_KEY, colour], [TEXT_FONT_KEY, font]] as const) {
+      if (value === null) localStorage.removeItem(key);
+      else localStorage.setItem(key, value);
+    }
+  } catch {
+    // As `writeText`: the choice holds for this session.
+  }
+}
 
 /**
  * **The step and face you last typed in, kept across reloads.**
@@ -574,10 +676,22 @@ function writeInkColor(color: string | null): void {
 }
 
 /** Local-only UI state — never synced, deliberately per-client. */
-export const useUiStore = create<UiStore>((set) => {
+export const useUiStore = create<UiStore>((set, get) => {
+  // The width is read once here, so the first paint on a phone is already
+  // folded rather than open for a frame and then folding; the Minimap keeps
+  // it current from then on.
+  const minimapFold: MinimapFold = {
+    kept: readFlag(MINIMAP_KEY, true),
+    narrow: narrowNow(),
+    narrowOpen: false,
+  };
   // Fan-out and entered-HTML only make sense for a single-item selection.
+  // The same ids in the same order keep the held list (cleanup RP-8, 27 Sep
+  // 2026): a marquee writes a fresh array on every pointermove, and each new
+  // identity re-rendered every whole-selection reader and asked for a presence
+  // beat (CanvasPage), which comes back as a roster (RP-1).
   const selectionSideEffects = (s: UiStore, next: string[]) => ({
-    selectedItemIds: next,
+    selectedItemIds: shallow(s.selectedItemIds, next) ? s.selectedItemIds : next,
     fannedItemId: next.length === 1 && s.fannedItemId === next[0] ? s.fannedItemId : null,
     enteredItemId: next.length === 1 && s.enteredItemId === next[0] ? s.enteredItemId : null,
   });
@@ -587,10 +701,16 @@ export const useUiStore = create<UiStore>((set) => {
     fannedItemId: null,
     drag: null,
     resize: null,
+    groupPreview: null,
+    groupDropTargetId: null,
+    groupDropOutId: null,
+    aim: null,
     marquee: null,
     guides: [],
     spacing: [],
     enteredItemId: null,
+    activeGroupId: null,
+    groupDialog: null,
     renamingItemId: null,
     openThreadId: null,
     pendingComment: null,
@@ -600,20 +720,28 @@ export const useUiStore = create<UiStore>((set) => {
     lastTextStyle: readTextStyle(),
     lastTextFace: readTextFace(),
     lastPaper: readPaper(),
+    ...readTextInk(),
     sketch: [],
     sketchError: null,
     penSession: false,
     helpOpen: false,
+    vocabularyOpen: false,
     inkColor: readInkColor(),
     activeTool: "select",
     commentMode: false,
+    cursorSignalEditing: false,
+    cursorSignal: null,
+    setCursorSignalState: (state) => set(state),
     stamp: null,
     adding: null,
     trashOpen: false,
     identityOpen: false,
     shareOpen: false,
     mainPanelOpen: false,
-    minimapOpen: readFlag(MINIMAP_KEY, true),
+    chatAt: readChatAt(),
+    chatBarOpen: false,
+    minimapOpen: minimapShown(minimapFold),
+    minimapFold,
     cursorGlow: readFlag(GLOW_KEY, true),
     presenterNotes: readFlag(PRESENTER_NOTES_KEY, false),
     panelWidth: readPanelWidth(),
@@ -624,6 +752,8 @@ export const useUiStore = create<UiStore>((set) => {
     agentsPanelOpen: false,
     contextPanelOpen: false,
     personasPanelOpen: false,
+    extensionPanelOpen: false,
+    extensionPanelId: null,
     followingActorId: null,
     marksOpen: false,
     historyOpen: false,
@@ -632,6 +762,9 @@ export const useUiStore = create<UiStore>((set) => {
     collapsedComments: [],
     modulesGeneration: 0,
     bumpModules: () => set((s) => ({ modulesGeneration: s.modulesGeneration + 1 })),
+    moduleDialog: null,
+    openModuleDialog: (id, args = "") => set({ moduleDialog: { id, args } }),
+    closeModuleDialog: () => set({ moduleDialog: null }),
     liveDocs: readIdList(LIVE_DOCS_KEY),
     pendingChat: null,
     paletteOpen: null,
@@ -659,9 +792,14 @@ export const useUiStore = create<UiStore>((set) => {
     setFanned: (fannedItemId) => set({ fannedItemId }),
     setDrag: (drag) => set({ drag }),
     setResize: (resize) => set({ resize }),
+    setGroupPreview: (groupPreview) => set({ groupPreview }),
+    setGroupDropTarget: (groupDropTargetId, groupDropOutId = null) => set({ groupDropTargetId, groupDropOutId }),
+    setAim: (aim) => set({ aim }),
     setMarquee: (marquee) => set({ marquee }),
     setGuides: (guides, spacing = []) => set({ guides, spacing }),
     setEntered: (enteredItemId) => set({ enteredItemId }),
+    setActiveGroup: (activeGroupId) => set({ activeGroupId, enteredItemId: null, selectedItemIds: [] }),
+    setGroupDialog: (groupDialog) => set({ groupDialog }),
     setRenaming: (renamingItemId) => set({ renamingItemId }),
     setOpenThread: (openThreadId) => set({ openThreadId }),
     setPendingComment: (pendingComment) => set({ pendingComment }),
@@ -681,10 +819,14 @@ export const useUiStore = create<UiStore>((set) => {
       set((s) =>
         pendingText === null && s.pendingText?.oneShot === true && s.activeTool === "text"
           ? { pendingText, activeTool: "select" as Tool }
-          : { pendingText },
+          : { pendingText: pendingText && pendingText.containerId === undefined ? { ...pendingText, containerId: s.activeGroupId } : pendingText },
       ),
     setClipboard: (clipboard) => set({ clipboard }),
     setContextMenu: (contextMenu) => set({ contextMenu }),
+    setLastTextInk: (lastTextColour, lastTextFont) => {
+      writeTextInk(lastTextColour, lastTextFont);
+      set({ lastTextColour, lastTextFont });
+    },
     setLastText: (lastTextStyle, lastTextFace, lastPaper) => {
       writeText(lastTextStyle, lastTextFace, lastPaper);
       set({ lastTextStyle, lastTextFace, lastPaper });
@@ -727,6 +869,8 @@ export const useUiStore = create<UiStore>((set) => {
     setAgentsPanelOpen: (agentsPanelOpen) => set({ agentsPanelOpen }),
     setContextPanelOpen: (contextPanelOpen) => set({ contextPanelOpen }),
     setPersonasPanelOpen: (personasPanelOpen) => set({ personasPanelOpen }),
+    setExtensionPanelOpen: (extensionPanelOpen) => set({ extensionPanelOpen }),
+    setExtensionPanelId: (extensionPanelId) => set({ extensionPanelId }),
     setFollowingActor: (followingActorId) => set({ followingActorId }),
     setMarksOpen: (marksOpen) => set({ marksOpen }),
     setHistoryOpen: (historyOpen) => set({ historyOpen }),
@@ -799,7 +943,7 @@ export const useUiStore = create<UiStore>((set) => {
      * because the reason generalises — anything outside the viewport that
      * reacts to the camera wants to know when a person is driving it.
      */
-    setPanning: (panning) => set({ panning }),
+    setPanning: (panning) => set((s) => (s.panning === panning ? s : { panning })),
     setRailPanning: (railPanning) => set({ railPanning }),
     setPanelWidth: (width) => {
       // Clamped HERE rather than at the drag, so every caller gets the same
@@ -827,9 +971,18 @@ export const useUiStore = create<UiStore>((set) => {
       writeFlag(GLOW_KEY, cursorGlow);
       set({ cursorGlow });
     },
-    setMinimapOpen: (minimapOpen) => {
-      writeFlag(MINIMAP_KEY, minimapOpen);
-      set({ minimapOpen });
+    setMinimapOpen: (open) => {
+      const { fold, store } = chooseMinimap(get().minimapFold, open);
+      // Only a wide window's choice is a preference. A narrow one is this
+      // visit's, and writing it would be the width deciding the desktop.
+      if (store) writeFlag(MINIMAP_KEY, open);
+      set({ minimapFold: fold, minimapOpen: minimapShown(fold) });
+    },
+    setMinimapNarrow: (narrow) => {
+      const was = get().minimapFold;
+      if (was.narrow === narrow) return;
+      const fold = { ...was, narrow };
+      set({ minimapFold: fold, minimapOpen: minimapShown(fold) });
     },
   };
 });

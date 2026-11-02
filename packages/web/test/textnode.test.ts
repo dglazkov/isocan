@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { textCommit } from "../src/lib/text.ts";
+import { TEXT_KIND, textBox, type Item } from "@isocan/core";
+import { restyledTextBox, textCommit } from "../src/lib/text.ts";
 import { rules, selectorsOf, withoutComments } from "./cssrules.ts";
 
 /**
@@ -204,5 +205,36 @@ describe("the composer box fits the type, not just the text", () => {
     expect(commit).toContain("const measured = { width, height };");
     expect(src).toContain("editing ? (pending.width ?? fit.width) : fit.width");
     expect(src).toContain("editing ? Math.max(pending.height ?? 0, fit.height) : fit.height");
+  });
+});
+
+/**
+ * **Picking a bigger step on a caption that exists grows its box** (23 Sep
+ * 2026). The step used to land alone, and closing the composer with the
+ * words unchanged sent nothing else — a 64px title in the 16px box it was
+ * measured at. `restyledTextBox` is what `restyle` rides its resize on.
+ */
+describe("restyling an existing caption", () => {
+  const words = "Acme step 2 · the review side — and status notes too: step 1 waits on step 2";
+  const actor = { id: "usr_a", name: "A" };
+  const born = textBox(words);
+  const node: Item = {
+    id: "itm_1", x: 0, y: 0, ...born, title: "t", description: "",
+    properties: { kind: TEXT_KIND }, versions: [], currentVersionId: "",
+    createdAt: "", createdBy: actor, updatedAt: "", updatedBy: actor,
+  };
+
+  it("grows to hold the words at the new step and face", () => {
+    for (const [style, face] of [["heading", "sans"], ["title", "serif"], ["display", "hand"]] as const) {
+      const next = restyledTextBox(node, born, words, style, face, null);
+      expect(next, `${style}/${face}`).not.toBeNull();
+      expect(next!.height).toBeGreaterThanOrEqual(textBox(words, style, face).height);
+      expect(next!.width).toBeGreaterThanOrEqual(textBox(words, style, face).width);
+    }
+  });
+
+  it("sends nothing when the box already holds them, and leaves paper to its square", () => {
+    expect(restyledTextBox(node, born, words, "body", "sans", null)).toBeNull();
+    expect(restyledTextBox(node, born, words, "display", "sans", "yellow")).toBeNull();
   });
 });

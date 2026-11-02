@@ -1,0 +1,21 @@
+{
+  "name": "@isocan/sandbox",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "A program that lives on the canvas as a file and runs fenced on the machine that typed the verb",
+  "exports": {
+    "./core": "./src/core.ts",
+    "./web": "./src/web.tsx",
+    "./cli": "./src/cli.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@isocan/core": "*"
+  },
+  "peerDependencies": {
+    "react": "^18.3.1"
+  }
+}

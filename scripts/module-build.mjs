@@ -86,7 +86,8 @@ const hasCli = existsSync(path.join(src, "src/cli.ts"));
 const hasGuide = existsSync(path.join(src, "agent-guide.md"));
 
 if (hasWeb) {
-  await esbuild.build({
+  const built = await esbuild.build({
+    metafile: true,
     entryPoints: { web: path.join(src, "src/web.tsx") },
     bundle: true,
     format: "esm",
@@ -100,6 +101,15 @@ if (hasWeb) {
     logLevel: "warning",
     minify: true,
   });
+  // esbuild emits CSS beside JavaScript, but a runtime import is not an HTML
+  // entrypoint: nobody else inserts its stylesheet. Load the entry's complete
+  // CSS bundle before registration, including styles used by lazy chunks.
+  const entry = Object.entries(built.metafile.outputs).find(([, facts]) => facts.entryPoint === path.relative(process.cwd(), path.join(src, "src/web.tsx")));
+  if (entry?.[1].cssBundle) {
+    const relative = "./" + path.relative(path.dirname(entry[0]), entry[1].cssBundle).split(path.sep).join("/");
+    const loadStyle = `await new Promise((resolve,reject)=>{const link=document.createElement("link");link.rel="stylesheet";link.href=new URL(${JSON.stringify(relative)},import.meta.url).href;link.onload=resolve;link.onerror=()=>reject(new Error("Module stylesheet could not load"));document.head.appendChild(link)});\n`;
+    await fs.appendFile(path.resolve(entry[0]), "\n" + loadStyle);
+  }
 }
 if (hasCli) {
   await esbuild.build({
@@ -112,25 +122,70 @@ if (hasCli) {
     platform: "node",
     target: "node20",
     outdir: path.join(out, "dist"),
+    // A `.md` import is its text. A module's CLI half carries its guide that
+    // way (`packages/cli/bin/workspace-loader.mjs` says why: a bundle has no
+    // stable `import.meta.url` to read a sibling file from), and the copy
+    // below keeps the guide on disk too, for `manifest.guide`.
+    loader: { ".md": "text" },
     plugins: [hostPlugin],
     logLevel: "warning",
   });
 }
 if (hasGuide) await fs.copyFile(path.join(src, "agent-guide.md"), path.join(out, "agent-guide.md"));
 
+/**
+ * **Assets travel with the module** (proposed: `assets`, 11 Sep 2026).
+ *
+ * This script used to copy exactly two things — `dist/` and the guide — so a
+ * runtime module's pictures and markdown never reached `~/.isocan/modules/`,
+ * though the daemon's `/modules/<slug>/*` would have served them. One missing
+ * copy between a module that ships content and one that cannot. `assets/` is
+ * copied verbatim and every file is listed in the manifest with its size, so
+ * `isocan module add` prints what lands on disk as well as what runs; a file
+ * over the bound is refused here, before anybody downloads it.
+ */
+const { ASSET_MAX_BYTES, ASSETS_MAX_BYTES } = await import(pathToFileURL(path.join(repo, "packages/core/src/moduleassets.ts")).href);
+const assets = [];
+if (existsSync(path.join(src, "assets"))) {
+  for (const rel of (await fs.readdir(path.join(src, "assets"), { recursive: true })).sort()) {
+    const from = path.join(src, "assets", rel);
+    if ((await fs.stat(from)).isDirectory()) continue;
+    const size = (await fs.stat(from)).size;
+    if (size > ASSET_MAX_BYTES) {
+      console.error(`assets/${rel} is ${size} bytes — over the ${ASSET_MAX_BYTES}-byte bound for one module asset`);
+      process.exit(2);
+    }
+    await fs.mkdir(path.dirname(path.join(out, "assets", rel)), { recursive: true });
+    await fs.copyFile(from, path.join(out, "assets", rel));
+    assets.push({ path: `assets/${rel.split(path.sep).join("/")}`, size });
+  }
+  const total = assets.reduce((n, a) => n + a.size, 0);
+  if (total > ASSETS_MAX_BYTES) {
+    console.error(`assets/ is ${total} bytes in all — over the ${ASSETS_MAX_BYTES}-byte bound for a module`);
+    process.exit(2);
+  }
+}
+
 const manifest = {
   name: pkg.name,
   version: pkg.version,
   ...(pkg.description ? { description: pkg.description } : {}),
   engines: pkg.isocan?.engines ?? ">=0.1.0",
+  ...(pkg.isocan?.proposed ? { proposed: pkg.isocan.proposed } : {}),
   ...(record.kinds ? { kinds: record.kinds } : {}),
   ...(record.propertyKeys ? { propertyKeys: record.propertyKeys } : {}),
+  ...(record.contributes ? { contributes: record.contributes } : {}),
   ...(hasWeb ? { web: "dist/web.js" } : {}),
   ...(hasCli ? { cli: "dist/cli.mjs" } : {}),
   ...(hasGuide ? { guide: "agent-guide.md" } : {}),
+  ...(assets.length ? { assets } : {}),
 };
 await fs.writeFile(path.join(out, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
 const files = (await fs.readdir(path.join(out, "dist"), { recursive: true })).filter((f) => !f.endsWith(path.sep) && f.includes("."));
-console.log(`built ${manifest.name} ${manifest.version} → ${out}`);
-console.log(`  ${files.length} file${files.length === 1 ? "" : "s"} in dist/${hasGuide ? ", agent-guide.md" : ""}, manifest.json`);
+if (files.length === 0) await fs.rm(path.join(out, "dist"), { recursive: true, force: true });
+console.log(`built ${manifest.name} ${manifest.version} → ${out}${!hasWeb && !hasCli ? " (data only — runs nothing)" : ""}`);
+console.log(
+  `  ${files.length} file${files.length === 1 ? "" : "s"} in dist/${hasGuide ? ", agent-guide.md" : ""}` +
+    `${assets.length ? `, ${assets.length} asset${assets.length === 1 ? "" : "s"}` : ""}, manifest.json`,
+);
 console.log(`  isocan module add ${path.relative(process.cwd(), out) || "."}`);

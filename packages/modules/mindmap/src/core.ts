@@ -16,6 +16,8 @@ export * from "./graph.ts";
 export const mindmap: CoreModule = {
   name: "@isocan/mindmap",
   propertyKeys: [MAP_PROP, MAP_PARENT_PROP],
+  itemReferenceProperties: [MAP_PARENT_PROP],
+  groupIdentityProperties: [MAP_PROP],
   contextPieces: (canvas) => {
     const maps = mapsOn(canvas);
     if (maps.length === 0) return [];

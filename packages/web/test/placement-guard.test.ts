@@ -22,7 +22,8 @@ describe("every pointer-placed gesture says chosen", () => {
   });
 
   it("a drop on the canvas — files let go at the pointer", () => {
-    expect(read("../src/components/CanvasViewport.tsx")).toContain("addFiles(canvasId, actor, files, { ...world, chosen: true })");
+    expect(read("../src/components/CanvasViewport.tsx")).toContain("groupDropPolicy(target, world)");
+    expect(read("../src/components/CanvasViewport.tsx")).toContain("addFiles(canvasId, actor, files, { ...world, chosen: true }, destination)");
   });
 
   it("a paste at a point, and not a paste beside the originals", () => {

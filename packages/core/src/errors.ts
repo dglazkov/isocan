@@ -1,4 +1,26 @@
+/**
+ * **The one word for a home-scope refusal**, wherever a refusal already
+ * carries a word.
+ *
+ * As the `reason` beside `not-admitted` at the door and on a
+ * `WS_NOT_ADMITTED` close, where `withdrawn`, `taken-down` and `ended` ride:
+ * the same kind of fact about the same kind of moment, and every client that
+ * branches on those is already looking in the right place. As the `code` at
+ * `/api/attest` and at the door's mint, where there is no admission to be
+ * refused and the refusal is the whole answer. And as the `OpValidationError`
+ * code at `actor.claim`, so a terminal prints the sentence and stops rather
+ * than reading `name-taken` and offering a pass.
+ *
+ * Short, for `TAKEN_DOWN`'s reason: a WebSocket close reason is capped at 123
+ * bytes and throws rather than truncating, so the word travels on the socket
+ * and the sentence is fetched by whoever renders it. Kept with the other
+ * wire errors so branching on it does not load refusal policy helpers.
+ */
+export const REFUSED = "refused";
+
 type OpErrorCode =
+  | "design-intent-conflict"
+  | "edit-conflict"
   | "unknown-item"
   | "unknown-version"
   | "unknown-thread"
@@ -26,16 +48,69 @@ type OpErrorCode =
    * already used the sequence number it tried to claim. Never retried by the
    * client: see `OplogFencedError`. */
   | "writer-fenced"
+  | "group-conflict"
+  | "migration-boundary"
+  /** The operator of this home refused that name (operator phase 6): a
+   * claim `as` an actor on the refusal list. Its own code rather than
+   * `name-taken`, because the remedy differs — a pass will not help, and the
+   * message is the home's sentence, with the address to write to. */
+  | "refused"
+  /** The acting agent has a ceiling on this canvas (critique phase 2's
+   * `note`: a critic's notes, replies and reactions) and this op is above
+   * it. Nothing was written; the remedy is the person who enrolled it. */
+  | "beyond-ceiling"
   | "bad-op";
+
+/**
+ * **A refusal the home answered.** Every refusal comes over the wire in one
+ * shape, `{ error, code?, reason? }`: the code is what a client branches on,
+ * the message is what a person reads. This is that body, thrown, with the
+ * HTTP status beside it.
+ *
+ * In core rather than beside the route surface that throws it
+ * (docs/projects/room/design.md, `routes`): the room module tells a refusal
+ * from a lost connection by it and imports nothing from `@isocan/api`, which
+ * re-exports this same class so every `instanceof` still agrees.
+ */
+export class ApiError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+    readonly code?: string,
+    /** Why, when the code alone does not say — `withdrawn` on a
+     * `not-admitted` from a badge that had been inside (see `WITHDRAWN`). */
+    readonly reason?: string,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
 
 export class OpValidationError extends Error {
   constructor(
     public readonly code: OpErrorCode,
     message: string,
+    /** Why, when the code alone does not say — which of `name-taken`'s
+     * refusals of `as` this is (`CLAIM_REFUSAL` in `claims.ts`). Sent beside
+     * the code, and read back as `ApiError.reason`. */
+    public readonly reason?: string,
   ) {
     super(message);
     this.name = "OpValidationError";
   }
+}
+
+/** Structural undo conflicts must not be discarded or fall through to older work. */
+export class GroupConflictError extends OpValidationError {
+  constructor(message: string) {
+    super("group-conflict", message);
+    this.name = "GroupConflictError";
+  }
+}
+
+/** Conversion refusals leave queued intent and every actor's history candidate intact. */
+export class MigrationBoundaryError extends OpValidationError {
+  constructor(message: string) { super("migration-boundary", message); this.name = "MigrationBoundaryError"; }
 }
 
 /**

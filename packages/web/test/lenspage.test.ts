@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-import { rules, withoutComments } from "./cssrules.ts";
+import { loadedWith, rules } from "./cssrules.ts";
 
 /**
  * **A lens is not a canvas, and this is the surface where that is easiest to
@@ -76,7 +76,7 @@ describe("the lens page", () => {
 });
 
 describe("the lens's stylesheet", () => {
-  const sheet = rules(withoutComments()).filter((r) => /\.lens-/.test(r.selector));
+  const sheet = rules(loadedWith("lens.css")).filter((r) => /\.lens-/.test(r.selector));
 
   it("exists, and takes its colours from tokens", () => {
     expect(sheet.length).toBeGreaterThan(0);
@@ -225,7 +225,7 @@ describe("the lens says who is live", () => {
 });
 
 describe("here and standing by do not look alike", () => {
-  const sheet = rules(withoutComments()).filter((r) => /lens-live-dot/.test(r.selector));
+  const sheet = rules(loadedWith("lens.css")).filter((r) => /lens-live-dot/.test(r.selector));
 
   it("has a rule for each state", () => {
     expect(sheet.some((r) => /\.standby/.test(r.selector))).toBe(true);

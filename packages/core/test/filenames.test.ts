@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  deckFilename,
+  docFilenameFrom,
   extensionOf,
   filenameFromTitle,
   filenamesInUse,
   renamedFilename,
+  titleSlug,
   uniqueFilename,
 } from "../src/index.ts";
 import { apply, nv, seedState } from "./helpers.ts";
@@ -29,6 +32,57 @@ describe("filenameFromTitle", () => {
 
   it("leaves an extensionless file extensionless", () => {
     expect(filenameFromTitle("Read me", "LICENSE")).toBe("read-me");
+  });
+});
+
+/**
+ * **One title, one filename, whichever door it leaves by** (cleanup DU-2,
+ * 27 Sep 2026).
+ *
+ * There were six spellings of this rule. The canonical one decomposed accents
+ * and never removed the marks, so a mark in the middle of a word became a
+ * hyphen ("Crème brûlée" → `cre-me-bru-le-e`; "Café" only passed above
+ * because its accent is the last letter). The ASCII copies — a placed Google
+ * Doc, a deck download, a wireframe screen — dropped the accented letter
+ * outright ("Café" → `caf`) and turned a Japanese title into the fallback.
+ * Each case below runs every former copy on the same title.
+ */
+describe("titleSlug, the one rule every filename is made by", () => {
+  const cases: [string, string][] = [
+    ["Crème brûlée", "creme-brulee"],
+    ["Café", "cafe"],
+    ["Ångström über naïve Øre", "angstrom-uber-naive-øre"],
+    ["東京 タワー", "東京-タワー"],
+    // A dakuten is a combining mark after NFKD; only Latin letters lose theirs,
+    // so デ stays デ rather than becoming テ.
+    ["データ", "データ"],
+    // Devanagari vowel signs are marks too, and a word without them is a
+    // different word.
+    ["हिन्दी", "हिन्दी"],
+    ["Ｆｕｌｌ ﬁle №1", "full-file-no1"],
+  ];
+
+  it.each(cases)("%s → %s", (title, stem) => {
+    expect(titleSlug(title)).toBe(stem);
+    expect(filenameFromTitle(title, "old.svg")).toBe(`${stem}.svg`);
+    expect(docFilenameFrom(title)).toBe(`${stem}.md`);
+    expect(deckFilename(title, "html")).toBe(`${stem}.html`);
+  });
+
+  it("answers nothing for a title with nothing in it, so each caller keeps its own fallback", () => {
+    expect(titleSlug("🎸 !!")).toBe("");
+    expect(docFilenameFrom("***")).toBe("document.md");
+    expect(deckFilename("  ", "pdf")).toBe("deck.pdf");
+  });
+
+  it("cuts at a length without leaving a hyphen or half a character behind", () => {
+    expect(titleSlug("Acme launch plan", { max: 12 })).toBe("acme-launch");
+    expect(titleSlug("𠀀𠀁𠀂", { max: 2 })).toBe("𠀀𠀁");
+  });
+
+  it("keeps to ASCII for a name whose grammar is ASCII, folding accents rather than dropping letters", () => {
+    expect(titleSlug("Crème brûlée", { ascii: true })).toBe("creme-brulee");
+    expect(titleSlug("東京", { ascii: true })).toBe("");
   });
 });
 

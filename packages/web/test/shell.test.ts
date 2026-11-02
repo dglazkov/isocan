@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeEach, describe, expect, it } from "vitest";
+import { MODEL_CACHE } from "@isocan/core/local-judge";
 
 /**
  * **The cached shell, driven** — phase 10's first clause.
@@ -39,6 +40,9 @@ interface Harness {
   ) => Promise<{ body: string; from: string } | "passed">;
   /** Every key in the cache, so a test can assert what is NOT in there. */
   cached: () => string[];
+  /** The cache NAMES that exist, and a way to make one — what activate's disowning reads. */
+  names: () => string[];
+  open: (name: string) => Promise<unknown>;
   /** Flip the network off. */
   offline: () => void;
   online: () => void;
@@ -152,6 +156,8 @@ function load(startOffline = false, shellHtml: string = SHELL_HTML): Harness {
     install: () => run("install"),
     activate: () => run("activate"),
     cached: () => [...cache.keys()],
+    names: () => [...keys],
+    open: (name: string) => cacheApi.open(name),
     offline: () => void (up = false),
     online: () => void (up = true),
     requests,
@@ -182,6 +188,22 @@ beforeEach(async () => {
 });
 
 describe("what the shell must never touch", () => {
+  it("passes the local judge's model straight through, and never deletes the judge's cache", async () => {
+    // local-judge phase 0: 165 MB the judge's Worker keeps in Cache Storage
+    // under a name of its own. Cached by "try" it would be held twice; deleted
+    // by activate's disowning it would be a 165 MB download again.
+    const before = sw.cached().sort();
+    expect(await sw.fetch(`${origin}/models/embeddinggemma-2-text-270m`)).toBe("passed");
+    expect(sw.cached().sort()).toEqual(before);
+    const next = load();
+    await next.open(MODEL_CACHE); // core's name, so sw.js's prefix is held to it
+    await next.open("isocan-shell-v1");
+    await next.install();
+    await next.activate();
+    expect(next.names()).toContain(MODEL_CACHE);
+    expect(next.names()).not.toContain("isocan-shell-v1");
+  });
+
   it("passes every /api/ request straight through, uncached", async () => {
     const routes = [
       "/api/ops",

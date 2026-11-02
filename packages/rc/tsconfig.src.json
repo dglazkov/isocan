@@ -1,0 +1,13 @@
+// The room module's sources, typechecked the way a host with no Node sees
+// them (docs/projects/room/phases.md, phase 1's proof): no `@types/node`, and
+// the globals a Worker has — fetch, AbortSignal, URL, timers — rather than a
+// terminal's. `tsconfig.json` beside this carries Node's types for the tests,
+// which is why a bare `process` under `src` would pass there and fails here.
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": [],
+    "lib": ["ES2023", "WebWorker"]
+  },
+  "include": ["src"]
+}

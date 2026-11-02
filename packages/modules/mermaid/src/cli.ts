@@ -1,5 +1,4 @@
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import guideText from "../agent-guide.md";
 import type { CliModule } from "@isocan/cli/modulehost";
 import { mermaidModule } from "./core.ts";
 
@@ -14,7 +13,7 @@ import { mermaidModule } from "./core.ts";
 export const mermaidCli: CliModule = {
   core: mermaidModule,
   register: () => {},
-  guide: readFileSync(fileURLToPath(new URL("../agent-guide.md", import.meta.url)), "utf8"),
+  guide: guideText,
 };
 
 export default mermaidCli;

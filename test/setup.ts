@@ -1,3 +1,7 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { isolateModelEnv } from "./model-env.ts";
 import { monitorEventLoopDelay } from "node:perf_hooks";
 import { Agent, fetch as undiciFetch } from "undici";
 import { afterAll, afterEach, beforeEach } from "vitest";
@@ -25,6 +29,19 @@ import { afterAll, afterEach, beforeEach } from "vitest";
 process.env.ISOCAN_DAEMON_GUARD_PID = String(process.pid);
 
 /**
+ * **No test opens a browser window.** `isocan open`, `isocan setup` and the
+ * operator's proof all hand an address to the machine's browser, and the
+ * operator verbs that landed on 12–13 September put real windows on a real
+ * screen during a test run. The CLI children a test spawns inherit this
+ * through `{ ...process.env }`, so the guard holds for the binary as well as
+ * for anything in-process — and `openInBrowser` still prints the address,
+ * which is all a test ever wanted from it.
+ *
+ * Set rather than forced: a test that is ABOUT the opening can override it.
+ */
+process.env.ISOCAN_BROWSER ??= "none";
+
+/**
  * A daemon that knows a home is a REPLICA — it serves ops to CLIs and stops
  * serving pages to people (`resolveHomeUrl`, phase 6). That is read from the
  * environment, so a developer who has pointed their own machine at a home
@@ -50,6 +67,23 @@ delete process.env.ISOCAN_HOME_URL;
  * else — which that file also does.
  */
 process.env.ISOCAN_DEFAULT_HOME = "";
+
+/**
+ * **No test spends the developer's own model keys** (keys phase 1). A CLI
+ * code path that resolves a key with no home of its own reads
+ * `~/.isocan/keys.json` — the person's real one, in an in-process test — so
+ * a developer who had run `isocan keys set typesafe` would watch the suite
+ * call the real Jev. `ISOCAN_KEYS_HOME` moves that default to an empty
+ * directory for this worker and every CLI it spawns. Environment keys win
+ * over that file, so clear those settings too: an ambient Gemini key made
+ * voice-model's two "no key" cases reach their provider stubs instead of
+ * refusing locally. A test about keys supplies its own synthetic settings
+ * after setup, including when it is testing environment precedence.
+ */
+isolateModelEnv(process.env);
+const noKeys = mkdtempSync(path.join(os.tmpdir(), "isocan-keys-none-"));
+process.env.ISOCAN_KEYS_HOME = noKeys;
+afterAll(() => rmSync(noKeys, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
 
 /**
  * And this worker dies when vitest does. Test files run in forked children, and
@@ -419,6 +453,9 @@ async function describeListener(url: string): Promise<string> {
  */
 const CONNECT_BUDGET_MS = 3000;
 const CONNECT_ATTEMPT_MS = 1200;
+// undici 8 sets the type of service best-effort itself, so a socket the
+// kernel has already reset fails the request on its real state rather than
+// throwing EINVAL from inside the write (lessons.md #109).
 const connectBounded = new Agent({ connect: { timeout: CONNECT_ATTEMPT_MS } });
 const realFetch: typeof fetch = (input, init) =>
   undiciFetch(input as Parameters<typeof undiciFetch>[0], { ...(init as Parameters<typeof undiciFetch>[1]), dispatcher: connectBounded }) as unknown as Promise<Response>;
@@ -434,7 +471,11 @@ globalThis.fetch = async function retryingFetch(input, init) {
         // written. The same guarantee `syscall === "connect"` gives below.
         cause?.code === "UND_ERR_CONNECT_TIMEOUT" ||
         (cause?.syscall === "connect" &&
-          (cause.code === "ETIMEDOUT" || cause.code === "ECONNREFUSED" || cause.code === "ECONNRESET"));
+          (cause.code === "ETIMEDOUT" || cause.code === "ECONNREFUSED" || cause.code === "ECONNRESET")) ||
+        // macOS 27 can report a full queue's connect as made and reset it
+        // before the first write; EPIPE is the kernel refusing the bytes, so
+        // nothing reached the server (packages/api/src/client.ts says why).
+        (cause?.syscall === "write" && cause.code === "EPIPE");
       /**
        * **When it gives up, it says what it gave up ON.**
        *

@@ -39,16 +39,72 @@ interface PersonaGoal {
   measuredBy: string;
   /** The unit, when there is one — "ms", "%", left off for a plain count. */
   unit?: string;
+  /**
+   * **When the number is a debt rather than a size, the command that prints
+   * what it is a debt against.**
+   *
+   * One goal needs this and the reason generalises. "Bytes past the last size
+   * somebody agreed to" is bounded `at most 0` by construction — it measures
+   * the OVERSHOOT of a ceiling, so its bound cannot move and a report of it
+   * cannot say which ceiling. Two nights reading 1,200 are then the same
+   * sentence about two different worlds, and `scripts/reviews.mjs` let an
+   * answer given in one cover the other.
+   *
+   * A command, not a number: the ceiling has one home (`bundle-ceiling.mjs`)
+   * and this quotes it. Unlike `measured by` it is not an instrument and has no
+   * selftest — there is nothing to break in a number somebody wrote down. What
+   * `test/bundle-budget.test.ts` holds instead is that it prints the same
+   * number the gate enforces.
+   */
+  against?: string;
   /** What it measured when the baseline was taken, and when. */
   baseline?: { value: number; at: string; commit?: string };
 }
 
+/**
+ * **"When nothing else is happening"** — the idle trigger of
+ * `docs/research/2026-09-07-small-personas.md` (D2), named with its scope
+ * from the start because there are two idlenesses and conflating them would
+ * start a heavy run while somebody is mid-sprint on an unrelated canvas.
+ *
+ * `machine` is what a repo-wide persona wants: this computer has not been
+ * busy for `minutes`. `canvas` is "nobody has touched this canvas", which
+ * presence already answers — parsed here so a file can say it, and refused by
+ * the runner until something runs a persona against a canvas.
+ */
+interface PersonaIdle {
+  scope: "machine" | "canvas";
+  minutes: number;
+}
+
 /** Time, or an event. `docs/projects/personas/design.md` argues for starting
- *  with time: it is built, and its failure mode is boring. */
+ *  with time: it is built, and its failure mode is boring.
+ *
+ *  `idle` rides on a schedule rather than replacing it: the cron is what the
+ *  nightly fires and `scripts/cadence.mjs` reconciles, and the idle clause is
+ *  the second, cheaper door — `persona-run.mjs --idle` — for a machine that is
+ *  on and not busy. */
 type PersonaTrigger =
-  | { kind: "schedule"; cron: string }
+  | { kind: "schedule"; cron: string; idle?: PersonaIdle }
   | { kind: "push"; to: string; paths?: string[] }
   | { kind: "manual" };
+
+/**
+ * **What a persona may spend on one run** — D3 of the small-personas note:
+ * "cheap" as a number rather than an adjective.
+ *
+ * The shape is `rcLimits`' — named per-agent limits, each optional, each a
+ * plain number — rather than a second vocabulary for the same idea. The
+ * runner hands both to the harness as hard caps (`--max-budget-usd`,
+ * `--max-turns`), writes what the run actually cost beside them, and turns a
+ * run that went over into a finding. **A persona with no budget is never
+ * handed to a model by machinery at all**, which is what keeps the nine
+ * expensive personas where they were: run by a person, on purpose.
+ */
+interface PersonaBudget {
+  usdPerRun?: number;
+  turnsPerRun?: number;
+}
 
 export interface Persona {
   /** The filename's stem, and the name every surface calls it by. */
@@ -62,8 +118,25 @@ export interface Persona {
   tools: string[];
   goals: PersonaGoal[];
   trigger: PersonaTrigger;
+  /** What one run may spend. Absent means machinery never runs a model for it. */
+  budget?: PersonaBudget;
+  /**
+   * **Who decides what this persona found** — the persona a small one hands
+   * off to (#197's "cheap finds, expensive decides"). A name, not a model: the
+   * expensive tier is a role with a lens, and naming the role is what lets
+   * `isocan persona runs <that one>` show what was handed to it.
+   */
+  escalate?: string;
   /** Where its runs are filed. */
   runs?: string;
+  /**
+   * The vendor's `color` (Claude Code tints a subagent with it), and a
+   * critic's pin colour. It was in the known-keys list and read into nothing,
+   * so a persona's colour was dropped while the test beside this said a key
+   * this build did not understand must never be — found when critics needed
+   * theirs (critique phase 0, 14 Oct 2026).
+   */
+  color?: string;
   /** Everything after the front matter — the lens itself, in prose, which is
    *  the part a model actually reads. Kept verbatim. */
   body: string;
@@ -162,6 +235,7 @@ function readGoals(lines: string[]): PersonaGoal[] {
         bound: parsed.bound,
         measuredBy,
         ...(parsed.unit ? { unit: parsed.unit } : {}),
+        ...(current["against"] ? { against: current["against"]! } : {}),
         ...(current["baseline"]
           ? (() => {
               const [value, at, commit] = current["baseline"]!.split(/\s*,\s*/);
@@ -192,6 +266,36 @@ function readGoals(lines: string[]): PersonaGoal[] {
   return goals;
 }
 
+/**
+ * `idle: machine 15m` / `idle: canvas 20m`. The scope is REQUIRED — a bare
+ * `idle: 20m` is dropped rather than guessed, because guessing is exactly the
+ * conflation D2 exists to prevent.
+ */
+function readIdle(text: string | undefined): PersonaIdle | null {
+  const m = /^(machine|canvas)\s+([0-9]+)\s*m(?:in(?:utes?)?)?$/.exec((text ?? "").trim());
+  if (!m) return null;
+  return { scope: m[1] as PersonaIdle["scope"], minutes: Number(m[2]) };
+}
+
+/**
+ * `budget:` with `usd per run:` and `turns per run:` beneath it. A value that
+ * is not a positive number is dropped, and a budget with nothing left in it
+ * is no budget — so a typo reads as "machinery will not run this", never as
+ * "unlimited".
+ */
+function readBudget(lines: string[] | undefined): PersonaBudget | null {
+  if (!lines || lines.length === 0) return null;
+  const out: PersonaBudget = {};
+  for (const line of lines) {
+    const m = /^([^:]+):\s*\$?\s*([0-9]+(?:\.[0-9]+)?)\s*$/.exec(line);
+    if (!m || !(Number(m[2]) > 0)) continue;
+    const key = m[1]!.trim();
+    if (key === "usd per run") out.usdPerRun = Number(m[2]);
+    if (key === "turns per run") out.turnsPerRun = Math.floor(Number(m[2]));
+  }
+  return out.usdPerRun !== undefined || out.turnsPerRun !== undefined ? out : null;
+}
+
 function readTrigger(lines: string[] | undefined): PersonaTrigger {
   if (!lines || lines.length === 0) return { kind: "manual" };
   const kv = new Map<string, string>();
@@ -200,7 +304,10 @@ function readTrigger(lines: string[] | undefined): PersonaTrigger {
     if (m) kv.set(m[1]!.trim(), unquote(m[2]!));
   }
   const cron = kv.get("cron") ?? kv.get("schedule");
-  if (cron) return { kind: "schedule", cron };
+  if (cron) {
+    const idle = readIdle(kv.get("idle"));
+    return { kind: "schedule", cron, ...(idle ? { idle } : {}) };
+  }
   if (kv.get("on") === "push") {
     const paths = kv.get("paths");
     return {
@@ -223,11 +330,16 @@ export function parsePersona(text: string, filename: string): Persona | null {
   const front = readFront(split.front);
   const one = (key: string) => front.get(key)?.[0];
   const stem = filename.replace(/\.md$/i, "").split("/").pop() ?? filename;
-  const known = new Set(["name", "description", "model", "effort", "tools", "goal", "goals", "trigger", "runs", "color"]);
+  const known = new Set([
+    "name", "description", "model", "effort", "tools", "goal", "goals", "trigger", "runs", "color",
+    "budget", "escalate",
+  ]);
   const extra: Record<string, string> = {};
   for (const [key, value] of front) {
     if (!known.has(key)) extra[key] = value.join("\n");
   }
+  const budget = readBudget(front.get("budget"));
+  const escalate = one("escalate")?.replace(/^to\s+/, "").trim();
   return {
     name: one("name") ?? stem,
     description: one("description") ?? "",
@@ -236,7 +348,10 @@ export function parsePersona(text: string, filename: string): Persona | null {
     tools: (one("tools") ?? "").split(/\s*,\s*/).map((t) => t.trim()).filter(Boolean),
     goals: readGoals(front.get("goal") ?? front.get("goals") ?? []),
     trigger: readTrigger(front.get("trigger")),
+    ...(budget ? { budget } : {}),
+    ...(escalate ? { escalate } : {}),
     ...(one("runs") !== undefined ? { runs: one("runs")! } : {}),
+    ...(one("color") !== undefined ? { color: unquote(one("color")!) } : {}),
     body: split.body,
     extra,
   };
@@ -249,7 +364,12 @@ export function parsePersona(text: string, filename: string): Persona | null {
  */
 export function goalLine(goal: PersonaGoal): string {
   const unit = goal.unit ?? "";
-  const target = `${goal.bound.kind} ${goal.bound.value}${unit}`;
+  // A bound of 0 on a DEBT is a bound against a number that moves, and a line
+  // that prints the 0 alone reads as an absolute. Say what it is 0 past —
+  // the command, because the number is not knowable from here.
+  const target =
+    `${goal.bound.kind} ${goal.bound.value}${unit}` +
+    (goal.against ? ` of what \`${goal.against}\` prints` : "");
   if (!goal.baseline) return `${goal.name} — ${target}, never measured`;
   const met = goal.bound.kind === "at most"
     ? goal.baseline.value <= goal.bound.value
@@ -278,7 +398,26 @@ export function personaWarnings(persona: Persona): string[] {
   if (persona.trigger.kind === "manual" && persona.goals.length > 0) {
     out.push("no trigger — somebody has to remember to run it");
   }
+  if (persona.escalate && !persona.budget) {
+    out.push(
+      `hands off to ${persona.escalate} but declares no budget — ` +
+        "machinery never runs a model without one, so there is no small pass to hand off from",
+    );
+  }
   return out;
+}
+
+/**
+ * **Who a run page handed its finding to**, read off the page itself — the
+ * same reason `runFindings` reads the page rather than a second file: a
+ * record kept beside the thing it describes cannot drift from it.
+ *
+ * `persona-run.mjs` writes the line; `isocan persona runs <name>` reads it to
+ * show a persona what OTHER personas handed it, which is the expensive tier's
+ * only inbox. Null when the page escalated nothing.
+ */
+export function escalatedTo(page: string): string | null {
+  return /^\*\*Escalated to `([a-z0-9-]+)`/m.exec(page)?.[1] ?? null;
 }
 
 /** Newest baseline wins; used when a run records one. */

@@ -23,6 +23,7 @@ export function EmojiPicker({
   onPick,
   onClose,
   worn,
+  className,
 }: {
   /**
    * The `+` this hangs off. Read for its SCREEN rectangle, because the panel
@@ -34,6 +35,9 @@ export function EmojiPicker({
   /** Marks this item already wears — shown pressed, because picking one again
    * takes yours back and the picker should say so before you click. */
   worn: readonly string[];
+  /** Beside `react-picker` — for a doorway that needs a different layer
+   *  (the agent pointer's, opened from over the covers). */
+  className?: string;
 }) {
   const [query, setQuery] = useState("");
   const [group, setGroup] = useState(0);
@@ -123,7 +127,7 @@ export function EmojiPicker({
 
   return createPortal(
     <div
-      className="react-picker"
+      className={className ? `react-picker ${className}` : "react-picker"}
       role="menu"
       /**
        * Portalled to the body to escape overflow and transforms — this says it

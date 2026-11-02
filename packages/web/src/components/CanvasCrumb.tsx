@@ -1,7 +1,8 @@
-import { Suspense, lazy, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import type { Actor } from "@isocan/core";
 
 import { useDismissOnOutside } from "../lib/dismiss.ts";
+import { FloatingHandles, useFloatingBox } from "../lib/floatingbox.tsx";
 import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { Presence } from "./Presence.tsx";
@@ -14,6 +15,8 @@ const IdentityMenu = lazy(() => import("./IdentityMenu.tsx").then((m) => ({ defa
  * never open, and it was riding in the entry chunk on every visit.
  */
 const ShareDialog = lazy(() => import("./ShareDialog.tsx").then((m) => ({ default: m.ShareDialog })));
+// Who just showed up — lazy, so a first visit downloads none of it (`lib/arrivals.ts`).
+const ArrivalToasts = lazy(() => import("./ArrivalToasts.tsx"));
 import { ShareGlyph } from "./Glyphs.tsx";
 import { useCanEdit } from "../lib/capability.ts";
 
@@ -41,10 +44,16 @@ import { useCanEdit } from "../lib/capability.ts";
  * which canvas you are in and who is in it with you.
  */
 export function CanvasTitle({ actor }: { actor: Actor }) {
-  const canvas = useCanvasStore((s) => s.project);
+  const canvas = useCanvasStore((s) => s.record);
   const canEdit = useCanEdit();
   const [editing, setEditing] = useState(false);
   const nameRef = useDismissOnOutside<HTMLDivElement>(editing, () => setEditing(false));
+  const float = useFloatingBox<HTMLDivElement>({ minWidth: 240, minHeight: 140 });
+  const resetFloat = float.reset;
+
+  useEffect(() => {
+    if (!editing) resetFloat();
+  }, [editing, resetFloat]);
 
   return (
     <div className="canvas-name" ref={nameRef}>
@@ -78,7 +87,8 @@ export function CanvasTitle({ actor }: { actor: Actor }) {
           Switching now lives in the `···` menu, where it carries a word and
           ⌘O, and the bar is back to one glyph. See `menuentries.tsx`. */}
       {editing && canvas && (
-        <div className="canvas-popover">
+        <div ref={float.ref} className="canvas-popover" style={float.style}>
+          <FloatingHandles box={float} />
           <CanvasEditor
             title={canvas.title}
             description={canvas.description}
@@ -111,22 +121,34 @@ export function CanvasPresence({
   actor: Actor;
   onIdentity: (actor: Actor | null) => void;
 }) {
-  const canvas = useCanvasStore((s) => s.project);
+  const canvas = useCanvasStore((s) => s.record);
   const connection = useCanvasStore((s) => s.connection);
   const identityOpen = useUiStore((s) => s.identityOpen);
   const identityRef = useDismissOnOutside<HTMLDivElement>(identityOpen, () =>
     useUiStore.getState().setIdentityOpen(false),
   );
+  const float = useFloatingBox<HTMLDivElement>({ minWidth: 240, minHeight: 160 });
+  const resetFloat = float.reset;
+
+  useEffect(() => {
+    if (!identityOpen) resetFloat();
+  }, [identityOpen, resetFloat]);
+
+  const connectionIssue = connection !== "live" && connection !== "connecting";
 
   return (
     <>
-      <span className={`conn ${connection}`}>{connection}</span>
+      {connectionIssue && <span className={`conn ${connection}`}>{connection}</span>}
       {/* The pile is where you see everyone else; your own face in it is the
           handle for being someone else. */}
       <div className="identity-anchor" ref={identityRef}>
         <Presence actor={actor} />
+        <Suspense fallback={null}>
+          <ArrivalToasts actor={actor} />
+        </Suspense>
         {identityOpen && (
-          <div className="identity-popover">
+          <div ref={float.ref} className="identity-popover" style={float.style}>
+            <FloatingHandles box={float} />
             <Suspense fallback={null}>
             <IdentityMenu
               actor={actor}
@@ -149,11 +171,18 @@ export function CanvasPresence({
  * that lives in three places is one button or it is three that drift.
  */
 export function ShareButton({ actor }: { actor: Actor }) {
-  const canvas = useCanvasStore((s) => s.project);
+  const canvas = useCanvasStore((s) => s.record);
   const shareOpen = useUiStore((s) => s.shareOpen);
   const shareRef = useDismissOnOutside<HTMLDivElement>(shareOpen, () =>
     useUiStore.getState().setShareOpen(false),
   );
+  const float = useFloatingBox<HTMLDivElement>({ minWidth: 320, minHeight: 200 });
+  const resetFloat = float.reset;
+
+  useEffect(() => {
+    if (!shareOpen) resetFloat();
+  }, [shareOpen, resetFloat]);
+
   return (
     <div className="identity-anchor" ref={shareRef}>
       <button
@@ -166,7 +195,8 @@ export function ShareButton({ actor }: { actor: Actor }) {
         Share
       </button>
       {shareOpen && canvas && (
-        <div className="identity-popover share-popover">
+        <div ref={float.ref} className="identity-popover share-popover" style={float.style}>
+          <FloatingHandles box={float} />
           <Suspense fallback={null}>
             <ShareDialog actor={actor} onClose={() => useUiStore.getState().setShareOpen(false)} />
           </Suspense>

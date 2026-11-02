@@ -1,0 +1,124 @@
+import { Suspense, useEffect, useMemo, useRef } from "react";
+import { JUDGMENT_ROUTE, type Actor, type DialogHost } from "@isocan/core";
+import { TEXT_ROUTE } from "@isocan/core/text";
+import { moduleDialog } from "../modules.ts";
+import { flashNotice, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
+import { fetchBlobText } from "../lib/blobtext.ts";
+import { request } from "../lib/api.ts";
+import { useUiStore } from "../stores/uiStore.ts";
+import { useWebHost } from "../lib/modulehost.ts";
+import { useRcParked } from "../lib/answerable.ts";
+import { canEditNow } from "../lib/capability.ts";
+import { Modal } from "./Modal.tsx";
+
+/**
+ * **A module's popup** (proposed: `dialogs`, 11 Sep 2026 —
+ * `docs/projects/design-competition/module-gaps.md` §3).
+ *
+ * The eighth slot, and the first one a person OPENS rather than finds on the
+ * screen. Overlays are edges and pages are cover routes; neither is a thing
+ * that comes up over where you are because you asked — a picker. So the shell
+ * owns the box and the module fills the inside:
+ *
+ * - **One at a time**, by construction: the store holds one `{ id, args }`.
+ * - **The app's own `Modal`**, so Escape, the backdrop and the ✕ close it the
+ *   way they close Help — "this closes" is a property of being a modal, not a
+ *   thing a module gets an opinion about.
+ * - **Focus goes in and comes back**: the first control in the dialog takes
+ *   focus when it opens, Tab stays inside it, and whatever had focus before
+ *   gets it back when it closes. A keyboard user who opened it from ⌘K is
+ *   returned to where they were, not to the top of the page.
+ *
+ * It opens only from a door a person used — a command they typed
+ * (`localcommands.ts`) or a palette entry they chose (`actions.ts`) — never
+ * on load and never from an op arriving. That is the whole of its risk
+ * budget, and why a module cannot open one itself: `DialogFacts` hands it a
+ * way to CLOSE, not to open.
+ */
+/**
+ * **Ask the home's text model** (`TEXT_ROUTE`) — the one place the web posts
+ * there. The dialog host's `generate` is this, and *Vary the copy…*
+ * (`lib/varycopy.ts`) imports it from here rather than naming the route
+ * itself: a second importer of `@isocan/core/text` would carve that file into
+ * a chunk of its own that the entry must name (copy-edit phase 2, measured).
+ */
+export const postText = (words: unknown): Promise<unknown> => request("POST", TEXT_ROUTE, words);
+
+export function ModuleDialogs({ canvasId, actor }: { canvasId: string; actor: Actor }) {
+  const open = useUiStore((s) => s.moduleDialog);
+  const close = useUiStore((s) => s.closeModuleDialog);
+  const selection = useUiStore((s) => s.selectedItemIds);
+  // A runtime module's dialog may arrive after the command that names it.
+  useUiStore((s) => s.modulesGeneration);
+  const canvas = useCanvasStore((s) => s.canvas);
+  const groupMode = useCanvasStore((s) => s.record?.groupMode ?? "legacy");
+  const rcParked = useRcParked(canvasId);
+  const base = useWebHost(canvasId, actor);
+  /* A dialog that composes reads the canvas it writes to and asks the home's
+     judge (wireframes phase 5) and its text model (copy-edit 0.5) — here, in the lazy chunk, so a first visit
+     pays for none of it. `getCanvas` reads the store at call time: the
+     `canvas` prop is the one the dialog opened on. */
+  const host = useMemo<DialogHost>(() => ({
+    ...base,
+    close,
+    readText: (hash) => fetchBlobText(canvasId, hash),
+    getCanvas: () => useCanvasStore.getState().canvas!,
+    judge: (question) => request("POST", JUDGMENT_ROUTE, question),
+    generate: postText,
+    notice: (text, problem) => (problem ? setNotice(text) : flashNotice(text, 6000)),
+  }), [base, close, canvasId]);
+  const bodyRef = useRef<HTMLDivElement>(null);
+
+  const dialog = open ? moduleDialog(open.id) : null;
+
+  useEffect(() => {
+    if (!dialog) return;
+    const before = document.activeElement as HTMLElement | null;
+    const focusables = () =>
+      [...(bodyRef.current?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])',
+      ) ?? [])];
+    focusables()[0]?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      const all = focusables();
+      if (all.length === 0) return;
+      const first = all[0]!;
+      const last = all[all.length - 1]!;
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      before?.focus?.();
+    };
+  }, [dialog]);
+
+  if (!open || !canvas) return null;
+  if (!dialog) return null;
+  const Body = dialog.component;
+  return (
+    <Modal label={dialog.title} title={dialog.title} onClose={close} {...(dialog.wide ? { wide: true } : {})}>
+      <div ref={bodyRef} className="module-dialog">
+        <Suspense fallback={<p>Loading…</p>}>
+        <Body
+          canvasId={canvasId}
+          groupMode={groupMode}
+          canvas={canvas}
+          selection={selection}
+          args={open.args}
+          rcParked={rcParked}
+          canEdit={canEditNow()}
+          host={host}
+        />
+        </Suspense>
+      </div>
+    </Modal>
+  );
+}

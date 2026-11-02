@@ -1,5 +1,5 @@
 import type { Item } from "./model.ts";
-import { canvasUrl, parseCanvasAddress } from "./address.ts";
+import { CANVAS_PATH_PREFIX, canvasUrl, parseCanvasAddress } from "./address.ts";
 import { BROWSER_MIME, parseUriList } from "./browseritem.ts";
 
 /**
@@ -39,6 +39,45 @@ export function isCanvasItem(item: Item): boolean {
 export function canvasIdOf(item: Item): string | null {
   if (!isCanvasItem(item)) return null;
   return item.properties[CANVAS_PROP] ?? null;
+}
+
+/** Automatic readers inspect declared addresses before choosing a MIME renderer:
+ * changing kind cannot turn a personal canvas into an unguarded site or image.
+ * Pass the raw canvas property, not canvasIdOf's kind-dependent result. This
+ * extracts a target only; its authoritative classification still precedes IO. */
+export function automaticCanvasTarget(declaredCanvasId: string | null, source: string | null):
+  | { kind: "none" }
+  | { kind: "canvas"; canvasId: string; source: string | null }
+  | { kind: "unavailable"; refused: string } {
+  const unavailable = { kind: "unavailable" as const, refused: "This card's declared canvas address is incomplete or inconsistent." };
+  const validId = (id: string) => /^[A-Za-z0-9_-]+$/.test(id);
+  if (declaredCanvasId !== null && !validId(declaredCanvasId)) return unavailable;
+  let address: ReturnType<typeof parseCanvasAddress> = null;
+  if (source?.trim()) {
+    try { address = parseCanvasAddress(source); } catch { return unavailable; }
+    if (!address) {
+      // An item, deck, workbench or malformed subpath still names a canvas.
+      // Use the shared root parser; its setup-specific exact-path semantics
+      // remain unchanged. Relative canvas routes have no asserted authority.
+      let url: URL | undefined;
+      try {
+        const raw = source.trim();
+        url = new URL(raw.startsWith("/") || /^[a-z][a-z0-9+.-]*:/i.test(raw) ? raw : `https://${raw}`, "https://invalid.invalid");
+      } catch { /* A non-canvas URL stays the ordinary renderer's concern. */ }
+      if (url?.pathname.split("/")[1] === CANVAS_PATH_PREFIX.slice(1)) {
+        if (source.trim().startsWith("/") || !["http:", "https:"].includes(url.protocol)) return unavailable;
+        try { address = parseCanvasAddress(`${url.origin}${url.pathname.split("/").slice(0, 3).join("/")}`); }
+        catch { return unavailable; }
+        if (!address) return unavailable;
+      }
+    }
+    if (!address && declaredCanvasId !== null) return unavailable;
+  }
+  if (address) {
+    if (!validId(address.canvasId) || (declaredCanvasId !== null && declaredCanvasId !== address.canvasId)) return unavailable;
+    return { kind: "canvas", canvasId: address.canvasId, source: canvasUrl(address.origin, address.canvasId) };
+  }
+  return declaredCanvasId === null ? { kind: "none" } : { kind: "canvas", canvasId: declaredCanvasId, source: null };
 }
 
 /** What the ↗ opens, on any item that has one. */

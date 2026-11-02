@@ -19,6 +19,7 @@ import {
   underRowSpellsItOut,
   underSlotFor,
 } from "../src/lib/chrome.ts";
+import { loadedWith, sheets } from "./cssrules.ts";
 
 const actor = { id: "usr_a", name: "A" };
 const stamp = { createdAt: "", createdBy: actor, updatedAt: "", updatedBy: actor };
@@ -371,10 +372,10 @@ describe("the strip under an item lets its one control be clicked", () => {
     expect(block(".item-under")).toMatch(/pointer-events:\s*none/);
   });
 
-  it("gives the button its events back", () => {
+  it("gives the focus strip buttons their events back", () => {
     expect(
-      block(".fullscreen-btn"),
-      "inside a pointer-events:none row a button is decoration — it needs pointer-events: auto",
+      block(".focus-strip-btn"),
+      "a focus-strip button needs pointer-events: auto",
     ).toMatch(/pointer-events:\s*auto/);
   });
 
@@ -386,17 +387,15 @@ describe("the strip under an item lets its one control be clicked", () => {
 });
 
 /**
- * **The full-screen control always has an icon, and spells itself out when roomy.**
+ * **The top-left focus strip always carries icons, and spells labels out when roomy.**
  *
- * The button always carries the `[ ]` icon (`EXPAND`). When there is plenty of
- * room (`>= 210px`), it also spells out "Full screen" beside the icon. When
- * space is tight, it collapses to just the icon so the whole row still fits
- * without crowding marks or size chips.
- *
- * It keeps its name on hover via `data-tip` and for screen readers via
+ * Each button in `.item-focus-strip` carries its icon (`EXPAND`, `EDIT_ICON`,
+ * `ENTER_ICON` / `LEAVE_ICON`). When there is room (`spellItOut`), it spells
+ * out `View`, `Edit`, `Enter` / `Leave` beside the icon. When space is tight,
+ * it collapses to `.compact` (icon only) and keeps its name via `data-tip` and
  * `aria-label`.
  */
-describe("the full-screen control has an icon and adapts its label to room", () => {
+describe("the top-left focus strip has icons and adapts labels to room", () => {
   const itemView = readFileSync(
     fileURLToPath(new URL("../src/components/ItemView.tsx", import.meta.url)),
     "utf8",
@@ -407,34 +406,26 @@ describe("the full-screen control has an icon and adapts its label to room", () 
   );
 
   it("always carries the icon and conditionally spells the label", () => {
-    const button = itemView.match(/<button\s+className=\{`fullscreen-btn\$\{spellItOut \? "" : " compact"\}`\}[\s\S]*?<\/button>/);
-    expect(button, "no fullscreen button").toBeTruthy();
-    expect(button![0]).toContain("{EXPAND}");
-    expect(button![0]).toContain('{spellItOut && <span>Full screen</span>}');
+    const strip = itemView.match(/<div\s+className="item-focus-strip item-focus-strip-nw"[\s\S]*?\n {8}<\/div>/);
+    expect(strip, "no item-focus-strip").toBeTruthy();
+    expect(strip![0]).toContain("{EXPAND}");
+    expect(strip![0]).toContain("{spellItOut && <span>View</span>}");
+    expect(strip![0]).toContain("{EDIT_ICON}");
+    expect(strip![0]).toContain("{spellItOut && <span>Edit</span>}");
+    expect(strip![0]).toContain("{entered ? LEAVE_ICON : ENTER_ICON}");
   });
 
   it("brackets the threshold, so it can be retuned but not lost or drifted", () => {
-    // Measured: 211px for the whole line with the labeled button (22 + 6 +
-    // 91 + 6 + 86). Below that the label overlaps its neighbours; far above
-    // it a roomy item goes to the glyph for no reason. The first version of
-    // this test froze point values instead, which said nothing when the
-    // button grew 14px under an unchanged threshold (lesson #11: bracket a
-    // tuning constant, never freeze it).
     expect(FULL_LABEL_ROOM).toBeGreaterThanOrEqual(211);
     expect(FULL_LABEL_ROOM).toBeLessThan(320);
   });
 
   it("charges the room for every worn mark", () => {
-    // The row also carries the marks. Two chips on a 215px item ran the size
-    // chip 84 measured pixels past the item's edge under a threshold that
-    // only looked at the item's width.
     const roomy = FULL_LABEL_ROOM + 2 * MARK_ROOM;
     expect(underRowSpellsItOut(roomy, 1, 2)).toBe(true);
     expect(underRowSpellsItOut(roomy - 1, 1, 2)).toBe(false);
-    // The same width that spells it out bare does not with marks on.
     expect(underRowSpellsItOut(FULL_LABEL_ROOM, 1, 0)).toBe(true);
     expect(underRowSpellsItOut(FULL_LABEL_ROOM, 1, 1)).toBe(false);
-    // And a chip's charge is a real chip's width, not a token.
     expect(MARK_ROOM).toBeGreaterThanOrEqual(46);
     expect(MARK_ROOM).toBeLessThan(60);
   });
@@ -445,60 +436,42 @@ describe("the full-screen control has an icon and adapts its label to room", () 
     expect(underRowSpellsItOut(wide, 0.4, 0)).toBe(false);
   });
 
-  it("keeps the name for a screen reader", () => {
-    expect(itemView).toMatch(/aria-label="Full screen"/);
+  it("keeps the names for a screen reader", () => {
+    expect(itemView).toMatch(/aria-label="View"/);
+    expect(itemView).toMatch(/aria-label="Edit"/);
   });
 
   it("keeps the name for a pointer, and draws it rather than using `title`", () => {
-    // `title` waits about a second and lands at the pointer, not the control.
-    // Conditional on purpose: the labeled form's tip carries only the keys
-    // (its ink already says the name); the compact form's tip carries both.
     expect(itemView).toMatch(/data-tip=\{spellItOut \? "Enter/);
-    expect(itemView).toMatch(/"Full screen — Enter, Esc comes back"/);
-    expect(css).toMatch(/\.fullscreen-btn::after\s*\{[^}]*content:\s*attr\(data-tip\)/);
+    expect(itemView).toMatch(/"View — Enter, Esc comes back"/);
+    expect(css).toMatch(/\.focus-strip-btn::after\s*\{[^}]*content:\s*attr\(data-tip\)/);
   });
 
   it("shows that tooltip on focus too, not only on hover", () => {
-    expect(css).toMatch(/\.fullscreen-btn:focus-visible::after/);
+    expect(css).toMatch(/\.focus-strip-btn:focus-visible::after/);
   });
 
   it("keeps the tooltip out of the pointer's way", () => {
-    // If it caught events it would become the thing under the pointer on the
-    // way to the control it describes.
-    const tip = css.match(/\.fullscreen-btn::after\s*\{([^}]*)\}/);
+    const tip = css.match(/\.focus-strip-btn::after\s*\{([^}]*)\}/);
     expect(tip![1]).toMatch(/pointer-events:\s*none/);
   });
 
-  it("opens the tooltip DOWNWARD, away from the item it describes", () => {
-    // This strip hangs under the item, so upward is into the artifact — and
-    // `.item` is its own stacking context, so a tip that opens up cannot even
-    // be lifted clear of what it covers. Down is the empty canvas.
-    const tip = css.match(/\.fullscreen-btn::after\s*\{([^}]*)\}/)![1];
-    expect(tip).toMatch(/top:\s*calc\(100% \+/);
-    expect(tip, "upward puts the tip over the item").not.toMatch(/bottom:\s*calc\(100% \+/);
+  it("opens the tooltip UPWARD into empty canvas above the top-left strip", () => {
+    const tip = css.match(/\.focus-strip-btn::after\s*\{([^}]*)\}/)![1];
+    expect(tip).toMatch(/bottom:\s*calc\(100% \+/);
+    expect(tip, "downward puts the tip over the titlebar and item").not.toMatch(/top:\s*calc\(100% \+/);
   });
 
-  it("wears the same chip as the readout beside it, not a foreign pill", () => {
-    // One row, one voice: a solid dark capsule next to the pale size chip
-    // read as something that had landed on the row rather than as the row
-    // speaking. Same three tokens the neighbouring chip uses.
-    const tip = css.match(/\.fullscreen-btn::after\s*\{([^}]*)\}/)![1];
+  it("wears the same chip as the readout, not a foreign pill", () => {
+    const tip = css.match(/\.focus-strip-btn::after\s*\{([^}]*)\}/)![1];
     expect(tip).toMatch(/background:\s*var\(--chip\)/);
     expect(tip).toMatch(/color:\s*var\(--ink-muted\)/);
     expect(tip).toMatch(/border:\s*1px solid var\(--line-soft\)/);
   });
 
-  it("keeps the button face one solid color without an inner chip", () => {
-    // The chip styling that once wrapped the label in a nested grey capsule
-    // is kept off by SCOPE, not by a counter-rule: `.item-hint > span` styles
-    // only the strip's own direct children, so the button's inner span is
-    // simply never a chip. One home for the rule — the un-styling reset that
-    // used to sit beside it reset nothing and invited the two to disagree.
+  it("keeps the under-item hint span scoped to direct children", () => {
     expect(css).toMatch(/\.item-hint > span\s*\{/);
     expect(css).not.toMatch(/\.item-hint span\s*\{/);
-    expect(css, "a dead reset is a second home for the scoping rule").not.toMatch(
-      /\.fullscreen-btn span\s*\{/,
-    );
   });
 });
 
@@ -602,7 +575,7 @@ describe("the Chat and the comments say which they are", () => {
     // `thread.setMain` demotes the current one — a canvas has a single slot,
     // so promoting is also a demotion, and the button that hides that is
     // the button somebody loses a conversation to.
-    const layer = read("CommentLayer.tsx");
+    const layer = read("CommentPopovers.tsx");
     expect(layer).toContain("Make this the Chat");
     // "goes BACK to" was the false half: a Chat born with `main: true` has
     // never been a pin, so there is nowhere for it to go back to.
@@ -659,7 +632,7 @@ describe("the Chat and the comments say which they are", () => {
     );
     // And promoting still works from the canvas, which is what makes the
     // removal safe: it is how you change which thread is the Chat.
-    expect(read("CommentLayer.tsx")).toMatch(/type: "thread\.setMain", threadId: thread\.id/);
+    expect(read("CommentPopovers.tsx")).toMatch(/type: "thread\.setMain", threadId: thread\.id/);
   });
 
   it("writes a name one way, on every screen", () => {
@@ -678,7 +651,8 @@ describe("the Chat and the comments say which they are", () => {
      * included" — is a caption and may be set however it reads best. What may
      * not vary is a name.
      */
-    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+    // The workbench's own names ride in `workbench.css` since 27 Sep 2026.
+    const css = loadedWith("workbench.css");
     const shouts = (selector: string) => {
       const rule = new RegExp(`\\${selector}\\s*\\{[^}]*\\}`).exec(css)?.[0] ?? "";
       expect(rule, `${selector} must have a rule`).not.toBe("");
@@ -698,7 +672,7 @@ describe("the Chat and the comments say which they are", () => {
   });
 
   it("names the thing a pin holds a comment, on the button that deletes one", () => {
-    expect(read("CommentLayer.tsx")).toContain("Delete comment");
+    expect(read("CommentPopovers.tsx")).toContain("Delete comment");
   });
 
   it("keeps the CLI and the guide on the same word as the app", () => {
@@ -724,6 +698,8 @@ describe("the Chat and the comments say which they are", () => {
 describe("the editor's theme", () => {
   const cm = readFileSync(new URL("../src/lib/cmtheme.ts", import.meta.url), "utf8");
   const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+  /** The chrome itself, which left `styles.css` with the lazy editor (BC-2, 27 Sep 2026). */
+  const chrome = readFileSync(new URL("../src/components/stage-editor.css", import.meta.url), "utf8");
 
   it("colours syntax from tokens, never from literals", () => {
     // A hex here would be a colour that cannot follow the theme, in the one
@@ -757,8 +733,101 @@ describe("the editor's theme", () => {
   it("scopes the chrome to the stage's editor, not to every CodeMirror", () => {
     // A bare `.cm-editor` rule would reach into any other editor this app
     // mounts later.
-    const bare = [...css.matchAll(/^\.cm-[\w-]+/gm)];
+    const bare = sheets.flatMap((s) => [...s.text.matchAll(/^\.cm-[\w-]+/gm)].map((m) => `${s.file}: ${m[0]}`));
     expect(bare, "a .cm- rule outside .stage-editor-cm").toEqual([]);
-    expect(css).toMatch(/\.stage-editor-cm \.cm-editor\s*\{/);
+    expect(chrome).toMatch(/\.stage-editor-cm \.cm-editor\s*\{/);
+  });
+});
+
+
+describe("document previews retain their shell without mounting unreadable contents", () => {
+  it("keeps all 1,000 overview cards below the document mounting threshold", () => {
+    expect(Array.from({ length: 1000 }, () => hasRoomForChrome(180, 120, 0.09)).filter(Boolean)).toHaveLength(0);
+  });
+  it("mounts readable nearby content and honors explicit entry", () => {
+    // The preview stands down unless entered, or near the window AND roomy —
+    // inline in ItemView since it became a single `&&` on the held answer.
+    const itemView = readFileSync(fileURLToPath(new URL("../src/components/ItemView.tsx", import.meta.url)), "utf8");
+    expect(itemView).toContain("!entered && !(nearWindow && roomy)");
+    expect(hasRoomForChrome(180, 120, 1)).toBe(true);
+  });
+});
+
+/**
+ * **The CSS forms are the JS rules, number for number** (26 Sep 2026).
+ *
+ * Zooming used to re-render every item, because every item read the raw scale
+ * to work out its chrome in JS. The continuous half of that chrome is now CSS
+ * against the world's `--scale` — and CSS nobody can run in a unit test is
+ * exactly where a rule forks quietly. So each form is evaluated here, with
+ * `--w`, `--h` and `--scale` substituted, and held to the function it replaced
+ * across widths, heights and zooms from 5% to 400%.
+ */
+describe("the chrome's CSS forms compute what the functions did", async () => {
+  const chrome = await import("../src/lib/chrome.ts");
+  const core = await import("@isocan/core");
+  /** `calc`, `clamp`, `min`, `max` and `px`, for these forms and nothing more. */
+  const evaluate = (css: string, w: number, h: number, scale: number): number => {
+    const js = css
+      .replace(/var\(--w\)/g, String(w))
+      .replace(/var\(--h\)/g, String(h))
+      .replace(/var\(--scale\)/g, String(scale))
+      .replace(/(\d)px/g, "$1")
+      .replace(/calc\(/g, "(")
+      .replace(/clamp\(/g, "__clamp(")
+      .replace(/\bmin\(/g, "Math.min(")
+      .replace(/\bmax\(/g, "Math.max(");
+    const __clamp = (lo: number, v: number, hi: number) => Math.min(Math.max(lo, v), hi);
+    return new Function("__clamp", `return ${js};`)(__clamp) as number;
+  };
+  const widths = [8, 16, 40, 120, 240, 480, 960, 2400];
+  const zooms = [0.05, 0.1, 0.16, 0.25, 0.4, 0.6, 1, 1.6, 2.5, 4];
+
+  it("counter-scales by one over the zoom", () => {
+    const inner = /^scale\((.*)\)$/.exec(String(chrome.COUNTER_SCALED_CSS.transform))![1]!;
+    for (const scale of zooms) {
+      const js = Number(/scale\(([^)]+)\)/.exec(chrome.counterScale(scale).transform)![1]);
+      expect(evaluate(inner, 0, 0, scale)).toBeCloseTo(js, 9);
+    }
+  });
+
+  it("gives the under row the item's screen width", () => {
+    for (const w of widths) for (const scale of zooms) {
+      expect(evaluate(String(chrome.UNDER_ROW_CSS.width), w, 0, scale)).toBeCloseTo(chrome.underRow(w, scale).width, 9);
+    }
+  });
+
+  it("gives the name the room titleRow gave it, icon or not", () => {
+    for (const w of widths) for (const scale of zooms) {
+      const row = chrome.titleRow(w, scale);
+      expect(evaluate(chrome.nameRoomCss(row), w, 0, scale), `${w} at ${scale}`).toBeCloseTo(row.nameRoom, 9);
+    }
+  });
+
+  it("sizes a text or kind mark as textMarkSize did, in world units", () => {
+    for (const w of widths) for (const h of [10, 60, 300]) for (const scale of zooms) {
+      expect(evaluate(chrome.TEXT_MARK_CSS, w, h, scale)).toBeCloseTo(core.textMarkSize(w, h, scale) / scale, 9);
+    }
+  });
+
+  it("packs the same decisions the rules make, hysteresis included", () => {
+    const note = { id: "itm_acme", properties: {}, reactions: { "👍": ["usr_a"] } } as unknown as Item;
+    for (const w of widths) for (const h of [10, 60, 300]) for (const scale of zooms) {
+      for (const was of [undefined, true, false]) {
+        // No previous answer is an absent field, not an explicit `undefined`.
+        const held = was === undefined ? {} : { r: was, t: was, s: was };
+        const bits = chrome.zoomDecisions(note, w, h, scale, held);
+        const row = chrome.titleRow(w, scale);
+        expect(!!(bits & chrome.Z_ROOMY)).toBe(chrome.hasRoomForChrome(w, h, scale, was));
+        expect(!!(bits & chrome.Z_ICON)).toBe(row.icon);
+        expect(!!(bits & chrome.Z_NAME)).toBe(row.name);
+        expect(!!(bits & chrome.Z_SPELL)).toBe(chrome.underRowSpellsItOut(w, scale, 1, was));
+        expect(!!(bits & chrome.Z_MARK)).toBe(core.textMarkSize(w, h, scale) >= core.KIND_MARK_MIN);
+        // Semantic Zoom's card: only with a members' type size, and only where it cannot be read.
+        expect(bits & chrome.Z_GIST).toBe(0);
+        const gisted = chrome.zoomDecisions(note, w, h, scale, was === undefined ? {} : { g: was }, 16);
+        expect(!!(gisted & chrome.Z_GIST)).toBe(!core.textIsLegible(16, scale, was));
+      }
+    }
   });
 });

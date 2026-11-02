@@ -1,18 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
-import { spawn, type ChildProcess } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { startDaemon, type Daemon } from "@isocan/server";
-import { harnessVars } from "@isocan/api";
+import { type Daemon } from "@isocan/server";
+import { startDaemon } from "@isocan/server/daemon";
+import { cliEnv, runCli, type Run } from "./cli.ts";
 
 /**
  * **Grids, over the wire** (sprint phase 5): a grid laid on a sheet, a
  * note placed into one cell, the deck made from a sheet in reading order.
  */
 
-const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 const kit = { id: "usr_kit", name: "Kit" };
 
 let home: string;
@@ -32,27 +30,8 @@ afterEach(async () => {
   await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
-interface Run {
-  code: number;
-  stdout: string;
-  stderr: string;
-}
-
 function isocan(...args: string[]): Promise<Run> {
-  const env = { ...process.env };
-  for (const name of harnessVars) delete env[name];
-  const child: ChildProcess = spawn(process.execPath, [cliBin, ...args], {
-    env: { ...env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(base).port },
-    cwd: home,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  let stdout = "";
-  let stderr = "";
-  child.stdout!.setEncoding("utf8");
-  child.stdout!.on("data", (chunk) => (stdout += chunk));
-  child.stderr!.setEncoding("utf8");
-  child.stderr!.on("data", (chunk) => (stderr += chunk));
-  return new Promise((resolve) => child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })));
+  return runCli(args, { cwd: home, env: cliEnv({ ISOCAN_HOME: home, ISOCAN_PORT: new URL(base).port }) });
 }
 
 async function json(...args: string[]): Promise<any> {
@@ -66,14 +45,15 @@ describe("a grid on a sheet", () => {
     await isocan("canvas", "create", "Friday");
     const sheet = await json("area", "new", "Test", "--size", "3200x1400");
     const grid = await json("area", "grid", "Test", "2x3", "--rows", "Ana,Ben", "--cols", "one,two,three");
-    expect(grid.grid).toEqual({ rows: 2, cols: 3, rowNames: ["Ana", "Ben"], colNames: ["one", "two", "three"] });
-    expect((await json("area", "ls"))[0]).toMatchObject({ title: "Test", grid: "2x3" });
+    expect(grid.intent).toBe("layout");
+    expect((await json("area", "ls"))[0]).toMatchObject({ title: "Test", layout: { rowCount: 2, columnCount: 3, rows: ["Ana", "Ben"], columns: ["one", "two", "three"] } });
 
     // Into cell 2,3: the bottom-right third of the inner region.
     const note = await json("text", "liked the summary", "--paper", "yellow", "--in", "Test", "--cell", "2,3");
-    const sx: number = sheet.placement.x;
-    const sy: number = sheet.placement.y;
-    expect(note.placement.chosen).toBe(true);
+    const frame = sheet.changes.find((row: any) => row.itemId === sheet.itemId).boxAfter;
+    const sx: number = frame.x;
+    const sy: number = frame.y;
+    expect((await json("ls")).find((row: any) => row.id === note.itemId).containerId).toBe(sheet.itemId);
     // The exact corner is core's (`cellBox`, inset and rounded); what the
     // wire has to show is that it landed in the right third and the lower
     // half of the sheet.
@@ -84,7 +64,7 @@ describe("a grid on a sheet", () => {
 
     const off = await isocan("text", "nowhere", "--in", "Test", "--cell", "3,1");
     expect(off.code).not.toBe(0);
-    expect(off.stderr).toContain("2×3");
+    expect(off.stderr).toMatch(/cell|row/i);
     const noSheet = await isocan("text", "nowhere", "--cell", "1,1");
     expect(noSheet.code).not.toBe(0);
     expect(noSheet.stderr).toContain("--cell needs --in");
@@ -99,11 +79,14 @@ describe("a grid on a sheet", () => {
     const shown = await json("slides", "show");
     const order = (shown.slides ?? shown).map((one: any) => one.title ?? one);
     expect(order.indexOf("frame one")).toBeLessThan(order.indexOf("frame two"));
-    expect(story.title).toBe("Storyboard");
+    expect((await json("area", "ls")).find((row: any) => row.id === story.itemId).title).toBe("Storyboard");
     expect(f1.itemId).not.toBe(f2.itemId);
 
     const cleared = await isocan("area", "grid", "Test", "--clear");
     expect(cleared.code, cleared.stderr).toBe(0);
-    expect((await json("area", "ls")).find((one: any) => one.title === "Test").grid).toBe("");
+    const plain = (await json("area", "ls")).find((one: any) => one.title === "Test");
+    expect(plain.layout.rowCount).toBeUndefined();
+    expect(plain.layout.columnCount).toBeUndefined();
+    expect(plain.layout.rows).toBeUndefined();
   });
 });

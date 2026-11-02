@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-import { css, rules, selectorsOf, withoutComments } from "./cssrules.ts";
+import { css, loadedWith, rules, selectorsOf } from "./cssrules.ts";
 import { PEEK_CAP } from "../src/lib/peekplace.ts";
 
 /**
@@ -26,7 +26,7 @@ const component = readFileSync(
   fileURLToPath(new URL("../src/components/CardPeek.tsx", import.meta.url)),
   "utf8",
 );
-const sheet = rules(withoutComments());
+const sheet = rules(loadedWith("canvas-list.css"));
 
 /** The rule under EXACTLY this selector — a substring match can be satisfied
  *  by a descendant or a suffix while the rule it guards is gone. */

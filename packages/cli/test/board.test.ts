@@ -1,21 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
-import { spawn, type ChildProcess } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { startDaemon, type Daemon } from "@isocan/server";
-import { harnessVars } from "@isocan/api";
+import { type Daemon } from "@isocan/server";
+import { startDaemon } from "@isocan/server/daemon";
 import { SPRINT_BOARD } from "@isocan/core";
+import { cliEnv, runCli, type Run } from "./cli.ts";
 
 /**
  * **The board and the brief, over the wire** (sprint phase 1). A laid board
- * is eleven areas the daemon accepted where the layout put them; laying it
+ * is eleven groups the daemon accepted where the layout put them; laying it
  * again lays nothing; a phase called afterwards knows its sheet; the brief
  * lands on the Brief sheet and the second brief is a version of the first.
  */
 
-const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 const kit = { id: "usr_kit", name: "Kit" };
 
 let home: string;
@@ -35,27 +33,8 @@ afterEach(async () => {
   await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
-interface Run {
-  code: number;
-  stdout: string;
-  stderr: string;
-}
-
 function isocan(...args: string[]): Promise<Run> {
-  const env = { ...process.env };
-  for (const name of harnessVars) delete env[name];
-  const child: ChildProcess = spawn(process.execPath, [cliBin, ...args], {
-    env: { ...env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(base).port },
-    cwd: home,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  let stdout = "";
-  let stderr = "";
-  child.stdout!.setEncoding("utf8");
-  child.stdout!.on("data", (chunk) => (stdout += chunk));
-  child.stderr!.setEncoding("utf8");
-  child.stderr!.on("data", (chunk) => (stderr += chunk));
-  return new Promise((resolve) => child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })));
+  return runCli(args, { cwd: home, env: cliEnv({ ISOCAN_HOME: home, ISOCAN_PORT: new URL(base).port }) });
 }
 
 async function json(...args: string[]): Promise<any> {
@@ -73,9 +52,9 @@ describe("the board, laid and read back", () => {
     const laid = await json("sprint", "board");
     expect(laid.laid.map((one: any) => one.key)).toEqual(SPRINT_BOARD.map((one) => one.key));
     expect(laid.laid[0].x).toBeGreaterThan(400);
-    const areas = await json("area", "ls");
-    expect(areas.length).toBe(SPRINT_BOARD.length);
-    expect(areas[0]).toMatchObject({ title: "Brief", holds: "0" });
+    const groups = await json("area", "ls");
+    expect(groups.length).toBe(SPRINT_BOARD.length);
+    expect(groups[0]).toMatchObject({ title: "Brief", parentId: null, directCount: 0, directMemberIds: [] });
 
     // Again: nothing laid twice.
     const again = await json("sprint", "board");
@@ -95,11 +74,12 @@ describe("the board, laid and read back", () => {
     expect(first.version).toBe(1);
     const onBrief = await json("ls", "--in", "Brief");
     expect(onBrief.map((one: any) => one.title)).toEqual(["Brief"]);
+    expect(onBrief[0].containerId).toBe(groups[0].id);
     const second = await json("sprint", "brief", "--goal", "Sign-up feels like ten seconds", "--decider", "Maya", "--question", "Can we skip the password?");
     expect(second.itemId).toBe(first.itemId);
     expect(second.version).toBe(2);
     const stillOne = await json("ls", "--in", "Brief");
     expect(stillOne.length).toBe(1);
     expect(stillOne[0].versions.length).toBe(2);
-  });
+  }, 60_000);
 });

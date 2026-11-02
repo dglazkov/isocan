@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { documentsWeb } from "../src/web.tsx";
+import { documentsFocusFacet, documentsWeb, isDocumentsFocusMatch } from "../src/web.tsx";
+import { reorderMarkdownSection } from "../src/focus.tsx";
 
 /**
  * **The two new slots, filled**: an inspector for documents beside the
@@ -35,5 +36,14 @@ describe("documents fill the inspector and page slots", () => {
        correct. The invariant is that the segment reaches ModulePage. */
     expect(page).toMatch(/<ModulePage[^>]*segment=\{pageSegment\}/);
     expect(modules).toContain("export function modulePage(segment: string)");
+  });
+
+  it("declares a ModuleFocus facet (module.documents) and reorders markdown sections cleanly", () => {
+    expect(documentsFocusFacet.id).toBe("module.documents");
+    expect(documentsFocusFacet.priority).toBe(15);
+    const md = "# Overview\nIntro text.\n\n## Architecture\nDetails A.\n\n## Rollout\nDetails B.";
+    const reordered = reorderMarkdownSection(md, 2, -1);
+    expect(reordered.indexOf("## Rollout")).toBeLessThan(reordered.indexOf("## Architecture"));
+    expect(typeof isDocumentsFocusMatch).toBe("function");
   });
 });

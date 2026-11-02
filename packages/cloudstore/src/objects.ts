@@ -52,6 +52,16 @@ export interface ObjectStore {
   delete(key: string): Promise<void>;
 
   /**
+   * **Every key under a prefix**, for the one caller that erases a canvas
+   * whole (operator phase 3). A prefix and not a glob, because that is the
+   * one shape every object store lists cheaply — and because `canvases/{id}/`
+   * with its trailing slash is the whole of what a purge must reach: the
+   * snapshot, the blobs, the archive, the overflow ops, and any scratch part
+   * a crashed compose left beside them. Nothing outside it, ever.
+   */
+  list(prefix: string): Promise<string[]>;
+
+  /**
    * Add bytes to the END of an object, creating it if absent.
    *
    * The one method here that is not a thin delegation, because **object

@@ -295,6 +295,11 @@ more.**
 Seven, in `.agents/personas/`: `accessibility`, `architect`, `copy`,
 `design-auditor`, `market-researcher`, `performance`, `qa-tester`.
 
+*Nine as of 11 Sep 2026: `reviewer` and `journeys` joined on 30 Aug — the
+first for whether the code says true things about itself, with ratchets for
+bounds; the second for whether the app works when somebody opens it, which the
+suite structurally cannot see. [`README.md`](README.md) carries the table.*
+
 Three were added and one was narrowed, and the gate each had to pass is the one
 below rather than "would this lens be nice to have":
 

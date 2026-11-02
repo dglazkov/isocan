@@ -59,6 +59,7 @@ export function canvasPath(canvasId: string): string {
  */
 const ITEM_PATH_SEGMENT = "i";
 
+/** The path of one item full screen, origin-relative — `/p/<canvas>/i/<item>`. */
 export function itemPath(canvasId: string, itemId: string): string {
   return `${canvasPath(canvasId)}/${ITEM_PATH_SEGMENT}/${encodeURIComponent(itemId)}`;
 }
@@ -78,12 +79,14 @@ export function itemUrl(origin: string, canvasId: string, itemId: string): strin
  * full screen is one: it is an address either surface can hand you.
  */
 const DECK_PATH_SEGMENT = "deck";
+/** The router's pattern for the deck view, built from `CANVAS_ROUTE` so the two agree. */
 export const DECK_ROUTE = `${CANVAS_ROUTE}/${DECK_PATH_SEGMENT}`;
 
 export function deckPath(canvasId: string): string {
   return `${canvasPath(canvasId)}/${DECK_PATH_SEGMENT}`;
 }
 
+/** The deck view's whole address — what the CLI's headless Chrome prints from. */
 export function deckUrl(origin: string, canvasId: string): string {
   return `${origin.replace(/\/+$/, "")}${deckPath(canvasId)}`;
 }
@@ -96,12 +99,17 @@ export function deckUrl(origin: string, canvasId: string): string {
  * surface can hand you, and `isocan open --page <segment>` does.
  */
 const MODULE_PAGE_PATH_SEGMENT = "x";
+/** The router's pattern for a module's page; `:segment` is the module's own name for it. */
 export const MODULE_PAGE_ROUTE = `${CANVAS_ROUTE}/${MODULE_PAGE_PATH_SEGMENT}/:segment`;
 
+/**
+ * A module page's path, origin-relative. The segment goes in unencoded: it is a name a module declared.
+ */
 export function modulePagePath(canvasId: string, segment: string): string {
   return `${canvasPath(canvasId)}/${MODULE_PAGE_PATH_SEGMENT}/${segment}`;
 }
 
+/** A module page's whole address — what `isocan open --page` hands somebody. */
 export function modulePageUrl(origin: string, canvasId: string, segment: string): string {
   return `${origin.replace(/\/+$/, "")}${modulePagePath(canvasId, segment)}`;
 }
@@ -126,7 +134,9 @@ export function modulePageUrl(origin: string, canvasId: string, segment: string)
  */
 const WORKBENCH_PATH_SEGMENT = "w";
 
+/** The router's pattern for the workbench with nothing on the stage. */
 export const WORKBENCH_ROUTE = `${CANVAS_ROUTE}/${WORKBENCH_PATH_SEGMENT}`;
+/** The workbench with one artifact staged; `wbItemId`, not `itemId`, for the reason above. */
 export const WORKBENCH_ITEM_ROUTE = `${WORKBENCH_ROUTE}/:wbItemId`;
 
 /** The workbench with nothing focused — the agent room itself. */
@@ -143,6 +153,39 @@ export function workbenchItemPath(canvasId: string, itemId: string): string {
 export function workbenchUrl(origin: string, canvasId: string, itemId?: string): string {
   const path = itemId ? workbenchItemPath(canvasId, itemId) : workbenchPath(canvasId);
   return `${origin.replace(/\/+$/, "")}${path}`;
+}
+
+/**
+ * **A motion, rendered to a movie** (motion phase 1; `docs/projects/motion/design.md` §4).
+ *
+ * One page both surfaces open: `isocan motion render` in the headless browser
+ * `canvas shot` drives, and phase 2's *Render movie…* in a hidden frame — so
+ * the two cannot drift. Under the canvas's address like the deck view, because
+ * every read the page makes (the snapshot, the motion's blob) is a read OF the
+ * canvas, and the home answers it with exactly the access a person has to the
+ * item. The design wrote `/render/motion/:itemId`; an item id alone names no
+ * canvas to ask.
+ */
+const MOTION_RENDER_PATH_SEGMENT = "render/motion";
+/** The router's pattern for the render page, built from `CANVAS_ROUTE`. */
+export const MOTION_RENDER_ROUTE = `${CANVAS_ROUTE}/${MOTION_RENDER_PATH_SEGMENT}/:itemId`;
+
+/**
+ * The render page's whole address. The query is how the movie is asked for —
+ * `format` (`mp4`, `webm` or `gif`), `version`, `fps`, `size` (`1080` or `1920x1080`), `seconds`, `background`
+ * (`#rrggbb`) and `keep` (frame numbers whose pre-encode picture the page
+ * keeps, for a proof to compare with) — each left out when not given.
+ */
+export function motionRenderUrl(
+  origin: string,
+  canvasId: string,
+  itemId: string,
+  query: Partial<Record<"format" | "version" | "fps" | "size" | "seconds" | "background" | "keep", string | number>> = {},
+): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) if (value !== undefined && String(value) !== "") params.set(key, String(value));
+  const search = params.toString();
+  return `${origin.replace(/\/+$/, "")}${canvasPath(canvasId)}/${MOTION_RENDER_PATH_SEGMENT}/${encodeURIComponent(itemId)}${search ? `?${search}` : ""}`;
 }
 
 /**
@@ -190,6 +233,61 @@ export function canvasUrlWithPass(origin: string, canvasId: string, token: strin
  */
 export function urlWithPass(url: string, token: string): string {
   return `${url}#${token}`;
+}
+
+/** The query keys `embedCanvasUrl` writes and the two readers below read —
+ * spelled once, for the reason the rest of this file is. */
+const EMBED_PARAM = "embed";
+const CHAT_PARAM = "chat";
+
+/** A query string's parameters, with or without its leading `?`. */
+function queryOf(search: string): URLSearchParams {
+  return new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+}
+
+/**
+ * The address `isocan embed` hands a host pane (`docs/projects/antigravity/design.md`).
+ *
+ * When a canvas is framed inside an agent manager's pane beside an existing
+ * conversation column, opening the 320px left Chat dock by default puts two
+ * chat columns side by side and spends half the pane. `?embed=1` before the
+ * `#<pass>` fragment says "a host framed me": the web client keeps the Chat
+ * dock and its rail button off while leaving the live Agent Presence strip
+ * intact, and answers the host's selection bridge. `{ chat: true }` keeps the
+ * dock (`&chat=on`) without ceasing to be an embed.
+ *
+ * A query parameter rather than more fragment, because the fragment is the
+ * pass's and is stripped the moment it is redeemed; `?embed=1` has to
+ * outlive that. It is not a credential, so being logged costs nothing.
+ */
+export function embedCanvasUrl(
+  origin: string,
+  canvasId: string,
+  token: string,
+  opts?: { chat?: boolean | undefined },
+): string {
+  const base = canvasUrl(origin, canvasId);
+  return urlWithPass(`${base}?${EMBED_PARAM}=1${opts?.chat ? `&${CHAT_PARAM}=on` : ""}`, token);
+}
+
+/**
+ * Whether a page was opened by a host pane: `?embed=1`, exactly what
+ * `embedCanvasUrl` writes and nothing else. The web client answers a framing
+ * host's selection bridge only when this holds, so a tab nobody framed never
+ * posts what is selected in it to anybody.
+ */
+export function isEmbedded(search: string): boolean {
+  return queryOf(search).get(EMBED_PARAM) === "1";
+}
+
+/**
+ * Whether an embedded page keeps its own Chat dock off: framed
+ * (`isEmbedded`), and not asked to keep it with `chat=on`. The Agent
+ * Presence strip stays either way — who is on the canvas is not the host's
+ * business to replace.
+ */
+export function isEmbeddedChatHidden(search: string): boolean {
+  return isEmbedded(search) && queryOf(search).get(CHAT_PARAM) !== "on";
 }
 
 /**
@@ -276,9 +374,25 @@ export function parseCanvasAddress(raw: string): CanvasAddress | null {
   // question nobody asked with a canvas nobody named.
   const parts = url.pathname.replace(/\/+$/, "").split("/");
   if (parts.length !== 3 || parts[0] !== "" || `/${parts[1]}` !== CANVAS_PATH_PREFIX) return null;
-  const canvasId = decodeURIComponent(parts[2] ?? "");
+  const canvasId = decodeSegment(parts[2]);
   if (!canvasId) return null;
   return { origin: url.origin, canvasId, ...(pass !== undefined ? { pass } : {}) };
+}
+
+/** A path segment decoded, or null when the escape is malformed.
+ *
+ * `decodeURIComponent` throws on a bad percent escape (`/p/%E0%A4%A`), and
+ * both address parsers document a null answer for anything that is not an
+ * address — a throw would force every caller to catch, which is the exact
+ * thing the null contract exists to avoid. Pasted text is arbitrary, so a
+ * malformed escape is an ordinary input, not an exception. */
+function decodeSegment(segment: string | undefined): string | null {
+  if (!segment) return null;
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return null;
+  }
 }
 
 /** An item address taken apart — `parseCanvasAddress`'s shape with the item
@@ -323,8 +437,8 @@ export function parseItemAddress(raw: string): ItemAddress | null {
   ) {
     return null;
   }
-  const canvasId = decodeURIComponent(parts[2] ?? "");
-  const itemId = decodeURIComponent(parts[4] ?? "");
+  const canvasId = decodeSegment(parts[2]);
+  const itemId = decodeSegment(parts[4]);
   if (!canvasId || !itemId) return null;
   return { origin: url.origin, canvasId, itemId };
 }
@@ -581,4 +695,11 @@ export function cloudAgentInstructions(origin: string, canvasId: string, token?:
     "",
     "Then run `isocan --agent-help` and follow its instructions.",
   ].join("\n");
+}
+
+/** A comment conversation on its canvas, shared by inbox links and the reader. */
+export const THREAD_QUERY = "thread";
+/** An inbox link carries the conversation without changing the canvas address. */
+export function threadPath(canvasId: string, threadId: string): string {
+  return `${canvasPath(canvasId)}?${new URLSearchParams({ [THREAD_QUERY]: threadId })}`;
 }

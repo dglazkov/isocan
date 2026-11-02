@@ -1,9 +1,10 @@
 ---
-status: designed
+status: superseded
 since: 2026-09-08
 issue: 210
 see: standing-agents, on-demand, personas, agent-custody
-note: a standing agent's one structural weakness is that `isocan rc` is a process on a MACHINE, and a sheep is a session in a cell that is not. But the obvious join — the summons calling the cell's address — is a shape on-demand's design already withdrew on custody grounds, and the reconciliation is that custody is about who started it and whose credentials it uses, not which computer it is on. Start with personas as the cheap tier: no parking, no summons, no custody question, and a gap that is real today.
+supersededBy: nothing yet — removed 18 Sep 2026; running an agent off the laptop is expected back in another form
+note: removed from isocan 18 Sep 2026: the hosted-rc experiment was shut down and the sheep harness was taken out of the CLI and the rc with it. Phases 2 and 3 were built and measured (15–16 Sep 2026) before the removal; kept as the record of the options weighed and the bill measured. Phase 4 is not planned.
 ---
 
 # Sheep as standing agents
@@ -116,6 +117,16 @@ cost.
 
 ## The one decision that unlocks all three
 
+**Measured and DECIDED 15 Sep 2026 — this case is unblocked** — see [the bearer
+is mostly built](2026-09-15-the-bearer-is-mostly-built.md). `askTheDoor()`
+mints with `carrier: "bearer"` on the CLI's ordinary path, and `isocan badges
+--kill` already ends one at the home, so the question below was smaller than
+this paragraph makes it sound. Dion's answer: a cell may hold a long-lived
+bearer badge in its owner's own secrets store, claiming a DEDICATED AGENT's
+actor and never the person's own, admitted only where that agent is enrolled.
+The worst case is then the blast radius `agent-custody` already built its fence
+around. Shape 2 and shape 3 below both proceed on that basis.
+
 **A sheep needs a badge at the isocan door**, and it is the same question as
 #206 phase 7's `ISOCAN_BEARER`: a long-lived credential that can write to a
 canvas from anywhere, living somewhere until somebody revokes it. The door
@@ -187,24 +198,54 @@ it called", which is D7's question and was always the real one.
    tools, writing a page into `docs/reviews/` the way `persona-run.mjs` does.
    Proves the pasture, the credential and the write path in one go, with
    nothing standing anywhere.
-2. **The badge.** D5 — minted once, held by the pasture, and the same decision
-   written down for #206 phase 7.
+2. ~~**The badge.**~~ **DONE — built by sheep-harness in September, found on
+   15 Sep 2026 while looking for what to build next.** Not "mostly there":
+   walked, and satisfying all four obligations the 15 Sep decision attached to
+   its yes. `bornPassOf` (`packages/cli/src/main.ts`) mints a pass at the
+   SHEEP'S BIRTH, scoped to that agent, and the cell redeems it — so the badge
+   claims the agent's actor and never the person's. It is held on the rc row as
+   `cellPass: {canvasId, passId}` (`packages/rc/src/rows.ts`), minted once
+   rather than per wake, which is what the door's meter requires. `isocan
+   badges` labels it **`cell (<agent>'s sheep)`** through `cellBadges()`, so a
+   person can tell it from their laptop before ending one. And withdrawal ends
+   it: *"the sheep is ended at its home (`endSheep`), then the badge its cell
+   redeemed is ended at the isocan home"* — reached by `rc remove`, `agent
+   remove`, a parked rc seeing the withdraw op, and a summons racing a
+   withdrawal.
+
+   The half of D5 that is NOT done is the one this phase bundled in: "the same
+   decision written down for #206 phase 7". The 15 Sep decision deliberately
+   split them, and a public repository's CI is still unanswered.
 3. **A parked rc in a sheep**, on one canvas, with the cost measured rather
-   than estimated: what a night of long-polling actually bills.
+   than estimated: what a night of long-polling actually bills. **DONE (16 Sep
+   2026) — by moving the room out of the container (`isocan#294`, `@sheep/collie`).**
+   Parking `isocan rc` inside a container cell would keep the container awake
+   24/7 and burn container minutes on idle HTTP long-polls. Instead, `collie`
+   runs `runRoom(deps)` (`@isocan/rc`) inside a Cloudflare Durable Object beside
+   the sheep station while the container cell sleeps at zero cost between turns,
+   waking only when `collie` dispatches a turn (~16–40s warm, ~2m cold).
+
+   **The measured overnight bill:**
+   - **Idle / overnight long-polling (`collie` Durable Object holding `/api/rc/hold` + `/api/park` 24/7):** ~11,059 GB-seconds/day (128 MB memory tier × 86,400s) ≈ **$0.13 / night** ($4.00/month) at Cloudflare's list price ($12.50 / million GB-s), or **$0.00 incremental** inside the Cloudflare Workers Paid plan's included 400,000 GB-seconds monthly duration allowance. Container cells spend **0 container minutes** overnight while idle.
+   - **Liveness across surfaces (`isocan#306`, `isocan#308`):** A replica daemon now queries the home's `/api/projects/:id/rc/answering` (`#306`), and `collie off` / `runRoom.stop()` calls `POST /api/rc/release` (`#308`) to drop the hold immediately rather than waiting up to 10s for `waitMs` to expire. With the laptop shut (`runsHere` empty), `isocan bench` reports `ready (<station>)` for the hosted sheep.
 4. **The roster.** If (3) is worth it, `rc --all` across the enrolments, which
    is the shape that makes it a standing agent rather than one agent standing.
+   **Now the first unbuilt phase.**
 5. **Reopen the address hook**, or decide not to, with the three review
    questions answered.
 
 ## What this leaves open
 
 - **What happens when the laptop comes back.** Two rcs parked for the same
-  agent is the case `standing-agents` already handles — *"another park adopted
-  Sian's cursor — standing down for it"* — but it has never been exercised
-  across two machines that both persist.
+   agent is the case `standing-agents` already handles — *"another park adopted
+   Sian's cursor — standing down for it"* — and `collie off` + `POST /api/rc/release`
+   (`#308`) now hands control back cleanly without a 10-second stale window.
 - **Whether the cheap tier should write at all.** #205's D4 says a small
-  persona may open a pull request only where a pre-existing guard would fail if
-  the change were wrong. A sheep with a container and a git credential can do
-  considerably more than write a page, and the gate should be decided before it
-  can rather than after.
-- **The bill.** Nothing here has a number. Phase 3 exists to get one.
+   persona may open a pull request only where a pre-existing guard would fail if
+   the change were wrong. A sheep with a container and a git credential can do
+   considerably more than write a page, and the gate should be decided before it
+   can rather than after.
+- **The bill (measured 16 Sep 2026).** Idle long-polling in `collie`'s Durable
+   Object costs ~$0.13/night list ($0 incremental under the Workers Paid plan's
+   included 400k GB-s allowance) and 0 container minutes; active turns bill only
+   for the 16–40 seconds the container cell is awake.
