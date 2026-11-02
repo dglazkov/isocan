@@ -12,8 +12,11 @@ a `credit` line saying who it is after and that it is not affiliated, its
   name breaks the rules is listed with what is wrong.
 - `isocan critic add <critic>` — a roster critic onto the canvas, by id or
   name (`critic add inevitable`), its lens copied from its pack's
-  `critique.md`. Refused, in words, when that critic is already here or its
-  first word is another critic's (mentions resolve by first word).
+  `critique.md`. `isocan critic add board` builds the **Board** critic
+  (`agentName: "Board"`, `critique.critic=board`) from the canvas's kept Mood
+  board tiles and their swatches (`isocan mood board`), and refuses when no
+  tiles are kept yet. Refused, in words, when that critic is already here or
+  its first word is another critic's (mentions resolve by first word).
 - `isocan critic new "<name>"` — a skeleton to fill in. `--after "<person>"`
   credits who it is an homage to, and its name may not carry theirs;
   `--self` is for a critic you made of yourself.
@@ -23,7 +26,9 @@ a `credit` line saying who it is after and that it is not affiliated, its
 ### Asking for a critique
 
 - `isocan critique <item> --by <critic>` — asks one critic what it makes of a
-  screen (`isocan critique "#Checkout" --by inevitable`). The first time on a
+  screen (`isocan critique "#Checkout" --by inevitable`, or `--by board` to
+  judge the screen against the Mood board's kept tiles, creating the `Board`
+  card on the fly if kept tiles exist). The first time on a
   canvas it enrols the critic on **your** runner, so your `isocan rc` must be
   parked there — without one it says so and enrols nothing. Every time, it
   re-reads the card and rewrites the critic's working directory from it, then
@@ -114,14 +119,16 @@ The same cards, worn by the canvas's lead instead of enrolled as agents of
 their own (topic `proactive` says how to answer a crit):
 
 - `isocan critic add reductionist` — a starter lens (`critic ls` lists them:
-  reductionist, brand-voice, newcomer, craftsperson), named for what it
-  looks for, never a person. `isocan critic new "<name>" --lens "<one line>"
+  reductionist, brand-voice, newcomer, craftsperson, plus `board` whenever the
+  Mood board has kept tiles), named for what it looks for, never a person.
+  `isocan critic new "<name>" --lens "<one line>"
   [--refs "<work it is after>"]` describes one; its name may carry no word of
   the references. A new card is switched on.
 - `isocan critic set <critic> --on|--off --loud blockers|studio|everything
   --when pause|share|asked` — the room's settings, one undo.
 - `isocan critique <item>` — the person asks the room: every critic switched
-  on (or `--as a,b`), asked of the lead in the Chat.
+  on (or `--as a,b`, including `--as board` when tiles are kept on the Mood
+  board), asked of the lead in the Chat.
 - `isocan critique note <item> --as <critic> --at <fx,fy> --kind …` — the
   lead's note worn as that critic; `critique read <item> [--post --say …]`
   folds the room; `critique both <a>+<b>` asks the lead for two proposals.

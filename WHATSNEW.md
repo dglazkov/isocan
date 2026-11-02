@@ -21,6 +21,50 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 25 October 2026
+
+- **Make a drawing move.** With **Motion** on in Settings → Experiments,
+  select one or more SVGs, right-click → **Animate…**, and pick a recipe
+  (**assemble**, **idle**, **reveal**, **orbit**, **emphasis**) or say how it
+  should move and ask your agent. A motion appears beside them and plays on
+  the canvas, with a scrubber; leave a comment at a moment and opening it
+  takes the player back there. Ask for changes in the Chat and the motion
+  gains a version; **Refresh from sources** picks up a drawing you've
+  edited. **Render movie…** puts an MP4, WebM or GIF beside it — the same
+  frames you watched. From the CLI: `isocan motion new|edit|refresh|render`.
+
+## 17 October 2026
+
+- **Explore a look before drawing screens.** With **Mood board** on in
+  Settings → Experiments and a Gemini key set, open **Design systems → Explore
+  a look…** or type `/moodboard` to generate nine non-UI mood pictures across
+  light, material, texture, colour, era, density, place, and lettering. Keep
+  favourites into a **Mood** board on the canvas, drop the rest or close the
+  tray in one undo, branch any kept or dropped-in reference photo with **More
+  like this** or **Push →** (`warmer`, `cooler`, `quieter`, `louder`, `older`,
+  `newer`, `rougher`, `finer`), or run `isocan mood explore|keep|drop|more|board`
+  from the CLI. Every kept picture and dropped-in reference photo gets an
+  automatic colour swatch strip under it (click a chip to copy its hex), and
+  **Design systems → Derive from the board** (or `/design-system`) derives a
+  `DESIGN.md` whose palette and direction cite the kept pictures in
+  `isocan.sources` — hover any token to light up the picture it came from on
+  the canvas. Once you build screens, open **Crit with the room…** (or
+  **Critique with…**) to add the **Board** critic (`isocan critic add board`,
+  `isocan critique <item> --by board`), which checks whether every colour and
+  surface on the screen feels like what you kept. Keeping is for people only;
+  agents are refused.
+
+
+## 15 October 2026
+
+- **Make a person a pass admitted your machine's person.** `isocan setup
+  <pass>` on a machine that already has someone keeps them as the default.
+  `isocan identity --home --as <actor id>` now switches the machine to the
+  admitted person, without folding anyone into anyone, and the same command
+  with the old id switches back. Tools that speak for the machine — scripts,
+  direct mode — then speak as them.
+
+
 ## 14 October 2026
 
 - **Say it like a designer.** Type "make the header pop more, it feels
@@ -55,13 +99,6 @@ second week.
   asks four now-or-instead pairs (density, brand, layout, tone) with its own
   guess highlighted. Or ask it to show you extremes, or name a product that
   gets it right. `isocan stuck`.
-
-- **Changes ripple.** Stop editing a screen for a minute and the canvas's
-  agent reads your edits back as a few named decisions, then shows every
-  other screen that would change, is already in sync or disagrees, with
-  previews you can keep. Nothing changes until you keep one, put the change
-  in the design system, or mark the screen a one-off. A pulse in the top
-  bar keeps one tick per screen. `isocan ripple`.
 
 - **The brief, as a card.** A design request's brief sits on the canvas as
   six lines: Making, For, Should feel, Never, Constraints, Right now. What

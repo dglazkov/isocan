@@ -7,7 +7,7 @@ import { isOpId, type Item, type MetaPatch, type NewVersion, type Operation, typ
  * item's content and patches its title and properties as one undoable op, and
  * is refused unless the item still stands where the writer last read it. The
  * design review and repair flows use it. The public CLI did not reach it, so
- * a generator that keeps one card current (keel's weekly Loop card, a "live
+ * a generator that keeps one card current (plates's weekly Loop card, a "live
  * pulse") could only stack an unconditional version over whatever a person had
  * done to the card, or append a new card every run.
  *

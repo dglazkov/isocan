@@ -1,5 +1,6 @@
 import { selectCreatedItems } from "./groupplacement.ts";
-import type { Actor, CanvasCursor, CanvasTheme, Item, ModuleMark, ThemeAnchor } from "@isocan/core";
+import type { Actor, CanvasCursor, CanvasTheme, DeckTransition, Item, ModuleMark, ThemeAnchor } from "@isocan/core";
+import { DECK_TRANSITIONS, deckTransitionLabel, isDeckTransition3d } from "@isocan/core";
 import { markOffered, moduleMarkIntent, moduleMarkPatch, moduleMarks } from "@isocan/core";
 import { canvasScopes, isDesignSystem, parentOf } from "@isocan/core";
 import { isDesignFile } from "@isocan/core/design-use";
@@ -35,6 +36,7 @@ import { canEditNow } from "./capability.ts";
 import { modules as shellModules } from "../modules.ts";
 import { canvasGroupEntries, groupDeleteLabel } from "./canvasgroupmenus.ts";
 import { openGroupCreation, groupTask, groupsEnabled } from "./canvasgroups.ts";
+import { openUiDevtools } from "./uitweaks.ts";
 
 /**
  * **What the right-click menu offers, and why each thing is on it.**
@@ -393,8 +395,6 @@ function oneItemEntries(one: Item, version: Item["versions"][number] | null, ctx
     { label: "Explain", run: () => explainItem(ctx.canvasId, ctx.actor, one.id) },
     // Walk it as someone else (proactive-agent phase 9) — `isocan walk`; a group of screens, a prototype or a screen, loaded on the click.
     ...(version?.mimeType === "text/html" || one.properties.kind === "group" ? [{ label: "Walk it as someone else…", run: () => walkItem(ctx.canvasId, ctx.actor, one.id) }] : []),
-    // Changes ripple (proactive-agent phase 6) — `isocan ripple`; a screen's edits read against every other screen, loaded on the click.
-    ...(version?.mimeType === "text/html" && history ? [{ label: "Ripple…", run: () => void import("../components/RipplePanel.tsx").then((m) => m.openRipple({ canvasId: ctx.canvasId, actor: ctx.actor, itemId: one.id })) }] : []),
     // N voices for a screen's words, each a variation (copy-edit phase 2) — `isocan words vary` — and, once
     // it has voices (on the screen or on one of them), all of them side by side to mix (phase 3) — `isocan
     // words mix`. Both load on the click, through the one lazy file. "Compare the copy…" stays dimmed until
@@ -664,7 +664,33 @@ export function canvasMenu(ctx: MenuContext): MenuEntry[] {
         });
       },
     },
+    { separator: "" },
+    {
+      label: "Customize UI…",
+      shortcutFor: "Customize UI",
+      run: () => openUiDevtools("layers"),
+    },
   ]);
+}
+
+/**
+ * **The deck's transition, as a set you can see** — the drawer's "Slide
+ * transition" rows. Full screen's bar offers the same `DECK_TRANSITIONS`
+ * in its own dropdown, since this menu sits under full screen. A canvas fact (`deckTransitionPatch`,
+ * one `project.update`), so every row writes; the 3D ones say so beside
+ * their names, because "Cube" alone does not tell you it will turn.
+ */
+function deckTransitionEntries(
+  current: DeckTransition,
+  set: (transition: DeckTransition) => void | Promise<void>,
+): MenuEntry[] {
+  return DECK_TRANSITIONS.map((transition) => ({
+    label: deckTransitionLabel(transition),
+    ...(isDeckTransition3d(transition) ? { value: "3D" } : {}),
+    checked: current === transition,
+    writes: true,
+    run: () => void set(transition),
+  }));
 }
 
 /**
@@ -730,6 +756,10 @@ export function chromeMenu(ctx: {
    *  own — null when nothing has been chosen (#204 phase 3). */
   cursor: CanvasCursor | null;
   setCursor: (cursor: CanvasCursor | null) => void | Promise<void>;
+  /** How this canvas's deck moves between slides, and the write that changes
+   *  it. Absent from a caller that does not offer the choice. */
+  deckTransition?: DeckTransition;
+  setDeckTransition?: (transition: DeckTransition) => void | Promise<void>;
   /** Open the switcher — the same face ⌘O opens. */
   openSwitcher: () => void;
   /** Whether the ground travels with the canvas or stays behind the glass. */
@@ -879,6 +909,20 @@ export function chromeMenu(ctx: {
     ...(ctx.groups?.length
       ? [{ label: "Groups", value: ctx.groupsValue ?? "", run: () => {}, submenu: ctx.groups }]
       : []),
+    /* **Slide transition** — how full screen moves from one slide to the
+       next, for everybody watching. Beside Groups because it is the same kind
+       of row: something about this canvas, not a place to go. */
+    ...(ctx.deckTransition && ctx.setDeckTransition
+      ? [
+          {
+            label: "Slide transition",
+            value: deckTransitionLabel(ctx.deckTransition),
+            writes: true,
+            run: () => {},
+            submenu: deckTransitionEntries(ctx.deckTransition, ctx.setDeckTransition),
+          },
+        ]
+      : []),
     { separator: "" },
     {
       /**
@@ -1013,6 +1057,11 @@ export function chromeMenu(ctx: {
           run: () => writeMotion(motion),
         })),
       ],
+    },
+    {
+      label: "Customize UI…",
+      shortcutFor: "Customize UI",
+      run: () => openUiDevtools("glass"),
     },
     /* **The cursor glow left this menu on 13 Sep** (#195 put it here). Its
        own note said it belonged "beside the minimap because it is the same

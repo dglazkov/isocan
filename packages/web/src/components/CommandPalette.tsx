@@ -15,6 +15,7 @@ import { latelyIds } from "../lib/lately.ts";
 import { useInboxStore } from "../stores/inboxStore.ts";
 import { loadSeen } from "../lib/seen.ts";
 import { switchCanvas } from "../lib/canvasswitch.ts";
+import { FloatingHandles, useFloatingBox } from "../lib/floatingbox.tsx";
 
 /**
  * **⌘K: a launcher for anything, not a second composer.**
@@ -76,6 +77,7 @@ export function CommandPalette({
   const [at, setAt] = useState(0);
   const field = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLDivElement>(null);
+  const float = useFloatingBox<HTMLDivElement>({ minWidth: 340, minHeight: 200 });
 
   useEffect(() => field.current?.focus(), []);
   // A new face starts with a clean field: what you typed to find "Switch
@@ -236,10 +238,13 @@ export function CommandPalette({
     <>
       <div className="palette-backdrop" onPointerDown={onClose} />
       <div
-        className={`palette${switching ? " palette-canvases" : ""}`}
+        ref={float.ref}
+        className={`palette${switching ? " palette-canvases" : ""}${float.isSized ? " is-sized" : ""}`}
+        style={float.style}
         role="dialog"
         aria-label={switching ? "Switch canvas" : "Run a command"}
       >
+        <FloatingHandles box={float} />
         <input
           ref={field}
           className="palette-field"

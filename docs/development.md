@@ -86,6 +86,18 @@ isocan identity --home --name "Paul"
 
 The `--home` flag identifies you as the owner of the machine.
 
+If this machine already has a person and `isocan setup <pass>` admitted you
+as someone else ("admitted but not made default"), make that actor the
+machine's person instead of naming a new one:
+
+```sh
+isocan identity --home --as <actorId>
+```
+
+It folds nothing and is reversible — the confirmation names the previous
+person, and `--home --as <their id>` switches back. The home refuses an actor
+this machine's badge was never handed.
+
 **Note:** Without `--home`, the command tries to identify the *agent* running
 it and fails if no agent is configured. Inside a Claude Code or Codex session,
 `--session` is implied. In that case, running `isocan identity` in an unbound

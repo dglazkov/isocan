@@ -14,6 +14,7 @@ import { hasRoomForChrome } from "./chrome.ts";
 import { canEditNow } from "./capability.ts";
 import { explainItem, walkItem } from "./itemactions.ts";
 import { hideChrome, showAllChrome, showChrome } from "./hideable.ts";
+import { openUiDevtools, startUiPiecePicker } from "./uitweaks.ts";
 import { modules, moduleViews } from "../modules.ts";
 
 /**
@@ -175,6 +176,23 @@ export const ACTIONS: readonly Action[] = [
       if (hidden) showChrome("canvas.topfade");
       else hideChrome("canvas.topfade");
     },
+  },
+  {
+    id: "ui-devtools",
+    name: "Customize UI (Devtools)…",
+    hint: "tweak control sizes, frosted glass opacity, z-index layers, radii, and colors live",
+    keys: "⌥D",
+    group: "View",
+    available: onCanvas,
+    run: () => openUiDevtools(),
+  },
+  {
+    id: "ui-pick-piece",
+    name: "Pick UI piece to tweak…",
+    hint: "point at any bar, rail, dock, or card on screen to open its Devtools",
+    group: "View",
+    available: onCanvas,
+    run: () => startUiPiecePicker(),
   },
   {
     id: "theme",
@@ -351,8 +369,6 @@ export const ACTIONS: readonly Action[] = [
   { id: "explain", name: "Explain this item", group: "Open", available: (ctx) => onCanvas(ctx) && ctx.selection.length === 1, run: (ctx) => explainItem(ctx.canvasId!, ctx.actor, ctx.selection[0]!) },
   // Proactive-agent phase 9: the selected flow walked as simulated people — `isocan walk`'s door.
   { id: "walk", name: "Walk it as someone else", group: "Open", available: (ctx) => onCanvas(ctx) && ctx.selection.length === 1, run: (ctx) => walkItem(ctx.canvasId!, ctx.actor, ctx.selection[0]!) },
-  // Proactive-agent phase 6: the selected screen's edits read against every other screen — `isocan ripple`'s door.
-  { id: "ripple", name: "Ripple this screen's changes", group: "Open", available: (ctx) => onCanvas(ctx) && ctx.selection.length === 1, run: (ctx) => void import("../components/RipplePanel.tsx").then((m) => m.openRipple({ canvasId: ctx.canvasId!, actor: ctx.actor, itemId: ctx.selection[0]! })) },
   {
     // Copy-edit phase 2: N voices for one screen's words, as variations — `isocan words vary`'s door.
     id: "vary-copy",

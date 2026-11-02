@@ -14,7 +14,6 @@
     "./questionnaire-adoption": "./src/questionnaire-adoption.ts",
     "./design-brief": "./src/design-brief.ts",
     "./brief-card": "./src/brief-card.ts",
-    "./ripple": "./src/ripple.ts",
     "./stuck": "./src/stuck.ts",
     "./desk-check": "./src/desk-check.ts",
     "./walk": "./src/walk.ts",
@@ -35,6 +34,9 @@
     "./semantic-zoom": "./src/semantic-zoom.ts",
     "./keys": "./src/keys.ts",
     "./keystore": "./src/keystore.ts",
+    "./mood": "./src/mood.ts",
+    "./motion": "./src/motion.ts",
+    "./motion-render": "./src/motion-render.ts",
     "./copy-deck": "./src/copy-deck.ts",
     "./copy-variants": "./src/copy-variants.ts",
     "./copy-fit": "./src/copy-fit.ts",
@@ -43,7 +45,8 @@
     "./wire-words": "./src/wire-words.ts",
     "./chatclean": "./src/chatclean.ts",
     "./diff": "./src/diff.ts",
-    "./voice-dsp": "./src/voice-dsp.ts"
+    "./voice-dsp": "./src/voice-dsp.ts",
+    "./ui-tweaks": "./src/ui-tweaks.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

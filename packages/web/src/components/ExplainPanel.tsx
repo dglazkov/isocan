@@ -8,6 +8,7 @@ import { uploadOrStageTextBlob } from "../lib/upload.ts";
 import { revealItem } from "../lib/zoomactions.ts";
 import { flashNotice, sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
+import { FloatingHandles, useFloatingBox } from "../lib/floatingbox.tsx";
 import "./explain.css";
 
 /**
@@ -55,6 +56,7 @@ function closeExplain(): void {
 }
 
 function ExplainPanel({ canvasId, actor, itemId, onClose }: ExplainRequest & { onClose: () => void }) {
+  const float = useFloatingBox<HTMLElement>({ minWidth: 260, minHeight: 160 });
   const canvas = useCanvasStore((s) => s.canvas);
   const [lead, setLead] = useState<{ lead: Actor | null; cannot: string | null } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -84,9 +86,12 @@ function ExplainPanel({ canvasId, actor, itemId, onClose }: ExplainRequest & { o
   }, [canvasId, actor.id]);
 
   if (!story || "refused" in story) {
-    return <aside className="explain-panel" data-explain-panel aria-label="Explain">
+    return <aside ref={float.ref} className="explain-panel" style={float.style} data-explain-panel aria-label="Explain">
+      <FloatingHandles box={float} />
       <button className="explain-close" aria-label="Close" onClick={onClose}>✕</button>
-      <p className="explain-empty">{story ? story.refused : "The canvas is not loaded."}</p>
+      <div className="float-scroll">
+        <p className="explain-empty">{story ? story.refused : "The canvas is not loaded."}</p>
+      </div>
     </aside>;
   }
 
@@ -141,19 +146,22 @@ function ExplainPanel({ canvasId, actor, itemId, onClose }: ExplainRequest & { o
   </>;
 
   const showCritique = !story.critique && !story.asked;
-  return <aside className="explain-panel" data-explain-panel={story.itemId} aria-label={`Explain “${story.title}”`}>
+  return <aside ref={float.ref} className="explain-panel" style={float.style} data-explain-panel={story.itemId} aria-label={`Explain “${story.title}”`}>
+    <FloatingHandles box={float} />
     <button className="explain-close" aria-label="Close" onClick={onClose}>✕</button>
-    <h3>Explain “{story.title}”</h3>
-    {sections.map((s) => <section key={s.key} data-explain-section={s.key}>
-      <h4>{s.heading}</h4>
-      <ul className="explain-list">
-        {s.lines.map((line, i) => <li key={i}>{line.text}{link(line)}</li>)}
-      </ul>
-    </section>)}
-    {canEdit && <footer className="explain-acts">
-      {showCritique && <button className="btn secondary" data-explain-critique disabled={busy || !lead?.lead || Boolean(lead.cannot)} onClick={() => void critique()}>Critique</button>}
-      <button className="btn secondary" data-explain-rationale disabled={busy} onClick={() => void copyRationale()}>Copy as rationale</button>
-    </footer>}
-    {canEdit && showCritique && lead?.cannot && <p className="explain-cannot" data-explain-cannot>No critique: {lead.cannot}. The history above stands without one.</p>}
+    <div className="float-scroll">
+      <h3>Explain “{story.title}”</h3>
+      {sections.map((s) => <section key={s.key} data-explain-section={s.key}>
+        <h4>{s.heading}</h4>
+        <ul className="explain-list">
+          {s.lines.map((line, i) => <li key={i}>{line.text}{link(line)}</li>)}
+        </ul>
+      </section>)}
+      {canEdit && <footer className="explain-acts">
+        {showCritique && <button className="btn secondary" data-explain-critique disabled={busy || !lead?.lead || Boolean(lead.cannot)} onClick={() => void critique()}>Critique</button>}
+        <button className="btn secondary" data-explain-rationale disabled={busy} onClick={() => void copyRationale()}>Copy as rationale</button>
+      </footer>}
+      {canEdit && showCritique && lead?.cannot && <p className="explain-cannot" data-explain-cannot>No critique: {lead.cannot}. The history above stands without one.</p>}
+    </div>
   </aside>;
 }

@@ -58,11 +58,11 @@ describe("the Loop findings are derived, not written", () => {
     expect(offenders, "a download token is committed here; move it to a secret and rotate it").toEqual([]);
   });
 
-  it("keel's own loop test passes — keel ships it, and CI runs vitest, not node --test", () => {
-    /* keel-loop.yml (keel practice `loop`) replaced isocan's loop.yml on
-       5 Oct 2026; the guards that lived here (pull never decides, Loop is
+  it("plates's own loop test passes — plates ships it, and CI runs vitest, not node --test", () => {
+    /* The loop workflow, adopted as Keel practice `loop`, replaced isocan's
+       loop.yml on 5 Oct 2026 (now plates-loop.yml); the guards that lived here (pull never decides, Loop is
        enabled in a fresh CLI, the key reaches the CLI as STITCH_API_KEY) are
-       keel's now, held by its tests/loop.test.mjs and its own workflow
+       plates's now, held by its tests/loop.test.mjs and its own workflow
        tests. This runs that file so isocan's gate still reads it. */
     const out = spawnSync(process.execPath, ["--test", `${repo}/tests/loop.test.mjs`], { cwd: repo, encoding: "utf8" });
     expect(out.status, out.stdout + out.stderr).toBe(0);

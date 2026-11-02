@@ -232,6 +232,20 @@ export function warmHtmlSnapshot(
   return renderHtmlBlobSnapshot(canvasId, blobHash, width, height, true);
 }
 
+/**
+ * Gently warm the WebP raster snapshot for an offscreen HTML screen during
+ * browser idle time while the camera is calm, so zooming out or panning fast
+ * finds the still picture already decoded in memory.
+ */
+export function warmIdleHtmlSnapshot(
+  canvasId: string,
+  blobHash: string,
+  width: number,
+  height: number,
+): Promise<string | null> {
+  return renderHtmlBlobSnapshot(canvasId, blobHash, width, height, false);
+}
+
 /** The cached still picture of an HTML item's blob, as an object URL — null until it has rendered, or while `enabled` is false. */
 export function useHtmlSnapshot(
   canvasId: string,

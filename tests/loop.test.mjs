@@ -1,6 +1,6 @@
 // Loop's findings are files, and docs/LOOP.md is a view of them: the same
 // arrangement as the roadmap, and the same guard, or the view is the first
-// thing to fall behind. Managed by keel (practice `loop`). This file is how the
+// thing to fall behind. Managed by plates (practice `loop`). This file is how the
 // project's gate runs `render --check`: keep it in what `npm test` runs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

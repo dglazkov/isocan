@@ -2,13 +2,7 @@ import type { Actor, CanvasContents, WebHost } from "@isocan/core";
 import { itemPath } from "@isocan/core";
 import { usePresentation } from "../lib/canvasPresentation.ts";
 import { presentedCanvas, previewedCanvas } from "../lib/presentation.ts";
-import {
-  CONTENT_ZOOM_MIN,
-  EDGE_ZOOM_MIN,
-  contentShownAtZoom,
-  edgesShownAtZoom,
-  zoomBandAt,
-} from "../lib/chrome.ts";
+import { EDGE_ZOOM_MIN, edgesShownAtZoom } from "../lib/chrome.ts";
 import { modules } from "../modules.ts";
 import { Suspense, lazy, useCallback, useContext, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
@@ -19,13 +13,7 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { currentCommands } from "../lib/commands.ts";
 import { fetchBlobText } from "../lib/blobtext.ts";
 
-export {
-  CONTENT_ZOOM_MIN,
-  EDGE_ZOOM_MIN,
-  contentShownAtZoom,
-  edgesShownAtZoom,
-  zoomBandAt,
-};
+export { EDGE_ZOOM_MIN, edgesShownAtZoom };
 
 const LazyNodeEdgesUnderlay = lazy(() => import("./NodeEdgesUnderlay.tsx"));
 
@@ -56,10 +44,10 @@ function hasAnyDeclaredEdge(canvas: CanvasContents): boolean {
  * anchor: an arrow between kept screens is something you click, retarget and
  * play from (`core/modules.ts`, `WebHost`, "Who gets it").
  *
- * Governed by the 3-band zoom rule (`edgesShownAtZoom` / `zoomBandAt`):
- * - `close` (`scale >= 0.25`): node content and edges shown.
- * - `farther` (`0.08 <= scale < 0.25`): node content hidden, edges shown.
- * - `furthest` (`scale < 0.08`): both node content and edges hidden.
+ * Directional edges and module underlays stay shown down to `EDGE_ZOOM_MIN`
+ * (`edgesShownAtZoom`) and hide when zoomed past that floor (`scale < 0.08`).
+ * Node content itself is governed per item by screen size (`hasRoomForChrome`,
+ * `textIsLegible`), never by a raw scale cutoff.
  */
 export function ModuleUnderlays({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   const presentation = usePresentation();
@@ -76,13 +64,8 @@ export function ModuleUnderlays({ canvasId, actor }: { canvasId: string; actor: 
   const openItem = useCallback((itemId: string, anchor?: string) => navigate(`${itemPath(canvasId, itemId)}${anchor ? `?at=${encodeURIComponent(anchor.replace(/^#/, ""))}` : ""}`), [canvasId, navigate]);
   // A runtime module that arrived after first paint is a new underlay.
   useUiStore((s) => s.modulesGeneration);
-  const held = useRef<{ c?: boolean; e?: boolean }>({}).current;
-  const edgesVisible = useUiStore((s) => {
-    const band = zoomBandAt(s.viewport.scale, held);
-    held.c = band === "close";
-    held.e = edgesShownAtZoom(s.viewport.scale, held.e);
-    return held.e;
-  });
+  const held = useRef<{ e?: boolean }>({}).current;
+  const edgesVisible = useUiStore((s) => (held.e = edgesShownAtZoom(s.viewport.scale, held.e)));
   if (!canvas || !edgesVisible) return null;
   const previewed = previewedCanvas(presentedCanvas(canvas, presentation), gesture);
   const facts = {

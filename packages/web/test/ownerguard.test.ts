@@ -71,21 +71,28 @@ describe("a slide that cannot be photographed is not animated", () => {
   const full = read("../src/components/FullScreen.tsx");
   const viewer = read("../src/components/Viewer.tsx");
 
-  it("cuts when either side of the flip is a frame", () => {
+  it("never puts a frame in a view transition", () => {
     /**
      * A view transition animates a SNAPSHOT, and a sandboxed cross-origin
      * iframe captures as a blank rectangle — so the push was a white flash
      * across the screen on every flip. Caching never touched it: the frame
-     * was loaded the whole time, it just cannot be photographed.
+     * was loaded the whole time, it just cannot be photographed. So a flip
+     * with a frame on ONE side cuts, and a flip with frames on BOTH sides is
+     * handed to the frame pool (a live note) and returns before any view
+     * transition starts.
      */
-    expect(flip).toMatch(/framed = false/);
-    expect(flip).toMatch(/if \(\s*framed \|\|/);
+    expect(flip).toMatch(/framed: Framing = "none"/);
+    expect(flip).toMatch(/if \(\s*framed === "one" \|\|/);
+    const live = flip.indexOf('if (framed === "both")');
+    expect(live).toBeGreaterThan(-1);
+    expect(live).toBeLessThan(flip.indexOf("document.startViewTransition("));
   });
 
   it("is asked on both faces of the deck, which flip the same way", () => {
     for (const [name, src] of [["full screen", full], ["the viewer", viewer]] as const) {
       expect(src, `${name} does not pass framed`).toContain("isFramedItem(next)");
       expect(src, `${name} ignores the slide being left`).toContain("isFramedItem(here)");
+      expect(src, `${name} ignores the canvas's transition`).toContain("deckTransitionOf(");
     }
   });
 });

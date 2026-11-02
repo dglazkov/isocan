@@ -101,6 +101,40 @@ export function frameStats(gaps) {
 }
 
 /**
+ * Blank-content and flicker counts across sampled frames/mutations of a gesture.
+ *
+ * Each sample lists the item ids on screen whose faces were `ready` vs `blank`
+ * at that beat. `blankFrames` counts samples with any blank item on screen;
+ * `flickers` counts transitions where an item already seen `ready` on screen
+ * drops to `blank` later in the same gesture.
+ */
+export function flickerStats(samples) {
+  let blankFrames = 0;
+  let flickers = 0;
+  const blankIds = new Set();
+  const seen = new Map();
+  for (const sample of samples) {
+    const blank = sample.blank ?? [];
+    const ready = sample.ready ?? [];
+    if (blank.length > 0) blankFrames++;
+    for (const id of blank) {
+      blankIds.add(id);
+      if (seen.get(id) === "ready") flickers++;
+      seen.set(id, "blank");
+    }
+    for (const id of ready) {
+      seen.set(id, "ready");
+    }
+  }
+  return {
+    samples: samples.length,
+    blankFrames,
+    flickers,
+    blankItems: [...blankIds].sort(),
+  };
+}
+
+/**
  * **What a walk across a living ground cost**, from its inter-frame gaps: the
  * middle, the tail a person feels (p95), the worst, and how many frames a
  * screen refreshing at `hz` would have shown twice — a gap of two refreshes is
@@ -268,6 +302,9 @@ async function main() {
   const arg = (name, fallback) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : fallback; };
   const root = path.resolve(arg("--root", fileURLToPath(new URL("..", import.meta.url))));
   const grounds = argv.includes("--grounds");
+  const check = argv.includes("--check");
+  const maxP90 = Number(arg("--max-p90", "34"));
+  const itemsExplicit = argv.includes("--items");
   const items = Number(arg("--items", grounds ? "6" : "250"));
   // The grounds are measured at the size the budget names (1440p); the
   // gestures keep the 1440x900 their wheel and drag coordinates assume.
@@ -316,10 +353,19 @@ async function main() {
     const screen = (i) => `<!doctype html><html><head><meta charset="utf-8"><title>Acme ${i}</title><style>body{margin:0;font-family:Georgia,serif;background:#f6f3ec;color:#1d2a24}header{padding:24px 32px;background:#234236;color:#f6f3ec}h1{margin:0;font-size:36px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:24px 32px}.card{background:#fff;border-radius:8px;overflow:hidden}.card img{width:100%;display:block}.card p{margin:8px 12px}</style></head><body><header><h1>Acme store ${i}</h1><p>Gear for the long way round</p></header><section class="grid">${[0, 1, 2, 3, 4, 5].map((k) => `<div class="card"><img src="${photo(i + k)}" alt=""><p>Item ${k}</p></div>`).join("")}</section><section id="more"></section><script>document.getElementById("more").innerHTML = "<p style='padding:0 32px'>" + "Built by the page's own script. ".repeat(8) + "</p>";</script></body></html>`;
     const note = (i) => `# Acme note ${i}\n\nThe **quarterly** plan for team ${i % 12}, with a [link](https://example.com/${i}) and \`code\`.\n\n- first point about item ${i}\n- second point, *emphasised*\n- third point with more words to wrap across the card\n\n> A quote that sits under the list.\n`;
     const ids = [];
+    const htmlIds = [];
     if (html > 0) {
-      for (let i = 0; i < html; i++) ids.push((await canvas.add({ content: screen(i), mime: "text/html", title: `Acme screen ${i}`, at: { x: (i % 6) * 960, y: Math.floor(i / 6) * 720 }, size: { width: 880, height: 640 } })).id);
-    } else for (let i = 0; i < items; i++) ids.push((await canvas.add({ content: note(i), mime: "text/markdown", title: `Acme ${i}`, at: { x: (i % 20) * 360, y: Math.floor(i / 20) * 300 }, size: { width: 320, height: 260 } })).id);
-    for (let t = 0; t < Math.min(40, items); t++) await canvas.comment(ids[(t * 3) % ids.length], `Acme comment ${t}`);
+      for (let i = 0; i < html; i++) {
+        const id = (await canvas.add({ content: screen(i), mime: "text/html", title: `Acme screen ${i}`, at: { x: (i % 6) * 960, y: Math.floor(i / 6) * 720 }, size: { width: 880, height: 640 } })).id;
+        ids.push(id);
+        htmlIds.push(id);
+      }
+    }
+    if (html === 0 || itemsExplicit) {
+      const yBase = html > 0 ? Math.ceil(html / 6) * 720 + 80 : 0;
+      for (let i = 0; i < items; i++) ids.push((await canvas.add({ content: note(i), mime: "text/markdown", title: `Acme ${i}`, at: { x: (i % 20) * 360, y: yBase + Math.floor(i / 20) * 300 }, size: { width: 320, height: 260 } })).id);
+    }
+    for (let t = 0; t < Math.min(40, ids.length); t++) await canvas.comment(ids[(t * 3) % ids.length], `Acme comment ${t}`);
 
     const b = await browser();
     let mover = null;
@@ -328,7 +374,7 @@ async function main() {
       await b.send("Page.navigate", { url: origin });
       await throughTheDoor(b, origin, "Acme Viewer");
       await b.send("Page.navigate", { url: `${origin}/p/${canvasId}` });
-      const need = Math.min(20, html > 0 ? html : items);
+      const need = Math.min(20, ids.length);
       await until(b, `document.querySelectorAll("[data-item-id]").length >= ${need}`, "items to render", 60_000);
       await sleep(2500);
       const rendered = await b.ev(`document.querySelectorAll("[data-item-id]").length`);
@@ -344,7 +390,7 @@ async function main() {
       // Pictures render after the camera is calm; give them, and any live frame, time.
       if (html > 0) await sleep(6000);
       const liveFrames = `[...document.querySelectorAll(".item iframe")].filter((f) => { const r = f.getBoundingClientRect(); return r.width > 0 && r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth; }).length`;
-      if (html > 0) console.log(`board    ${html} screens, zoom ${(await b.ev(worldScale)).toFixed(2)}, ${await b.ev(liveFrames)} live frames on screen, ${await b.ev(`document.querySelectorAll("img.html-snapshot").length`)} pictures, ${width}x${height}@${dpr}x`);
+      if (html > 0) console.log(`board    ${html} screens${itemsExplicit ? ` + ${items} notes` : ""}, zoom ${(await b.ev(worldScale)).toFixed(2)}, ${await b.ev(liveFrames)} live frames on screen, ${await b.ev(`document.querySelectorAll("img.html-snapshot").length`)} pictures, ${width}x${height}@${dpr}x`);
       await b.send("Emulation.setCPUThrottlingRate", { rate: throttle });
       if (grounds) {
         const { LIVING } = await import("@isocan/core");
@@ -368,8 +414,81 @@ async function main() {
         if (awake.length) process.exitCode = 1;
         return;
       }
-      const probe = `(() => { window.__gaps = []; window.__cams = new Set(); window.__cursors = new Set(); window.__ghosts = new Set(); let last = performance.now(); const f = (t) => { window.__gaps.push(t - last); last = t; window.__cams.add(document.querySelector('.world')?.style.transform ?? ''); window.__cursors.add([...document.querySelectorAll('.remote-cursor')].map((c) => c.style.left).join()); window.__ghosts.add(document.querySelector('.item.ghosted')?.style.translate ?? ''); if (window.__on) requestAnimationFrame(f); }; window.__on = true; requestAnimationFrame(f); window.__loaf = []; if (!window.__loafOn) { window.__loafOn = true; try { new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__loaf.push({ duration: e.duration, render: e.renderStart ? e.startTime + e.duration - e.renderStart : 0, scripts: e.scripts.map((x) => ({ duration: x.duration, invoker: x.invoker })) }); }).observe({ type: 'long-animation-frame' }); } catch {} } return true; })()`;
-      const collect = `(() => { window.__on = false; return { gaps: window.__gaps.slice(1), cams: window.__cams.size, cursors: window.__cursors.size, ghosts: window.__ghosts.size - 1, loaf: window.__loaf }; })()`;
+      const htmlSetLit = JSON.stringify(htmlIds);
+      const probe = `(() => {
+        const htmlIds = new Set(${htmlSetLit});
+        const world = document.querySelector('.world');
+        const boxes = [];
+        for (const el of document.querySelectorAll('.item[data-item-id]')) {
+          const id = el.dataset.itemId;
+          if (!id || el.classList.contains('area') || el.hasAttribute('data-group-id')) continue;
+          const c = el.querySelector(':scope > .item-content');
+          if (!c) continue;
+          boxes.push({
+            id,
+            c,
+            x: parseFloat(el.style.left) || 0,
+            y: parseFloat(el.style.top) || 0,
+            w: parseFloat(el.style.width) || 0,
+            h: parseFloat(el.style.height) || 0,
+          });
+        }
+        window.__gaps = []; window.__cams = new Set(); window.__cursors = new Set(); window.__ghosts = new Set(); window.__faces = [];
+        let last = performance.now();
+        const parseCamera = (xf) => {
+          const t = /translate(?:3d)?\\((-?[0-9.]+)px,\\s*(-?[0-9.]+)px/.exec(xf);
+          const s = /scale\\(([0-9.]+)\\)/.exec(xf);
+          return { tx: t ? Number(t[1]) : 0, ty: t ? Number(t[2]) : 0, scale: s ? Number(s[1]) : 1 };
+        };
+        const sampleFaces = () => {
+          const xf = world?.style.transform ?? '';
+          const { tx, ty, scale } = parseCamera(xf);
+          const ready = []; const blank = [];
+          for (const b of boxes) {
+            const left = b.x * scale + tx;
+            const top = b.y * scale + ty;
+            const w = b.w * scale;
+            const h = b.h * scale;
+            if (left + w <= 4 || top + h <= 4 || left >= innerWidth - 4 || top >= innerHeight - 4 || w < 24 || h < 18) continue;
+            const c = b.c;
+            const isHtml = htmlIds.has(b.id) || !!c.querySelector('.html-view-surface, .html-view');
+            const roomy = w >= 180 && h >= 110;
+            if (!isHtml && !roomy && !c.querySelector('.text-mark, .sz-gist')) continue;
+            let isBlank = false;
+            if (c.querySelector('.item-standby')) {
+              isBlank = true;
+            } else if (!c.firstElementChild) {
+              isBlank = true;
+            } else if (isHtml) {
+              const img = c.querySelector('img.html-snapshot');
+              const snapOk = !!img && img.complete && img.naturalWidth > 0;
+              const liveOk = [...c.querySelectorAll('iframe')].some((fr) => !fr.classList.contains('arriving'));
+              if (!snapOk && !liveOk) isBlank = true;
+            }
+            if (isBlank) blank.push(b.id);
+            else ready.push(b.id);
+          }
+          window.__faces.push({ ready, blank });
+        };
+        const f = (t) => {
+          window.__gaps.push(t - last); last = t;
+          window.__cams.add(world?.style.transform ?? '');
+          window.__cursors.add([...document.querySelectorAll('.remote-cursor')].map((c) => c.style.left).join());
+          window.__ghosts.add(document.querySelector('.item.ghosted')?.style.translate ?? '');
+          sampleFaces();
+          if (window.__on) requestAnimationFrame(f);
+        };
+        window.__on = true;
+        sampleFaces();
+        requestAnimationFrame(f);
+        window.__loaf = [];
+        if (!window.__loafOn) {
+          window.__loafOn = true;
+          try { new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__loaf.push({ duration: e.duration, render: e.renderStart ? e.startTime + e.duration - e.renderStart : 0, scripts: e.scripts.map((x) => ({ duration: x.duration, invoker: x.invoker })) }); }).observe({ type: 'long-animation-frame' }); } catch {}
+        }
+        return true;
+      })()`;
+      const collect = `(() => { window.__on = false; if (window.__faceMo) { window.__faceMo.disconnect(); window.__faceMo = null; } return { gaps: window.__gaps.slice(1), cams: window.__cams.size, cursors: window.__cursors.size, ghosts: window.__ghosts.size - 1, loaf: window.__loaf, faces: window.__faces }; })()`;
       const wheel = (dx, dy, modifiers = 0) => b.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: 720, y: 450, deltaX: dx, deltaY: dy, modifiers });
       if (profileOut) { await b.send("Profiler.enable"); await b.send("Profiler.setSamplingInterval", { interval: 250 }); }
       // A face of its own for the cursor gesture, made before any gesture is
@@ -438,14 +557,35 @@ async function main() {
         if (name === "cursor" && got.cursors < 10) throw new Error(`REFUSED: the cursor gesture drew the remote cursor at only ${got.cursors} positions — its beats are not reaching this browser`);
         if (name === "remote-drag" && got.cursors < 10) throw new Error(`REFUSED: the mover's cursor reached this browser at only ${got.cursors} positions — its beats are not arriving`);
         if ((name === "pan" || name === "zoom") && got.cams < 10) throw new Error(`REFUSED: the ${name} gesture moved the camera through only ${got.cams} positions — the wheel is not reaching the canvas`);
-        results[name] = { ...frameStats(got.gaps), cameraPositions: got.cams, ...(name === "remote-drag" ? { ghostPositions: got.ghosts } : {}), longFrames: longFrames(got.loaf), ...(profile ? { bySource: selfTimeBySource(profile, assets) } : {}) };
+        const stability = flickerStats(got.faces ?? []);
+        results[name] = { ...frameStats(got.gaps), cameraPositions: got.cams, blankFrames: stability.blankFrames, flickers: stability.flickers, blankItems: stability.blankItems, ...(name === "remote-drag" ? { ghostPositions: got.ghosts } : {}), longFrames: longFrames(got.loaf), ...(profile ? { bySource: selfTimeBySource(profile, assets) } : {}) };
       }
-      if (profileOut) writeFileSync(profileOut, JSON.stringify({ items, throttle, results }, null, 2));
+      if (profileOut) writeFileSync(profileOut, JSON.stringify({ items, html, throttle, results }, null, 2));
+      if (recordOut) {
+        const chrome = await b.send("Browser.getVersion").then((v) => v.product, () => "Chrome (version not read)");
+        const cpu = os.cpus()[0]?.model ?? "unknown CPU";
+        const machine = `${cpu}, ${Math.round(os.totalmem() / 2 ** 30)} GB, ${os.platform()} ${os.arch()}`;
+        const commit = (() => { try { return execFileSync("git", ["rev-parse", "--short", "HEAD"], { cwd: root, encoding: "utf8" }).trim(); } catch { return "unknown"; } })();
+        writeFileSync(recordOut, `${JSON.stringify({ at: new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()), commit, machine, chrome, page: `${width}x${height}@${dpr}x`, throttle, items: html > 0 && !itemsExplicit ? 0 : items, html, scale: toScale || null, gestures: results }, null, 2)}\n`);
+      }
+      const boardLabel = html > 0 ? `${html} screens${itemsExplicit ? `+${items} notes` : ""}` : `${items}`;
       for (const [name, r] of Object.entries(results)) {
-        console.log(`${name.padEnd(6)} items=${html > 0 ? `${html} screens` : items}${r.ghostPositions !== undefined ? ` ghosts=${r.ghostPositions}` : ""} throttle=${throttle}x frames=${r.frames} p50=${r.p50.toFixed(1)} p90=${r.p90.toFixed(1)} p99=${r.p99.toFixed(1)} worst=${r.worst.toFixed(1)} >16.7ms=${r.over16} >32ms=${r.over32}`);
+        console.log(`${name.padEnd(6)} items=${boardLabel}${r.ghostPositions !== undefined ? ` ghosts=${r.ghostPositions}` : ""} throttle=${throttle}x frames=${r.frames} p50=${r.p50.toFixed(1)} p90=${r.p90.toFixed(1)} p99=${r.p99.toFixed(1)} worst=${r.worst.toFixed(1)} >16.7ms=${r.over16} >32ms=${r.over32} blank=${r.blankFrames} flicker=${r.flickers}`);
         const lf = r.longFrames;
         if (lf.count) console.log(`         long frames ${lf.count}: script ${lf.scriptMs.toFixed(0)} ms, style/layout/paint ${lf.renderMs.toFixed(0)} ms; worst ${lf.worst.map((w) => `${w.ms.toFixed(0)} (${w.scriptMs.toFixed(0)} script, ${w.renderMs.toFixed(0)} render, ${w.by})`).join(", ")}`);
         if (r.bySource) for (const f of r.bySource.files.slice(0, 8)) console.log(`         ${f.ms.toFixed(0).padStart(6)} ms ${(100 * f.share).toFixed(1).padStart(5)}%  ${f.file}`);
+      }
+      if (check) {
+        const failures = [];
+        for (const [name, r] of Object.entries(results)) {
+          if (r.blankFrames > 0) failures.push(`${name} showed blank content on ${r.blankFrames} sampled beat(s) (${r.blankItems.join(", ")})`);
+          if (r.flickers > 0) failures.push(`${name} flickered ${r.flickers} time(s) on screen`);
+          if ((name === "pan" || name === "zoom") && r.p90 > maxP90) failures.push(`${name} p90 ${r.p90.toFixed(1)} ms exceeded ${maxP90} ms budget`);
+        }
+        if (failures.length) {
+          console.error(`FAIL     ${failures.join("; ")}`);
+          process.exitCode = 1;
+        }
       }
       const errors = b.takeErrors();
       if (errors.length) console.log(`page errors: ${JSON.stringify(errors).slice(0, 300)}`);

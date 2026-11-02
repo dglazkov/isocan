@@ -247,7 +247,7 @@ describe("renovate.json keeps its lanes", () => {
   const config = JSON.parse(readFileSync(`${root}/renovate.json`, "utf8"));
 
   it("leaves the test fixtures alone", () => {
-    // keel's renovate.json (5 Oct 2026) ignores every fixtures directory,
+    // Keel's renovate.json (adopted 5 Oct 2026, now Plates) ignores every fixtures directory,
     // which covers test/fixtures/.
     expect(config.ignorePaths.some((p: string) => p === "test/fixtures/**" || p === "**/fixtures/**")).toBe(true);
   });

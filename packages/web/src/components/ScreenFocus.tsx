@@ -5,7 +5,6 @@ import {
   isDesignSystem,
   newGroupId,
   newVersionId,
-  selectGoverningDesign,
   visualFaceOf,
   type FocusFacts,
   type FocusSubtarget,
@@ -189,124 +188,6 @@ export async function saveScreenCopyEdits(
     newGroupId(),
   );
   return { ok: true, versionId, html: outcome.html };
-}
-
-export function ScreenFocusView(facts: FocusFacts) {
-  const [html, setHtml] = useState<string | null>(null);
-  const [viewport, setViewport] = useState<ScreenViewportId>("fit");
-  const [infoOpen, setInfoOpen] = useState(false);
-  const readTextRef = useRef(facts.readText);
-  readTextRef.current = facts.readText;
-
-  useEffect(() => {
-    let active = true;
-    void readTextRef
-      .current()
-      .then((t) => {
-        if (active) setHtml(t);
-      })
-      .catch(() => {
-        if (active) setHtml("");
-      });
-    return () => {
-      active = false;
-    };
-  }, [facts.version.blobHash]);
-
-  const governing = useMemo(
-    () => selectGoverningDesign(facts.canvas, [], { at: facts.item }),
-    [facts.canvas, facts.item],
-  );
-
-  if (html === null) {
-    return <div className="page-note">Loading screen…</div>;
-  }
-
-  const preset =
-    SCREEN_VIEWPORT_PRESETS.find((p) => p.id === viewport) ?? SCREEN_VIEWPORT_PRESETS[3]!;
-  const notes = facts.item.properties?.notes?.trim() ?? "";
-
-  return (
-    <div className="screen-focus-view" data-testid="screen-focus-view">
-      <div className="screen-focus-toolbar">
-        <div className="screen-viewport-group" role="group" aria-label="Viewport width">
-          {SCREEN_VIEWPORT_PRESETS.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              data-viewport-preset={p.id}
-              className={`screen-viewport-btn${viewport === p.id ? " active" : ""}`}
-              onClick={() => setViewport(p.id)}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-        {governing.status === "selected" && governing.item && (
-          <span className="screen-governing-badge" title="Governing DESIGN.md">
-            ◆ {governing.item.title}
-          </span>
-        )}
-        <span className="spacer" />
-        <button
-          type="button"
-          className={`screen-info-btn${infoOpen ? " active" : ""}`}
-          aria-expanded={infoOpen}
-          onClick={() => setInfoOpen((v) => !v)}
-        >
-          Screen Info
-        </button>
-      </div>
-      <div className="screen-focus-body">
-        <div className="screen-focus-stage-wrap">
-          <div
-            className="screen-focus-frame"
-            data-viewport-width={preset.width ?? "fit"}
-            style={
-              preset.width
-                ? { width: `${preset.width}px`, maxWidth: "100%" }
-                : { width: "100%" }
-            }
-          >
-            <iframe
-              className="html-view screen-focus-iframe"
-              sandbox="allow-scripts"
-              srcDoc={html}
-              title={facts.item.title}
-            />
-          </div>
-        </div>
-        {infoOpen && (
-          <aside className="screen-focus-rail" aria-label="Screen info">
-            <div className="screen-rail-section">
-              <strong>Governing Design</strong>
-              <p>
-                {governing.status === "selected" && governing.item
-                  ? `${governing.item.title} (${governing.item.id})`
-                  : "No governing DESIGN.md on this canvas"}
-              </p>
-            </div>
-            <div className="screen-rail-section">
-              <strong>Versions ({facts.item.versions.length})</strong>
-              <ul className="screen-version-list">
-                {facts.item.versions.map((v, i) => (
-                  <li key={v.id}>
-                    <code>v{i + 1}</code> · {v.filename} ({v.size} B)
-                  </li>
-                ))}
-              </ul>
-            </div>
-            {notes && (
-              <div className="screen-rail-section">
-                <strong>Speaker Notes</strong>
-                <p>{notes}</p>
-              </div>
-            )}
-          </aside>
-        )}
-      </div>
-    </div>
-  );
 }
 
 export function ScreenFocusEdit(facts: FocusFacts) {
@@ -559,7 +440,10 @@ export const screenFocusFacet: ModuleFocus<
   id: "builtin.screen",
   priority: 0,
   matches: isHtmlScreenFocusMatch,
-  view: ScreenFocusView,
+  // No `view`: View on an HTML screen is the screen itself, full bleed — a
+  // slide or a page needs no viewport chrome, and the floating FocusHeader
+  // would sit on top of any bar we drew. The viewport presets and state
+  // previews live in Edit, where they are tools rather than furniture.
   edit: ScreenFocusEdit,
   agentPrompts: [
     {

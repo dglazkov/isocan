@@ -70,7 +70,7 @@ describe("every ground this build offers can actually be drawn", () => {
   });
 
   it("gives every painted ground a holding colour of its own", () => {
-    /* What shows before the JPEG arrives, and what `groundtone.ts` draws the
+    /* What shows before the JPEG arrives, and what `groundtoken.ts` draws the
        top fade from. Its own rule, not the shared one: the tile behaviour is
        `.canvas-theme-painted` and this is the half that differs. */
     for (const theme of Object.keys(PAINTED)) {

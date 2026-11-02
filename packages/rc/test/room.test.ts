@@ -20,6 +20,7 @@ import {
   type RoomRows,
   type RoomState,
 } from "../src/index.ts";
+import { formatThoughtStatus, humanizeToolStatus } from "../src/helpers.ts";
 
 /**
  * **The room over in-memory deps** (docs/projects/room/phases.md, phase 1's
@@ -127,6 +128,7 @@ class AcmeHome {
    * badge holds them (`held-elsewhere`), or a refusal that passes on its own
    * (`claimed-just-now`, `live`). */
   claimRefused = new Map<string, string>();
+  sessionUpdates: Array<{ sessionId: string; patch: Record<string, unknown> }> = [];
   private waiters: (() => void)[] = [];
   private nextSession = 1;
 
@@ -166,7 +168,7 @@ class AcmeHome {
         threadId: string;
         anchorItemId?: string | null;
         main?: true;
-        comment: { id: string; body: string; record?: true | string };
+        comment: { id: string; body: string; record?: true | string; items?: string[] };
       };
       const thread = (this.threads[o.threadId] ??= {
         id: o.threadId,
@@ -181,6 +183,7 @@ class AcmeHome {
         author: actor,
         createdAt: new Date(this.clock.now).toISOString(),
         ...(o.comment.record ? { record: o.comment.record } : {}),
+        ...(o.comment.items ? { items: o.comment.items } : {}),
       } as CommentThread["comments"][number]);
     }
     for (const wake of this.waiters.splice(0)) wake();
@@ -232,8 +235,9 @@ class AcmeHome {
         home.sessions.set(sessionId, { actor, ...(harness ? { harness } : {}), ...(kind ? { kind } : {}) });
         return { sessionId };
       },
-      updateSession: async (_canvasId: string, sessionId: string) => {
+      updateSession: async (_canvasId: string, sessionId: string, patch: unknown) => {
         if (!home.sessions.has(sessionId)) throw new ApiError(404, "no such session");
+        home.sessionUpdates.push({ sessionId, patch: patch as Record<string, unknown> });
         return { ok: true };
       },
       endSession: async (_canvasId: string, sessionId: string) => {
@@ -1559,6 +1563,91 @@ describe("a budgeted agent's run", () => {
     expect(cancelled).toEqual(["acp_run"]);
     expect(lines).toContain("Percy · run so far — 1 of 6 turns, $0.42 of $0.40");
     expect(systemLines(home, threadId)).toEqual(["Percy stopped at its budget — $0.42 of $0.40 for this run. Ask again in a new thread for a new run."]);
+    await room.stop();
+    await room.done;
+  });
+
+  it("targets the referenced item on summons and streams readable thoughts and tool actions to the cursor", async () => {
+    expect(formatThoughtStatus("Let's inspect the yellow banner layout and spacing.")).toBe(
+      "💭 Let's inspect the yellow banner layout and spacing…",
+    );
+    expect(humanizeToolStatus("File .agents/skills/isocan-collab/SKILL.md")).toEqual({
+      status: "checking canvas guide…",
+    });
+
+    const clock = new HandClock();
+    const home = new AcmeHome(clock);
+    home.enrol(PERCY);
+    home.items["itm_yellow"] = {
+      id: "itm_yellow",
+      title: "Acme Yellow Banner",
+      x: 200,
+      y: 100,
+      width: 900,
+      height: 72,
+      properties: {},
+      versions: [{ id: "v1", blobHash: "h1", mimeType: "text/html", filename: "banner.html", size: 10, createdAt: "", createdBy: OWNER }],
+      currentVersionId: "v1",
+      createdAt: "",
+      createdBy: OWNER,
+      updatedAt: "",
+      updatedBy: OWNER,
+    };
+    const rows: RcAgentRow[] = [
+      { canvasId: CANVAS.id, actorId: PERCY.id, name: PERCY.name, harness: "claude-code", cwd: "/acme/percy", sessionId: null },
+    ];
+    const { deps } = roomOver(home, clock, { rows });
+    deps.adapterFor = async () => ({
+      harness: "claude-code",
+      open: async (): Promise<RoomAdapter> => ({
+        ensureSession: async () => ({ sessionId: "acp_1", resumed: false }),
+        prompt: async (_s, _t, onEvent) => {
+          clock.now += 2_000;
+          onEvent({ kind: "thought", text: "Checking the yellow banner copy and contrast." });
+          clock.now += 2_000;
+          onEvent({ kind: "tool", detail: "File .agents/skills/isocan-collab/SKILL.md" });
+          clock.now += 2_000;
+          onEvent({ kind: "tool", detail: "Terminal isocan edit itm_yellow banner.html" });
+          return { stopReason: "end_turn" };
+        },
+        close: () => {},
+      }),
+    });
+
+    const room = runRoom(deps);
+    await clock.advance(0);
+
+    // Ask on the Main Thread (anchorItemId: null, coordinates down at 500,600)
+    // while `items: ["itm_yellow"]` is selected.
+    home.append(OWNER, {
+      type: "thread.create",
+      threadId: "thr_main",
+      x: 500,
+      y: 600,
+      anchorItemId: null,
+      main: true,
+      comment: {
+        id: "cmt_ask",
+        body: "@Percy please work on this yellow box",
+        mentions: [PERCY.id],
+        items: ["itm_yellow"],
+      },
+    } as unknown as Operation);
+    await clock.advance(0);
+
+    const updates = home.sessionUpdates.map((u) => u.patch).filter((p) => "status" in p);
+    // Initial lifecycle beat puts the cursor right on `itm_yellow` (650, 136), not (500, 600).
+    expect(updates[0]).toMatchObject({
+      status: "reading your comment…",
+      statusSource: "lifecycle",
+      activity: { kind: "working", itemId: "itm_yellow" },
+      onThread: "thr_main",
+      cursor: { x: 650, y: 136 },
+    });
+    expect(updates.map((u) => u.status)).toContain("💭 Checking the yellow banner copy and contrast…");
+    expect(updates.map((u) => u.status)).toContain("checking canvas guide…");
+    expect(updates.map((u) => u.status)).toContain('updating "Acme Yellow Banner"…');
+
     await room.stop();
     await room.done;
   });

@@ -5,21 +5,18 @@ workspace, beside the Antigravity chat. Every part of it is an `isocan` CLI
 command, so the plugin can do nothing the CLI cannot.
 
 - **The pane** (`sidecars/canvas/`) opens the canvas your workspace's
-  `.isocan/project.json` names, without isocan's own chat column — the Antigravity
-  chat is where you steer. An unbound folder can be bound to an existing
-  canvas (by id, link or title) or to a new one. Select items on the canvas
-  and ask Antigravity about them from the pane.
+  `.isocan/project.json` (or `~/.isocan/bindings.json`) names, without isocan's
+  own chat column — the Antigravity chat is where you steer. An unbound folder
+  can be bound to an existing canvas (by id, link or title) or to a new one.
 - **Arriving** (`hooks.json`): a new conversation in a bound workspace is
   named (`isocan identity --session`) and put on the canvas, so what it
   writes is attributed to it rather than to you. `ISOCAN_ANTIGRAVITY_JOIN=off` in
   Antigravity's environment keeps the note and skips the joining.
-- **Agents**: the pane's Agents bar enrols standing agents pinned to a model
-  (`isocan rc add <name> --harness … --model …`), from
-  `sidecars/canvas/presets.json` — edit it, or point `ISOCAN_ANTIGRAVITY_PRESETS`
-  at your own. They answer @mentions while `isocan rc` runs on your machine,
-  and the pane marks any whose harness cannot take the model.
-- **The rest**: the `isocan` (`/isocan` opens the pane pill), `fan-out`
-  (`/fan-out` fans a canvas task across model tiers) and `isocan-collab`
+- **The relay** (`lib/relay.mjs`): while the pane runs, an @mention of a
+  conversation on the canvas (or a reply in its thread) is relayed into that
+  conversation, which answers on the canvas. `ISOCAN_ANTIGRAVITY_RELAY=off`
+  switches it off.
+- **The rest**: the `isocan` (`/isocan` opens the pane pill) and `isocan-collab`
   skills, a rule for bound workspaces, the `canvas-builder` and `visual-arena`
   agents, and the `isocan mcp` server.
 
@@ -46,8 +43,5 @@ directory. Restart Antigravity after installing, and after any change to
   the folder to a canvas on a shared home such as isocan.io.
 - Every new conversation in a bound workspace joins the canvas — subagent
   conversations run the same hook.
-- A preset's model id is spelled the way its harness spells it, and nothing
-  here can check the spelling: a wrong id fails when the agent is first
-  summoned, not when it is enrolled.
 
 `docs/projects/antigravity/` in the repo has the design.

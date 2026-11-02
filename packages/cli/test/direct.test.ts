@@ -287,6 +287,82 @@ describe("arriving on a pass, the way the cloud dialog sends you", () => {
   });
 });
 
+/**
+ * **A machine with a person, handed a second one by a pass** (15 Oct 2026).
+ *
+ * keel publishes through direct mode as the machine's person. On a machine
+ * that already had a person ("Admiral One"), `setup <pass>` admitted the
+ * owner's actor but kept the default — so the badge could speak as the owner
+ * and the CLI never would, short of `--join`, which folds one into the other
+ * for good. `identity --home --as` is the switch, and it has to switch back.
+ */
+describe("switching the machine's person", () => {
+  it("`identity --home --as` makes a pass-admitted actor the person, switches back, and refuses an actor the badge was never handed", async () => {
+    const noSession = { ISOCAN_DIRECT: homeUrl, CLAUDE_CODE_SESSION_ID: "" };
+    const first = await isocan(["identity", "--home", "--name", "Admiral One"], noSession);
+    expect(first.code, first.stderr).toBe(0);
+    const admiral = /\((usr_[^)]+)\)/.exec(first.stdout)![1]!;
+
+    const owner = { id: "usr_acme_owner", name: "Acme Owner" };
+    await badge.speakAs(owner);
+    await fetch(`${homeUrl}/api/ops`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...badge.headers },
+      body: JSON.stringify({
+        canvasId: null, actor: owner,
+        op: { type: "project.create", canvasId: "prj_acme", title: "Acme redesign" },
+      }),
+    });
+    const { token } = await fetch(`${homeUrl}/api/projects/prj_acme/passes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...badge.headers },
+      body: JSON.stringify({ actorId: owner.id }),
+    }).then((r) => r.json()) as { token: string };
+    const arrived = await isocan(
+      ["setup", `${homeUrl}/p/prj_acme#${token}`, "--direct", "--no-install", "--no-open"],
+      { CLAUDE_CODE_SESSION_ID: "" },
+    );
+    expect(arrived.code, arrived.stderr).toBe(0);
+    // The reported situation: admitted, not made default.
+    expect(arrived.stdout).toContain("already answers to Admiral One");
+    expect(arrived.stdout).toContain(`isocan identity --home --as ${owner.id}`);
+    expect((await isocan(["whoami"], noSession)).stdout).toContain(`Admiral One (${admiral})`);
+
+    const switched = await isocan(["identity", "--home", "--as", owner.id], noSession);
+    expect(switched.code, switched.stderr).toBe(0);
+    expect(switched.stdout).toContain(`this machine's person is now Acme Owner (${owner.id})`);
+    expect(switched.stdout).toContain(`isocan identity --home --as ${admiral}`);
+    expect(JSON.parse(await fs.readFile(path.join(machine, "identity.json"), "utf8"))).toMatchObject(owner);
+    expect((await isocan(["whoami"], noSession)).stdout).toContain(`Acme Owner (${owner.id})`);
+    const said = await isocan(
+      ["comment", "add", "from the owner", "--at", "0,0", "--canvas", "prj_acme"],
+      noSession,
+    );
+    expect(said.code, said.stderr).toBe(0);
+    const snapshot = (await (
+      await fetch(`${homeUrl}/api/projects/prj_acme/canvas`, { headers: badge.headers })
+    ).json()) as { canvas: { threads: Record<string, { createdBy: { id: string } }> } };
+    expect(Object.values(snapshot.canvas.threads).map((t) => t.createdBy.id)).toEqual([owner.id]);
+
+    // Reversible, both ways, and nothing folded: each keeps its own id.
+    const back = await isocan(["identity", "--home", "--as", admiral], noSession);
+    expect(back.code, back.stderr).toBe(0);
+    expect((await isocan(["whoami"], noSession)).stdout).toContain(`Admiral One (${admiral})`);
+    const again = await isocan(["identity", "--home", "--as", owner.id], noSession);
+    expect(again.code, again.stderr).toBe(0);
+    expect((await isocan(["whoami"], noSession)).stdout).toContain(`Acme Owner (${owner.id})`);
+
+    // An actor this badge was never handed: the home refuses, the file stays.
+    const stranger = { id: "usr_acme_stranger", name: "Acme Stranger" };
+    await badge.speakAs(stranger);
+    const refused = await isocan(["identity", "--home", "--as", stranger.id], noSession);
+    expect(refused.code).not.toBe(0);
+    expect(refused.stderr).toContain(`cannot make ${stranger.id} its person`);
+    expect(JSON.parse(await fs.readFile(path.join(machine, "identity.json"), "utf8"))).toMatchObject(owner);
+    expect(await daemonStarted()).toBe(false);
+  });
+});
+
 describe("files, with nowhere to keep them", () => {
   /**
    * **The half of direct mode that was a hypothesis until it was driven.**

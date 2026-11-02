@@ -58,7 +58,7 @@ describe("the release tree", () => {
     // arguments each prints its usage and exits 2 — which it can only reach
     // after its whole module graph has loaded, so exit 2 IS "it starts", and
     // ERR_MODULE_NOT_FOUND (exit 1) is the failure this file exists for.
-    for (const script of ["scripts/canvas-shot.mjs", "scripts/deck-export.mjs"]) {
+    for (const script of ["scripts/canvas-shot.mjs", "scripts/deck-export.mjs", "scripts/motion-render.mjs"]) {
       const done = spawnSync(process.execPath, [path.join(tree, script)], { encoding: "utf8", cwd: scratch });
       expect(done.stderr, `${script} did not start`).not.toMatch(/ERR_MODULE_NOT_FOUND/);
       expect(done.stderr).toMatch(/usage:/);

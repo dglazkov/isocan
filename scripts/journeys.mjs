@@ -3864,6 +3864,476 @@ export default async function act({ prompt, cli, cwd }) {
     },
   },
   {
+    name: "motion",
+    /**
+     * **Motion, Scenes 1–3, in a browser** (motion phase 2,
+     * `docs/projects/motion/journey.md`). Its own home and daemon with the
+     * real `isocan rc` and `packages/cli/test/fake-acp.mjs` as Kit, the
+     * canvas's lead — **no model runs**: the act below is Kit, and it answers
+     * the way the agent guide tells an agent to, by writing a SPEC and running
+     * `isocan motion new … --spec` (and, for "slower", `motion spec` then
+     * `motion edit`). Every write the browser makes is the real request.
+     *
+     * Maya, with the `motion` experiment on: Animate… before anybody is
+     * parked says so in one sentence and sends nothing; then three SVGs of
+     * Acme Bakery's logo, selected by real presses, right-click → Animate… →
+     * assemble builds a motion in the browser that plays beside them, its
+     * controls below the stage. Her words go to Kit as a summons; Kit's spec
+     * lands as a second motion. "Slower wheat, and less sway" in the Chat
+     * makes it a version. She scrubs its player to about 1.2 s by a real
+     * press on the scrubber inside its frame, ⇧C pins a comment that keeps
+     * the moment, and opening that comment again later scrubs the player
+     * back there. Render movie… records 6 s at 60 fps, 1080 × 1080 — the
+     * progress line counts frames — and lands a video item wearing
+     * `renderedFrom`. Then (motion phase 3) Render movie… again with WebM
+     * picked lands a `video/webm` item whose `renderedFrom` says so, and
+     * Animate… → reveal builds the logo's reveal beside it.
+     */
+    what: "select SVGs → Animate… (recipe in the browser; words through the parked agent's spec) → a version by talking → scrub, comment at a time, reopen it → Render movie… (MP4, then WebM) → Animate… reveal",
+    async run(rig) {
+      const { b } = rig;
+      const home = mkdtempSync(path.join(tmpdir(), "isocan-journey-motion-"));
+      const kitDir = path.join(home, "kit");
+      const fakeAcp = path.join(repo, "packages/cli/test/fake-acp.mjs");
+      const act = path.join(home, "act.mjs");
+      const fixtures = path.join(repo, "packages/core/test/fixtures/motion");
+      execFileSync("mkdir", ["-p", kitDir]);
+      writeFileSync(path.join(home, "identity.json"), JSON.stringify({ id: "usr_motion_maya", name: "Maya", createdAt: new Date().toISOString() }));
+      writeFileSync(path.join(home, "config.json"), JSON.stringify({ adapterEnv: ["FAKE_ACP_*"], acpAdapters: { "claude-code": [process.execPath, fakeAcp] }, defaultHarness: "claude-code" }));
+      // Kit, scripted: it writes a spec from the words — never code — and answers with the CLI.
+      writeFileSync(act, `
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+export default async function act({ prompt, cli, cwd }) {
+  const canvasId = /"canvasId":\\s*"([^"]+)"/.exec(prompt)?.[1];
+  if (!canvasId) return;
+  const run = (...args) => execFileSync(process.execPath, [cli, "--canvas", canvasId, ...args], { encoding: "utf8" });
+  const payload = JSON.parse(prompt.slice(prompt.indexOf("returns):\\n") + 10));
+  const said = [];
+  const walk = (v) => { if (typeof v === "string") said.push(v); else if (v && typeof v === "object") Object.values(v).forEach(walk); };
+  walk(payload.entries);
+  const memory = path.join(cwd, "motion.json");
+  const threadId = /"threadId":\\s*"([^"]+)"/.exec(prompt)?.[1];
+  const slower = said.find((s) => /slower/i.test(s));
+  if (slower && existsSync(memory)) {
+    const { itemId } = JSON.parse(readFileSync(memory, "utf8"));
+    const { spec } = JSON.parse(run("--json", "motion", "spec", itemId));
+    for (const move of spec.moves) {
+      if (move.target !== "wheat/stalk") continue;
+      for (const ch of Object.values(move.channels)) for (const k of ch.keys ?? []) k.t = Math.round(k.t * 1.4 * 1000) / 1000;
+      if (move.channels.rotate?.wave) move.channels.rotate.wave = { ...move.channels.rotate.wave, amp: 1.5, from: 2.1 };
+    }
+    const file = path.join(cwd, "slower.json");
+    writeFileSync(file, JSON.stringify(spec, null, 2));
+    run("motion", "edit", itemId, "--spec", file);
+    if (threadId) run("comment", "reply", threadId, "Slower wheat, less sway: a new version of the motion.");
+    return;
+  }
+  const ask = said.find((s) => s.includes("Animate, please:"));
+  if (!ask || existsSync(memory)) return;
+  const ids = [...ask.matchAll(/\\((itm_[\\w-]+)\\)/g)].map((m) => m[1]);
+  const words = /— “([^”]*)”\\./.exec(ask)?.[1] ?? "";
+  const spec = {
+    seconds: 3,
+    loop: false,
+    moves: [
+      { target: "circle", channels: { draw: { keys: [{ t: 0, v: 0 }, { t: 0.9, v: 1, ease: "inOut" }] } } },
+      { target: "wheat/stalk", pivot: "base", follows: "circle", channels: {
+        scale: { keys: [{ t: 0.5, v: 0.2 }, { t: 1.5, v: 1, ease: "outBack" }] },
+        rotate: { keys: [{ t: 0.5, v: -10 }, { t: 1.5, v: 0, ease: "outBack" }], wave: { period: 3, amp: 3, from: 1.5 } },
+      } },
+      { target: "wordmark", follows: "wheat/stalk", channels: {
+        opacity: { keys: [{ t: 1.7, v: 0 }, { t: 2, v: 1, ease: "out" }] },
+        y: { keys: [{ t: 1.7, v: 8 }, { t: 2.3, v: 0, ease: "outBack" }] },
+      } },
+    ],
+  };
+  const file = path.join(cwd, "scene-1.json");
+  writeFileSync(file, JSON.stringify(spec, null, 2));
+  const made = JSON.parse(run("--json", "motion", "new", ...ids, "--spec", file, "--say", words, "--title", "Acme logo — from words"));
+  writeFileSync(memory, JSON.stringify({ itemId: made.itemId }));
+  if (threadId) run("comment", "reply", threadId, "Here it moves: Acme logo — from words.");
+}
+`);
+      const daemon = await startDaemon(home);
+      const { origin } = daemon;
+      const env = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(origin).port, FAKE_ACP_ACT: act, FAKE_ACP_CLI: cli };
+      for (const name of ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_ENTRYPOINT", "ISOCAN_SESSION_ID", "ISOCAN_HARNESS", "CODEX_SANDBOX", "CODEX_THREAD_ID"]) delete env[name];
+      const runCli = (...args) => {
+        const out = execFileSync(process.execPath, [cli, "--json", ...args], { cwd: home, encoding: "utf8", env });
+        return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+      };
+      const shots = {};
+      const shot = async (name) => {
+        const file = path.join(tmpdir(), `isocan-motion-${name}-${Date.now()}.png`);
+        writeFileSync(file, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+        shots[name] = file;
+      };
+      const FEATURES = `{headers:{'x-isocan-features':'canvas-groups-v4'}}`;
+      const served = async (id) => JSON.parse(await b.ev(`fetch('/api/projects/${id}/canvas', ${FEATURES}).then(r => r.json()).then(r => JSON.stringify(r.canvas))`));
+      const mouse = (type, x, y, { button = "left", modifiers = 0 } = {}) => b.send("Input.dispatchMouseEvent", {
+        type, x, y, modifiers, button: type === "mouseMoved" ? "none" : button,
+        buttons: type === "mousePressed" ? (button === "right" ? 2 : 1) : 0, clickCount: type === "mouseMoved" ? 0 : 1,
+      });
+      const press = async (at, opts) => { await mouse("mouseMoved", at.x, at.y); await mouse("mousePressed", at.x, at.y, opts); await mouse("mouseReleased", at.x, at.y, opts); await sleep(200); };
+      /**
+       * A point on an item that the browser's own hit test says IS that item —
+       * not the Chat panel over it, not the item drawn on top of it. The asked
+       * fraction first, else the nearest point of a grid over the item that
+       * hits it; none, and the failure says what covers it.
+       */
+      const pointOn = async (itemId, fx = 0.5, fy = 0.5) => {
+        const at = await b.ev(`(() => {
+          const el = document.querySelector('.item[data-item-id="${itemId}"]');
+          if (!el) return { none: "the item is not drawn" };
+          const r = el.getBoundingClientRect();
+          const hits = (x, y) => document.elementFromPoint(x, y)?.closest(".item")?.dataset.itemId === ${JSON.stringify(itemId)};
+          const want = { x: r.left + r.width * ${fx}, y: r.top + r.height * ${fy} };
+          const tries = [want];
+          for (let i = 1; i < 10; i++) for (let j = 1; j < 10; j++) tries.push({ x: r.left + (r.width * i) / 10, y: r.top + (r.height * j) / 10 });
+          tries.sort((a, b2) => Math.hypot(a.x - want.x, a.y - want.y) - Math.hypot(b2.x - want.x, b2.y - want.y));
+          const ok = tries.find((p) => p.x > 0 && p.y > 0 && p.x < innerWidth && p.y < innerHeight && hits(p.x, p.y));
+          if (ok) return { x: Math.round(ok.x), y: Math.round(ok.y) };
+          const top = document.elementFromPoint(want.x, want.y);
+          return { none: "covered by " + (top ? (top.className?.toString?.() || top.tagName) : "nothing") };
+        })()`);
+        if (at.none) throw new Error(`no point on ${itemId} a press would reach: ${at.none}`);
+        return at;
+      };
+      /** A row of the item menu, pressed for real — after a real right-click on `at`. */
+      const menuRow = async (at, label) => {
+        await press(at, { button: "right" });
+        const row = `[...document.querySelectorAll(".context-menu [role=menuitem], .context-menu button")].find((el) => el.textContent.trim().startsWith(${JSON.stringify(label)}))`;
+        try {
+          await until(b, `!!${row}`, `the item menu, offering "${label}"`, 5000);
+        } catch (err) {
+          const offered = await b.ev(`[...document.querySelectorAll(".context-menu [role=menuitem], .context-menu button")].map(e => e.textContent.trim()).join(" | ")`);
+          throw new Error(`${err.message} — it offers: ${offered}`);
+        }
+        const r = await b.ev(`(() => { const r = ${row}.getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`);
+        await press(r);
+      };
+      /**
+       * The player inside a motion's frame, read through an isolated world —
+       * the frame is the sandboxed content origin, so the page cannot look
+       * inside it, and neither does the app; only the journey does, to see
+       * what a person sees.
+       */
+      const inPlayer = async (blobHash, expression) => {
+        const { frameTree } = await b.send("Page.getFrameTree");
+        const all = [];
+        const visit = (t) => { all.push(t.frame); (t.childFrames ?? []).forEach(visit); };
+        visit(frameTree);
+        const frame = all.find((f) => f.url.includes(blobHash));
+        if (!frame) return null;
+        const { executionContextId } = await b.send("Page.createIsolatedWorld", { frameId: frame.id, worldName: "journey" });
+        const r = await b.send("Runtime.evaluate", { expression, contextId: executionContextId, returnByValue: true });
+        return r.result?.value ?? null;
+      };
+      const currentHash = (item) => item.versions.find((v) => v.id === item.currentVersionId).blobHash;
+      let rc = null;
+      let rcOut = "";
+      try {
+        const id = runCli("canvas", "create", "Acme Bakery").canvasId;
+        const add = (file, title, at, size) => runCli("--canvas", id, "add", path.join(fixtures, file), "--title", title, "--at", at, "--size", size).itemId;
+        const circle = add("circle.svg", "Circle", "0,0", "200x200");
+        const wheat = add("wheat.svg", "Wheat", "58,30", "84x140");
+        const wordmark = add("wordmark.svg", "Wordmark", "-60,210", "320x60");
+        runCli("--canvas", id, "rc", "add", "Kit", "--dir", kitDir);
+        runCli("--canvas", id, "canvas", "edit", "--prop", "proactive=Kit");
+
+        const { address } = runCli("--canvas", id, "pass");
+        await b.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+        const loaded = b.once("Page.loadEventFired");
+        await b.send("Page.navigate", { url: origin });
+        await Promise.race([loaded, sleep(15_000)]);
+        await b.ev(`(() => { localStorage.clear(); localStorage.setItem("isocan.experiments", JSON.stringify(["motion"])); return true; })()`);
+        await b.send("Page.navigate", { url: address });
+        await sleep(2500);
+        for (const itemId of [circle, wheat, wordmark]) await until(b, `!!document.querySelector('.item[data-item-id="${itemId}"]')`, "the logo's three SVGs on Maya's canvas", 20_000);
+        await rig.click(".zoom-pct", "the zoom menu");
+        await rig.clickText(".zoom-menu-row", "Zoom to Fit", "Zoom to Fit");
+        await sleep(800);
+
+        // 1. Three SVGs, selected by real presses: the wheat, then ⇧ the circle on its rim and the wordmark.
+        const selectLogo = async () => {
+          const seen = [];
+          const selected = () => b.ev(`[...document.querySelectorAll(".item.selected")].map((e) => e.dataset.itemId).join(",")`);
+          // The whole canvas first: adding a motion glides the camera to it.
+          await rig.click(".zoom-pct", "the zoom menu");
+          await rig.clickText(".zoom-menu-row", "Zoom to Fit", "Zoom to Fit");
+          await sleep(800);
+          if (await selected()) {
+            const bare = await openSpot(rig);
+            await press(bare);
+            await until(b, `!document.querySelector(".item.selected")`, "the selection to clear", 3000);
+          }
+          // The wheat first: it sits inside the circle, and a selected item draws on top.
+          await press(await pointOn(wheat, 0.5, 0.6));
+          seen.push(await selected());
+          await press(await pointOn(circle, 0.95, 0.5), { modifiers: 8 });
+          seen.push(await selected());
+          await press(await pointOn(wordmark, 0.5, 0.5), { modifiers: 8 });
+          seen.push(await selected());
+          await until(b, `[${JSON.stringify(circle)}, ${JSON.stringify(wheat)}, ${JSON.stringify(wordmark)}].every((id) => document.querySelector('.item[data-item-id="' + id + '"]')?.classList.contains("selected"))`, `all three SVGs selected (after each press: ${JSON.stringify(seen)}; circle ${circle}, wheat ${wheat}, wordmark ${wordmark})`, 4000);
+        };
+        await selectLogo();
+
+        // 1a. Nobody parked yet: Animate… says so in one sentence, and sends nothing.
+        await menuRow(await pointOn(wordmark, 0.5, 0.5), "Animate…");
+        await until(b, `!!document.querySelector("[data-motion-animate]")`, "the Animate dialog", 10_000);
+        await until(b, `/Nobody’s agent is parked/.test(document.querySelector("[data-motion-animate] .motion-problem")?.textContent ?? "")`, "the sentence that nobody is parked");
+        if (!(await b.ev(`document.querySelector("[data-motion-ask]").disabled`))) throw new Error("Ask is offered with nobody parked");
+        await shot("animate-nobody-parked");
+        await rig.press("Escape");
+        await until(b, `!document.querySelector('.modal-backdrop')`, "the dialog to close");
+        if (Object.values((await served(id)).threads).length !== 0) throw new Error("Animate… with nobody parked sent something");
+
+        // Kit's runner, parked.
+        rc = spawn(process.execPath, [cli, "--canvas", id, "rc"], { cwd: home, env, stdio: ["ignore", "pipe", "pipe"] });
+        rc.stdout.on("data", (c) => (rcOut += c));
+        rc.stderr.on("data", (c) => (rcOut += c));
+        await until(b, `fetch('/api/projects/${id}/rc', ${FEATURES}).then(r => r.json()).then(r => r.parked)`, "Kit's rc to park", 20_000);
+        await sleep(2500);
+
+        // 1b. Animate… → assemble: built in the browser, beside the logo.
+        await selectLogo();
+        await menuRow(await pointOn(wordmark, 0.5, 0.5), "Animate…");
+        await until(b, `!!document.querySelector("[data-motion-recipe-go]")`, "the Animate dialog, with its recipes", 10_000);
+        await until(b, `!document.querySelector("[data-motion-animate] .motion-problem[role=status]")`, "the dialog to know Kit is parked", 10_000);
+        await shot("animate-dialog");
+        await rig.click("[data-motion-recipe-go]", "Animate with assemble");
+        await until(b, `!document.querySelector('.modal-backdrop')`, "the recipe's motion to land", 20_000);
+        let canvas = await served(id);
+        const recipeMotion = Object.values(canvas.items).find((i) => i.properties.motion === "true");
+        if (!recipeMotion) throw new Error("no motion item after Animate with assemble");
+        const sources = JSON.parse(recipeMotion.properties.motionSources).map((s) => s.item);
+        if (JSON.stringify(sources) !== JSON.stringify([circle, wheat, wordmark])) throw new Error(`the motion was taken from ${sources}, not the logo back to front`);
+        if (recipeMotion.x < 260 || recipeMotion.height !== 270 + 32) throw new Error(`the motion is not beside the logo with its controls below: ${JSON.stringify({ x: recipeMotion.x, h: recipeMotion.height })}`);
+        await until(b, `!!document.querySelector('.item[data-item-id="${recipeMotion.id}"] iframe')`, "the motion playing on the canvas", 20_000);
+        const player = await (async () => {
+          const deadline = Date.now() + 15_000;
+          for (;;) {
+            const p = await inPlayer(currentHash(recipeMotion), `(() => { const s = document.getElementById("stage").getBoundingClientRect(), c = document.getElementById("motion-controls").getBoundingClientRect(); return { scrub: !!document.getElementById("motion-scrub"), label: document.getElementById("motion-scrub")?.getAttribute("aria-label"), below: c.top >= s.bottom - 0.5, time: document.getElementById("motion-time").textContent }; })()`);
+            if (p || Date.now() > deadline) return p;
+            await sleep(300);
+          }
+        })();
+        if (!player?.scrub || player.label !== "Time" || !player.below) throw new Error(`the player is not a labelled scrubber below the stage: ${JSON.stringify(player)}`);
+        if (!/ \/ 2\.4 s$/.test(player.time)) throw new Error(`the player does not say the motion's length: ${player.time}`);
+        await shot("assembled");
+
+        // 1c. Words, through the parked agent: a summons naming the sources; Kit writes the spec.
+        const words = "assemble: the circle draws on, the wheat grows up from the base, the wordmark settles in last; then a slow idle sway";
+        await selectLogo();
+        await menuRow(await pointOn(wordmark, 0.5, 0.5), "Animate…");
+        await until(b, `!!document.querySelector("[data-motion-animate] textarea") && !document.querySelector("[data-motion-animate] textarea").disabled`, "the words field, with Kit to answer", 10_000);
+        await rig.click("[data-motion-animate] textarea", "the words field");
+        await rig.type(words);
+        await until(b, `/^Ask Kit$/.test(document.querySelector("[data-motion-ask]")?.textContent ?? "") && !document.querySelector("[data-motion-ask]").disabled`, "Ask Kit");
+        await rig.click("[data-motion-ask]", "Ask Kit");
+        await until(b, `!document.querySelector('.modal-backdrop')`, "the ask to send");
+        canvas = await served(id);
+        const asked = Object.values(canvas.threads).flatMap((t) => t.comments).find((c) => c.body.includes("Animate, please:"));
+        if (!asked || !asked.body.includes(words) || JSON.stringify(asked.items) !== JSON.stringify([circle, wheat, wordmark]) || asked.mentions?.length !== 1) throw new Error(`the summons does not name the sources and the words: ${JSON.stringify(asked)}`);
+        await until(b, `fetch('/api/projects/${id}/canvas', ${FEATURES}).then(r => r.json()).then(r => Object.values(r.canvas.items).some(i => i.properties.motion === "true" && i.description === ${JSON.stringify(words)}))`, "Kit's motion, written from the words", 60_000);
+        canvas = await served(id);
+        const spoken = Object.values(canvas.items).find((i) => i.properties.motion === "true" && i.description === words);
+        if (spoken.createdBy?.name !== "Kit") throw new Error(`the words' motion was made by ${spoken.createdBy?.name}, not Kit`);
+        const spokenSpec = runCli("--canvas", id, "motion", "spec", spoken.id);
+        if (spokenSpec.recipe !== null || spokenSpec.spec.moves.find((m) => m.target === "wheat/stalk")?.pivot !== "base") throw new Error(`Kit's motion is not its spec, turning the stalk on its base: ${JSON.stringify(spokenSpec)}`);
+        await until(b, `!!document.querySelector('.item[data-item-id="${spoken.id}"]')`, "Kit's motion on Maya's canvas", 20_000);
+
+        // 2. "Slower wheat, and less sway", in the Chat: Kit edits its spec into a version.
+        await until(b, `!!document.querySelector(".main-panel .mention-input")`, "the Chat's composer", 20_000);
+        await sleep(1500);
+        await rig.click(".main-panel .mention-input", "the Chat's composer");
+        await rig.type("Slower wheat, and less sway.");
+        await rig.press("Enter");
+        await until(b, `fetch('/api/projects/${id}/canvas', ${FEATURES}).then(r => r.json()).then(r => r.canvas.items[${JSON.stringify(spoken.id)}].versions.length === 2)`, "the motion to gain a version from 'slower'", 60_000);
+        canvas = await served(id);
+        const versioned = canvas.items[spoken.id];
+        const slowerSpec = runCli("--canvas", id, "motion", "spec", spoken.id).spec;
+        const stalk = slowerSpec.moves.find((m) => m.target === "wheat/stalk");
+        if (stalk.channels.rotate.wave.amp !== 1.5 || stalk.channels.scale.keys[1].t <= 1.5) throw new Error(`the new version is not slower with less sway: ${JSON.stringify(stalk)}`);
+
+        // 2b. Scrub to about 1.2 s, by a real press on the scrubber inside the motion's frame.
+        await rig.click(".zoom-pct", "the zoom menu");
+        await rig.clickText(".zoom-menu-row", "Zoom to Fit", "Zoom to Fit");
+        await sleep(800);
+        await press(await pointOn(spoken.id, 0.5, 0.05));
+        await until(b, `!!document.querySelector('.item[data-item-id="${spoken.id}"].selected')`, "Kit's motion selected", 4000);
+        await rig.click(`.item[data-item-id="${spoken.id}"] button[aria-label="Enter item"]`, "Enter, on the motion");
+        await until(b, `!!document.querySelector('.item[data-item-id="${spoken.id}"] iframe')`, "the motion's live frame, entered", 15_000);
+        const hash = currentHash(versioned);
+        const seconds = Number(versioned.properties.motionSeconds);
+        const scrubAt = async (t) => {
+          const inner = await inPlayer(hash, `(() => { const r = document.getElementById("motion-scrub").getBoundingClientRect(); return { left: r.left, width: r.width, top: r.top, height: r.height, vw: innerWidth }; })()`);
+          if (!inner) throw new Error("the motion's frame is not there to scrub");
+          const outer = await b.ev(`(() => { const f = [...document.querySelectorAll('.item[data-item-id="${spoken.id}"] iframe')].find((f) => f.src.includes(${JSON.stringify(hash)})); const r = f.getBoundingClientRect(); return { left: r.left, top: r.top, width: r.width }; })()`);
+          const k = outer.width / inner.vw;
+          // A range's value runs between the thumb's centres, not its edges: about 8 px in from each.
+          const thumb = 8;
+          const x = outer.left + k * (inner.left + thumb + ((inner.width - 2 * thumb) * t) / seconds);
+          const y = outer.top + k * (inner.top + inner.height / 2);
+          await press({ x: Math.round(x), y: Math.round(y) });
+        };
+        await scrubAt(1.2);
+        const readTime = () => inPlayer(hash, `Number(document.getElementById("motion-scrub").value)`);
+        const scrubbed = await readTime();
+        if (!(Math.abs(scrubbed - 1.2) < 0.15)) throw new Error(`the scrubber pressed at 1.2 s reads ${scrubbed}`);
+        await shot("scrubbed");
+
+        // 2c. ⇧C on the motion: the comment keeps the moment. Leave it first —
+        // the keyboard is inside the frame while it is entered.
+        const leave = async () => {
+          await rig.click(`.item[data-item-id="${spoken.id}"] button[aria-label="Leave item"]`, "Leave, on the motion");
+          await until(b, `!!document.querySelector('.item[data-item-id="${spoken.id}"] button[aria-label="Enter item"]')`, "the motion left", 4000);
+        };
+        await leave();
+        await rig.click(`.item[data-item-id="${spoken.id}"] .item-titlebar .chrome-left`, "the motion's title");
+        await until(b, `!!document.querySelector('.item[data-item-id="${spoken.id}"].selected')`, "Kit's motion selected again", 4000);
+        const k = { windowsVirtualKeyCode: 67, key: "C", code: "KeyC" };
+        await b.send("Input.dispatchKeyEvent", { type: "rawKeyDown", modifiers: 8, ...k });
+        await b.send("Input.dispatchKeyEvent", { type: "keyUp", modifiers: 8, ...k });
+        await until(b, `!!document.querySelector(".compose-popover [data-comment-at]")`, "the composer, saying the moment", 5000);
+        const composedAt = Number(await b.ev(`document.querySelector(".compose-popover [data-comment-at]").dataset.commentAt`));
+        if (Math.abs(composedAt - scrubbed) > 0.011) throw new Error(`the composer keeps ${composedAt}, not the scrubbed ${scrubbed}`);
+        await rig.type("wordmark overshoots here");
+        await until(b, `document.querySelector(".compose-popover textarea")?.value === "wordmark overshoots here"`, "the words in the composer", 4000);
+        await rig.clickText(".compose-popover button", "Comment", "the composer's Comment button");
+        await until(b, `fetch('/api/projects/${id}/canvas', ${FEATURES}).then(r => r.json()).then(r => Object.values(r.canvas.threads).some(t => t.anchorItemId === ${JSON.stringify(spoken.id)} && t.comments[0].at !== undefined))`, "the comment pinned to the motion, at its moment", 10_000);
+        canvas = await served(id);
+        const pinned = Object.values(canvas.threads).find((t) => t.anchorItemId === spoken.id);
+        if (pinned.comments[0].body !== "wordmark overshoots here" || Math.abs(pinned.comments[0].at - scrubbed) > 0.011) throw new Error(`the pinned comment is not the words at the moment: ${JSON.stringify(pinned.comments[0])}`);
+        const listed = runCli("--canvas", id, "comment", "ls", "--item", spoken.id);
+        if (listed[0]?.comments[0]?.at !== pinned.comments[0].at) throw new Error("the terminal does not read the comment's moment");
+
+        // 2d. Elsewhere in the motion, then the comment opened again: the player scrubs back to it.
+        await until(b, `!document.querySelector(".compose-popover")`, "the composer to close after sending", 4000);
+        await rig.click(`.item[data-item-id="${spoken.id}"] button[aria-label="Enter item"]`, "Enter, on the motion again");
+        await until(b, `!!document.querySelector('.item[data-item-id="${spoken.id}"] iframe')`, "the motion's frame", 15_000);
+        await scrubAt(2.6);
+        const away = await readTime();
+        if (!(away > 2.2)) throw new Error(`the scrubber pressed at 2.6 s reads ${away}`);
+        await leave();
+        await until(b, `!!document.querySelector(".pin")`, "the comment's pin", 5000);
+        await until(b, `!document.querySelector('.toast-said')`, "the comment toasts to clear", 30_000);
+        await b.ev(`(() => { const p = [...document.querySelectorAll(".pin")].find((p) => /overshoots/.test(p.title)); p?.setAttribute("data-journey-pin", ""); return !!p; })()`);
+        await rig.click("[data-journey-pin]", "the comment's pin", { x: 0.3, y: 0.3 });
+        await until(b, `/overshoots/.test(document.querySelector('.thread-popover')?.textContent ?? '') && !!document.querySelector('.thread-popover [data-comment-at]')`, "the comment opened, saying its moment", 5000);
+        const deadline = Date.now() + 5000;
+        let back = await readTime();
+        while (Math.abs(back - pinned.comments[0].at) > 0.011 && Date.now() < deadline) { await sleep(200); back = await readTime(); }
+        if (Math.abs(back - pinned.comments[0].at) > 0.011) throw new Error(`opening the comment left the player at ${back}, not its moment ${pinned.comments[0].at}`);
+        await shot("comment-at-moment");
+        await rig.press("Escape");
+
+        // 3. Render movie… → MP4, 1080 × 1080, 60 fps, 6 s.
+        await press(await pointOn(spoken.id, 0.5, 0.05));
+        await menuRow(await pointOn(spoken.id, 0.5, 0.05), "Render movie…");
+        await until(b, `!!document.querySelector("[data-motion-render-go]")`, "the Render movie dialog", 10_000);
+        await b.ev(`(() => { const i = [...document.querySelectorAll("[data-motion-render] input[type=number]")][1]; i.setAttribute("data-journey-seconds", ""); return true; })()`);
+        await rig.click("[data-journey-seconds]", "the Seconds field");
+        // Emptied key by key — ⌘A here would be the canvas's select-all.
+        for (const k of [{ windowsVirtualKeyCode: 8, key: "Backspace", code: "Backspace" }, { windowsVirtualKeyCode: 46, key: "Delete", code: "Delete" }]) {
+          for (let i = 0; i < 4; i++) {
+            await b.send("Input.dispatchKeyEvent", { type: "rawKeyDown", ...k });
+            await b.send("Input.dispatchKeyEvent", { type: "keyUp", ...k });
+          }
+        }
+        await rig.type("6");
+        const typed = await b.ev(`document.querySelector("[data-journey-seconds]").value`);
+        if (typed !== "6") throw new Error(`the Seconds field reads ${typed}, not 6`);
+        await rig.click("[data-motion-render-go]", "Render MP4");
+        const lines = [];
+        let progress = null;
+        for (const deadline = Date.now() + 60_000; Date.now() < deadline && !progress;) {
+          const line = await b.ev(`document.querySelector("[data-motion-progress]")?.textContent ?? document.querySelector("[data-motion-render] .motion-problem")?.textContent ?? "(no progress line)"`);
+          if (lines.at(-1) !== line) lines.push(line);
+          if (/^frame [1-9]\d* of 360$/.test(line)) progress = line;
+          else await sleep(150);
+        }
+        if (!progress) throw new Error(`the progress line never counted frames of 360 — it read: ${JSON.stringify(lines)}`);
+        await shot("rendering");
+        await until(b, `fetch('/api/projects/${id}/canvas', ${FEATURES}).then(r => r.json()).then(r => Object.values(r.canvas.items).some(i => i.properties.renderedFrom))`, "the movie beside the motion", 240_000);
+        canvas = await served(id);
+        const movie = Object.values(canvas.items).find((i) => i.properties.renderedFrom);
+        const from = JSON.parse(movie.properties.renderedFrom);
+        const v = movie.versions[0];
+        if (v.mimeType !== "video/mp4" || from.item !== spoken.id || from.version !== versioned.currentVersionId || from.fps !== 60 || from.size !== "1080x1080" || from.seconds !== 6) {
+          throw new Error(`the movie is not the motion's version at 60 fps, 1080 × 1080, 6 s: ${JSON.stringify({ mime: v.mimeType, from })}`);
+        }
+        await until(b, `!!document.querySelector('.item[data-item-id="${movie.id}"] video')`, "the movie playing on the canvas", 20_000);
+        // MOTION_MOVIE=<file.mp4> keeps the movie, for ffprobe and a person's eyes.
+        if (process.env.MOTION_MOVIE) {
+          const b64 = await b.ev(`fetch('/api/projects/${id}/blobs/${v.blobHash}').then(r => r.arrayBuffer()).then(a => { let t = ""; const u = new Uint8Array(a); for (let i = 0; i < u.length; i += 0x8000) t += String.fromCharCode(...u.subarray(i, i + 0x8000)); return btoa(t); })`);
+          writeFileSync(process.env.MOTION_MOVIE, Buffer.from(b64, "base64"));
+        }
+        await shot("movie");
+
+        // 3b. Render movie… → WebM (motion phase 3): the format picked by a
+        // real press, the rest as the dialog offers it — the motion's own length.
+        await rig.click(".zoom-pct", "the zoom menu");
+        await rig.clickText(".zoom-menu-row", "Zoom to Fit", "Zoom to Fit");
+        await sleep(800);
+        await press(await pointOn(spoken.id, 0.5, 0.05));
+        await menuRow(await pointOn(spoken.id, 0.5, 0.05), "Render movie…");
+        await until(b, `!!document.querySelector("[data-motion-format=webm]")`, "the Render movie dialog, with its formats", 10_000);
+        await rig.click("[data-motion-format=webm]", "the WebM format");
+        await until(b, `document.querySelector("[data-motion-format=webm]").checked && /^Render WebM$/.test(document.querySelector("[data-motion-render-go]").textContent)`, "WebM picked, and the button saying so", 3000);
+        const webmSeconds = Number(await b.ev(`[...document.querySelectorAll("[data-motion-render] input[type=number]")][1].value`));
+        await shot("render-webm-dialog");
+        await rig.click("[data-motion-render-go]", "Render WebM");
+        await until(b, `fetch('/api/projects/${id}/canvas', ${FEATURES}).then(r => r.json()).then(r => Object.values(r.canvas.items).some(i => i.properties.renderedFrom && JSON.parse(i.properties.renderedFrom).format === "webm"))`, "the WebM beside the motion", 240_000);
+        canvas = await served(id);
+        const webm = Object.values(canvas.items).find((i) => i.properties.renderedFrom && JSON.parse(i.properties.renderedFrom).format === "webm");
+        const webmFrom = JSON.parse(webm.properties.renderedFrom);
+        const wv = webm.versions[0];
+        if (wv.mimeType !== "video/webm" || !wv.filename.endsWith(".webm") || webmFrom.item !== spoken.id || webmFrom.fps !== 60 || webmFrom.seconds !== webmSeconds) {
+          throw new Error(`the WebM is not the motion at 60 fps for ${webmSeconds} s: ${JSON.stringify({ mime: wv.mimeType, filename: wv.filename, from: webmFrom })}`);
+        }
+        await until(b, `[...document.querySelectorAll('.item[data-item-id="${webm.id}"] video')].some((v) => v.readyState >= 1 && v.videoWidth === 1080)`, "the WebM loaded on the canvas", 20_000);
+        await shot("movie-webm");
+
+        // 4. A recipe of phase 3's: Animate… → reveal, picked by a real press.
+        // The WebM's arrival glides the camera to it; let that finish first.
+        await sleep(2500);
+        await selectLogo();
+        await menuRow(await pointOn(wordmark, 0.5, 0.5), "Animate…");
+        await until(b, `!!document.querySelector("[data-motion-animate] input[value=reveal]")`, "the Animate dialog, offering reveal", 10_000);
+        await rig.click("[data-motion-animate] input[value=reveal]", "the reveal recipe");
+        await until(b, `/^Animate with reveal$/.test(document.querySelector("[data-motion-recipe-go]").textContent)`, "Animate with reveal", 3000);
+        await rig.click("[data-motion-recipe-go]", "Animate with reveal");
+        await until(b, `!document.querySelector('.modal-backdrop')`, "the reveal motion to land", 20_000);
+        canvas = await served(id);
+        const revealed = Object.values(canvas.items).find((i) => i.properties.motion === "true" && / — reveal$/.test(i.title));
+        if (!revealed) throw new Error(`no reveal motion after Animate with reveal: ${Object.values(canvas.items).map((i) => i.title).join(" | ")}`);
+        const revealSpec = runCli("--canvas", id, "motion", "spec", revealed.id);
+        if (revealSpec.recipe !== "reveal" || revealSpec.spec.moves.length !== 3 || revealSpec.spec.loop !== false) throw new Error(`the reveal motion is not the reveal recipe over the logo: ${JSON.stringify({ recipe: revealSpec.recipe, moves: revealSpec.spec.moves.length, loop: revealSpec.spec.loop })}`);
+        await until(b, `!!document.querySelector('.item[data-item-id="${revealed.id}"] iframe')`, "the reveal motion playing on the canvas", 20_000);
+        await shot("revealed");
+
+        const errors = b.takeErrors();
+        if (errors.length > 0) throw new Error(`the page threw: ${errors[0]}`);
+        return { screenshots: shots, recipeMotion: recipeMotion.id, spoken: spoken.id, scrubbed, commentAt: pinned.comments[0].at, progress, movie: { id: movie.id, renderedFrom: from, bytes: v.size }, webm: { id: webm.id, renderedFrom: webmFrom, bytes: wv.size }, reveal: revealed.id };
+      } catch (err) {
+        await shot("failure").catch(() => {});
+        throw new Error(`${err.message}\n(screens: ${JSON.stringify(shots)})\n--- rc ---\n${rcOut.slice(-3000)}`);
+      } finally {
+        if (rc) {
+          rc.kill("SIGINT");
+          await new Promise((r) => { rc.once("exit", r); setTimeout(r, 3000); });
+          if (rc.exitCode === null) rc.kill("SIGKILL");
+        }
+        await daemon.stop();
+        rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+        await b.send("Emulation.clearDeviceMetricsOverride").catch(() => {});
+      }
+    },
+  },
+  {
     name: "panels",
     /** The bug: the Personas panel's header collapsed to `display: block` and
      *  its icon sat on its own title, while every test passed. */
@@ -5168,197 +5638,6 @@ export default async function act({ prompt, cli, cwd }) {
         // What the brief's item was showing, so a failure names the face rather than a timeout.
         const face = await b.ev(`(document.querySelector("[data-design-record]")?.textContent ?? "no design record face on screen").slice(0, 1200)`).catch(() => "");
         throw new Error(`${err.message}\n--- the brief's face ---\n${face}\n--- rc ---\n${rcOut.slice(-3000)}`);
-      } finally {
-        if (rc) {
-          rc.kill("SIGINT");
-          await new Promise((r) => { rc.once("exit", r); setTimeout(r, 3000); });
-          if (rc.exitCode === null) rc.kill("SIGKILL");
-        }
-        await daemon.stop();
-        rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-      }
-    },
-  },
-  {
-    name: "proactive-ripple",
-    /**
-     * **Changes ripple** (proactive-agent phase 6, journey scene 6,
-     * `docs/projects/proactive-agent/phases.md`).
-     *
-     * Its own home and daemon with the real `isocan rc` and
-     * `packages/cli/test/fake-acp.mjs` as Kit, the canvas's lead — **no model
-     * runs**. A synthetic Acme pre-order app of six screens: Menu, and five
-     * others of which Checkout, Profile and Orders still paint with the old
-     * accent, Basket already has the new one and About has none.
-     *
-     * Maya edits Menu three times; the last edit moves the accent. Nothing is
-     * said over the run: the pulse stays away until the run has been quiet a
-     * minute (`RIPPLE_QUIET_MS`), then it appears in the top bar, one tick per
-     * screen, and Maya's own client asks Kit — the settle trigger, with no
-     * click. Kit reads the edits back as a decision, names a good move, argues
-     * Profile is an exception, sketches one idea, and previews Checkout and
-     * Orders as proposals citing Menu's version. Every screen but Menu is byte
-     * for byte what it was; the panel shows the read-back, the three states,
-     * the previews with their changed regions outlined and tagged, the
-     * altitudes and the sketch set apart. Keep on Checkout's preview brings
-     * its tick current, and only Checkout moved. Screenshots of the panel and
-     * the pulse, light and dark.
-     */
-    what: "changes ripple: a settled run summons Kit unasked; previews arrive as proposals, the pulse shows behind and conflict, and nothing changes until Keep",
-    async run(rig) {
-      const { b } = rig;
-      const home = mkdtempSync(path.join(tmpdir(), "isocan-journey-ripple-"));
-      const kitDir = path.join(home, "kit");
-      const fakeAcp = path.join(repo, "packages/cli/test/fake-acp.mjs");
-      const act = path.join(home, "act.mjs");
-      execFileSync("mkdir", ["-p", kitDir]);
-      writeFileSync(path.join(home, "identity.json"), JSON.stringify({ id: "usr_ripple_maya", name: "Maya", createdAt: new Date().toISOString() }));
-      writeFileSync(path.join(home, "config.json"), JSON.stringify({ adapterEnv: ["FAKE_ACP_*"], acpAdapters: { "claude-code": [process.execPath, fakeAcp] }, defaultHarness: "claude-code" }));
-      // Kit, scripted: asked to ripple, it reads the ripple, previews every
-      // screen that would change but Profile (which it argues), and reads back.
-      writeFileSync(act, `
-import { execFileSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
-import path from "node:path";
-export default async function act({ prompt, cli, cwd }) {
-  const canvasId = /"canvasId":\\s*"([^"]+)"/.exec(prompt)?.[1];
-  const source = /Ripple, please \\((itm_[\\w-]+)@/.exec(prompt)?.[1];
-  if (!canvasId || !source) return;
-  const run = (...args) => execFileSync(process.execPath, [cli, "--canvas", canvasId, ...args], { encoding: "utf8" });
-  const json = (...args) => JSON.parse(execFileSync(process.execPath, [cli, "--json", "--canvas", canvasId, ...args], { encoding: "utf8" }));
-  const r = json("ripple", source);
-  if (r.back) return;
-  const previews = [];
-  for (const s of r.read.screens.filter((x) => x.state === "would change" && x.title !== "Profile")) {
-    const file = path.join(cwd, s.itemId + ".html");
-    writeFileSync(file, run("get", s.itemId).split("#b5452a").join("#8a3a20"));
-    previews.push("--preview", s.itemId + "=" + file);
-  }
-  run("ripple", source, "--read-back", "--decision", "a warmer, quieter accent", "--good", "you kept one accent for every action",
-    "--exception", "Profile | a settings list, not a decision screen", "--sketch", "With one accent, the brand mark could carry the colour alone.", ...previews);
-}
-`);
-      const daemon = await startDaemon(home);
-      const { origin } = daemon;
-      const env = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(origin).port, FAKE_ACP_ACT: act, FAKE_ACP_CLI: cli };
-      for (const name of ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_ENTRYPOINT", "ISOCAN_SESSION_ID", "ISOCAN_HARNESS", "CODEX_SANDBOX", "CODEX_THREAD_ID"]) delete env[name];
-      const runCli = (...args) => {
-        const out = execFileSync(process.execPath, [cli, "--json", ...args], { cwd: home, encoding: "utf8", env });
-        return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
-      };
-      const page = (name, accent, words) => {
-        const file = path.join(home, `${name}-${Date.now()}.html`);
-        const style = accent ? `<style>:root{--accent:${accent}}h1{color:var(--accent);font-size:32px}a{display:inline-block;margin-top:24px;padding:12px 20px;border-radius:8px;background:var(--accent);color:#fff;text-decoration:none}</style>` : "";
-        writeFileSync(file, `<!doctype html><meta charset="utf-8"><title>${name}</title>${style}<body style='font:16px system-ui;padding:24px'><h1>${name}</h1><p>${words}</p>${accent ? "<a href='#'>Continue</a>" : ""}</body>`);
-        return file;
-      };
-      const shot = async (name) => {
-        const file = path.join(tmpdir(), `isocan-ripple-${name}-${Date.now()}.png`);
-        writeFileSync(file, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
-        return file;
-      };
-      const pulse = `document.querySelector("[data-ripple-pulse]")`;
-      const panel = `document.querySelector("[data-ripple-panel]")`;
-      // The canvas as the person's client reads it: a reader that says which features it decodes.
-      const features = "canvas-groups-v4,questionnaires-v1,design-requests-v1,design-requests-v2,design-decisions-v1,design-repairs-v1";
-      const served = async (id) => b.ev(`fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'${features}'}}).then(r => r.json()).then(r => JSON.stringify(r.canvas?.items ?? r))`);
-      let rc = null;
-      let rcOut = "";
-      try {
-        const id = runCli("canvas", "create", "Acme Bakery").canvasId;
-        const screens = {};
-        for (const [i, title, accent, words] of [[0, "Menu", "#b5452a", "Sourdough · Rye"], [1, "Checkout", "#b5452a", "Sourdough loaf × 1 · Pickup Saturday"], [2, "Basket", "#8a3a20", "Your basket is empty."], [3, "Profile", "#b5452a", "Notifications · Payment"], [4, "Orders", "#b5452a", "Last Saturday: two loaves"], [5, "About", null, "A neighbourhood bakery."]]) {
-          screens[title] = runCli("--canvas", id, "add", page(title, accent, words), "--title", title, "--size", "390x520", "--at", `${(i % 3) * 470},${Math.floor(i / 3) * 760}`).itemId;
-        }
-        runCli("--canvas", id, "rc", "add", "Kit", "--dir", kitDir);
-        runCli("--canvas", id, "canvas", "edit", "--prop", "proactive=Kit");
-        rc = spawn(process.execPath, [cli, "--canvas", id, "rc"], { cwd: home, env, stdio: ["ignore", "pipe", "pipe"] });
-        rc.stdout.on("data", (c) => (rcOut += c));
-        rc.stderr.on("data", (c) => (rcOut += c));
-
-        const { address } = runCli("--canvas", id, "pass");
-        await b.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
-        const loaded = b.once("Page.loadEventFired");
-        await b.send("Page.navigate", { url: origin });
-        await Promise.race([loaded, sleep(15_000)]);
-        await b.ev(`(() => { localStorage.clear(); return true; })()`);
-        await b.send("Page.navigate", { url: address });
-        await until(b, `!!document.querySelector('[data-item-id="${screens.About}"]')`, "the canvas with its six screens", 20_000);
-        await until(b, `fetch('/api/projects/${id}/rc', {headers:{'x-isocan-features':'${features}'}}).then(r => r.json()).then(r => r.parked)`, "Kit's rc to park", 20_000);
-
-        // 1. Maya's run on Menu: three edits, the last a new accent. Nothing is said over it.
-        const othersOf = (items) => JSON.stringify(Object.values(JSON.parse(items)).filter((i) => i.id !== screens.Menu && !i.properties?.proposal).map((i) => [i.id, i.currentVersionId, i.versions.length, i.x, i.y, i.properties]));
-        const before = othersOf(await served(id));
-        for (const [accent, words] of [["#b5452a", "Sourdough · Rye · Croissant"], ["#b5452a", "Sourdough · Rye · Croissant · Bun"], ["#8a3a20", "Sourdough · Rye · Croissant · Bun"]]) {
-          runCli("--canvas", id, "edit", screens.Menu, page("Menu", accent, words));
-        }
-        await sleep(3000);
-        if (await b.ev(`!!${pulse}`)) throw new Error("the pulse spoke over a run of edits that had not settled");
-
-        // 2. Quiet for a minute: the pulse appears, one tick per screen, and Maya's client asks Kit — no click.
-        await until(b, `!!${pulse}`, "the pulse after the run settled", 90_000);
-        const ticks = await b.ev(`Object.fromEntries([...${pulse}.querySelectorAll("[data-ripple-tick]")].map((t) => [t.dataset.rippleTick, t.dataset.state]))`);
-        const want = { [screens.Menu]: "current", [screens.Checkout]: "behind", [screens.Basket]: "current", [screens.Profile]: "behind", [screens.Orders]: "behind", [screens.About]: "current" };
-        if (JSON.stringify(Object.keys(ticks).sort()) !== JSON.stringify(Object.keys(want).sort()) || Object.entries(want).some(([k, v]) => ticks[k] !== v)) throw new Error(`the pulse is not one tick per screen in the right states: ${JSON.stringify(ticks)}`);
-        await until(b, `fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'${features}'}}).then(r => r.json()).then(r => Object.values(r.canvas.threads).some((t) => t.comments.some((c) => c.author.name === "Maya" && c.body.includes("Ripple, please ("))))`, "Maya's client to ask Kit once the run settled", 15_000);
-
-        // 3. Kit's previews arrive as proposals beneath Checkout and Orders; the read-back lands; Profile is argued, not previewed.
-        await until(b, `document.querySelectorAll("[data-proposal]").length === 2`, "Kit's two previews, as proposals", 90_000);
-        await until(b, `${pulse}?.querySelector('[data-ripple-tick="${screens.Profile}"]')?.dataset.state === "conflict"`, "Profile in conflict once Kit argued it", 20_000);
-        const items = JSON.parse(await served(id));
-        const previews = Object.values(items).filter((i) => i.properties?.proposal);
-        const parents = previews.map((p) => p.properties.parent).sort();
-        if (JSON.stringify(parents) !== JSON.stringify([screens.Checkout, screens.Orders].sort())) throw new Error(`the previews hang beneath the wrong screens: ${JSON.stringify(parents)}`);
-        for (const p of previews) {
-          const cites = JSON.parse(p.properties.proposalCites);
-          if (cites[0]?.kind !== "version" || cites[0]?.ref !== `${screens.Menu}@v4`) throw new Error(`a preview does not cite Menu's version: ${JSON.stringify(cites)}`);
-        }
-        if (othersOf(await served(id)) !== before) throw new Error("the ripple changed a screen besides Menu before anything was kept");
-
-        // 4. The panel: the read-back, the three states, the previews outlined and tagged, the altitudes, the sketch set apart.
-        await rig.click("[data-ripple-pulse-open]", "the pulse");
-        await until(b, `!!${panel}?.querySelector('[data-ripple-section="back"]')`, "the ripple panel", 15_000);
-        await until(b, `${panel}.querySelectorAll("[data-ripple-preview] iframe").length === 2`, "both previews in the panel", 15_000);
-        const text = await b.ev(`${panel}.textContent`);
-        for (const w of ["What you decided", "a warmer, quieter accent", "Caught doing it right: you kept one accent for every action", "What changed", "--accent #b5452a → #8a3a20", "Would change", "Already in sync", "Disagrees, your call", "a settings list, not a decision screen", "Screen by screen", "Put it in the design system", "This one is a one-off", "One idea this makes possible", "With one accent, the brand mark could carry the colour alone."]) {
-          if (!text.includes(w)) throw new Error(`the panel does not say ${JSON.stringify(w)}: ${text.slice(0, 1500)}`);
-        }
-        if (!(await b.ev(`${panel}.querySelector('[data-ripple-altitude="screens"]').getAttribute("aria-pressed") === "true"`))) throw new Error("screen by screen is not the default altitude");
-        if (!(await b.ev(`!!${panel}.querySelector('[data-ripple-screen="${screens.Basket}"][data-state="in sync"]') && !!${panel}.querySelector('[data-ripple-screen="${screens.Profile}"][data-state="disagrees"]')`))) throw new Error("Basket is not in sync, or Profile does not disagree, in the panel");
-        // The changed regions, outlined and tagged inside each preview: the frame's origin is opaque, so it says back how many it marked.
-        await until(b, `[...${panel}.querySelectorAll("[data-ripple-preview] .ripple-preview")].every((p) => Number(p.dataset.rippleMarked) >= 1)`, "each preview's changed regions outlined and tagged", 15_000);
-        const shots = {};
-        for (const theme of ["light", "dark"]) {
-          await b.ev(`(() => { document.documentElement.dataset.theme = ${JSON.stringify(theme)}; return true; })()`);
-          await sleep(400);
-          shots[`panel-${theme}`] = await shot(`panel-${theme}`);
-        }
-        await b.ev(`(() => { document.documentElement.dataset.theme = "light"; return true; })()`);
-
-        // 5. Keep is the person's: Checkout's preview becomes its next version; its tick turns current; nothing else moved.
-        const keep = previews.find((p) => p.properties.parent === screens.Checkout).id;
-        await rig.click(`[data-ripple-keep="${keep}"]`, "Keep on Checkout's preview");
-        await until(b, `${pulse}?.querySelector('[data-ripple-tick="${screens.Checkout}"]')?.dataset.state === "current"`, "Checkout current after Keep", 20_000);
-        const after = JSON.parse(await served(id));
-        if (after[screens.Checkout].versions.length !== 2) throw new Error(`Keep did not make one new version of Checkout: ${after[screens.Checkout].versions.length}`);
-        const was = JSON.parse(before).filter((r) => r[0] !== screens.Checkout).map((r) => [r[0], r[1], r[2]]);
-        const now = Object.values(after).filter((i) => i.id !== screens.Menu && i.id !== screens.Checkout && !i.properties?.proposal).map((i) => [i.id, i.currentVersionId, i.versions.length]);
-        if (JSON.stringify(now) !== JSON.stringify(was)) throw new Error(`a Keep on Checkout moved another screen: ${JSON.stringify(now)} vs ${JSON.stringify(was)}`);
-        const printed = runCli("--canvas", id, "ripple");
-        if (printed.ticks.find((t) => t.itemId === screens.Checkout)?.state !== "current" || printed.ticks.find((t) => t.itemId === screens.Orders)?.state !== "behind") throw new Error(`the terminal's pulse does not read the same: ${JSON.stringify(printed.ticks)}`);
-        await b.ev(`(() => { ${panel}.scrollTop = 0; return true; })()`);
-        for (const theme of ["light", "dark"]) {
-          await b.ev(`(() => { document.documentElement.dataset.theme = ${JSON.stringify(theme)}; return true; })()`);
-          await sleep(400);
-          shots[`kept-${theme}`] = await shot(`kept-${theme}`);
-        }
-        await b.ev(`(() => { document.documentElement.dataset.theme = "light"; return true; })()`);
-        const errors = b.takeErrors();
-        if (errors.length > 0) throw new Error(`the page threw: ${errors[0]}`);
-        return { screenshots: shots };
-      } catch (err) {
-        const said = await b.ev(`(document.querySelector("[data-ripple-panel]")?.textContent ?? "no ripple panel").slice(0, 1200)`).catch(() => "");
-        throw new Error(`${err.message}\n--- the panel ---\n${said}\n--- rc ---\n${rcOut.slice(-3000)}`);
       } finally {
         if (rc) {
           rc.kill("SIGINT");
@@ -6775,6 +7054,146 @@ export default async function act({ prompt, cli, cwd }) {
         await daemon.stop();
         stub.close();
         rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+        await b.send("Emulation.clearDeviceMetricsOverride").catch(() => {});
+      }
+    },
+  },
+  {
+    name: "canvas-pan-zoom",
+    /**
+     * **Pan and zoom stay responsive and never show blank content or flicker**
+     * (16 Oct 2026). A populated board of HTML screens and Markdown notes is
+     * panned across and zoomed out and back in while every animation frame
+     * checks the items inside the viewport. No card on screen may fall into
+     * `.item-standby` or show an undecoded HTML shell, and no rendered card may
+     * drop its face mid-gesture.
+     */
+    what: "panning and zooming across screens and notes stays responsive and never shows blank content or flickers",
+    async run(rig) {
+      const { b, home, origin } = rig;
+      const port = new URL(origin).port;
+      const env = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: port, ISOCAN_SESSION_ID: "acme-pan-zoom-journey", ISOCAN_HARNESS: "test" };
+      const runCli = (...args) => {
+        const out = execFileSync(process.execPath, [cli, "--json", ...args], { cwd: home, encoding: "utf8", env });
+        return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+      };
+      runCli("identity", "--session", "--name", "Acme Pan CLI");
+      const id = runCli("canvas", "create", "Acme pan zoom").canvasId;
+      const htmlIds = [];
+      for (let i = 0; i < 6; i++) {
+        const file = path.join(home, `screen-${i}.html`);
+        writeFileSync(
+          file,
+          `<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;font-family:sans-serif;background:#f4f1ea;color:#1d2a24;padding:24px}h1{margin:0 0 12px}.box{padding:16px;background:#fff;border-radius:8px}</style></head><body><h1>Acme screen ${i}</h1><div class="box">Storefront preview ${i}</div></body></html>`,
+        );
+        htmlIds.push(runCli("--canvas", id, "add", file, "--title", `Acme screen ${i}`, "--at", `${(i % 3) * 940},${Math.floor(i / 3) * 700}`, "--size", "880x640").itemId);
+      }
+      for (let i = 0; i < 16; i++) {
+        const file = path.join(home, `note-${i}.md`);
+        writeFileSync(file, `# Acme note ${i}\n\nQuarterly check ${i} with **bold** words and \`code\`.\n`);
+        runCli("--canvas", id, "add", file, "--title", `Acme note ${i}`, "--at", `${(i % 8) * 380},${1480 + Math.floor(i / 8) * 320}`, "--size", "320x260");
+      }
+
+      await b.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+      try {
+        await b.send("Page.navigate", { url: `${origin}/p/${id}` });
+        await until(b, `document.querySelectorAll(".item[data-item-id]").length >= 16`, "the board's items to mount", 20_000);
+        // Zoom to 0.55 so screens and notes share the viewport, then wait for idle WebP snapshots to warm.
+        const worldScale = `Number((document.querySelector(".world")?.style.transform.match(/scale\\(([0-9.]+)\\)/) ?? [])[1] ?? 1)`;
+        for (let i = 0; i < 40 && (await b.ev(worldScale)) < 0.55; i++) {
+          await b.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: 720, y: 450, deltaX: 0, deltaY: -40, modifiers: 2 });
+          await sleep(30);
+        }
+        await sleep(3500);
+
+        const htmlLit = JSON.stringify(htmlIds);
+        await b.ev(`(() => {
+          const htmlSet = new Set(${htmlLit});
+          const world = document.querySelector(".world");
+          const boxes = [];
+          for (const el of document.querySelectorAll(".item[data-item-id]")) {
+            const itemId = el.dataset.itemId;
+            const c = el.querySelector(":scope > .item-content");
+            if (!itemId || !c) continue;
+            boxes.push({
+              id: itemId,
+              c,
+              x: parseFloat(el.style.left) || 0,
+              y: parseFloat(el.style.top) || 0,
+              w: parseFloat(el.style.width) || 0,
+              h: parseFloat(el.style.height) || 0,
+            });
+          }
+          window.__pzGaps = []; window.__pzCams = new Set(); window.__pzBlank = 0; window.__pzFlicker = 0; window.__pzBlankIds = new Set();
+          const seen = new Map();
+          let last = performance.now();
+          const sample = () => {
+            const xf = world?.style.transform ?? "";
+            const t = /translate(?:3d)?\\((-?[0-9.]+)px,\\s*(-?[0-9.]+)px/.exec(xf);
+            const s = /scale\\(([0-9.]+)\\)/.exec(xf);
+            const tx = t ? Number(t[1]) : 0, ty = t ? Number(t[2]) : 0, scale = s ? Number(s[1]) : 1;
+            let frameBlank = false;
+            for (const bx of boxes) {
+              const left = bx.x * scale + tx, top = bx.y * scale + ty, w = bx.w * scale, h = bx.h * scale;
+              if (left + w <= 4 || top + h <= 4 || left >= innerWidth - 4 || top >= innerHeight - 4 || w < 24 || h < 18) continue;
+              const c = bx.c;
+              const isHtml = htmlSet.has(bx.id) || !!c.querySelector(".html-view-surface, .html-view");
+              const roomy = w >= 180 && h >= 110;
+              if (!isHtml && !roomy && !c.querySelector(".text-mark, .sz-gist")) continue;
+              let blank = false;
+              if (c.querySelector(".item-standby") || !c.firstElementChild) blank = true;
+              else if (isHtml) {
+                const img = c.querySelector("img.html-snapshot");
+                const snapOk = !!img && img.complete && img.naturalWidth > 0;
+                const liveOk = [...c.querySelectorAll("iframe")].some((fr) => !fr.classList.contains("arriving"));
+                if (!snapOk && !liveOk) blank = true;
+              }
+              if (blank) {
+                frameBlank = true;
+                window.__pzBlankIds.add(bx.id);
+                if (seen.get(bx.id) === "ready") window.__pzFlicker++;
+                seen.set(bx.id, "blank");
+              } else {
+                seen.set(bx.id, "ready");
+              }
+            }
+            if (frameBlank) window.__pzBlank++;
+          };
+          const f = (now) => {
+            window.__pzGaps.push(now - last); last = now;
+            window.__pzCams.add(world?.style.transform ?? "");
+            sample();
+            if (window.__pzOn) requestAnimationFrame(f);
+          };
+          window.__pzOn = true;
+          sample();
+          requestAnimationFrame(f);
+          return true;
+        })()`);
+
+        const wheel = (dx, dy, modifiers = 0) => b.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: 720, y: 450, deltaX: dx, deltaY: dy, modifiers });
+        for (let i = 0; i < 40; i++) {
+          await wheel(i < 20 ? 45 : -45, i % 2 ? 30 : -30);
+          await sleep(16);
+        }
+        for (let i = 0; i < 40; i++) {
+          await wheel(0, i < 20 ? 45 : -45, 2);
+          await sleep(16);
+        }
+        await sleep(250);
+
+        const got = await b.ev(`(() => {
+          window.__pzOn = false;
+          const s = window.__pzGaps.slice(1).sort((a, b) => a - b);
+          const p90 = s.length ? s[Math.min(s.length - 1, Math.floor(0.9 * s.length))] : 0;
+          return { frames: s.length, cams: window.__pzCams.size, p90: Math.round(p90 * 10) / 10, blank: window.__pzBlank, flicker: window.__pzFlicker, blankIds: [...window.__pzBlankIds] };
+        })()`);
+        if (got.cams < 12) throw new Error(`pan and zoom moved the camera through only ${got.cams} positions`);
+        if (got.blank > 0) throw new Error(`blank content appeared on ${got.blank} frame(s) during pan/zoom (${got.blankIds.join(", ")})`);
+        if (got.flicker > 0) throw new Error(`rendered content flickered ${got.flicker} time(s) during pan/zoom`);
+        if (got.p90 > 34) throw new Error(`pan/zoom p90 frame gap was ${got.p90} ms (budget 34 ms)`);
+        return got;
+      } finally {
         await b.send("Emulation.clearDeviceMetricsOverride").catch(() => {});
       }
     },

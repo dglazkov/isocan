@@ -9,6 +9,7 @@ import {
   applyActorJoin,
   applyActorMark,
   applyClaim,
+  claimsActor,
   emptyActorRegistry,
   mergeJoins,
 } from "../src/claims.ts";
@@ -187,6 +188,15 @@ describe("the wire shapes answer for the old id", () => {
     const colored = applyActorColor(folded, { type: "actor.setColor", actorId: second.id, color: "#0f8a80" });
     expect(actorColors(colored)[second.id]).toBe("#0f8a80");
     expect(actorColors(colored)[dimitri.id]).toBe("#0f8a80");
+  });
+
+  it("claimsActor: a badge holding a folded id speaks for the person, and vice versa", () => {
+    const joined = { [second.id]: dimitri.id };
+    const heldOld = [{ actorId: second.id, boundAt: "2026-09-01T00:00:00.000Z" }];
+    const heldNew = [{ actorId: dimitri.id, boundAt: "2026-09-01T00:00:00.000Z" }];
+    expect(claimsActor(heldOld, dimitri.id, joined)).toBe(true);
+    expect(claimsActor(heldNew, second.id, joined)).toBe(true);
+    expect(claimsActor(heldOld, kenny.id, joined)).toBe(false);
   });
 });
 

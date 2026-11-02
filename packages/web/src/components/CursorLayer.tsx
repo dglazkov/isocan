@@ -2,13 +2,20 @@ import { useEffect, useRef, useState } from "react";
 import { useCanvasCursor } from "../lib/wearscursor.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
-import { worldToScreen, threadWorldPos } from "../lib/viewport.ts";
+import { worldToScreen } from "../lib/viewport.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { cursorChipLabel, pointerMark, type Actor } from "@isocan/core";
 import { useActorMarks } from "../lib/marks.ts";
 import { isAgentActor, useActorKinds } from "../lib/actorkinds.ts";
 import { sessionName, useActorNames } from "../lib/names.ts";
-import { otherTabSessionIds, quietFor, spreadOverlaps, statusLine } from "../lib/presence.ts";
+import {
+  nextWorkingWaypoint,
+  otherTabSessionIds,
+  quietFor,
+  sessionWorkingBounds,
+  spreadOverlaps,
+  statusLine,
+} from "../lib/presence.ts";
 import { groundCursors, realMove } from "../lib/groundcursors.ts";
 
 const LERP_HUMAN = 0.22; // real cursors track tightly
@@ -78,26 +85,10 @@ export function CursorLayer({ actor = null }: { actor?: Actor | null } = {}) {
       const spread = spreadOverlaps(stillTargets);
 
       for (const session of current) {
-        // Wander area: the anchored item's bounds, or a synthetic patch
-        // around a freestanding work point.
-        let workingBounds: { x: number; y: number; width: number; height: number } | undefined;
-        if (session.activity?.kind === "working") {
-          if ("itemId" in session.activity) {
-            workingBounds = canvas?.items[session.activity.itemId];
-          } else if ("threadId" in session.activity) {
-            // Around the pin: the thread is what they are working ON.
-            const thread = canvas?.threads[session.activity.threadId];
-            const at = thread && canvas ? threadWorldPos(canvas, thread) : null;
-            if (at) workingBounds = { x: at.x - 90, y: at.y - 60, width: 180, height: 120 };
-          } else {
-            workingBounds = {
-              x: session.activity.x - 110,
-              y: session.activity.y - 75,
-              width: 220,
-              height: 150,
-            };
-          }
-        }
+        // Wander area: the targeted item's bounds (including a thread's
+        // anchored or referenced item), or a synthetic patch around a
+        // freestanding work point.
+        const workingBounds = sessionWorkingBounds(session, canvas);
         if (!session.cursor && !workingBounds) continue;
         live.add(session.sessionId);
 
@@ -114,30 +105,10 @@ export function CursorLayer({ actor = null }: { actor?: Actor | null } = {}) {
 
         if (workingBounds) {
           if (now >= rec.nextAt) {
-            if (Math.random() < 0.22) {
-              // thinking pause — hold position a beat
-              rec.nextAt = now + 500 + Math.random() * 900;
-            } else {
-              // next waypoint: biased toward the item's edges and corners
-              const pad = 12;
-              const t = Math.random();
-              const along = Math.random();
-              const w = workingBounds.width + pad * 2;
-              const h = workingBounds.height + pad * 2;
-              const ox = workingBounds.x - pad;
-              const oy = workingBounds.y - pad;
-              if (t < 0.7) {
-                // edge band
-                const edge = Math.floor(Math.random() * 4);
-                rec.tx = edge < 2 ? ox + along * w : edge === 2 ? ox : ox + w;
-                rec.ty = edge === 0 ? oy : edge === 1 ? oy + h : oy + along * h;
-              } else {
-                // interior point
-                rec.tx = ox + 0.15 * w + Math.random() * 0.7 * w;
-                rec.ty = oy + 0.15 * h + Math.random() * 0.7 * h;
-              }
-              rec.nextAt = now + 350 + Math.random() * 900;
-            }
+            const next = nextWorkingWaypoint(workingBounds, rec);
+            rec.tx = next.tx;
+            rec.ty = next.ty;
+            rec.nextAt = now + next.dwellMs;
           }
         } else {
           rec.tx = home.x;

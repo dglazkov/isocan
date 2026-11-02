@@ -1,8 +1,8 @@
 import "./design-system-view.css";
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Markdown } from "../lib/markdown.tsx";
-import type { Actor, DesignDoc, DesignTypography } from "@isocan/core";
-import { bySeverity, checkDesign, parseDesign, parseHex, resolveToken } from "@isocan/core";
+import type { Actor, DesignDoc, DesignTypography, Item } from "@isocan/core";
+import { bySeverity, checkDesign, parseDesign, parseHex, readDesignSources, resolveToken } from "@isocan/core";
 import { readDesignDirection } from "@isocan/core/design-direction";
 import {
   componentCss,
@@ -12,6 +12,8 @@ import {
   type ComponentShape,
 } from "../lib/designview.ts";
 import { fetchBlobText, peekBlobText, type TextLoad } from "../lib/blobtext.ts";
+import { useCanvasStore } from "../stores/canvasStore.ts";
+import { useUiStore } from "../stores/uiStore.ts";
 
 /**
  * A design system, shown as itself.
@@ -66,6 +68,21 @@ function DesignSystemViewInner({ canvasId, blobHash, author }: { canvasId: strin
     () => (load && !("failed" in load) ? parseDesign(load.text) : null),
     [load],
   );
+  const sources = useMemo(() => (parsed ? readDesignSources(parsed) : {}), [parsed]);
+  const items = useCanvasStore((s) => s.canvas?.items);
+  const peekedRef = useRef<string | null>(null);
+  const setPeek = useCallback((itemId: string | null) => {
+    peekedRef.current = itemId;
+    useUiStore.getState().setPeeked(itemId);
+  }, []);
+  useEffect(
+    () => () => {
+      if (peekedRef.current && useUiStore.getState().peekedItemId === peekedRef.current) {
+        useUiStore.getState().setPeeked(null);
+      }
+    },
+    [],
+  );
 
   if (load === null) return <div className="file-view">…</div>;
   if ("failed" in load) return <div className="file-view">{load.failed}</div>;
@@ -73,10 +90,23 @@ function DesignSystemViewInner({ canvasId, blobHash, author }: { canvasId: strin
 
   const doc = parsed;
   const direction = readDesignDirection(doc);
+  const sourceHover = (itemId: string | undefined) =>
+    itemId
+      ? {
+          "data-source-item": itemId,
+          tabIndex: 0,
+          onPointerEnter: () => setPeek(itemId),
+          onMouseEnter: () => setPeek(itemId),
+          onFocus: () => setPeek(itemId),
+          onPointerLeave: () => setPeek(null),
+          onMouseLeave: () => setPeek(null),
+          onBlur: () => setPeek(null),
+        }
+      : {};
   return (
     <div className="ds-view">
       <Masthead doc={doc} />
-      {direction.status === "valid" && <section className="ds-section"><h3>{direction.direction.stage === "accepted" ? "Accepted treatments · authored record" : "Provisional direction"}</h3><p>{direction.direction.rationale}</p>{author && <small>Written by {author.name}</small>}<ol>{direction.direction.taskHierarchy.map((step, index) => <li key={index}>{step}</li>)}</ol><details><summary>Reusable decisions</summary><p>{direction.direction.layout}</p><p>{direction.direction.density}</p><p>{direction.direction.typography}</p><p>{direction.direction.palettePurpose}</p>{direction.direction.treatments.map((treatment) => <p key={treatment.name}><strong>{treatment.name}</strong> · {treatment.guidance}<br /><small>{treatment.states.join(" · ")}</small></p>)}</details></section>}
+      {direction.status === "valid" && <section className="ds-section"><h3>{direction.direction.stage === "accepted" ? "Accepted treatments · authored record" : "Provisional direction"}</h3><p>{direction.direction.rationale}</p>{author && <small>Written by {author.name}</small>}<ol>{direction.direction.taskHierarchy.map((step, index) => <li key={index}>{step}</li>)}</ol><details><summary>Reusable decisions</summary>{(["layout", "density", "typography", "palettePurpose"] as const).map((field) => { const srcId = sources[`direction.${field}`] ?? sources[field]; return <p key={field} {...sourceHover(srcId)}>{direction.direction[field]}{srcId && <small className="ds-source">from “{items?.[srcId]?.title ?? srcId}”</small>}</p>; })}{direction.direction.treatments.map((treatment) => { const srcId = sources[`direction.treatments.${treatment.name}`] ?? sources["direction.treatments"]; return <p key={treatment.name} {...sourceHover(srcId)}><strong>{treatment.name}</strong> · {treatment.guidance}<br /><small>{treatment.states.join(" · ")}{srcId ? ` · from “${items?.[srcId]?.title ?? srcId}”` : ""}</small></p>; })}</details></section>}
       {direction.status === "malformed" && <section className="ds-problems"><h3>Direction could not be read</h3><p>{direction.problems.join(" ")}</p></section>}
       <Findings doc={doc} />
       {doc.problems.length > 0 && (
@@ -89,7 +119,7 @@ function DesignSystemViewInner({ canvasId, blobHash, author }: { canvasId: strin
           </ul>
         </section>
       )}
-      <Colors doc={doc} />
+      <Colors doc={doc} sources={sources} items={items} setPeek={setPeek} />
       <Type doc={doc} />
       <Scale doc={doc} />
       <Corners doc={doc} />
@@ -151,7 +181,17 @@ function Masthead({ doc }: { doc: DesignDoc }) {
   );
 }
 
-function Colors({ doc }: { doc: DesignDoc }) {
+function Colors({
+  doc,
+  sources,
+  items,
+  setPeek,
+}: {
+  doc: DesignDoc;
+  sources: Readonly<Record<string, string>>;
+  items: Readonly<Record<string, Item>> | undefined;
+  setPeek: (itemId: string | null) => void;
+}) {
   const colors = Object.entries(doc.tokens.colors ?? {});
   if (colors.length === 0) return null;
   return (
@@ -160,8 +200,25 @@ function Colors({ doc }: { doc: DesignDoc }) {
       <div className="ds-swatches">
         {colors.map(([name, value]) => {
           const on = readableInk(value);
+          const srcId = sources[`colors.${name}`];
+          const tileTitle = srcId ? (items?.[srcId]?.title ?? srcId) : null;
           return (
-            <div className="ds-swatch" key={name}>
+            <div
+              className="ds-swatch"
+              key={name}
+              {...(srcId
+                ? {
+                    "data-source-item": srcId,
+                    tabIndex: 0,
+                    onPointerEnter: () => setPeek(srcId),
+                    onMouseEnter: () => setPeek(srcId),
+                    onFocus: () => setPeek(srcId),
+                    onPointerLeave: () => setPeek(null),
+                    onMouseLeave: () => setPeek(null),
+                    onBlur: () => setPeek(null),
+                  }
+                : {})}
+            >
               <div className="ds-chip" style={{ background: value, color: on?.color ?? "inherit" }}>
                 {/* What ink this colour can carry — NOT a pass mark. Every
                     colour scores well here; the grading is in Checks above. */}
@@ -176,6 +233,7 @@ function Colors({ doc }: { doc: DesignDoc }) {
               </div>
               <b>{name}</b>
               <code>{value}</code>
+              {tileTitle && <small className="ds-source">from “{tileTitle}”</small>}
             </div>
           );
         })}

@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-/** The Status words a phases.md uses, mapped to keel/front-matter status. */
+/** The Status words a phases.md uses, mapped to plates/front-matter status. */
 export const PHASE_WORDS = Object.freeze({
   CLOSED: "built",
   "PART-DONE": "partial",
@@ -18,7 +18,7 @@ const STATUS_LINE = /^\*\*Status:\s*([A-Z][A-Z-]*(?: [A-Z][A-Z-]+)*)/;
 /**
  * The phase sections of a phases.md (`## Phase N …` or `## N. …`), outside
  * fenced code: [{ id, title, heading, word, status, line }]. Matches
- * `phaseSections` in `scripts/keel/lib.mjs`.
+ * `phaseSections` in `scripts/plates/lib.mjs`.
  */
 export function phaseSections(text) {
   const lines = String(text ?? "").split(/\r?\n/);

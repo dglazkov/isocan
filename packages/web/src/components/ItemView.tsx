@@ -63,6 +63,7 @@ import { useContentOrigin } from "../lib/contentBase.ts";
 import { itemFrame, useFrameSrc } from "../lib/frame.ts";
 import { readabilityBand, showsLiveFrame, useHtmlSnapshot } from "../lib/htmlsnapshot.ts";
 import { sendPrototypeClick } from "../lib/prototypeclick.ts";
+import { takeLiveFlip } from "../lib/deckflip.ts";
 import { FrameAnchor, anchored, anchorFromMessage, nextSpot, type FrameSpot } from "../lib/frameanchor.ts";
 import { fetchBlobText, peekBlobText, type TextLoad } from "../lib/blobtext.ts";
 const DesignSystemView = lazy(() => import("./DesignSystemView.tsx").then((module) => ({ default: module.DesignSystemView })));
@@ -71,7 +72,7 @@ import { useGistStore } from "../stores/gistStore.ts";
 import { publishDrag, sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { snapBox, unionBox } from "../lib/snap.ts";
-import { COUNTER_SCALED_CSS, nameRoomCss, TEXT_MARK_CSS, UNDER_ROW_CSS, underSlotFor, Z_CONTENT, Z_EDGES, Z_GIST, Z_ICON, Z_LEGIBLE, Z_MARK, Z_NAME, Z_ROOMY, Z_SPELL, zoomDecisions, type ZoomHeld } from "../lib/chrome.ts";
+import { COUNTER_SCALED_CSS, nameRoomCss, TEXT_MARK_CSS, UNDER_ROW_CSS, underSlotFor, Z_GIST, Z_ICON, Z_LEGIBLE, Z_MARK, Z_NAME, Z_ROOMY, Z_SPELL, zoomDecisions, type ZoomHeld } from "../lib/chrome.ts";
 import { useNavigate } from "react-router-dom";
 import { itemPath, nodeCapabilitiesFor, workbenchItemPath } from "@isocan/core";
 /**
@@ -319,8 +320,6 @@ function ItemViewInner({
   const gistEntry = useGistStore((s) => s[item.id]);
   const zoom = useUiStore((s) => zoomDecisions(item, width, height, s.viewport.scale, held, gistEntry?.px));
   const roomy = (held.r = (zoom & Z_ROOMY) !== 0);
-  const contentShown = (held.c = (zoom & Z_CONTENT) !== 0);
-  held.e = (zoom & Z_EDGES) !== 0;
   // The members cannot be read: the summary card shows inside the frame, and
   // the frame rises over them (`.gisted`). Never for a stacked group's card.
   const gisted = !stackBox && !(held.g = (zoom & Z_GIST) === 0);
@@ -1014,7 +1013,9 @@ function ItemViewInner({
         // against the world's `--scale` (`nameRoomCss`, `UNDER_ROW`).
         ...({ "--w": width, "--h": height } as React.CSSProperties),
         ...(remoteHolder && !selected
-          ? { outline: `2px dashed ${actorColorIn(colors, remoteHolder)}`, outlineOffset: "1px" }
+          ? // Counter-scaled like every other ring on an item, and on the
+            // same line as selection, so their selection reads as yours does.
+            { outline: `calc(2px / var(--scale, 1)) dashed ${actorColorIn(colors, remoteHolder)}`, outlineOffset: "calc(-1px / var(--scale, 1))" }
           : {}),
         ...(worker
           ? ({ "--work-color": actorColorIn(colors, worker.actorId) } as React.CSSProperties)
@@ -1032,8 +1033,9 @@ function ItemViewInner({
       onDoubleClick={onDoubleClick}
     >
       {detail && (worker || remoteHolder) && <span className="presentation-presence">{worker?.name ?? names[remoteHolder!] ?? "Viewing"}</span>}
-      {stackDepth >= 1 && <span className="ply" style={{ transform: "translate(5px, 5px)", opacity: 0.75 }} />}
-      {stackDepth >= 2 && <span className="ply" style={{ transform: "translate(10px, 10px)", opacity: 0.45 }} />}
+      {/* The look and the offset live in CSS (`.ply-1`, `.ply-2`): both depend on the zoom and on selection. */}
+      {stackDepth >= 1 && <span className="ply ply-1" />}
+      {stackDepth >= 2 && <span className="ply ply-2" />}
       {item.versions.length > 1 && roomy && (
         <button
           className="version-badge version-badge-ne"
@@ -1417,11 +1419,11 @@ function ItemViewInner({
          * size is still `textMarkSize`, so the words never claim more room
          * than the node they stand for.
          */}
-        {detail === "marker" ? <span className="presentation-marker" aria-hidden>◈</span> : detail === "compact" && !moduleRendererFor(current.mimeType, item) ? <div className="presentation-compact">{item.title}</div> : isText && !textLegible && contentShown ? (
+        {detail === "marker" ? <span className="presentation-marker" aria-hidden>◈</span> : detail === "compact" && !moduleRendererFor(current.mimeType, item) ? <div className="presentation-compact">{item.title}</div> : isText && !textLegible ? (
           gist ?? <span className="text-mark" style={{ fontSize: TEXT_MARK_CSS }}>
             {item.title}
           </span>
-        ) : (!entered && !contentShown) || (!isText && !isInk && !picture && !/^(image|video)\//.test(visual.mimeType) && !(htmlScreen && nearWindow) && !entered && !(nearWindow && roomy)) ? (
+        ) : !isText && !isInk && !picture && !/^(image|video)\//.test(visual.mimeType) && !(htmlScreen && nearWindow) && !entered && !(nearWindow && roomy) ? (
           /**
            * Far away, or the tab is in the background: the box stays exactly
            * where it is and what it holds stands down.
@@ -2029,18 +2031,12 @@ function HtmlItemView({
   snapshotOnly?: boolean | undefined;
   eagerSnapshot?: boolean | undefined;
 }) {
-  const origin = useContentOrigin(canvasId, snapshotOnly ? [] : [blobHash, ...warm]);
   const stack = useRef<HTMLDivElement>(null);
-  // `useFrameSrc`, not `itemFrame` directly: a loaded frame keeps the src it
-  // loaded with. A renewed signature is for the same bytes, and swapping it
-  // in would reload the document for nothing — see `frame.ts`.
-  const frame = useFrameSrc(origin, canvasId, blobHash);
   // Full screen's `#…`, for a document that opens somewhere inside itself (lib/frameanchor.ts).
   const anchor = useContext(FrameAnchor);
   const [heldSpot, setSpot] = useState<FrameSpot>({ itemId, blobHash, reported: null, carried: null });
   const spot = nextSpot(heldSpot, itemId, blobHash);
   if (spot !== heldSpot) setSpot(spot);
-  const src = !snapshotOnly && frame ? anchored(frame.src, spot.carried ?? anchor) : null;
   const warmAnchor = spot.carried ?? spot.reported ?? anchor;
   // Booleans and a band, never the raw zoom: a selector that returned the
   // scale would re-render every screen on every step of a zoom.
@@ -2051,7 +2047,7 @@ function HtmlItemView({
     blobHash,
     width ?? 880,
     height ?? 640,
-    (picture && Boolean(src)) || snapshotOnly || eagerSnapshot,
+    picture || snapshotOnly || eagerSnapshot,
     eagerSnapshot,
   );
   const [readySnapshotUrl, setReadySnapshotUrl] = useState<string | null>(null);
@@ -2069,6 +2065,12 @@ function HtmlItemView({
       wasLive: live,
     });
   if (wantLive !== live) setLive(wantLive);
+  const origin = useContentOrigin(canvasId, wantLive ? [blobHash, ...warm] : []);
+  // `useFrameSrc`, not `itemFrame` directly: a loaded frame keeps the src it
+  // loaded with while it stays live. When `wantLive` drops, the held src is
+  // released so the next mount uses a fresh signature — see `frame.ts`.
+  const frame = useFrameSrc(origin, canvasId, blobHash, wantLive);
+  const src = wantLive && frame ? anchored(frame.src, spot.carried ?? anchor) : null;
   useEffect(() => {
     if (!itemId || !actor) return;
     const hear = (e: MessageEvent) => {
@@ -2087,6 +2089,29 @@ function HtmlItemView({
     window.addEventListener("message", hear);
     return () => window.removeEventListener("message", hear);
   }, [canvasId, itemId, actor, src]);
+  // A motion's player (motion phase 2): it says where a person paused it, so
+  // a comment left then remembers the moment; and opening a comment pinned
+  // to this item at a time scrubs it there — now, and again once a frame
+  // that was still loading says it is ready.
+  const openThreadId = useUiStore((s) => s.openThreadId);
+  const openAt = useCanvasStore((s) => {
+    const thread = openThreadId ? s.canvas?.threads[openThreadId] : undefined;
+    return thread && thread.anchorItemId === itemId ? (thread.comments.find((c) => c.at !== undefined)?.at ?? null) : null;
+  });
+  useEffect(() => {
+    if (!itemId) return;
+    const frames = () => [...(stack.current?.querySelectorAll("iframe") ?? [])];
+    // Lazy: a canvas with no motion on it never fetches the half that answers.
+    const hear = (e: MessageEvent) => {
+      const from = frames().find((f) => f.contentWindow === e.source);
+      if (from && /^isocan:motion-/.test(String((e.data as { type?: unknown } | null)?.type))) {
+        void import("../lib/motionframe.ts").then((m) => m.heardFromMotion(itemId, e.data, from.contentWindow, openAt));
+      }
+    };
+    window.addEventListener("message", hear);
+    if (openAt !== null) void import("../lib/motionframe.ts").then((m) => m.seekMotion(frames().map((f) => f.contentWindow), openAt));
+    return () => window.removeEventListener("message", hear);
+  }, [itemId, openAt, src]);
   if (!snapshotUrl && (!wantLive || !src || !frame)) return <div className="html-view" />;
   return (
     <div className={`html-view-surface${proxyReady ? " has-snapshot" : ""}`}>
@@ -2144,6 +2169,35 @@ function HtmlView({
   const [shown, setShown] = useState<ReadonlySet<string>>(() => (overPicture ? EMPTY : new Set([src])));
   const [visible, setVisible] = useState(src);
   const warmKey = warm.join("\u0000");
+  /**
+   * **The deck's transition, played on the pages themselves.**
+   *
+   * A flip between two screens cannot ride a view transition — a frame
+   * photographs blank (`flipTo`) — but it does not need to: the slide being
+   * left and the slide arriving are both mounted right here. So when a flip
+   * left a note (`takeLiveFlip`) and this pool promotes the next frame, both
+   * frames are marked for the length of the motion — `deck-out` and
+   * `deck-in` — and the CSS moves the two LIVE documents (styles.css, "the
+   * deck flip"). Nothing is re-run, nothing re-fetched, and the 3D motions
+   * turn a real page rather than a picture of one.
+   *
+   * Only a stage that presents a deck takes the note, so a screen on the
+   * canvas underneath that happens to promote a frame mid-flip cannot steal
+   * the motion meant for the slide.
+   */
+  const [motion, setMotion] = useState<{ from: string; to: string; dir: "next" | "prev"; transition: string; ms: number } | null>(null);
+  const own = useRef<HTMLDivElement | null>(null);
+  const visibleNow = useRef(visible);
+  visibleNow.current = visible;
+  const setStack = useCallback(
+    (el: HTMLDivElement | null) => {
+      own.current = el;
+      if (typeof stackRef === "function") stackRef(el);
+      else if (stackRef) (stackRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+    },
+    [stackRef],
+  );
+  const leaving = motion?.from ?? null;
 
   useEffect(() => {
     const neighbours = warmKey === "" ? [] : warmKey.split("\u0000");
@@ -2156,19 +2210,20 @@ function HtmlView({
        * supposed to remove one. So the order never changes; `z-index` decides
        * what is on top instead.
        */
-      const want = new Set([visible, src, ...neighbours]);
+      // The slide on its way out stays until it has finished leaving.
+      const want = new Set([visible, src, ...neighbours, ...(leaving ? [leaving] : [])]);
       const kept = was.filter((one) => want.has(one) || one === visible);
       const added = [...want].filter((one) => !kept.includes(one));
       const next = [...kept, ...added];
       const trimmed =
         next.length > KEEP_FRAMES
-          ? next.filter((one, i) => one === visible || one === src || i >= next.length - KEEP_FRAMES)
+          ? next.filter((one, i) => one === visible || one === src || one === leaving || i >= next.length - KEEP_FRAMES)
           : next;
       return was.length === trimmed.length && was.every((one, i) => one === trimmed[i])
         ? was
         : trimmed;
     });
-  }, [src, visible, warmKey]);
+  }, [src, visible, warmKey, leaving]);
 
   // A frame's `load` waits for every image and font in it, and a slide of
   // full-size photographs can take long enough that the page under the picture
@@ -2184,12 +2239,34 @@ function HtmlView({
 
   useEffect(() => {
     if (!loaded.has(src)) return;
+    const from = visibleNow.current;
+    if (from !== src) {
+      const presenting = own.current?.closest(".fullscreen-stage") != null;
+      const flip = presenting ? takeLiveFlip() : null;
+      setMotion(flip && flip.ms > 0 ? { from, to: src, ...flip } : null);
+    }
     setVisible(src);
     setShown((was) => (was.has(src) ? was : new Set(was).add(src)));
   }, [src, loaded]);
 
+  // The motion ends when the arriving page has finished arriving
+  // (`onAnimationEnd` below). The timer is only the floor under that — a
+  // frame the browser never painted fires no event, and the outgoing page
+  // must not be held on the glass forever because of it.
+  useEffect(() => {
+    if (!motion) return;
+    const done = setTimeout(() => setMotion(null), motion.ms * 2 + 500);
+    return () => clearTimeout(done);
+  }, [motion]);
+
   return (
-    <div className="html-view-stack" ref={stackRef}>
+    <div
+      className={`html-view-stack${motion ? " deck-moving" : ""}`}
+      ref={setStack}
+      data-flip={motion?.dir}
+      data-transition={motion?.transition}
+      style={motion ? ({ "--deck-ms": `${motion.ms}ms` } as React.CSSProperties) : undefined}
+    >
       {mounted.map((one) => (
         <iframe
           key={one}
@@ -2200,13 +2277,14 @@ function HtmlView({
            * rather than over the ground. There is no moment where the two of
            * them together add up to less than one slide.
            */
-          className={`html-view${shown.has(one) ? "" : " arriving"}`}
+          className={`html-view${shown.has(one) ? "" : " arriving"}${motion?.from === one ? " deck-out" : motion?.to === one ? " deck-in" : ""}`}
           style={{ zIndex: one === visible ? 2 : 1 }}
           src={one}
           sandbox={sandbox}
           title={title}
           aria-hidden={one === visible ? undefined : true}
           onLoad={() => setLoaded((was) => (was.has(one) ? was : new Set(was).add(one)))}
+          onAnimationEnd={motion?.to === one ? () => setMotion((was) => (was?.to === one ? null : was)) : undefined}
         />
       ))}
     </div>

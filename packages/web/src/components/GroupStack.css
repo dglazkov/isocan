@@ -2,9 +2,9 @@
    `GroupStack.tsx`, so it ships with that chunk and only a canvas with a
    stack downloads it. `--tint` is set per card from a token (`tintOf`). */
 .group-stack { position: absolute; inset: 0; }
-.stack-band { display: flex; align-items: center; gap: 12px; padding: 0 4px; box-sizing: border-box; color: var(--ink); cursor: grab; user-select: none; white-space: nowrap; }
+.stack-band { display: flex; align-items: center; gap: 12px; padding: 0 4px; box-sizing: border-box; color: var(--ground-ink); cursor: grab; user-select: none; white-space: nowrap; }
 .stack-title { font-size: 22px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.stack-band .group-member-count { margin-left: 0; padding-left: 0; color: var(--ink-muted); }
+.stack-band .group-member-count { margin-left: 0; padding-left: 0; color: var(--ground-ink-muted); }
 .stack-pile { position: absolute; cursor: pointer; }
 .stack-card {
   position: absolute; inset: 0; box-sizing: border-box; overflow: hidden;
@@ -37,8 +37,12 @@
 .stack-open-scrim { position: absolute; inset: 0; background: var(--overlay); }
 .stack-open-panel {
   position: relative; width: min(960px, 100%); box-sizing: border-box; max-height: 80vh; overflow: auto;
-  padding: 16px; border-radius: 12px; background: var(--card); color: var(--ink);
-  border: 1px solid var(--line); box-shadow: var(--shadow-pop);
+  padding: 16px; border-radius: 12px;
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+  color: var(--ink);
+  border: 1px solid var(--glass-border); box-shadow: var(--shadow-glass);
 }
 .stack-open-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
 .stack-open-head small { color: var(--ink-muted); }

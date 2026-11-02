@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { PROPOSED, unknownProposals } from "@isocan/core";
+import { PROPOSED, unknownProposals, CLAIM_REFUSAL, SPRINT_BOARD } from "@isocan/core";
 
 import { EXPERIMENTS } from "../src/lib/experiments.ts";
 import { useUiStore } from "../src/stores/uiStore.ts";
@@ -65,6 +65,22 @@ describe("a module behind an experiment", () => {
        bundler doing its best. Measured when it landed: 22 bytes in the entry,
        the rest in the experiment's own lazy chunk. */
     expect(first.includes("voice-beam"), "the voice glow is in the first download").toBe(false);
+  });
+
+  it("keeps actor allocation and sprint setup deferred without dropping their runtime API", () => {
+    const first = entryChunk();
+    if (first === null) return;
+    // These are writer/setup payloads, not the harness classifier or sprint clock
+    // the first screen uses. A shared source file used to hoist both into entry.
+    expect(first).not.toContain(CLAIM_REFUSAL.claimedJustNow);
+    expect(first).not.toContain(SPRINT_BOARD[0]!.card.split("\n")[0]!);
+    const deferred = readdirSync(dist).filter((f) => f.endsWith(".js"))
+      .map((f) => readFileSync(dist + f, "utf8"))
+      .find((code) => /\bas allocateName\b/.test(code));
+    expect(deferred, "runtime modules still receive the complete core namespace").toBeDefined();
+    for (const name of ["allocateName", "SPRINT_BOARD", "boardLayout", "briefCard", "dispatchReason", "answerPolicy"]) {
+      expect(deferred).toMatch(new RegExp(`\\bas ${name}\\b`));
+    }
   });
 
   it("names itself in Settings, in words rather than an id", () => {

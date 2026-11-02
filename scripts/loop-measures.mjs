@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * **isocan's measures, as a Loop context.** Prints JSON to stdout; keel's
- * `scripts/loop.mjs push` runs this (`.keel/keel.json` "loop" "contexts",
+ * **isocan's measures, as a Loop context.** Prints JSON to stdout; plates's
+ * `scripts/loop.mjs push` runs this (`.plates/plates.json` "loop" "contexts",
  * source `isocan:measures`) and sends what it prints to Loop.
  *
  *   node scripts/loop-measures.mjs

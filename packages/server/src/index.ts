@@ -60,7 +60,7 @@ export {
 } from "./google.ts";
 /** Machine configuration schema (`~/.isocan/config.json`) and per-home proxy auth types. */
 export type { HomeAuthConfig, HomeAuthEntry, HomeConfig } from "./config.ts";
-export { adoptIdentity, askTheDoor, bearerHeader, fileBadgeStore, knockOnDoor, readBadge, writeBadge, writeIdentityName } from "./badge-store.ts";
+export { adoptIdentity, askTheDoor, bearerHeader, fileBadgeStore, knockOnDoor, readBadge, writeBadge, writeIdentityActor, writeIdentityName } from "./badge-store.ts";
 export type { BadgeStore, DoorAnswer, StoredBadge } from "./badge-store.ts";
 export { MINT_PER_MINUTE, TOO_MANY_BADGES } from "./meter.ts";
 export { HomeLink, HomeRefusedError, HomeUnreachableError } from "./home-link.ts";

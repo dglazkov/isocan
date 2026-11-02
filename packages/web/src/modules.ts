@@ -6,6 +6,7 @@ import {
   unregisterModule,
   type ComposerFacts,
   type DialogFacts,
+  type FileDropFacts,
   type FocusFacts,
   type InspectorFacts,
   type Item,
@@ -93,6 +94,8 @@ const BEHIND_EXPERIMENT: Record<string, string> = {
   stickers: "modules.stickers",
   talk: "modules.talk",
   anatomy: "modules.anatomy",
+  mood: "moodboard",
+  motion: "motion",
 };
 
 /**
@@ -112,6 +115,8 @@ const EXPERIMENT_HALVES: Record<string, () => Promise<{ default: ShellModule }>>
   "modules.stickers": () => import("@isocan/stickers/web") as Promise<{ default: ShellModule }>,
   "modules.talk": () => import("@isocan/talk/web") as Promise<{ default: ShellModule }>,
   "modules.anatomy": () => import("@isocan/anatomy/web") as Promise<{ default: ShellModule }>,
+  moodboard: () => import("@isocan/mood/web") as Promise<{ default: ShellModule }>,
+  motion: () => import("@isocan/motion/web") as Promise<{ default: ShellModule }>,
 };
 
 /**
@@ -309,6 +314,25 @@ export function moduleDropFor(types: readonly string[]): { mimeType: string; run
     }
   }
   return null;
+}
+
+/**
+ * Properties loaded modules contribute to a dropped native file, merged in
+ * module registration order (or `undefined` when none claim the drop).
+ */
+export async function moduleFileProperties(
+  facts: FileDropFacts,
+): Promise<Record<string, string> | undefined> {
+  await loadExperiments();
+  let merged: Record<string, string> | undefined;
+  for (const m of live()) {
+    if (!m.fileProperties) continue;
+    const props = await m.fileProperties(facts);
+    if (props && Object.keys(props).length > 0) {
+      merged = { ...(merged ?? {}), ...props };
+    }
+  }
+  return merged;
 }
 
 /** Every page a loaded module adds, in module order. */

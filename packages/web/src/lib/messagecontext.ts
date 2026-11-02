@@ -10,6 +10,39 @@ export function messageContextRoots(canvas: CanvasContents | null, body: string,
 }
 
 /**
+ * Whether a `ContextManifest` has anything to disclose beyond the item(s) a
+ * surface already names (the `.attached-chip` pills in Chat, or the item a
+ * comment pin / node-focus drawer is anchored to) — e.g. a group expanding into
+ * children, an attached ink mark, excluded/unavailable items, an explicit
+ * exclusion override, or a `#ref` outside those implicit roots.
+ */
+export function manifestNeedsDisclosure(
+  manifest: ContextManifest,
+  implicitIds: readonly string[],
+): boolean {
+  if (manifest.includeExcluded) return true;
+  if (manifest.counts.excluded > 0 || manifest.counts.unavailable > 0) return true;
+  const implicitSet = new Set(implicitIds);
+  if (manifest.rootIds.some((id) => !implicitSet.has(id))) return true;
+  if (manifest.expandedIds.some((id) => !implicitSet.has(id))) return true;
+  return manifest.entries.some((entry) => entry.kind === "group");
+}
+
+/**
+ * Whether `MessageContextPreview` has anything to disclose beyond the item(s)
+ * already implicit on the composer's surface.
+ */
+export function needsContextManifestPreview(
+  context: ReturnType<typeof useMessageContext>,
+  implicitIds: readonly string[],
+): boolean {
+  if (!context.enabled) return false;
+  if (context.error || context.includeExcluded) return true;
+  if (!context.manifest) return false;
+  return manifestNeedsDisclosure(context.manifest, implicitIds);
+}
+
+/**
  * **The preview follows the canvas; nobody refreshes it.**
  *
  * It used to stay fixed while the canvas changed, and every message carried

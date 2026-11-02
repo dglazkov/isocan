@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { FrameAnchor } from "../lib/frameanchor.ts";
 import type { Actor } from "@isocan/core";
-import { sourceOf, canvasPath, deckStep, itemPath, workbenchItemPath, nodeCapabilitiesFor, isFramedItem, noteFor, visualFaceOf, isDesignSystem, isTextItem } from "@isocan/core";
+import { deckTransitionOf, sourceOf, canvasPath, deckStep, itemPath, workbenchItemPath, nodeCapabilitiesFor, isFramedItem, noteFor, visualFaceOf, isDesignSystem, isTextItem } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { useFocusStore } from "../stores/focusStore.ts";
@@ -10,10 +10,11 @@ import { readBlobText } from "../lib/api.ts";
 import { Markdown } from "../lib/markdown.tsx";
 import { VersionContent } from "./ItemView.tsx";
 import { ArtifactStage } from "./ArtifactStage.tsx";
+import { MorphStage } from "./MorphStage.tsx";
 import { FocusHeader } from "./FocusHeader.tsx";
 import { useCanEdit } from "../lib/capability.ts";
 import { findNextItem, type Direction } from "../lib/spatialnav.ts";
-import { FLIP_NEXT, FLIP_PREV, REST_AFTER_MS, flipTo } from "../lib/deckflip.ts";
+import { FLIP_NEXT, FLIP_PREV, REST_AFTER_MS, flipTo, framingOf } from "../lib/deckflip.ts";
 import { revealItem } from "../lib/zoomactions.ts";
 import { isTyping } from "../lib/keys.ts";
 
@@ -170,16 +171,18 @@ export function FullScreen({
         if (!next) return; // the deck's edge: stay put rather than wrap
         useUiStore.getState().select(next.id);
         revealItem(next.id);
-        // The push, not a cut — the motion belongs to the deck flip alone;
-        // ⌘-arrows above are a spatial walk and stay instant. Except for a
-        // screen or a site: those are iframes, and an iframe photographs
-        // blank, so animating one is a white flash. See `flipTo`.
+        // The deck's transition, not a cut — the motion belongs to the deck
+        // flip alone; ⌘-arrows above are a spatial walk and stay instant.
+        // Which motion is the canvas's choice (`deckTransitionOf`). A screen
+        // or a site is an iframe, which photographs blank, so two frames are
+        // animated live and a frame beside anything else cuts. See `flipTo`.
         const here = canvas.items[itemId];
         flipTo(
           navigate,
           itemPath(canvasId, next.id),
           forward ? "next" : "prev",
-          isFramedItem(next) || (here !== undefined && isFramedItem(here)),
+          framingOf(here !== undefined && isFramedItem(here), isFramedItem(next)),
+          deckTransitionOf(useCanvasStore.getState().record ?? {}),
         );
       }
     }
@@ -284,6 +287,10 @@ export function FullScreen({
           onToggleNotes={() => useUiStore.getState().setPresenterNotes(!presenterNotes)}
         />
       )}
+      {/* The morph's twins, when the deck is set to morph (MorphStage) —
+          BEFORE the stage, so they paint beneath the live slide until a
+          morph raises them. */}
+      {!phone && <MorphStage canvasId={canvasId} itemId={itemId} />}
       <div className={`fullscreen-stage${presenterNotes ? " with-notes" : ""}`} {...gestures}>
         <FrameAnchor.Provider value={anchor}>
         {phone && item ? (() => {

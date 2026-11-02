@@ -636,6 +636,20 @@ export class CloudStore implements Store {
     }
   }
 
+  /**
+   * The newest `actors/{seq}` document, by Firestore's single-field index on
+   * `seq` — one small document read, same as `tipSeq(canvasId)`. Falls back to
+   * `ACTORS_SNAPSHOT.lastSeq` when the log collection is empty.
+   */
+  async tipActorsSeq(): Promise<number> {
+    const newest = await this.db.collection(ACTORS).orderBy("seq", "desc").limit(1).get();
+    if (!newest.empty) {
+      return (newest.docs[0]!.data()["seq"] as number | undefined) ?? 0;
+    }
+    const snapshot = await this.db.doc(ACTORS_SNAPSHOT).get();
+    return (snapshot.data()?.["lastSeq"] as number | undefined) ?? 0;
+  }
+
   // ---- blobs ----
 
   async putBlob(

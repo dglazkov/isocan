@@ -349,6 +349,8 @@ export class Engine {
   private loading = new Map<string, Promise<CanvasRuntime>>();
   /** The actor registry, as a promise so concurrent first readers share one load. */
   private actorsRuntime: Promise<ActorsRuntime> | null = null;
+  /** When `actorsRuntime` was last checked against `store.tipActorsSeq()`. */
+  private actorsCheckedAt = 0;
   private writers = new WriterChains();
   private listeners = new Set<EventListener>();
   private colorListeners = new Set<(colors: ActorColors, actorId: string) => void>();
@@ -570,13 +572,13 @@ export class Engine {
    * from the id, so this map is only ever the exceptions — plus one row per
    * folded actor, wearing the person's colour (multi-identity phase 5). */
   async actorColors(): Promise<ActorColors> {
-    const { registry } = await this.actors();
+    const { registry } = await this.actors(true);
     return actorColors(registry);
   }
 
   /** Actors folded into others, old id → new id (`actor.join`). */
   async actorJoins(): Promise<ActorJoins> {
-    const { registry } = await this.actors();
+    const { registry } = await this.actors(true);
     return actorJoins(registry);
   }
 
@@ -624,13 +626,13 @@ export class Engine {
   /** The name every actor goes by now, actor id → name. What a client shows
    * instead of the name stamped on a comment when it was written. */
   async actorNames(): Promise<ActorNames> {
-    const { registry } = await this.actors();
+    const { registry } = await this.actors(true);
     return actorNames(registry);
   }
 
   /** The mark each actor wears instead of an initial. */
   async actorMarks(): Promise<ActorMarks> {
-    const { registry } = await this.actors();
+    const { registry } = await this.actors(true);
     return actorMarks(registry);
   }
 
@@ -638,7 +640,7 @@ export class Engine {
    *  that is not a person's — recorded at claim time, so it outlives the
    *  session (`core/claims.ts` `actorKinds`). */
   async actorKinds(): Promise<ActorKinds> {
-    const { registry } = await this.actors();
+    const { registry } = await this.actors(true);
     return actorKinds(registry);
   }
 
@@ -695,25 +697,32 @@ export class Engine {
           ),
         );
       }
-      const runtime = await this.actors();
-      const ts = new Date().toISOString();
-      const registry = applyActorColor(runtime.registry, request.op);
-      const envelope: OpEnvelope = {
-        id: newOpId(),
-        canvasId: null,
-        actor: request.actor,
-        ...(request.clientId !== undefined ? { clientId: request.clientId } : {}),
-        ts,
-        op: request.op,
-      };
-      const seq = runtime.lastSeq + 1;
-      const entry: LogEntry = { seq, envelope, inverse: null };
-      await this.appendActorsOrFence(entry);
-      runtime.registry = registry;
-      runtime.lastSeq = seq;
-      await this.store.saveActors(registry, seq);
-      this.identityChanged(actorColors(registry), request.op.actorId);
-      return entry;
+      for (let attempt = 0; ; attempt++) {
+        const runtime = await this.actors(true);
+        const ts = new Date().toISOString();
+        const registry = applyActorColor(runtime.registry, request.op);
+        const envelope: OpEnvelope = {
+          id: newOpId(),
+          canvasId: null,
+          actor: request.actor,
+          ...(request.clientId !== undefined ? { clientId: request.clientId } : {}),
+          ts,
+          op: request.op,
+        };
+        const seq = runtime.lastSeq + 1;
+        const entry: LogEntry = { seq, envelope, inverse: null };
+        try {
+          await this.appendActorsOrFence(entry);
+        } catch (err) {
+          if (err instanceof OplogFencedError && attempt === 0) continue;
+          throw err;
+        }
+        runtime.registry = registry;
+        runtime.lastSeq = seq;
+        await this.store.saveActors(registry, seq);
+        this.identityChanged(actorColors(registry), request.op.actorId);
+        return entry;
+      }
     });
   }
 
@@ -741,8 +750,12 @@ export class Engine {
   }): Promise<LogEntry> {
     return this.enqueueHome(async () => {
       await this.requireActor(request.badgeId, request.actor.id);
+      const { registry: current } = await this.actors(true);
       const target = request.op.actorId;
-      if (target !== request.actor.id && !claimsActor(await this.desk.claimsOf(request.badgeId), target)) {
+      if (
+        target !== request.actor.id &&
+        !claimsActor(await this.desk.claimsOf(request.badgeId), target, current.joined)
+      ) {
         /**
          * **Or it is the speaker's own agent** (agent pointers, 30 Sep
          * 2026): the browser a person looks at a pointer in does not hold
@@ -752,9 +765,8 @@ export class Engine {
         const holders = await Promise.all(
           (await this.desk.claimants(target)).map((held) => this.desk.claimsOf(held.badgeId)),
         );
-        const { registry } = await this.actors();
-        const agent = actorKinds(registry)[resolveActor(registry.joined, target)] === "agent";
-        if (!ownsAgent(holders, request.actor.id, agent, registry.joined)) throw notYourActor(target);
+        const agent = actorKinds(current)[resolveActor(current.joined, target)] === "agent";
+        if (!ownsAgent(holders, request.actor.id, agent, current.joined)) throw notYourActor(target);
       }
       const homes = this.homes?.all() ?? [];
       if (homes.length > 0) {
@@ -769,23 +781,30 @@ export class Engine {
           ),
         );
       }
-      const runtime = await this.actors();
-      const registry = applyActorMark(runtime.registry, request.op);
-      const envelope: OpEnvelope = {
-        id: newOpId(),
-        canvasId: null,
-        actor: request.actor,
-        ...(request.clientId !== undefined ? { clientId: request.clientId } : {}),
-        ts: new Date().toISOString(),
-        op: request.op,
-      };
-      const seq = runtime.lastSeq + 1;
-      const entry: LogEntry = { seq, envelope, inverse: null };
-      await this.appendActorsOrFence(entry);
-      runtime.registry = registry;
-      runtime.lastSeq = seq;
-      await this.store.saveActors(registry, seq);
-      return entry;
+      for (let attempt = 0; ; attempt++) {
+        const runtime = await this.actors(true);
+        const registry = applyActorMark(runtime.registry, request.op);
+        const envelope: OpEnvelope = {
+          id: newOpId(),
+          canvasId: null,
+          actor: request.actor,
+          ...(request.clientId !== undefined ? { clientId: request.clientId } : {}),
+          ts: new Date().toISOString(),
+          op: request.op,
+        };
+        const seq = runtime.lastSeq + 1;
+        const entry: LogEntry = { seq, envelope, inverse: null };
+        try {
+          await this.appendActorsOrFence(entry);
+        } catch (err) {
+          if (err instanceof OplogFencedError && attempt === 0) continue;
+          throw err;
+        }
+        runtime.registry = registry;
+        runtime.lastSeq = seq;
+        await this.store.saveActors(registry, seq);
+        return entry;
+      }
     });
   }
 
@@ -814,11 +833,14 @@ export class Engine {
     return this.enqueueHome(async () => {
       await this.requireActor(request.badgeId, request.actor.id);
       const { from, into } = request.op;
-      const claims = await this.desk.claimsOf(request.badgeId);
+      const [claims, { registry: current }] = await Promise.all([
+        this.desk.claimsOf(request.badgeId),
+        this.actors(true),
+      ]);
       for (const id of [from, into]) {
-        if (!claimsActor(claims, id)) throw notBothActors(from, into, id);
+        if (!claimsActor(claims, id, current.joined)) throw notBothActors(from, into, id);
       }
-      const wrongWay = personIntoAgent((await this.actors()).registry, request.op);
+      const wrongWay = personIntoAgent(current, request.op);
       if (wrongWay) throw wrongWay;
       const homes = this.homes?.all() ?? [];
       if (homes.length > 0) {
@@ -833,24 +855,31 @@ export class Engine {
           ),
         );
       }
-      const runtime = await this.actors();
-      const registry = applyActorJoin(runtime.registry, request.op);
-      const envelope: OpEnvelope = {
-        id: newOpId(),
-        canvasId: null,
-        actor: request.actor,
-        ...(request.clientId !== undefined ? { clientId: request.clientId } : {}),
-        ts: new Date().toISOString(),
-        op: request.op,
-      };
-      const seq = runtime.lastSeq + 1;
-      const entry: LogEntry = { seq, envelope, inverse: null };
-      await this.appendActorsOrFence(entry);
-      runtime.registry = registry;
-      runtime.lastSeq = seq;
-      await this.store.saveActors(registry, seq);
-      this.identityChanged(actorColors(registry), from);
-      return entry;
+      for (let attempt = 0; ; attempt++) {
+        const runtime = await this.actors(true);
+        const registry = applyActorJoin(runtime.registry, request.op);
+        const envelope: OpEnvelope = {
+          id: newOpId(),
+          canvasId: null,
+          actor: request.actor,
+          ...(request.clientId !== undefined ? { clientId: request.clientId } : {}),
+          ts: new Date().toISOString(),
+          op: request.op,
+        };
+        const seq = runtime.lastSeq + 1;
+        const entry: LogEntry = { seq, envelope, inverse: null };
+        try {
+          await this.appendActorsOrFence(entry);
+        } catch (err) {
+          if (err instanceof OplogFencedError && attempt === 0) continue;
+          throw err;
+        }
+        runtime.registry = registry;
+        runtime.lastSeq = seq;
+        await this.store.saveActors(registry, seq);
+        this.identityChanged(actorColors(registry), from);
+        return entry;
+      }
     });
   }
 
@@ -917,7 +946,11 @@ export class Engine {
    * badge is the desk's, and was never on the engine's chain at all.
    */
   async requireActor(badgeId: string, actorId: string): Promise<void> {
-    if (claimsActor(await this.desk.claimsOf(badgeId), actorId)) return;
+    const [claims, { registry }] = await Promise.all([
+      this.desk.claimsOf(badgeId),
+      this.actors(),
+    ]);
+    if (claimsActor(claims, actorId, registry.joined)) return;
     throw notYourActor(actorId);
   }
 
@@ -1541,7 +1574,7 @@ export class Engine {
    * waits for; adoption is still one-time and first-come.
    */
   async actorBindings(badgeId: string, keys?: string[] | null): Promise<ActorBindingRecord[]> {
-    const { registry } = await this.actors();
+    const { registry } = await this.actors(true);
     if (keys) {
       const held = new Set((await this.desk.claimsOf(badgeId)).map((row) => row.sessionKey));
       for (const key of keys) {
@@ -1554,9 +1587,10 @@ export class Engine {
     for (const row of claims) {
       if (row.sessionKey === undefined) continue;
       if (wanted && !wanted.has(row.sessionKey)) continue;
+      const actorId = resolveActor(registry.joined, row.actorId);
       records.push({
         key: row.sessionKey,
-        actor: { id: row.actorId, name: registry.names[row.actorId]?.name ?? "" },
+        actor: { id: actorId, name: registry.names[actorId]?.name ?? "" },
         boundAt: row.boundAt,
         ...(row.canvasId !== undefined ? { canvasId: row.canvasId } : {}),
       });
@@ -2424,8 +2458,6 @@ export class Engine {
   }
 
   private async applyClaimAndPersist(request: ClaimRequest): Promise<LogEntry> {
-    const runtime = await this.actors();
-    const ts = new Date().toISOString();
     /**
      * **The operator refused this name** (operator phase 6). Only `as`
      * resuming an existing actor is checked: `fresh` mints a new name, which
@@ -2439,33 +2471,42 @@ export class Engine {
       const refused = this.options.refusedActor?.(request.op.as);
       if (refused) throw new OpValidationError(REFUSED, refusalSentence(refused));
     }
-    const { registry, actor, claims, adopted } = applyClaim(
-      await this.claimContext(request, runtime.registry, ts),
-      request.op,
-    );
-    const envelope: OpEnvelope = {
-      id: newOpId(),
-      canvasId: null,
-      actor,
-      ...(request.clientId !== undefined ? { clientId: request.clientId } : {}),
-      ts,
-      op: request.op,
-    };
-    const seq = runtime.lastSeq + 1;
-    const entry: LogEntry = { seq, envelope, inverse: null };
-    await this.appendActorsOrFence(entry);
-    runtime.registry = registry;
-    runtime.lastSeq = seq;
-    await this.store.saveActors(registry, seq);
-    // Two ledgers, two writes. The public half is a logged, replayable op;
-    // the private half is written straight to the desk, because the oplog
-    // must not learn that badges exist (mechanism 5).
-    if (adopted !== undefined) await this.desk.adopt(adopted, request.badgeId);
-    await this.desk.setClaims(request.badgeId, claims);
-    // A claim can be a RENAME, and a rename has to reach the comments the
-    // renamed actor wrote before it. Same channel a color change takes.
-    this.identityChanged(registry.colors, actor.id);
-    return entry;
+    for (let attempt = 0; ; attempt++) {
+      const runtime = await this.actors(true);
+      const ts = new Date().toISOString();
+      const { registry, actor, claims, adopted } = applyClaim(
+        await this.claimContext(request, runtime.registry, ts),
+        request.op,
+      );
+      const envelope: OpEnvelope = {
+        id: newOpId(),
+        canvasId: null,
+        actor,
+        ...(request.clientId !== undefined ? { clientId: request.clientId } : {}),
+        ts,
+        op: request.op,
+      };
+      const seq = runtime.lastSeq + 1;
+      const entry: LogEntry = { seq, envelope, inverse: null };
+      try {
+        await this.appendActorsOrFence(entry);
+      } catch (err) {
+        if (err instanceof OplogFencedError && attempt === 0) continue;
+        throw err;
+      }
+      runtime.registry = registry;
+      runtime.lastSeq = seq;
+      await this.store.saveActors(registry, seq);
+      // Two ledgers, two writes. The public half is a logged, replayable op;
+      // the private half is written straight to the desk, because the oplog
+      // must not learn that badges exist (mechanism 5).
+      if (adopted !== undefined) await this.desk.adopt(adopted, request.badgeId);
+      await this.desk.setClaims(request.badgeId, claims);
+      // A claim can be a RENAME, and a rename has to reach the comments the
+      // renamed actor wrote before it. Same channel a color change takes.
+      this.identityChanged(registry.colors, actor.id);
+      return entry;
+    }
   }
 
   /**
@@ -2690,11 +2731,11 @@ export class Engine {
     const mine = me?.attestations ?? [];
     if (mine.length === 0) return [];
     const names = await this.actorNames();
-    const { registry } = await this.actors();
+    const { registry } = await this.actors(true);
     const kinds = actorKinds(registry);
     // Already one of mine, so not something to resume. Includes the actor this
     // badge is wearing right now, which would otherwise be offered back to it.
-    const seen = new Set<string>(me!.claims.map((claim) => claim.actorId));
+    const seen = new Set<string>(me!.claims.map((claim) => resolveActor(registry.joined, claim.actorId)));
     const rows: { actor: Actor; via: string }[] = [];
     for (const attestation of mine) {
       for (const badge of await this.desk.badgesAttesting(attestation.attribute)) {
@@ -2832,14 +2873,18 @@ export class Engine {
   }
 
   /**
-   * The actor registry, loaded once. A PROMISE rather than the value, because
-   * canvas queues read it concurrently with the home queue writing it: two
-   * cold readers that each loaded and assigned their own copy would leave the
-   * identity writes landing on one object and the next reader holding the
-   * other — a lost name in memory, and the next registry append fenced.
+   * The actor registry, shared across concurrent readers and refreshed from the
+   * store when a cloud backing advances past this instance's cached `lastSeq`.
+   *
+   * On a file home (`tipActorsSeq` absent) one process owns the directory and
+   * the cached promise stays current forever. On a cloud home two instances
+   * share one Firestore, so `fresh = true` (every actor write and HTTP identity
+   * read) checks `tipActorsSeq()` immediately, and hot paths (`requireActor`,
+   * `resolveSessions`) check at most once per second.
    */
-  private actors(): Promise<ActorsRuntime> {
+  private loadActorsRuntime(): Promise<ActorsRuntime> {
     if (!this.actorsRuntime) {
+      this.actorsCheckedAt = Date.now();
       const loading = this.store.loadActors();
       this.actorsRuntime = loading;
       // A failed load is not cached: the next reader asks the store again.
@@ -2848,6 +2893,24 @@ export class Engine {
       });
     }
     return this.actorsRuntime;
+  }
+
+  private async actors(fresh = false): Promise<ActorsRuntime> {
+    const current = this.actorsRuntime;
+    const runtime = await this.loadActorsRuntime();
+    if (!this.store.tipActorsSeq) return runtime;
+    const now = Date.now();
+    if (!fresh && now - this.actorsCheckedAt < 1_000) return runtime;
+    this.actorsCheckedAt = now;
+    let tip: number;
+    try {
+      tip = await this.store.tipActorsSeq();
+    } catch {
+      return runtime;
+    }
+    if (tip <= runtime.lastSeq) return runtime;
+    if (this.actorsRuntime === current) this.actorsRuntime = null;
+    return this.loadActorsRuntime();
   }
 
   /** Eligibility is a protected canvas read; joins affect comparison, never historical authorship. */

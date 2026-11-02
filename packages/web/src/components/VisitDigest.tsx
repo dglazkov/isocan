@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getOplog } from "../lib/api.ts";
+import { FloatingHandles, useFloatingBox } from "../lib/floatingbox.tsx";
 import { visitDigest, type PriorVisit } from "../lib/visitdigest.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -46,11 +47,15 @@ export function VisitDigest({ prior, actor, morning, onItem, onThread }: { prior
  */
 export function AwayPanel({ prior, actor, morning }: { prior: PriorVisit; actor: Actor; morning: string }) {
   const [open, setOpen] = useState(true);
+  const float = useFloatingBox<HTMLElement>({ minWidth: 280, minHeight: 160 });
   if (!open) return null;
   const onItem = (id: string) => { useUiStore.getState().setSelection([id]); revealItem(id); };
-  return <aside className="away-panel" data-away-panel aria-label="While you were away">
+  return <aside ref={float.ref} className="away-panel" style={float.style} data-away-panel aria-label="While you were away">
+    <FloatingHandles box={float} />
     <button className="away-close" aria-label="Close" onClick={() => setOpen(false)}>✕</button>
-    <VisitDigest prior={prior} actor={actor} morning={morning} onItem={onItem} onThread={(id) => void import("../lib/conversation.ts").then((m) => m.openConversation(prior.canvasId, id))} />
+    <div className="float-scroll">
+      <VisitDigest prior={prior} actor={actor} morning={morning} onItem={onItem} onThread={(id) => void import("../lib/conversation.ts").then((m) => m.openConversation(prior.canvasId, id))} />
+    </div>
   </aside>;
 }
 

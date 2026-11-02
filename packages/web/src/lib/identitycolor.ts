@@ -1,7 +1,7 @@
 import { actorAliases, type Actor } from "@isocan/core";
 import { sendOp } from "./api.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
-import { rememberMark } from "./marks.ts";
+import { refreshActorMarks, rememberMark } from "./marks.ts";
 
 /**
  * Choose the color you wear. `actor.setColor` is home-scoped — it changes the
@@ -42,4 +42,5 @@ export async function setActorMark(
   for (const id of actorAliases(useCanvasStore.getState().actorJoins, of.id)) {
     rememberMark(id, mark);
   }
+  void refreshActorMarks();
 }

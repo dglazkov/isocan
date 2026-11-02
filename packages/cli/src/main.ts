@@ -5,6 +5,7 @@ import { noteOnBench, registerBench } from "./bench.ts";
 import { summaryColumn, summaryReport, summaryStatsReport } from "./summary.ts";
 import { registerKeys } from "./keys.ts";
 import { registerModel } from "./model.ts";
+import { registerTweak } from "./tweak.ts";
 import { makeTextAnchor, resolveTextAnchor, quoteRange, SOURCE_PATH_PROP } from "@isocan/core";
 // The copy lint's tells: slop.ts is eager already, so it is handed to the lazy lint rather than imported by it.
 import { SLOP_RULES } from "@isocan/core";
@@ -15,6 +16,8 @@ import { registerQuestionnaires } from "./questionnaire.ts";
 import { registerDesignSystems } from "./design-system.ts";
 import { designGovernsNotes, designReleasedNotes } from "./design-scope-notes.ts";
 import { designUnuse, designUse, ownDesignSystemAt } from "@isocan/core/design-use";
+import { moodBoardRead } from "@isocan/core/mood";
+import { MOTION_PROPS } from "@isocan/core/motion";
 import { cleanupNoun, cleanupOps, cleanupSelection, parseBefore, type CommentFilter } from "@isocan/core/chatclean";
 import { registerDesignRequests } from "./design-request.ts";
 import { registerDesignDecisions } from "./design-decision.ts";
@@ -187,6 +190,7 @@ import {
   groundOf,
   groundPatch,
   hasGround,
+  toneOfGround,
   anchorPatch,
   isTheme,
   noThemePatch,
@@ -374,6 +378,13 @@ import {
   slidePatch,
   slides,
   SLIDE_EMOJI,
+  DECK_TRANSITIONS,
+  deckTransitionHint,
+  deckTransitionLabel,
+  deckTransitionOf,
+  deckTransitionPatch,
+  isDeckTransition,
+  isDeckTransition3d,
   deckPages,
   deckHtml,
   isNote,
@@ -482,6 +493,7 @@ import { DaemonRoutes, exportCanvases, exportItem, importExport, type ExportRepo
 import { gitBackup, type GitBackupReport } from "./backup-git.ts";
 import {
   adoptIdentity,
+  becomeHomePerson,
   readIdentity,
   claimSessionIdentity,
   linkedCanvasesOf,
@@ -1042,7 +1054,9 @@ async function relabelLiveSession(cmd: Command, actor: Actor): Promise<void> {
  * owner.
  */
 function identityTarget(opts: { session?: boolean; home?: boolean; as?: string }): "session" | "home" {
-  if (opts.session || opts.as !== undefined) return "session";
+  // `--as` resumes an agent's actor unless `--home` says it is the machine's
+  // person being switched (`isocan identity --home --as <id>`).
+  if (opts.session || (opts.as !== undefined && !opts.home)) return "session";
   if (opts.home) return "home";
   return process.stdin.isTTY ? "home" : "session";
 }
@@ -1091,7 +1105,10 @@ program
   )
   .option("--home", "name the person who owns this machine (~/.isocan)")
   .option("--new", "become a new person instead of renaming this one (fresh actor id)")
-  .option("--as <actorId>", "resume an existing actor whose session is gone (implies --session)")
+  .option(
+    "--as <actorId>",
+    "resume an existing actor whose session is gone (implies --session); with --home, make an actor this machine already speaks for (e.g. one a pass admitted) the machine's person — reversible, nothing folded",
+  )
   .option(
     "--join <actorId>",
     "fold that actor into the one this session is (with --home, into the machine's person) — its comments, mentions and undo become yours; cannot be undone",
@@ -1243,6 +1260,30 @@ program
             } catch (err) {
               console.error(
                 `warning: could not bind this directory to a canvas — ${(err as Error).message}`,
+              );
+            }
+            return;
+          }
+          if (opts.as !== undefined) {
+            if (opts.name !== undefined || opts.new) {
+              throw new Error(
+                "`--home --as` switches to an existing actor under its own name — " +
+                  'rename afterwards with `isocan identity --home --name "…"`',
+              );
+            }
+            const wanted = opts.as.trim();
+            const { actor, previous } = await becomeHomePerson(client, home, wanted).catch((err: Error) => {
+              throw new Error(
+                `this machine's badge cannot make ${wanted} its person — the home said: ${err.message}`,
+              );
+            });
+            console.log(
+              `this machine's person is now ${actor.name} (${actor.id}) → ${paths.identityFile(home)}`,
+            );
+            if (previous && previous.id !== actor.id) {
+              console.log(
+                `was ${previous.name} (${previous.id}) — still on this machine's badge; ` +
+                  `switch back with \`isocan identity --home --as ${previous.id}\``,
               );
             }
             return;
@@ -4818,7 +4859,7 @@ program
               ? `${actor.name} (${actor.id}) — handed over by the pass, saved to ${paths.identityFile(home)}`
               : `this machine already answers to ${actor.name} (${actor.id}); the pass's ` +
                 `${answer.actor.name} (${answer.actor.id}) is admitted but not made default — ` +
-                "`isocan whoami` shows which";
+                `\`isocan identity --home --as ${answer.actor.id}\` makes it this machine's person (reversible)`;
           }
         }
 
@@ -5358,6 +5399,10 @@ canvas
           ...p,
           itemCount: Object.keys(snapshot.canvas.items).length,
           ...(dirs.length > 0 ? { directories: dirs } : {}),
+          // Which ink the ground takes (smart contrast) — derived, never
+          // stored; absent on the dot grid, whose tone is the app's. A
+          // picture is its worst case: the CLI cannot see its pixels.
+          ...(hasGround(p) ? { groundTone: toneOfGround(p, "dark") } : {}),
         });
       }
       printKeyValues({
@@ -5399,6 +5444,21 @@ canvas
       },
     ),
   );
+
+/**
+ * **What a ground means for the ink on it**, as the clause bare `canvas
+ * background` ends with (smart contrast): core's `toneOfGround`, said the way
+ * an agent about to write on the canvas needs it. A picture is described by
+ * its worst case — the CLI cannot see its pixels, and under the scrim every
+ * picture is dark — and Desert, where no ink reads, by what the app does
+ * there instead.
+ */
+function toneClause(canvas: { properties?: Record<string, string> }): string {
+  const tone = toneOfGround(canvas, "dark");
+  const what = groundOf(canvas) !== null ? "a picture, dark under its scrim" : `a ${tone} ground`;
+  if (tone === "mid") return `${what}: no ink reads on it alone, so names sit on a plate`;
+  return `${what}: ink on it is ${tone === "dark" ? "light" : "dark"}`;
+}
 
 canvas
   .command("background [theme]")
@@ -5508,12 +5568,13 @@ canvas
           const worn = cursorOf(p);
           return console.log(
             `a picture of yours (${picture.slice(0, 12)}…), pinned` +
-              (worn ? `, everyone pointing with a ${worn}` : ""),
+              (worn ? `, everyone pointing with a ${worn}` : "") +
+              ` — ${toneClause(p)}`,
           );
         }
         const now = themeOf(p);
         if (now === null) return console.log(`none — ${THEMES.join(", ")} are the grounds it can wear, or --picture <file>`);
-        return console.log(`${now} (${anchorOf(p) === "window" ? "stays put" : "moves with the canvas"})`);
+        return console.log(`${now} (${anchorOf(p) === "window" ? "stays put" : "moves with the canvas"}) — ${toneClause(p)}`);
       }
       if (theme !== "none" && !isTheme(theme)) {
         throw new Error(`not a background: ${theme} — ${THEMES.join(", ")}, none, or --picture <file>`);
@@ -6608,14 +6669,16 @@ program
         /**
          * Colour and font through core's doors, so the terminal takes exactly
          * the words the bar offers (`core/textcolour.ts`). A NAMED colour is
-         * adapted per theme and never warns; a hex is drawn exactly, so it is
-         * measured here and the canvas it will not read on is said out loud.
+         * adapted per theme — per ground, on a canvas with a ground of its own —
+         * and warns only where no shade of it can read; a hex is drawn exactly,
+         * so it is measured here against the ground this canvas actually has
+         * (both app grounds on the dot grid) and said out loud.
          * The font's width is in the box below — the estimate is all the CLI
          * has, and lesson #94 is what a font without one does.
          */
         const colour = opts.color === undefined ? null : textColourChoice(opts.color);
         const font = opts.font === undefined ? null : textFontChoice(opts.font);
-        const warnings = textColourWarnings(colour, paper);
+        const warnings = textColourWarnings(colour, paper, p);
         const { width, height } = sizeFor(
           opts.size,
           paper === null ? textBox(body, style, face, font) : { width: PAPER_SIZE, height: PAPER_SIZE },
@@ -6679,6 +6742,12 @@ const moduleHost: CliHost = {
   // Fenced or refused; there is no third answer, and no flag that makes one
   // (`sandbox.ts`, "A program that came from a canvas").
   runFenced: (request) => runFenced(paths.isocanHome(), request),
+  // A script of this copy's own, by its path in the package — never a path
+  // a module (or a canvas) could point outside `scripts/` with.
+  runPackageScript: (script, args, opts) => {
+    if (!/^scripts\/[a-z0-9-]+\.mjs$/.test(script)) throw new Error(`a module runs isocan's own scripts/*.mjs, not ${script}`);
+    runPackageScript(packagePath(script), args, opts);
+  },
   /**
    * `rc add`, promoted (proposed: `templates`): the claim, the enroll, the
    * cursor and the rc row — with the template's directory as the row's cwd
@@ -7496,6 +7565,11 @@ program
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const item = resolveItem(snapshot, ref);
+      await narrate(ctx, p.id, {
+        activity: { kind: "working", itemId: item.id },
+        cursor: itemCenter(item),
+        status: `reading "${truncate(item.title || item.id, 24)}"…`,
+      });
       const version =
         opts.rev === undefined
           ? item.versions.find((v) => v.id === item.currentVersionId)
@@ -7526,6 +7600,7 @@ program
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const item = resolveItem(snapshot, ref);
       await narrate(ctx, p.id, {
+        activity: { kind: "working", itemId: item.id },
         cursor: itemCenter(item),
         status: `looking at "${truncate(item.title || item.id, 24)}"`,
       });
@@ -8238,6 +8313,11 @@ program
         const ctx = await ctxOf(cmd);
         const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
         const item = resolveItem(snapshot, ref);
+        await narrate(ctx, p.id, {
+          activity: { kind: "working", itemId: item.id },
+          cursor: itemCenter(item),
+          status: `updating "${truncate(item.title || item.id, 24)}"…`,
+        });
         const patch = metaPatch(opts);
         if (opts.face !== undefined) {
           const trimmedFace = opts.face.trim();
@@ -8301,7 +8381,7 @@ program
          * exactly.
          */
         if (isTextItem(item) && patch.properties) {
-          const { warnings, ...normalised } = textPropsPatch(item, patch);
+          const { warnings, ...normalised } = textPropsPatch(item, patch, p);
           delete patch.properties;
           delete patch.removeProperties;
           Object.assign(patch, normalised);
@@ -9624,36 +9704,6 @@ program
   );
 
 /**
- * **Changes ripple** (proactive-agent phase 6): a settled run of edits on one
- * screen, read against every other — what changed, which screens would
- * change, are already in sync or disagree, the lead's read-back and its
- * previews, the person's altitude, and with no item the pulse. Reads only,
- * unless an act is said. The body lives in `ripple.ts`, loaded on this verb only.
- */
-program
-  .command("ripple [item]")
-  .description("Changes ripple: a screen's settled edits read against every other screen — would change, already in sync, disagrees; with no item, the pulse")
-  .option("--ask", "\"I like this\": ask the canvas's lead, in the Chat, to read the run back now")
-  .option("--altitude <altitude>", "the person's choice: screens (the default — keep each preview), system (the lead proposes it in the design system), one-off (ripple=off)")
-  .option("--read-back", "the lead's answer: post --decision (up to three), --good, --exception and --sketch as the read-back (a record in the Chat)")
-  .option("--decision <words>", "with --read-back: one decision the edits made, in design words (repeatable, three at most)", collectList)
-  .option("--good <words>", "with --read-back: a good move the person made by hand, named once (\"caught doing it right\")")
-  .option("--exception <line>", "with --read-back: \"<screen> | why it should stay as it is\", one line (repeatable)", collectList)
-  .option("--sketch <words>", "with --read-back: one idea the change makes possible, set apart — two sentences at most")
-  .option("--sketch-file <file>", "with --sketch: draw it, as a hunch beneath the source")
-  .option("--preview <screen=file>", "the lead's preview of a screen that would change: a proposal beneath it citing the source's version (repeatable)", collectList)
-  .option("--why <text>", "with --preview: why, in design words (default: the read-back's first decision)")
-  .option("--hunch", "with --preview: a hunch rather than sure")
-  .option("--canvas <canvas>")
-  .action(
-    run(async (item: string | undefined, opts: import("./ripple.ts").RippleOpts, cmd: Command) => {
-      const ctx = await ctxOf(cmd);
-      const { ripple } = await import("./ripple.ts");
-      await ripple(ctx, goodnightDeps(), item, opts);
-    }),
-  );
-
-/**
  * **Stuck detection** (proactive-agent phase 7): several tries at one item
  * that all missed — the agent stops guessing and asks. Reads the detection,
  * the lead's question with its guesses, or why it waits; the lead's
@@ -10383,6 +10433,8 @@ registerBench(program, ctxOf);
 registerKeys(program);
 // ---------- the local judge's model: `registerModel`, in model.ts (local-judge phase 0) ----------
 registerModel(program);
+// ---------- live UI Devtools: `registerTweak`, in tweak.ts ----------
+registerTweak(program, ctxOf);
 
 /**
  * **Inherit a canvas's memory here** (`docs/projects/memory/design.md`,
@@ -10604,6 +10656,45 @@ slidesCmd
       console.log(itemUrl(origin, p.id, deck[0]!.id));
       console.log(`The deck on paper (Save as PDF, or download one file that plays it):`);
       console.log(deckUrl(origin, p.id));
+      const motion = deckTransitionOf(p);
+      console.log(`Flips with: ${deckTransitionLabel(motion)} — ${deckTransitionHint(motion)} (isocan slides transition)`);
+    }),
+  );
+
+/**
+ * **How the deck moves between slides** — the canvas's choice, so the
+ * presenter and every viewer see the same motion. A canvas property sent as
+ * one `project.update` (`deckTransitionPatch`), the same op the app's
+ * "Slide transition" menu and full screen's Transition button send, so the
+ * two surfaces cannot disagree about what a transition is. No argument is a
+ * question: it says what the deck flips with now and lists the rest.
+ */
+slidesCmd
+  .command("transition [motion]")
+  .description(`How full screen moves between slides, for everybody watching: ${DECK_TRANSITIONS.join(", ")}`)
+  .option("--canvas <canvas>")
+  .action(
+    run(async (motion: string | undefined, opts: { canvas?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      if (opts.canvas) ctx.canvasRef = opts.canvas;
+      const p = await resolveCanvas(ctx);
+      const now = deckTransitionOf(p);
+      if (motion === undefined) {
+        if (ctx.json) return printJson({ transition: now, choices: [...DECK_TRANSITIONS] });
+        console.log(`${deckTransitionLabel(now)} (${now}) — ${deckTransitionHint(now)}\n`);
+        for (const one of DECK_TRANSITIONS) {
+          console.log(`${one === now ? "●" : " "} ${one.padEnd(6)} ${isDeckTransition3d(one) ? "3D  " : "    "}${deckTransitionHint(one)}`);
+        }
+        return;
+      }
+      const wanted = motion === "none" ? "cut" : motion;
+      if (!isDeckTransition(wanted)) {
+        throw new Error(`not a transition: ${motion} — ${DECK_TRANSITIONS.join(", ")}`);
+      }
+      if (wanted === now) return console.log(`the deck already flips with ${deckTransitionLabel(now)}`);
+      await sendOp(ctx, p.id, { type: "project.update", patch: deckTransitionPatch(wanted) });
+      if (ctx.json) return printJson({ transition: wanted });
+      console.log(`the deck flips with ${deckTransitionLabel(wanted)} — ${deckTransitionHint(wanted)}`);
     }),
   );
 
@@ -11463,7 +11554,21 @@ style
       const scope = designScope(snapshot, opts.in);
       const { governing } = await readDesignSystem(designSystemPort(ctx), { canvasId: p.id, ...(scope.at ? { target: { kind: "item", itemId: scope.at.id } } : {}) });
       if (governing.status !== "available") throw new Error(governing.reason);
-      const findings = bySeverity(checkDesign(governing.document));
+      const boardRead = moodBoardRead(snapshot.canvas, snapshot.project.groupMode ?? "legacy");
+      const isocanExt = governing.document.tokens.isocan;
+      const hasSources =
+        isocanExt !== null &&
+        typeof isocanExt === "object" &&
+        !Array.isArray(isocanExt) &&
+        "sources" in isocanExt;
+      const findings = bySeverity(
+        checkDesign(
+          governing.document,
+          boardRead.boardId || hasSources
+            ? { boardTileIds: new Set(boardRead.tiles.map((t) => t.itemId)) }
+            : undefined,
+        ),
+      );
       if (ctx.json) return printJson(opts.provenance ? { findings, governing } : findings);
       console.error(`${governing.title} · ${governing.selection.reason}${governing.exempt ? " · requirement exempt; incumbent retained" : ""}`);
       if (findings.length === 0) return console.error(`${governing.title}: nothing to fix`);
@@ -12389,7 +12494,7 @@ comment
   .option("--item <item>", "anchor to this item")
   .option("--quote <text>", "anchor to exact rendered text on --item")
   .option("--occurrence <number>", "which matching quote, counted from 1")
-  .option("--at <x,y>", "freestanding at world coordinates — or, with --item, a point ON the item as fractions of its size (0.6,0.8)")
+  .option("--at <x,y>", "freestanding at world coordinates — or, with --item, a point ON the item as fractions of its size (0.6,0.8) — or, with --item on a motion, one number: the moment in seconds (1.2)")
   .option("--in <group>", "attach this group and its complete subtree as frozen context")
   .option("--include-excluded", "explicitly include excluded context in this request")
   .action(
@@ -12397,6 +12502,19 @@ comment
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx, { create: true });
       if (!opts.item && !opts.at) throw new Error("pass --item <item> or --at <x,y>");
+      // One number with --item is a moment, not a place (motion phase 2): a
+      // comment on a motion at 1.2 s remembers the time, and opening it
+      // scrubs the player there. Only a motion has a clock to point into.
+      let moment: number | undefined;
+      if (opts.item && opts.at !== undefined && !opts.at.includes(",")) {
+        const item = resolveItem(snapshot, opts.item);
+        if (item.properties[MOTION_PROPS.motion] !== "true") throw new Error(`--at with one number is a moment in a motion, and ${item.title} is not one — a place on it is --at x,y`);
+        moment = Number(opts.at.replace(/s$/, ""));
+        const length = Number(item.properties[MOTION_PROPS.seconds]);
+        if (!Number.isFinite(moment) || moment < 0) throw new Error(`--at is seconds into the motion, not "${opts.at}"`);
+        if (Number.isFinite(length) && moment > length) throw new Error(`--at ${moment} is past the end of ${item.title}, which is ${length} s long`);
+        delete opts.at;
+      }
       if ((opts.quote !== undefined || opts.occurrence !== undefined) && !opts.item) throw new Error("Text selection requires --item");
       if (opts.occurrence !== undefined && opts.quote === undefined) throw new Error("--occurrence requires --quote");
       const textAnchor = opts.quote !== undefined ? await quotedCommentAnchor(ctx, p.id, resolveItem(snapshot, opts.item!), opts.quote, opts.occurrence) : null;
@@ -12417,6 +12535,7 @@ comment
       }
       const threadId = newThreadId();
       const first = await newComment(ctx, p.id, snapshot, text, { in: opts.in, includeExcluded: opts.includeExcluded });
+      if (moment !== undefined) first.at = moment;
       const receipt = await sendOp(ctx, p.id, {
         type: "thread.create",
         threadId,
@@ -12579,7 +12698,7 @@ comment
             : `at ${t.x},${t.y}`;
         console.log(`${t.id} (${anchor})`);
         for (const c of t.comments) {
-          console.log(`  ${actorNameIn(snapshot.names, c.author)} · ${c.createdAt} · ${c.id}`);
+          console.log(`  ${actorNameIn(snapshot.names, c.author)} · ${c.createdAt} · ${c.id}${c.at !== undefined ? ` · at ${c.at} s` : ""}`);
           console.log(`    ${c.body}`);
         }
       }

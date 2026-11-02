@@ -9,15 +9,18 @@
   position: absolute; top: 42px; right: 8px; z-index: var(--z-popover);
   width: min(260px, calc(100% - 16px)); padding: 6px;
   display: flex; flex-direction: column; gap: 1px;
-  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
-  box-shadow: var(--shadow-pop); font-size: 12px;
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+  border: 1px solid var(--glass-border); border-radius: var(--radius);
+  box-shadow: var(--shadow-glass); font-size: 12px;
 }
 .chat-tidy-menu > button, .chat-tidy-sub > button:not(.btn) {
   display: flex; align-items: center; gap: 6px; width: 100%;
   padding: 6px 8px; border: none; border-radius: 6px;
   background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer;
 }
-.chat-tidy-menu > button:hover:not(:disabled), .chat-tidy-sub > button:not(.btn):hover { background: var(--chip-hover); }
+.chat-tidy-menu > button:hover:not(:disabled), .chat-tidy-sub > button:not(.btn):hover { background: var(--glass-chip-hover); }
 .chat-tidy-menu button:disabled { color: var(--ink-soft); cursor: default; }
 .chat-tidy-menu .chat-tidy-danger:not(:disabled) { color: var(--danger); }
 .chat-tidy-head { margin: 2px 8px 4px; font-size: 10.5px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.04em; }

@@ -130,7 +130,7 @@ function StickerInspector({ item, host }: InspectorFacts) {
             void (async () => {
               const file = stickerFile(s);
               const blob = new Blob([file.body], { type: STICKER_MIME });
-              const put = await host.putBlob(blob, file.filename);
+              const put = await host.putBlob(blob, file.filename, { stageOffline: true });
               await host.send([
                 {
                   type: "item.addVersion",
@@ -167,7 +167,7 @@ export const stickersWeb: WebModule<never, typeof StickerView, typeof StickerIns
         if (!sticker) return; // a claim on a mime is not a promise about its payload
         const file = stickerFile(sticker);
         const blob = new Blob([file.body], { type: STICKER_MIME });
-        const put = await host.putBlob(blob, file.filename);
+        const put = await host.putBlob(blob, file.filename, { stageOffline: true });
         return [placeSticker(put.blobHash, put.size, sticker, at, containerId)];
       },
     },

@@ -81,10 +81,12 @@ beforeEach(async () => {
   const state = seed();
   await act(async () => socket.deliver({ type: "snapshot", project: state.project, canvas: state.canvas, lastSeq: 4, colors: {}, names: {} }));
 });
-afterEach(() => {
+afterEach(async () => {
   act(() => root.unmount());
   host.remove();
   disconnect();
+  // Arrival starts nested lazy imports; finish loading before jsdom is destroyed.
+  await vi.dynamicImportSettled();
 });
 
 describe("the page around the canvas", () => {

@@ -1,7 +1,7 @@
 import type { ContextPiece } from "./context.ts";
 import type { Actor, Canvas, CanvasContents, CommentThread, Item, ItemVersion } from "./model.ts";
 import type { NodeCapabilities } from "./capabilities.ts";
-import type { Operation } from "./ops.ts";
+import type { Operation, Placement } from "./ops.ts";
 import type { JudgmentRequest } from "./judgment.ts";
 import type { TextRequest } from "./text.ts";
 import type { CopyDeck, CopyEdit } from "./copy-deck.ts";
@@ -495,10 +495,14 @@ export interface WebHost {
    *  `group` for one undo, exactly as a multi-op action groups today. */
   send: (ops: readonly Operation[], group?: string) => Promise<void>;
   /** Bytes in, a hash out — the half no operation carries. What a module does
-   *  with the hash is an `item.add` or an `item.addVersion` of its own. */
+   *  with the hash is an `item.add` or an `item.addVersion` of its own.
+   *  `stageOffline` opts a single primary text/SVG blob into local staging;
+   *  send its single item operation through this same host. Secondary faces
+   *  and multi-operation transactions do not support this opt-in. */
   putBlob: (
     bytes: Blob,
     filename: string,
+    options?: { stageOffline?: boolean },
   ) => Promise<{ blobHash: string; size: number }>;
   /**
    * **Ask the parked rc to enrol an agent** (proposed: `templates`, 11 Sep
@@ -1026,6 +1030,19 @@ export interface ModuleDrop {
 }
 
 /**
+ * **What a module's `fileProperties` slot is handed** when a native file is
+ * dropped onto the canvas (moodboard phase 2: a reference photo dropped onto
+ * the Mood board wears `mood=reference` and `moodSwatches`).
+ */
+export interface FileDropFacts {
+  file: File;
+  mimeType: string;
+  placement: Placement;
+  destination: { containerId?: string | null; originGroupMode: "legacy" | "groups" };
+  items: Readonly<Record<string, Item>> | undefined;
+}
+
+/**
  * **What a composer control draws with, and how it asks for the row**
  * (proposed: `composer`).
  *
@@ -1174,6 +1191,12 @@ export interface WebModule<C, R = never, I = never, P = never, O = never, D = ne
   composer?: readonly ModuleComposer<X>[];
   /** Drags this module catches on the canvas, by mime. */
   drops?: readonly ModuleDrop[];
+  /**
+   * **Properties a loaded module adds to a dropped native file** (moodboard
+   * phase 2) — e.g. `mood=reference` and `moodSwatches` when an image is
+   * dropped onto the Mood board.
+   */
+  fileProperties?: (facts: FileDropFacts) => Promise<Record<string, string> | undefined>;
   /** Popups a person opens by a command or a palette entry. */
   dialogs?: readonly ModuleDialog<D>[];
   /** **Rows in an item's right-click menu** — only once the module's lazy half is loaded (`ModuleMenuFacts`). */
@@ -1430,8 +1453,14 @@ export function isDataOnly(manifest: ModuleManifest): boolean {
  * already stands; and a template's `prepare` may answer with the agent's
  * `budget` and `color`, which the rc applies when it enrols from a web ask.
  * Optional, provided or passed: a module built for `^0.2.9` still loads.
+ *
+ * **0.2.10 → 0.2.11 on 22 Oct 2026**, an addition (motion phase 1):
+ * `CliHost.runPackageScript`, a member a module is handed — one of isocan's
+ * own `scripts/*.mjs`, run the way `canvas shot` runs its — optional so a
+ * module can tell an older host by its absence. A module built for `^0.2.10`
+ * still loads.
  */
-export const MODULE_API_VERSION = "0.2.10";
+export const MODULE_API_VERSION = "0.2.11";
 
 /**
  * **The parts of the API we intend to change**, named so a module can say it

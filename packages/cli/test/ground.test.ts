@@ -187,3 +187,64 @@ describe("the ground a canvas stands on", () => {
     expect(await props()).toEqual({});
   });
 });
+
+/**
+ * **What a ground means for ink** (smart contrast phase 4). The tone is core's
+ * `toneOfGround`, derived and never stored; the CLI is where an agent about
+ * to write on the canvas learns it — from bare `canvas background`, from
+ * `canvas show --json`, and from a hex warned about against the ground the
+ * canvas actually has rather than the app's two.
+ */
+describe("the ground says which ink it takes", () => {
+  async function bare(): Promise<string> {
+    const said = await isocan("canvas", "background", "--canvas", "Ground");
+    expect(said.code, said.stderr).toBe(0);
+    return said.stdout.trim();
+  }
+  async function tone(): Promise<string | undefined> {
+    const shown = await isocan("--json", "canvas", "show", "Ground");
+    expect(shown.code, shown.stderr).toBe(0);
+    return (JSON.parse(shown.stdout) as { groundTone?: string }).groundTone;
+  }
+
+  it("names the tone on a seeded ground, Desert's plate, and a picture's worst case", async () => {
+    await isocan("canvas", "background", "night", "--canvas", "Ground");
+    expect(await bare()).toBe("night (moves with the canvas) — a dark ground: ink on it is light");
+    expect(await tone()).toBe("dark");
+    await isocan("canvas", "background", "snow", "--canvas", "Ground");
+    expect(await bare()).toMatch(/— a light ground: ink on it is dark$/);
+    expect(await tone()).toBe("light");
+    await isocan("canvas", "background", "desert", "--canvas", "Ground");
+    expect(await bare()).toMatch(/— a mid ground: no ink reads on it alone, so names sit on a plate$/);
+    expect(await tone()).toBe("mid");
+    await isocan("canvas", "background", "--picture", picture, "--canvas", "Ground");
+    expect(await bare()).toMatch(/pinned — a picture, dark under its scrim: ink on it is light$/);
+    expect(await tone()).toBe("dark");
+  });
+
+  it("says nothing new on the dot grid, whose tone is the app's", async () => {
+    const said = await bare();
+    expect(said).toMatch(/^none — /);
+    expect(said).not.toMatch(/ink/);
+    expect(await tone()).toBeUndefined();
+  });
+
+  it("warns about a hex against the ground the canvas has, and only there", async () => {
+    // Night: #333333 on #0a0d10 is 1.54, and the warning names the ground.
+    await isocan("canvas", "background", "night", "--canvas", "Ground");
+    const night = await isocan("text", "Acme on Night", "--color", "#333333", "--canvas", "Ground");
+    expect(night.code, night.stderr).toBe(0);
+    expect(night.stderr).toContain("warning: #333333 measures 1.54:1 on Night — body text needs 4.5");
+    expect(night.stderr).not.toMatch(/theme/);
+    // Snow: 8.74 — nothing to say, though the dark app's ground would fail it.
+    await isocan("canvas", "background", "snow", "--canvas", "Ground");
+    const snow = await isocan("text", "Acme on Snow", "--color", "#333333", "--canvas", "Ground");
+    expect(snow.code, snow.stderr).toBe(0);
+    expect(snow.stderr).not.toMatch(/warning/);
+    // The dot grid: exactly as before — both app grounds, the dark one fails.
+    await isocan("canvas", "background", "none", "--canvas", "Ground");
+    const grid = await isocan("text", "Acme on the grid", "--color", "#333333", "--canvas", "Ground");
+    expect(grid.code, grid.stderr).toBe(0);
+    expect(grid.stderr).toContain("warning: #333333 measures 1.52:1 on the ground in the dark theme — body text needs 4.5");
+  });
+});

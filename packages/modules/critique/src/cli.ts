@@ -17,6 +17,7 @@ import {
   type Item,
 } from "@isocan/core";
 import { packagePath } from "@isocan/core/packageroot";
+import { boardCriticDraft } from "@isocan/core/mood";
 import type { CliHost, CliModule, Ctx } from "@isocan/cli/modulehost";
 import {
   ANSWERS_PROP,
@@ -228,6 +229,12 @@ async function place(host: CliHost, ctx: Ctx, canvasId: string, snapshot: Canvas
 /** A new card is switched on for the room, in its colour (proactive-agent phase 8): adding a critic is switching it on. */
 const switchedOn = (draft: CriticDraft): Record<string, string> => ({ [CRITIC_ON]: "on", ...(hex(draft.color) ? { [CRITIC_COLOR]: hex(draft.color)! } : {}) });
 
+/** Refusal when `board` is asked for before any tile sits on the Mood board. */
+const NO_BOARD_TILES_ERROR = "no kept tiles on the Mood board yet — explore with `isocan mood explore` and keep tiles first";
+
+/** True when a CLI critic reference names the built-in `board` critic. */
+const isBoardRef = (ref: string): boolean => ref.trim().replace(/^@/, "").toLowerCase() === "board";
+
 function register(host: CliHost): void {
   const { program, run, ctxOf, resolveCanvas, printJson } = host;
   const family = program
@@ -266,6 +273,10 @@ the roster, or write your own; edit it with \`isocan edit <card> file.md\`.`,
         }));
         const offered = roster().map(({ module, critic }) => ({ id: critic.id, agentName: critic.agentName, title: critic.title, credit: critic.credit, module }));
         const lenses = STARTER_LENSES.map((l) => ({ id: l.id, agentName: l.agentName, lens: l.line }));
+        const boardDraft = boardCriticDraft(snapshot.canvas, snapshot.project.groupMode ?? "legacy");
+        if (boardDraft && !on.some((c) => c.critic.name === "board")) {
+          lenses.push({ id: boardDraft.name, agentName: boardDraft.agentName, lens: boardDraft.line });
+        }
         if (ctx.json) return printJson({ roster: offered, lenses, critics: rows });
         console.log("Starter lenses (isocan critic add <id>):");
         for (const l of lenses) console.log(`  ${l.id.padEnd(13)} ${l.agentName.padEnd(18)} ${l.lens}`);
@@ -289,6 +300,19 @@ the roster, or write your own; edit it with \`isocan edit <card> file.md\`.`,
     .option("--at <x,y>", "where to put the card")
     .action(
       run(async (ref: string, opts: { at?: string }, cmd: Command) => {
+        if (isBoardRef(ref)) {
+          // The Mood board as a critic (moodboard phase 4): built from this canvas's kept tiles.
+          const ctx = await ctxOf(cmd);
+          const canvas = await resolveCanvas(ctx);
+          const snapshot = await ctx.client.snapshot(canvas.id);
+          const draft = boardCriticDraft(snapshot.canvas, snapshot.project.groupMode ?? "legacy");
+          if (!draft) throw new Error(NO_BOARD_TILES_ERROR);
+          const refused = refuseJoin(await criticsOn(ctx, canvas.id, snapshot), draft);
+          if (refused) throw new Error(refused);
+          const itemId = await place(host, ctx, canvas.id, snapshot, draft, opts, switchedOn(draft));
+          if (ctx.json) return printJson({ itemId, name: draft.name, agentName: draft.agentName, credit: draft.credit, lens: draft.line, questions: draft.lens.questions, on: true });
+          return console.log(`${draft.agentName} is on ${canvas.title} (${itemId}), switched on — ${draft.credit}`);
+        }
         const list = roster();
         const entry = findInRoster(list, ref);
         const starter = entry ? null : findStarter(ref);
@@ -442,13 +466,21 @@ asks them all; each works alone, and when the last is done
         if (refs.length === 0) throw new Error("--by names at least one critic");
         const ctx = await ctxOf(cmd);
         const canvas = await resolveCanvas(ctx);
-        const snapshot = await ctx.client.snapshot(canvas.id);
+        let snapshot = await ctx.client.snapshot(canvas.id);
         const item = screenOf(host, snapshot, ref);
-        const on = await criticsOn(ctx, canvas.id, snapshot);
+        let on = await criticsOn(ctx, canvas.id, snapshot);
+        const needsBoard = refs.some(isBoardRef) && !findCritic(on, "board");
+        const boardDraft = needsBoard ? boardCriticDraft(snapshot.canvas, snapshot.project.groupMode ?? "legacy") : null;
+        if (needsBoard) {
+          if (!boardDraft) throw new Error(NO_BOARD_TILES_ERROR);
+          const refused = refuseJoin(on, boardDraft);
+          if (refused) throw new Error(refused);
+        }
         // Every critic resolved and checked before anything is enrolled, so a
         // refusal for the second leaves the canvas as it found it.
         const hits: CanvasCritic[] = [];
         for (const one of refs) {
+          if (isBoardRef(one) && boardDraft) continue;
           const hit = findCritic(on, one);
           if (!hit) throw new Error(`no critic "${one}" on ${canvas.title} — \`isocan critic ls\` lists them; \`isocan critic add ${one}\` adds one from the roster`);
           const clash = canvasClashes(on).find((c) => c.id === hit.critic.name);
@@ -456,7 +488,12 @@ asks them all; each works alone, and when the last is done
           if (problems.length) throw new Error(`${hit.critic.agentName}'s card needs fixing first — ${problems.join("; ")}`);
           if (!hits.some((h) => h.itemId === hit.itemId)) hits.push(hit);
         }
-        const clash = mentionClash(hits.map((h) => h.critic));
+        const clash = mentionClash([
+          ...hits.map((h) => h.critic),
+          ...(boardDraft
+            ? [{ name: boardDraft.name, agentName: boardDraft.agentName, credit: boardDraft.credit, self: false, line: boardDraft.line, ...boardDraft.lens }]
+            : []),
+        ]);
         if (clash) throw new Error(clash);
         // No runner, no critique — and nothing enrolled, so a refusal leaves
         // the canvas as it found it.
@@ -471,6 +508,16 @@ asks them all; each works alone, and when the last is done
         const onBehalf = snapshot.canvas.agents?.[ctx.actor.id]?.writtenBy?.id;
         if (owners.length > 0 && !owners.some((o) => o.id === ctx.actor.id || (onBehalf !== undefined && o.id === onBehalf))) {
           throw new Error(`the runner parked on ${canvas.title} is ${owners.map((o) => o.name).join(", ")}'s, and a critic runs on the machine that asks — start your own \`isocan rc\`. Nothing was enrolled.`);
+        }
+        if (boardDraft) {
+          await place(host, ctx, canvas.id, snapshot, boardDraft, {}, switchedOn(boardDraft));
+          snapshot = await ctx.client.snapshot(canvas.id);
+          on = await criticsOn(ctx, canvas.id, snapshot);
+          hits.length = 0;
+          for (const one of refs) {
+            const hit = findCritic(on, one);
+            if (hit && !hits.some((h) => h.itemId === hit.itemId)) hits.push(hit);
+          }
         }
         const asked: { hit: CanvasCritic; actorId: string; reused: boolean; dir: string | null; budget: { usdPerRun: number; turnsPerRun: number } }[] = [];
         for (const hit of hits) {

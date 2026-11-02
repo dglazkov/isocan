@@ -62,6 +62,8 @@ jobs:
       # so the two cannot disagree about what `npm test` runs on — see the
       # action for why that drift is the dangerous kind.
       - uses: ./.github/actions/suite-setup
+        with:
+          stage: suite-${{ matrix.shard }}
       # A release nobody tested is a release that installs a broken canvas. If
       # these fail, main keeps its last good release until the next green commit.
       #
@@ -115,6 +117,8 @@ jobs:
       # so the two cannot disagree about what `npm test` runs on — see the
       # action for why that drift is the dangerous kind.
       - uses: ./.github/actions/suite-setup
+        with:
+          stage: checks
       - run: npm run typecheck
       # The graders grade themselves. `--selftest` runs every check in
       # scripts/grade.mjs against a page built to break all of them and fails

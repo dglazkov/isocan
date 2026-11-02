@@ -4,7 +4,7 @@ import path from "node:path";
 import readline from "node:readline/promises";
 import type { Actor, ActorBindingRecord, ActorClaimOp } from "@isocan/core";
 import { BADGE_ENDED, elapsedLabel } from "@isocan/core";
-import { adoptIdentity as adoptStoredIdentity, paths, writeIdentityName } from "@isocan/server";
+import { adoptIdentity as adoptStoredIdentity, paths, writeIdentityActor, writeIdentityName } from "@isocan/server";
 import { ApiError } from "./routes.ts";
 import type { DaemonClient } from "./client.ts";
 import { harnessSessions, harnessVarsFor } from "./harness.ts";
@@ -522,6 +522,42 @@ export async function adoptIdentity(
   actor: Actor,
 ): Promise<{ actor: Actor; adopted: boolean }> {
   return adoptStoredIdentity(home, actor);
+}
+
+/**
+ * **Make an actor this machine already speaks for its person** — `isocan
+ * identity --home --as <actor id>`.
+ *
+ * `isocan setup <pass>` on a machine that already has a person hands the
+ * pass's actor to the badge and leaves the default alone (`adoptIdentity`
+ * refuses to overwrite), so the badge holds both and the CLI keeps speaking
+ * as the first. This is the switch: re-point the home claim at the named
+ * actor, then write the identity file from what the home answered (the
+ * registry's name, not one asserted here). Nothing is folded and nobody is
+ * renamed — the displaced person stays on the badge (`bindClaim` keeps a
+ * home-key row it displaces), so the same command with their id switches back.
+ *
+ * The home decides whether this badge may be them: the claim is `as`, judged
+ * at the single writer, and refused (`not-your-actor`, `name-taken`,
+ * `unknown-actor`) for an actor the badge was never handed. The file is
+ * written only after the home said yes. Same path through a local daemon and
+ * in direct mode: either way the client's badge is the one holding the
+ * handed-over row.
+ */
+export async function becomeHomePerson(
+  client: DaemonClient,
+  home: string,
+  actorId: string,
+): Promise<{ actor: Actor; previous: Actor | null }> {
+  await client.ensureDaemon();
+  client.useSessionKey(null);
+  const { envelope } = await client.claimActor({
+    type: "actor.claim",
+    sessionKey: HOME_CLAIM_KEY,
+    as: actorId,
+  });
+  const previous = await writeIdentityActor(home, envelope.actor);
+  return { actor: envelope.actor, previous };
 }
 
 /** Rename in place — the actor id is the stable key, so your history stays

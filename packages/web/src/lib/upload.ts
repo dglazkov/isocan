@@ -25,7 +25,8 @@ import {
   defaultSize,
 } from "@isocan/core";
 import { uploadBlob } from "./api.ts";
-import { sendEchoed } from "../stores/canvasStore.ts";
+import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
+import { moduleFileProperties } from "../modules.ts";
 import { mimeTypeOf } from "./mime.ts";
 import { changeCanvasGroup, groupsEnabled } from "./canvasgroups.ts";
 import { creationDestination, sendCreatedItem } from "./groupplacement.ts";
@@ -170,6 +171,13 @@ export async function addFiles(
       : placement;
     offsetX += width + FILE_GAP;
 
+    const extraProps = await moduleFileProperties({
+      file,
+      mimeType,
+      placement: at,
+      destination,
+      items: useCanvasStore.getState().canvas?.items,
+    });
     const itemId = newItemId();
     try {
       await sendCreatedItem(canvasId, actor, {
@@ -186,6 +194,7 @@ export async function addFiles(
         width,
         height,
         placement: at,
+        ...(extraProps ? { properties: extraProps } : {}),
       }, group);
     } catch (err) {
       throw new AddFilesError(

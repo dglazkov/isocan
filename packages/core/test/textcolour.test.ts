@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Item } from "../src/model.ts";
 import { CONTRAST_BODY, contrastRatio } from "../src/contrast.ts";
 import { SPOKEN_COLOURS, itemColour, spokenColour } from "../src/colour.ts";
+import { groundPatch, themePatch } from "../src/theme.ts";
 import { PAPERS, TEXT_COLOURS, TEXT_COLOR_PROP, TEXT_PROPERTIES, textColourOf, textFontFrom, textInkOf } from "../src/textnode.ts";
 import {
   TEXT_COLOUR_SHADES,
@@ -141,6 +142,47 @@ describe("a hex is drawn exactly, and warned about where it will not read", () =
   it("measures against the paper, not the ground, when it is on one", () => {
     expect(textColourWarnings("#202020", "yellow")).toEqual([]);
     expect(textColourWarnings("#f0f0f0", "yellow")).toHaveLength(2);
+  });
+});
+
+/**
+ * **On a canvas with a ground of its own** (smart contrast phase 4) there is
+ * one surface — the colour that ground is drawn in — not the app's two.
+ */
+describe("a colour is measured against the ground the canvas actually has", () => {
+  const on = (theme: Parameters<typeof themePatch>[0]) => ({ properties: themePatch(theme).properties as Record<string, string> });
+  const picture = { properties: groundPatch("a".repeat(64)).properties as Record<string, string> };
+
+  it("warns a hex once, naming the ground, and not where it reads", () => {
+    expect(textColourWarnings("#333333", null, on("night"))).toEqual([
+      "#333333 measures 1.54:1 on Night — body text needs 4.5. A named colour follows the ground; a hex is drawn exactly.",
+    ]);
+    // On Snow it reads (8.74), though the dark app's ground would fail it.
+    expect(textColourWarnings("#333333", null, on("snow"))).toEqual([]);
+    expect(textColourWarnings("#333333", null)).toHaveLength(1);
+    // A picture is measured at its brightest under the scrim, which is all
+    // the CLI can know.
+    expect(textColourWarnings("#555555", null, picture)[0]).toMatch(/on its picture \(at its brightest under the scrim\)/);
+  });
+
+  it("keeps paper's measure on a ground, because the words are on the paper", () => {
+    expect(textColourWarnings("#f0f0f0", "yellow", on("night"))).toEqual(textColourWarnings("#f0f0f0", "yellow"));
+  });
+
+  it("keeps the dot grid's two-theme measure when the canvas has no ground", () => {
+    expect(textColourWarnings("#202020", null, { properties: {} })).toEqual(textColourWarnings("#202020", null));
+  });
+
+  it("is silent for a name wherever its ground shade holds 3:1, and says where none can", () => {
+    for (const theme of ["galaxy", "night", "snow", "zen", "meadow"] as const) {
+      for (const c of TEXT_COLOURS) expect(textColourWarnings(c, null, on(theme)), `${c} on ${theme}`).toEqual([]);
+    }
+    // Brown on Ocean and a picture: the excused pair (groundcontrast.test.ts).
+    expect(textColourWarnings("brown", null, on("ocean"))[0]).toMatch(/^brown measures 2\.39:1 on Ocean — under 3:1/);
+    expect(textColourWarnings("brown", null, picture)).toHaveLength(1);
+    expect(textColourWarnings("red", null, on("ocean"))).toEqual([]);
+    // On paper a name is the paper's, whatever the ground.
+    expect(textColourWarnings("brown", "yellow", on("ocean"))).toEqual([]);
   });
 });
 

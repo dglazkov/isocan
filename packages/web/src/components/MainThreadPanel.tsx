@@ -59,7 +59,7 @@ import { useCommands } from "../lib/commands.ts";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
 const DesignTaskPanel = lazy(() => import("./DesignTaskPanel.tsx").then((module) => ({ default: module.DesignTaskPanel })));
 const QuestionnairePanel = lazy(() => import("./QuestionnairePanel.tsx").then((module) => ({ default: module.QuestionnairePanel })));
-import { messageContextRoots, useMessageContext, useMessageSend } from "../lib/messagecontext.ts";
+import { messageContextRoots, needsContextManifestPreview, useMessageContext, useMessageSend } from "../lib/messagecontext.ts";
 import { ContextManifestView, MessageContextPreview } from "./LazyGroupContext.tsx";
 import { useCanEdit } from "../lib/capability.ts";
 
@@ -119,26 +119,7 @@ function AttachedIcon({ canvasId, item }: { canvasId: string; item: Item }) {
   );
 }
 
-/**
- * Whether `MessageContextPreview` has anything to disclose beyond what the
- * `.attached-chip` pills already show for the canvas selection — e.g. a group
- * expanding into children, excluded/unavailable items, an explicit `#ref` in
- * the draft outside the selection, or a load failure.
- */
-export function needsContextManifestPreview(
-  context: ReturnType<typeof useMessageContext>,
-  selected: readonly string[],
-): boolean {
-  if (!context.enabled) return false;
-  if (context.error || context.includeExcluded) return true;
-  const manifest = context.manifest;
-  if (!manifest) return false;
-  if (manifest.counts.excluded > 0 || manifest.counts.unavailable > 0) return true;
-  if (manifest.expandedIds.length > selected.length) return true;
-  const selectedSet = new Set(selected);
-  if (manifest.rootIds.some((id) => !selectedSet.has(id))) return true;
-  return manifest.entries.some((entry) => entry.kind === "group");
-}
+export { needsContextManifestPreview };
 
 /**
  * What the message is about: the current selection, shown as chips over the

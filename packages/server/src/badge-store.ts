@@ -174,6 +174,23 @@ export async function writeIdentityName(home: string, name: string, fresh = fals
   });
 }
 
+/** Make an EXISTING actor this machine's person (`isocan identity --home
+ * --as`): the id and name the home answered with, replacing whoever the file
+ * named. Unlike `adoptIdentity` this overwrites on purpose — the caller has
+ * already been told by the home that this badge speaks for `actor`. Returns
+ * who the file named before, so the caller can say how to switch back. */
+export async function writeIdentityActor(home: string, actor: Actor): Promise<Actor | null> {
+  return updateIdentity(home, (current) => {
+    const previous = current.id && current.name
+      ? { id: current.id as string, name: current.name as string }
+      : null;
+    return {
+      next: { ...current, id: actor.id, name: actor.name, createdAt: new Date().toISOString() },
+      result: previous,
+    };
+  });
+}
+
 /** Merge a credential without dropping the person, other badges or private fields. */
 export async function writeBadge(home: string, base: string, badge: StoredBadge): Promise<void> {
   return updateIdentity(home, (current) => ({

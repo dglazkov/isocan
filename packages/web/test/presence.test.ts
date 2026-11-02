@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { emptyCanvas, type Item, type PresenceSession } from "@isocan/core";
-import { otherTabSessionIds, sessionLocus, spreadOverlaps } from "../src/lib/presence.ts";
+import {
+  nextWorkingWaypoint,
+  otherTabSessionIds,
+  sessionLocus,
+  sessionWorkingBounds,
+  spreadOverlaps,
+} from "../src/lib/presence.ts";
 import { sessionName } from "../src/lib/names.ts";
 
 function session(overrides: Partial<PresenceSession>): PresenceSession {
@@ -48,6 +54,54 @@ describe("sessionLocus", () => {
 
   it("is null for a session that has not stood anywhere yet", () => {
     expect(sessionLocus(session({}), canvas)).toBeNull();
+  });
+
+  it("targets the anchored or referenced item when working on a thread", () => {
+    const c = emptyCanvas();
+    const actor = { id: "usr_1", name: "Acme" };
+    c.items["itm_yellow"] = {
+      id: "itm_yellow",
+      x: 200,
+      y: 100,
+      width: 800,
+      height: 80,
+      versions: [{ id: "v1", blobHash: "h1", mimeType: "text/html", filename: "a.html", size: 1, createdAt: "", createdBy: actor }],
+      currentVersionId: "v1",
+    } as Item;
+    c.threads["thr_main"] = {
+      id: "thr_main",
+      x: 500,
+      y: 600,
+      anchorItemId: null,
+      main: true,
+      comments: [{ id: "c1", author: actor, body: "Fix the yellow box", items: ["itm_yellow"], createdAt: "" }],
+      createdAt: "",
+      createdBy: actor,
+    };
+    const s = session({ activity: { kind: "working", threadId: "thr_main" } });
+    expect(sessionWorkingBounds(s, c)).toEqual({ x: 200, y: 100, width: 800, height: 80 });
+    expect(sessionLocus(s, c)).toEqual({ x: 600, y: 140 });
+  });
+});
+
+describe("nextWorkingWaypoint", () => {
+  it("keeps every waypoint strictly inside the item bounds (including short wide banners)", () => {
+    const banner = { x: 200, y: 100, width: 900, height: 72 };
+    let pos = { x: 650, y: 136 };
+    let seq = 0;
+    const rng = () => {
+      seq = (seq * 1664525 + 1013904223) >>> 0;
+      return seq / 0x100000000;
+    };
+    for (let i = 0; i < 60; i++) {
+      const step = nextWorkingWaypoint(banner, pos, rng);
+      expect(step.tx).toBeGreaterThanOrEqual(banner.x + 12);
+      expect(step.tx).toBeLessThanOrEqual(banner.x + banner.width - 12);
+      expect(step.ty).toBeGreaterThanOrEqual(banner.y + 10);
+      expect(step.ty).toBeLessThanOrEqual(banner.y + banner.height - 18);
+      expect(step.dwellMs).toBeGreaterThan(250);
+      pos = { x: step.tx, y: step.ty };
+    }
   });
 });
 

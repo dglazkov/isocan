@@ -16,7 +16,6 @@ import {
 import { copyDeck } from "@isocan/core/copy-deck";
 import {
   ScreenFocusEdit,
-  ScreenFocusView,
   domElementSubtargetFor,
   extractDomElements,
   injectScreenStatePreview,
@@ -145,8 +144,12 @@ describe("Phase 6 — Screen Studio (text/html) & Module Facets (documents, merm
     document.body.appendChild(container);
     const root = createRoot(container);
 
+    // View is the screen itself, full bleed: no facet view, so the stage
+    // falls through to the bare VersionContent (no toolbar under the header).
+    expect(resolveNodeFocus(screen)?.view).toBeUndefined();
+
     await act(async () => {
-      root.render(createElement(ScreenFocusView, facts));
+      root.render(createElement(ScreenFocusEdit, facts));
     });
     await act(async () => {
       await Promise.resolve();
@@ -163,13 +166,6 @@ describe("Phase 6 — Screen Studio (text/html) & Module Facets (documents, merm
     expect(container.querySelector(".screen-focus-frame")?.getAttribute("data-viewport-width")).toBe(
       "390",
     );
-
-    await act(async () => {
-      root.render(createElement(ScreenFocusEdit, facts));
-    });
-    await act(async () => {
-      await Promise.resolve();
-    });
 
     const formChip = container.querySelector<HTMLButtonElement>('[data-dom-target="#payment-form"]');
     expect(formChip).not.toBeNull();

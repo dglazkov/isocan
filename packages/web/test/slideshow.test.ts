@@ -149,59 +149,39 @@ describe("marking a selection as slides", () => {
 });
 
 /**
- * **All the chrome rests, or none of it should.**
+ * **Full screen draws none of the stage's chrome.**
  *
- * `.fs-bar` bowed out after a few still seconds and the stage's own furniture
- * stayed: the pane bar ("Saved — v6", the walk arrows, "Edit text") and the
- * folded EDIT rail. Half the chrome fading reads as something failing to
- * load, not as a slideshow getting out of the way — and on a screen being
- * presented that strip is the only thing on the glass that is not the slide.
- *
- * One timer, not a second one: `.resting` is already on the ancestor.
+ * It used to rest: the pane bar ("Saved — v6", the walk arrows, "Edit text")
+ * faded with `.fs-bar` after a few still seconds, keeping its strip so the
+ * slide would not grow under a still mouse. Then the header became a floating
+ * pill and the bar sat UNDER it — covered, and still taking the slide's top
+ * strip (19 Oct 2026). Full screen is the presenting surface and never offers
+ * the editor, so it gets the bare stage, exactly as a hosted canvas always did.
  */
-describe("the stage's chrome rests with the bar above it", () => {
+describe("full screen gives the slide the whole stage", () => {
   // The stage's rules ship with it (`artifact-stage.css`) since 27 Sep 2026.
   const css = loadedWith("artifact-stage.css");
   const fs = readFileSync(
     fileURLToPath(new URL("../src/components/FullScreen.tsx", import.meta.url)),
     "utf8",
   );
+  const stage = readFileSync(
+    fileURLToPath(new URL("../src/components/ArtifactStage.tsx", import.meta.url)),
+    "utf8",
+  );
 
-  it("fades the pane bar with the bar above it", () => {
-    expect(css).toMatch(/\.fullscreen\.resting \.stage-pane-bar[\s\S]{0,120}opacity: 0/);
+  it("returns the bare stage for full screen before any pane is built", () => {
+    expect(stage).toContain('if (surface === "fullscreen" || !editable ||');
+    // Below that return there is no full-screen branch left to drift.
+    const marker = 'if (surface === "fullscreen" || !editable ||';
+    const afterReturn = stage.slice(stage.indexOf(marker) + marker.length);
+    expect(afterReturn).not.toMatch(/surface [!=]== "fullscreen"/);
   });
 
-  it("does not offer the editor at all, so there is no rail to fade", () => {
-    /**
-     * Presenting is not editing. A rail down the side of every slide
-     * offering a way INTO the editor is chrome earning nothing in the one
-     * place a slide should be the only thing on the glass — the workbench is
-     * where an item is worked on, and it has the same stage with a rail of
-     * its own. `readPanes` has always opened full screen with `edit: false`;
-     * this is that decision reaching the chrome.
-     */
-    const stage = readFileSync(
-      fileURLToPath(new URL("../src/components/ArtifactStage.tsx", import.meta.url)),
-      "utf8",
-    );
-    expect(stage).toContain(') : surface === "fullscreen" ? (');
-    expect(stage).toContain("Presenting is not editing");
-    // And the rules that only existed to make the rail behave went with it.
+  it("keeps no rules for chrome it no longer draws", () => {
+    expect(css).not.toContain(".fullscreen.resting .stage-pane-bar");
+    expect(css).not.toContain(".fullscreen .stage-preview-pane");
     expect(css).not.toContain(".fullscreen .stage-rail");
-    expect(css).not.toContain(".fullscreen.resting .stage-rail");
-  });
-
-  it("fades them, rather than removing them and moving the slide", () => {
-    // `visibility`/`opacity`, never `display`: a strip that stops taking space
-    // would grow the slide the moment somebody stopped moving the mouse.
-    const rule = css.slice(css.indexOf(".fullscreen.resting .stage-pane-bar"));
-    expect(rule.slice(0, rule.indexOf("}"))).not.toContain("display: none");
-    expect(css).toMatch(/\.stage-pane-bar \{[^}]*transition: opacity/);
-    expect(css).toMatch(/\.stage-rail \{[^}]*transition: opacity/);
-  });
-
-  it("drops the seam that drew against the rail's column", () => {
-    expect(css).toMatch(/\.fullscreen \.stage-preview-pane \{ border-left: 0/);
   });
 
   it("does not lean on `:has()` for the typing exception", () => {

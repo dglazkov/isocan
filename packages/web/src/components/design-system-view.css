@@ -27,6 +27,7 @@
 .ds-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; }
 .ds-swatch b { display: block; margin-top: 5px; font-size: 12px; }
 .ds-swatch code { font-size: 10.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.ds-source { display: block; margin-top: 2px; font-size: 10.5px; color: var(--ink-muted); }
 .ds-chip {
   height: 52px; border-radius: 7px; border: 1px solid var(--line);
   display: flex; align-items: flex-end; justify-content: flex-end; padding: 5px 6px;

@@ -1,12 +1,10 @@
 # Collaborating on an isocan canvas
 
 isocan is an infinite shared canvas. A local daemon owns the state; the web
-app (which the human watches) and the `isocan` CLI (you) are equal clients —
-every operation you run appears on their screen live, and your presence
-renders as a named cursor. This is the cold start: enough to arrive, name
-yourself, work a lap and park. Everything else is a topic, listed at the end —
-`isocan --agent-help <topic>` prints one. `isocan --help` is the
-command-by-command reference.
+app (the human) and the `isocan` CLI (you) are equal clients. Your operations
+appear live, and your presence is a named cursor. Start here to arrive, name
+yourself, work a lap and park. Topics are indexed below:
+`isocan --agent-help <topic>` opens one; `isocan --help` lists commands.
 
 ## Orient
 
@@ -167,9 +165,9 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 - `propose`, `taste` — work left beneath an item with its trigger and why; what deletes taught (`proactive`)
 - `goodnight start|plan|read|note|fill|done|untick|show|review` — the night watch: a talk, a note and promised frames, the morning review (`proactive`)
 - `explain <item>` — how an item got here: versions that mattered, roads not taken, what moved since; `--critique` answers a Critique (`proactive`)
-- `ripple [item]` — a screen's settled edits read against every other screen; no item: the pulse (`proactive`)
 - `stuck [item]` — tries that missed: ask, don't guess; `walk [flow]` — a flow as simulated people see it (`proactive`)
 - `words` — a screen's copy deck; `--apply` rewords strings; `words vary` makes N voices; `words mix` folds a pick home; `words lint` checks DESIGN.md's Voice
+- `tweak ls|set|reset|css` — customize UI pieces live (glass opacity, control sizes, z-index, spacing, colors)
 - `doc status` — where one of this repo's documents stands
 
 **History** (`history`)
@@ -179,7 +177,7 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 **Agents and rooms** (`agents`, `present`)
 - `agent add|remove|rules|mark`, `rc add|listen|remove`, `bench add|join|follow|rm`, `harness` — standing agents
 - `persona ls|show|runs`, `docket ls|answer` — roles and their findings
-- `slides add|rm|show|export|note|notes`, `sprint show|phase|board|brief|desk|end|handin|tally`, `present` — running a room
+- `slides add|rm|show|export|note|notes|transition`, `sprint show|phase|board|brief|desk|end|handin|tally`, `present` — running a room
 
 **What a canvas carries** (`extend`, and a topic per module)
 - `module add|rm|ls`, `tool ls|add`, `panel ls|add` — modules, rail tools, dock panels
@@ -316,6 +314,15 @@ never for an actor that is not its own earlier self. Asked to merge your
 person's identities, run `isocan identity --home --join <actorId>`: `--home`
 folds into the machine's person rather than into you, and the home refuses
 folding a person into an agent.
+
+`isocan identity --home --as <actorId>` is the reversible alternative when a
+machine already has a person and `isocan setup <pass>` admitted another one
+without making it the default ("admitted but not made default"): it makes
+that actor the machine's person — what the CLI speaks as with no session,
+direct mode included — under its own name, folding nothing. The home refuses
+an actor this machine's badge was never handed. The confirmation names who it
+was before; the same command with that id switches back. Run it only when the
+person asks.
 
 If `--session` found no harness session, mention it to the human after you
 have worked around it: a harness isocan has not met can opt in for good by
@@ -1186,11 +1193,16 @@ words are a command or a path, which yours often are, and `hand` when you
 are scribbling on the board rather than labelling it.
 
 `--color red|orange|yellow|green|blue|purple|pink|brown|grey` colours the
-words. A NAME adapts: each has a shade chosen for the light ground, the dark
-ground and paper, so it reads for a collaborator in either theme — prefer
-names. `--color '#rrggbb'` is drawn exactly, and the CLI warns (and sets it
-anyway) where it will not reach 4.5:1. `auto`, or no flag, is the theme's own
-ink; there is no black or white, because neither reads in both themes.
+words. A NAME adapts, and the shade follows the ground the canvas actually
+stands on: on the dot grid the app theme's shade, on a dark ground (Night, a
+picture) the dark shades, on a light one (Snow, Zen) the paper shades, and on
+paper the paper's — so it reads for a collaborator in either theme. Prefer
+names. On a ground of its own a name is held at 3:1, and the CLI says so where
+none can reach it (brown on Ocean). `--color '#rrggbb'` is drawn exactly, and
+the CLI warns (and sets it anyway) where it will not reach 4.5:1 — against the
+ground this canvas has ("on Night"), or both app grounds on the dot grid.
+`auto`, or no flag, is the ground's own ink; there is no black or white,
+because neither reads on every ground.
 
 `--font <name>` names a family from a closed list — Inter, IBM Plex Sans,
 DM Sans, Manrope, Space Grotesk, IBM Plex Serif, Fraunces, Lora, IBM Plex
@@ -2122,7 +2134,8 @@ const [, , file, out, w, h] = process.argv;
 const port = 9222 + Math.floor(process.pid % 500);
 const chrome = spawn(process.env.CHROME ?? "google-chrome", [
   "--headless=new", `--remote-debugging-port=${port}`, `--window-size=${w},${h}`,
-  "--hide-scrollbars", "--no-first-run", "--force-device-scale-factor=1", "about:blank",
+  "--hide-scrollbars", "--no-first-run", "--force-device-scale-factor=1",
+  "--disable-features=MacAppCodeSignClone", "about:blank",
 ], { stdio: "ignore" });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let target = null;
@@ -2146,6 +2159,9 @@ ws.close(); chrome.kill();
 ```
 
 On macOS, `CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"`.
+`--disable-features=MacAppCodeSignClone` stops Chrome leaving a copy of itself
+in a temp folder when the script kills it; each leftover copy adds a "Google
+Chrome" row to the Mac's Local Network settings.
 `ws` comes with isocan, so `node --input-type=module` from the isocan checkout
 finds it; anywhere else, `npm i ws` first. If there is no Chrome, say so and
 deliver the SVG — a real vector asset with a note beats a missing one.
@@ -3201,6 +3217,26 @@ to bottom, left to right. Marking narrows the walk to just the slides:
   writes one PNG per slide beside either. The app's ⌘K "Export the deck"
   opens the same view with Save as PDF and Download deck.html; both surfaces
   write the same HTML file from core's `deckHtml`.
+- `isocan slides transition [motion]` — how full screen moves from slide to
+  slide, for everybody watching: `push` (the default), `fade`, `zoom`, the
+  four 3D ones — `morph`, `depth` (the slide lifts into 3D, glides to the
+  next, lands flat), `cube`, `flip` — or `cut` (`none` works too) for no
+  motion. No argument says which one the deck uses and lists the rest. A
+  canvas property (`project.update`), the same write as the app's "Slide
+  transition" menu and full screen's Transition button. Screens animate live,
+  not as pictures; a flip between a screen and an image or text slide always
+  cuts. The app plays the chosen motion only for a viewer with the
+  *Presentation Transitions* experiment on (Settings → Experiments); everyone
+  else sees screens dissolve and pictures push, as before — so say so when you
+  set one for somebody.
+- **`morph`** takes a screen apart: its pieces (runs of words, pictures,
+  cards) lift off the page into depth, the ones that appear on both slides
+  travel to their place on the next, and everything settles flat. Pieces are
+  paired by the same words, the same image, or the same classes — so when you
+  BUILD a deck meant to morph, keep the repeated title's words identical, and
+  name anything that should travel with `data-morph="<name>"` on both slides
+  (it wins over every guess). It works between two HTML screens; any other
+  flip under `morph` fades.
 
 **Speaker notes** are text items that point at their slide, kept under it on
 the canvas where the deck is arranged — so a person reads the slide and what
@@ -4007,7 +4043,7 @@ then fix the cause rather than the symptom. Do not loop on the door, and do
 not delete your identity file to "start clean" — that is the one action that
 makes this refusal certain.
 
-<!-- topic: proactive | speaking first without speaking over — proposals, their cites and cap, the taste note, `/goodnight` and the morning review, Explain's critique, the brief card, `ripple`, `stuck`, critics, the desk check, `walk`, vague words -->
+<!-- topic: proactive | speaking first without speaking over — proposals, their cites and cap, the taste note, `/goodnight` and the morning review, Explain's critique, the brief card, `stuck`, critics, the desk check, `walk`, vague words -->
 
 ## Proposals: work beside the person's, never over it
 
@@ -4200,52 +4236,6 @@ It posts as a record (it wakes nobody) and the card shows it under the edit.
 Never edit a screen because the brief changed: propose, citing the line. With
 nobody to answer, the edit still lands and the card says the re-read waits.
 
-## Changes ripple
-
-When a person's run of edits on one screen **settles** — three or more new
-versions by them in a row, then a minute of quiet, or they say "I like this"
-(`isocan ripple <item> --ask`, **Ripple this** in the panel) — the canvas asks
-you, its lead, in the Chat: "Ripple, please (`<item>@v1..v4`): …". The ask
-already carries the deterministic half, which `isocan ripple <item> --json`
-prints whole: what the run changed that another screen could share (a token's
-value, a colour, type, space or shape value, a term), and every other screen
-in the source's scope in one of three states — **would change** (it holds the
-old form), **already in sync**, **disagrees, your call** (marked a one-off,
-a preview of it was deleted, or an exception you argued). Nothing on any
-other screen has changed, and nothing will until the person keeps something.
-
-Answer in one or two commands:
-
-```sh
-isocan ripple Menu --read-back --decision "a warmer, quieter accent" --decision "a tighter type scale" \
-  --good "you used proximity: the pickup time sits with the total" \
-  --exception "Profile | a settings list, not a decision screen" \
-  --sketch "With one accent, the brand mark could carry the colour alone." \
-  --preview "Checkout=checkout.html" --preview "Basket=basket.html"
-```
-
-- **The read-back is at most three decisions, in design words** — what the
-  edits *decided*, not a list of edits. `--good` names one good move the
-  person made by hand ("caught doing it right"), and a move is named once on
-  a canvas: the second time is refused.
-- **Previews are proposals**: each hangs beneath its screen citing
-  `version:<source>@vN`, under the cap of five like any other. Preview only a
-  screen that **would change**; a screen in sync needs nothing, and one that
-  disagrees is argued, not previewed. Draw the screen as it would look after
-  the decisions — the canvas outlines the changed regions and tags them.
-- **An exception is argued in one line** (`--exception "<screen> | why"`); it
-  moves that screen to *disagrees*, so the person decides.
-- **The sketch is one idea the change makes possible, set apart** from the
-  mechanical previews; `--sketch-file` draws it as a hunch beneath the source.
-
-The altitude is the person's, never yours: **screen by screen** is the
-default (they keep each preview), **put it in the design system** sends you
-"Ripple into the design system, please (…)" — propose the change beneath the
-DESIGN.md that governs the source, citing the same version — and **this one
-is a one-off** marks the source `ripple=off`, which silences it. Never edit
-another screen because one changed. `isocan ripple` with no item prints the
-pulse: one tick per screen, current, behind or in conflict.
-
 ## Stuck: stop guessing, and ask
 
 When a person's last tries at one item have all missed — **three in a row**,
@@ -4433,7 +4423,10 @@ with no flag at all, so a canvas somebody archives while you are parked on it
 is still the canvas you are standing on. `canvas background
 <galaxy|ocean|mountains|farm|desert|meadow|night|snow|aurora|pond|zen|none>` sets the ground a canvas stands on, and
 bare `canvas background` says what it is wearing — everybody on the canvas
-sees the same one, so it is a change to ask about rather than assume.
+sees the same one, so it is a change to ask about rather than assume — and
+what that means for ink: "a dark ground: ink on it is light", "a light ground",
+or on Desert "names sit on a plate" (`canvas show --json` carries it as
+`groundTone`). Read it before choosing a colour to write on the ground.
 `meadow` is a living ground: grass that parts under the cursor and settles
 when nothing moves, drawn in each viewer's browser and never stored or sent.
 `night` is one too: a dark meadow under a dim sky where every cursor, yours
@@ -4471,6 +4464,7 @@ on the thread before putting one on somebody else's canvas,
 `inbox [--mentions] [--new]`, `seen [--mark] [--canvas <name>]`,
 `who [--all]`, `activity [who]`, `whoami`, `identity [--color]`,
 `command ls|show|add|rm`, `tidy [--dry-run]`, `merge`, `shortcuts`,
+`tweak ls|set|reset|css` (customize UI pieces live — glass opacity, sizes, z-index, radii, colors; writes `canvas.properties["ui.tweaks"]`),
 `design [--css|--tokens] [set|check]`, `design check [--in <scope>] [--provenance]`, `design use <item> [--off]`,
 `design direction [file] [--in <scope>|--item <id>]`, `design project <directory> [--in <scope>|--item <id>] [--refresh]`,
 `design reconcile <directory>`, `design recipes`, `design recipe <id> [--design|--out <directory>]`, `design audit [--item|--in|--file|--fail]`,
@@ -4517,8 +4511,8 @@ and `save` back it like anything else; `--style`, `--face`, `--paper`,
 answers only at the canvas's own machine),
 `save <items...>` (write backed items out to that directory — see **Screens
 that become files**; `--force` overwrites one that changed on disk),
-`slides add|rm|show` (the deck full screen flips through — `show` prints the
-address to hand an audience),
+`slides add|rm|show|transition` (the deck full screen flips through — `show` prints the
+address to hand an audience, `transition` picks how it moves),
 `sprint [show|phase|end|handin|tally]` (the design sprint's clock — derived
 from the Chat's newest `/sprint` line; `phase` calls one, `handin` marks what
 was made for it, `tally` splits human and agent dots),

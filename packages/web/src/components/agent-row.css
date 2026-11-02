@@ -10,8 +10,11 @@
   position: fixed; z-index: var(--z-popover);
   width: 230px; max-height: 220px; overflow: hidden;
   padding: 8px 10px; border-radius: var(--radius);
-  background: var(--panel); border: 1px solid var(--line);
-  box-shadow: var(--shadow-pop); pointer-events: none;
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-glass); pointer-events: none;
 }
 .wb-row.open { background: var(--chip); }
 .wb-row-head {

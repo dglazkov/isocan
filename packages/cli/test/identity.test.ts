@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { PresenceSession, Canvas } from "@isocan/core";
+import { PASS_REDEEM_ROUTE, formatBadgeToken, normalizeHomeUrl, type PresenceSession, type Canvas } from "@isocan/core";
 import { type Daemon } from "@isocan/server";
 import { startDaemon, stopDaemons } from "@isocan/server/daemon";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
@@ -280,6 +280,46 @@ describe("a machine that lost its badge", () => {
     const right = await isocan(claude("s-kit"), "identity", "--home", "--join", kit);
     expect(right.code, right.stderr).toBe(0);
     expect(right.stdout).toContain(`${kit} is now Nico (${nico.id})`);
+  });
+
+  it("`--home --as` switches the machine's person to an actor a pass handed this badge, and back (daemon mode)", async () => {
+    // The CLI's badge is minted on its first request; Nico speaks once so it
+    // holds his home claim, the shape a machine has before a pass arrives.
+    expect((await isocan({}, "comment", "add", "as Nico", "--at", "0,0", "--canvas", "prj_1")).code).toBe(0);
+    const stored = JSON.parse(await fs.readFile(path.join(home, "identity.json"), "utf8")) as {
+      auth: Record<string, { badgeId: string; secret: string }>;
+    };
+    const cli = stored.auth[normalizeHomeUrl(base)]!;
+    const owner = { id: "usr_acme_owner", name: "Acme Owner" };
+    await badge.speakAs(owner);
+    const { token } = (await fetch(`${base}/api/projects/prj_1/passes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...badge.headers },
+      body: JSON.stringify({ actorId: owner.id }),
+    }).then((r) => r.json())) as { token: string };
+    // What `setup <pass>` does on a machine that already has a person: the
+    // badge is handed the owner, and the default stays Nico.
+    const redeemed = await fetch(`${base}${PASS_REDEEM_ROUTE}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${formatBadgeToken(cli.badgeId, cli.secret)}`,
+      },
+      body: JSON.stringify({ token }),
+    });
+    expect(redeemed.ok, await redeemed.clone().text()).toBe(true);
+    expect((await isocan({}, "whoami")).stdout).toContain(`Nico (${nico.id})`);
+
+    const switched = await isocan({}, "identity", "--home", "--as", owner.id);
+    expect(switched.code, switched.stderr).toBe(0);
+    expect(switched.stdout).toContain(`isocan identity --home --as ${nico.id}`);
+    expect(await homeIdentity()).toMatchObject(owner);
+    expect((await isocan({}, "whoami")).stdout).toContain(`Acme Owner (${owner.id})`);
+
+    expect((await isocan({}, "identity", "--home", "--as", nico.id)).code).toBe(0);
+    expect((await isocan({}, "whoami")).stdout).toContain(`Nico (${nico.id})`);
+    expect((await isocan({}, "identity", "--home", "--as", owner.id)).code).toBe(0);
+    expect((await isocan({}, "whoami")).stdout).toContain(`Acme Owner (${owner.id})`);
   });
 
   it("still says 'no identity configured' when the home really is blank", async () => {

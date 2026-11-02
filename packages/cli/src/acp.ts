@@ -430,7 +430,7 @@ export class AcpAgentProcess {
     if (kind === "agent_message_chunk") {
       this.onEvent?.({ kind: "chunk", text: String(update.content?.text ?? "") });
     } else if (kind === "agent_thought_chunk") {
-      this.onEvent?.({ kind: "thought" });
+      this.onEvent?.({ kind: "thought", text: String(update.content?.text ?? "") });
     } else if (kind === "tool_call" || kind === "tool_call_update") {
       this.onEvent?.({ kind: "tool", detail: String(update.title ?? update.toolCallId ?? "") });
     } else if (kind === "usage_update") {

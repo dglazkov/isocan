@@ -13,7 +13,9 @@ import {
   lookaheadVector,
   MAX_HELD_LOOKAHEAD,
   MAX_LOOKAHEAD_ITEMS,
+  MAX_ZOOM_LOOKAHEAD,
   needsLookahead,
+  zoomCandidates,
 } from "../src/lib/lookahead.ts";
 
 const actor = { id: "usr_acme", name: "Acme" };
@@ -240,5 +242,20 @@ describe("directional camera lookahead", () => {
     } finally {
       errors.mockRestore();
     }
+  });
+
+  it("collects items crossing into the viewport during zoom-out, ordered closest to center first", () => {
+    const items = [
+      makeItem("edge", 0, 0),
+      makeItem("center", 800, 500),
+      makeItem("far_away", 4000, 3000),
+    ];
+    const hits = zoomCandidates(
+      items,
+      { tx: 0, ty: 0, scale: 0.5 },
+      { width: 1200, height: 800 },
+    );
+    expect(hits.map((h) => h.itemId)).toEqual(["center", "edge"]);
+    expect(MAX_ZOOM_LOOKAHEAD).toBeGreaterThan(MAX_HELD_LOOKAHEAD);
   });
 });

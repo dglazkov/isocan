@@ -12,6 +12,7 @@ import {
 import { getOplog } from "../lib/api.ts";
 import { canEditNow } from "../lib/capability.ts";
 import { flashNotice, useCanvasStore } from "../stores/canvasStore.ts";
+import { FloatingHandles, useFloatingBox } from "../lib/floatingbox.tsx";
 import "./stuck.css";
 
 /**
@@ -33,6 +34,7 @@ import "./stuck.css";
 const LOOKBACK = 2000;
 
 export default function StuckCard({ canvasId, actor }: { canvasId: string; actor: Actor }) {
+  const float = useFloatingBox<HTMLElement>({ minWidth: 300, minHeight: 180 });
   const canvas = useCanvasStore((s) => s.canvas);
   const lastSeq = useCanvasStore((s) => s.lastSeq);
   const [entries, setEntries] = useState<LogEntry[]>([]);
@@ -102,8 +104,10 @@ export default function StuckCard({ canvasId, actor }: { canvasId: string; actor
     }
   };
 
-  return <section className="stuck-card" data-stuck-card={stuck.itemId} data-stuck-at={stuck.at} aria-label={`Stuck on “${title}”`}>
+  return <section ref={float.ref} className="stuck-card" style={float.style} data-stuck-card={stuck.itemId} data-stuck-at={stuck.at} aria-label={`Stuck on “${title}”`}>
+    <FloatingHandles box={float} />
     <button type="button" className="stuck-close" aria-label="Close" onClick={() => setDismissed(stuck.at)}>×</button>
+    <div className="float-scroll">
     {sections.map((s) => {
       if (s.key === "tiles") {
         return <div key={s.key} data-stuck-section={s.key}>
@@ -151,5 +155,6 @@ export default function StuckCard({ canvasId, actor }: { canvasId: string; actor
         <ul className={s.key === "waits" ? "stuck-list stuck-quiet" : "stuck-list"}>{s.lines.map((l) => <li key={l.text}>{l.text}</li>)}</ul>
       </div>;
     })}
+    </div>
   </section>;
 }

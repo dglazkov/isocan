@@ -1,3 +1,5 @@
+import { PERSON_HARNESSES, isAgentHarness } from "./harness.ts";
+export { PERSON_HARNESSES, isAgentHarness } from "./harness.ts";
 import type { Actor } from "./model.ts";
 import type { Operation } from "./ops.ts";
 import type { ActorClaim } from "./badge.ts";
@@ -134,31 +136,6 @@ export const emptyActorRegistry = (): ActorRegistry => ({
   joined: {},
   harnesses: {},
 });
-
-/**
- * The harnesses a PERSON claims from. Everything else — a coding harness,
- * an enrolment (`agent:`), a bot on a timer (`board:`) — is an agent. The
- * list is of people rather than of agents because new harnesses appear
- * (`harnessVars` in config.json) and a new one should be an agent by
- * default: the failure mode of guessing wrong the other way is a corpus
- * that counts a bot's receipts as somebody asking.
- */
-export const PERSON_HARNESSES: ReadonlySet<string> = new Set(["web", "home", "cli", "person"]);
-
-/**
- * Is this harness an agent's? Anything not a known person's harness is — empty or missing
- * is neither, and reads as not an agent.
- */
-export const isAgentHarness = (harness: string | null | undefined): boolean =>
-  harness !== null && harness !== undefined && harness !== "" && !PERSON_HARNESSES.has(harness.toLowerCase()) &&
-  // **A relay is not a kind** (14 Oct 2026). `replica:` is the key a daemon
-  // claims under when it carries its person up to a home: transport custody,
-  // not a harness. `bindName` stopped recording it on 14 Sep, and the file
-  // store repaired the rows it had already written, but a hosted home's cloud
-  // store never did — so a person announced by their own laptop before then
-  // still read as an agent there, and folding their browser into that id
-  // turned the browser into one too ("personal canvases belong to people").
-  harness.toLowerCase() !== "replica";
 
 /** Is this harness a person's own surface? */
 const isPersonHarness = (harness: string | null | undefined): boolean =>
@@ -585,15 +562,36 @@ export function bindName(
  * pass mints a badge carrying a named claim — "Jordan's tab and her daemon"),
  * so "one actor, one holder" was never going to survive, and the narrower
  * rule is already the shape the pass needs.
+ *
+ * **The machine's person is switched, never dropped** (15 Oct 2026). A claim
+ * that re-points the `home:` key at a DIFFERENT actor — `isocan identity
+ * --home --as <id>`, making a pass-admitted person this machine's default —
+ * keeps the person it displaced as a keyless row, the same shape a pass
+ * hands over (`bindHandoff`). The badge could speak as them a moment ago and
+ * nobody asked it to stop; dropping the row would make the switch one-way,
+ * because coming back is `as`, and `as` without a row on this badge is
+ * refused the moment any other surface still speaks as them. Only the home
+ * key: a coding harness's key re-pointed by `--session --as` still leaves the
+ * abandoned actor a stranger, as above.
  */
 export function bindClaim(
   claims: readonly ActorClaim[],
   envelope: { actor: Actor; ts: string; op: ActorClaimOp },
 ): ActorClaim[] {
   const { actor, ts, op } = envelope;
-  const kept = claims.filter(
-    (row) => row.actorId !== actor.id && row.sessionKey !== op.sessionKey,
-  );
+  const switchesPerson = harnessOf(op.sessionKey) === "home";
+  const kept: ActorClaim[] = [];
+  for (const row of claims) {
+    if (row.actorId === actor.id) continue;
+    if (row.sessionKey !== op.sessionKey) kept.push(row);
+    else if (switchesPerson) {
+      kept.push({
+        actorId: row.actorId,
+        boundAt: row.boundAt,
+        ...(row.canvasId !== undefined ? { canvasId: row.canvasId } : {}),
+      });
+    }
+  }
   kept.push({
     actorId: actor.id,
     boundAt: ts,
@@ -656,8 +654,13 @@ export function bindHandoff(
  * the author", actor-scoped undo — become authorization the moment an actor
  * means something, with the isomorphism contract untouched.
  */
-export function claimsActor(claims: readonly ActorClaim[], actorId: string): boolean {
-  return claims.some((row) => row.actorId === actorId);
+export function claimsActor(
+  claims: readonly ActorClaim[],
+  actorId: string,
+  joined?: ActorJoins,
+): boolean {
+  const target = resolveActor(joined, actorId);
+  return claims.some((row) => resolveActor(joined, row.actorId) === target);
 }
 
 /** The refusal, in one voice wherever the check runs. The honest client's

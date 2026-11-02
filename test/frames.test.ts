@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-// @ts-expect-error — a plain .mjs script, imported for its two pure readers.
-import { frameStats, groundCost, longFrames, selfTimeBySource } from "../scripts/frames.mjs";
+// @ts-expect-error — a plain .mjs script, imported for its pure readers.
+import { flickerStats, frameStats, groundCost, longFrames, selfTimeBySource } from "../scripts/frames.mjs";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { LIVING } from "@isocan/core";
@@ -23,6 +23,45 @@ describe("frameStats", () => {
 
   it("says nothing happened when nothing did", () => {
     expect(frameStats([])).toEqual({ frames: 0, p50: 0, p90: 0, p99: 0, worst: 0, over16: 0, over32: 0 });
+  });
+});
+
+describe("flickerStats", () => {
+  it("counts blank frames and ready-to-blank flickers separately", () => {
+    const got = flickerStats([
+      { ready: ["itm_a", "itm_b"], blank: [] },
+      { ready: ["itm_a"], blank: ["itm_b"] },
+      { ready: ["itm_a", "itm_b"], blank: ["itm_c"] },
+    ]);
+    expect(got).toEqual({
+      samples: 3,
+      blankFrames: 2,
+      flickers: 1,
+      blankItems: ["itm_b", "itm_c"],
+    });
+  });
+
+  it("reports zero when every visible item stayed rendered", () => {
+    expect(flickerStats([{ ready: ["itm_a"], blank: [] }, { ready: ["itm_a", "itm_b"], blank: [] }])).toEqual({
+      samples: 2,
+      blankFrames: 0,
+      flickers: 0,
+      blankItems: [],
+    });
+  });
+});
+
+describe("the canvas pan and zoom recorded reading", () => {
+  const reading = JSON.parse(readFileSync(fileURLToPath(new URL("../scripts/canvas-frames.json", import.meta.url)), "utf8"));
+
+  it("covers both pan and zoom with zero blank or flickering frames", () => {
+    expect(Object.keys(reading.gestures).sort()).toEqual(["pan", "zoom"]);
+    for (const [name, g] of Object.entries<{ blankFrames: number; flickers: number; p90: number; cameraPositions: number }>(reading.gestures)) {
+      expect(g.blankFrames, `${name} had blank frames`).toBe(0);
+      expect(g.flickers, `${name} flickered`).toBe(0);
+      expect(g.p90, `${name} p90 over budget`).toBeLessThanOrEqual(25);
+      expect(g.cameraPositions, `${name} camera did not move`).toBeGreaterThanOrEqual(10);
+    }
   });
 });
 

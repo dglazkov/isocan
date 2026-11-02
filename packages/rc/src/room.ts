@@ -48,12 +48,21 @@ import {
   rollWords,
   rulesOf,
   speakersFor,
+  threadTargetItem,
   turnedAway,
   turnedAwayLine,
 } from "@isocan/core";
 import { capLine, capMet, freshRun, runKeyOf, spendWords, type RunSpend } from "./budget.ts";
 import { gateTurn, type GuardLimits, type GuardState } from "./guards.ts";
-import { itemCenter, nameResolver, summonsPrompt, threadLocus, type SummonsContext } from "./helpers.ts";
+import {
+  formatThoughtStatus,
+  humanizeToolStatus,
+  itemCenter,
+  nameResolver,
+  summonsPrompt,
+  threadLocus,
+  type SummonsContext,
+} from "./helpers.ts";
 import type { RcAgentRow } from "./rows.ts";
 
 /**
@@ -1057,20 +1066,29 @@ async function room(
       await keepSpend();
     }
     const face = await routes.createSession(p.id, record.actor, undefined, harness.harness).catch(() => null);
-    const anchoredItem = thread?.anchorItemId ? snapshot?.canvas.items[thread.anchorItemId] : undefined;
+    const commentItems = (firstComment?.envelope.op as { comment?: { items?: string[] } } | undefined)?.comment?.items;
+    const targetedItem = snapshot ? threadTargetItem(snapshot.canvas, thread, commentItems) : undefined;
     const item = !threadId && changedItemId ? snapshot?.canvas.items[changedItemId] : undefined;
-    const contextItem = anchoredItem ?? item;
+    const contextItem = targetedItem ?? item;
     let working: PresenceActivity | null = null;
     if (face) {
-      working = threadId ? { kind: "working", threadId } : item ? { kind: "working", itemId: item.id } : null;
+      working = contextItem
+        ? { kind: "working", itemId: contextItem.id }
+        : threadId
+          ? { kind: "working", threadId }
+          : null;
+      const initialCursor = contextItem
+        ? itemCenter(contextItem)
+        : snapshot && thread
+          ? threadLocus(snapshot, thread)
+          : null;
       await routes
         .updateSession(p.id, face.sessionId, {
           status: threadId ? "reading your comment…" : "looking at what changed…",
           statusSource: "lifecycle",
           ...(working ? { activity: working } : {}),
           ...(threadId ? { onThread: threadId } : {}),
-          ...(snapshot && thread ? { cursor: threadLocus(snapshot, thread) } : {}),
-          ...(item ? { cursor: itemCenter(item) } : {}),
+          ...(initialCursor ? { cursor: initialCursor } : {}),
         })
         .catch(() => {});
     }
@@ -1159,11 +1177,12 @@ async function room(
       let turnUsd: number | null = null;
       let cancelled = false;
       // The event stream the adapter is already sending, spent on the face:
-      // each tool call becomes an inferred status (so it never displaces
-      // anything the agent said with `--say`) and re-asserts `working`.
-      // Throttled — a busy turn fires tools faster than a status is worth
-      // repainting.
-      let lastToolBeat = 0;
+      // thoughts and tool calls become inferred statuses (so they never
+      // displace anything the agent said with `--say`), re-assert `working`,
+      // and follow any canvas item a tool touches.
+      let lastStatusBeat = 0;
+      let lastStatusText = "";
+      let thoughtBuffer = "";
       const turn = await agent.prompt(
         session.sessionId,
         summonsPrompt(p.title, record.actor.name, { reason, entries: flagged }, summonsContext),
@@ -1178,14 +1197,41 @@ async function room(
             }
           }
           if (event.kind === "permission") say(`permission ${event.detail}`);
-          if (event.kind === "tool" && event.detail && clock.now() - lastToolBeat >= 2_000) {
-            lastToolBeat = clock.now();
-            const title = event.detail.length > 80 ? `${event.detail.slice(0, 79)}…` : event.detail;
-            beat({
-              status: title,
-              statusSource: "inferred",
-              ...(working ? { activity: working } : {}),
-            });
+          if (event.kind === "thought" && event.text) {
+            thoughtBuffer = (thoughtBuffer + event.text).slice(-600);
+            if (clock.now() - lastStatusBeat >= 1_400) {
+              const status = formatThoughtStatus(thoughtBuffer);
+              if (status && status !== lastStatusText) {
+                lastStatusBeat = clock.now();
+                lastStatusText = status;
+                beat({
+                  status,
+                  statusSource: "inferred",
+                  ...(working ? { activity: working } : {}),
+                });
+              }
+            }
+          }
+          if (event.kind === "tool" && event.detail) {
+            const parsed = humanizeToolStatus(event.detail, snapshot?.canvas.items);
+            if (!parsed) return;
+            const nextItem = parsed.itemId ? snapshot?.canvas.items[parsed.itemId] : undefined;
+            const itemChanged =
+              nextItem !== undefined &&
+              !(working?.kind === "working" && "itemId" in working && working.itemId === nextItem.id);
+            if (nextItem) {
+              working = { kind: "working", itemId: nextItem.id };
+            }
+            if (itemChanged || clock.now() - lastStatusBeat >= 1_400) {
+              lastStatusBeat = clock.now();
+              lastStatusText = parsed.status;
+              beat({
+                status: parsed.status,
+                statusSource: "inferred",
+                ...(working ? { activity: working } : {}),
+                ...(itemChanged && nextItem ? { cursor: itemCenter(nextItem) } : {}),
+              });
+            }
           }
         },
       );

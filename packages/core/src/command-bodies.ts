@@ -267,11 +267,30 @@ It is an item on the canvas, not a file in a repo — so it sits beside the
 designs it governs, versions like everything else, and the person can read it
 without knowing it exists.
 
-IF THERE IS NONE, DERIVE IT FROM WHAT IS ALREADY THERE. Do not invent a system
-and impose it: \`isocan ls --kind site --kind document\`, \`isocan get\` the two
-or three screens that look most like what they want, and write down what they
-ALREADY do. Where the screens disagree, pick the one that appears most, and
-say in the document that you did.
+IF THERE IS NONE, DERIVE IT FROM WHAT IS ALREADY THERE. First check whether the
+canvas has a Mood board with kept or reference tiles: \`isocan mood board
+--json\`.
+
+- **When the Mood board has tiles**, derive the system from the board:
+  1. Read \`isocan mood board --json\`: every kept or reference tile, with
+     \`axis\` (\`moodAxis\`), \`prompt\` (\`moodPrompt\`), \`swatches\`
+     (\`moodSwatches\`), and the person's original \`words\`.
+  2. Look at the tiles. An agent that can read pictures inspects them; one
+     without works from the swatches and axes, and says so.
+  3. Write DESIGN.md with \`isocan design set\`: draw the palette from
+     \`swatches\`, and write \`isocan.direction\` (\`rationale\`,
+     \`taskHierarchy\`, \`layout\`, \`density\`, \`typography\`,
+     \`palettePurpose\`, \`treatments\`) plus \`isocan.sources\` (\`{ "colors.<name>":
+     "<itemId>", "direction.<field>": "<itemId>", "direction.treatments.<name>":
+     "<itemId>" }\`), citing the kept or reference tile each value came from.
+     Quote the person's original words in \`rationale\`.
+  4. Do not invent a colour or direction choice no tile holds without explaining
+     why in \`rationale\` (\`isocan style check\` checks \`isocan.sources\`).
+- **When there is no Mood board**, do not invent a system and impose it:
+  \`isocan ls --kind site --kind document\`, \`isocan get\` the two or three
+  screens that look most like what they want, and write down what they ALREADY
+  do. Where the screens disagree, pick the one that appears most, and say in
+  the document that you did.
 
 FRONT MATTER — the normative half. Numbers, not adjectives:
 

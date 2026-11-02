@@ -31,25 +31,35 @@
 .chat-bar:not(.open) > .main-panel > :not(form) { display: none; }
 .chat-bar .main-panel form { border-top: 0; align-items: center; }
 /* Only the composer row makes room for the controls, by width rather than
-   padding: the messages above run the bar's full width. */
-.chat-bar .main-panel form { width: calc(100% - 96px); box-sizing: border-box; }
+   padding: the messages above run the bar's full width. The selection pills sit
+   above the controls, so they take the bar's full width too and fit three on
+   one horizontal row without wrapping early. */
+.chat-bar .main-panel form { width: calc(100% - 76px); box-sizing: border-box; }
+.chat-bar .attached { flex: 0 0 calc(100% + 76px); max-width: calc(100% + 76px); }
+.chat-bar .attached-chip { max-width: calc((100% - 14px) / 3); min-width: 0; }
 .chat-bar .main-panel form .mention-field { flex: 1 1 200px; }
+/* The bar itself is the pill, so the composer inside wears no inner box. */
+.chat-bar .mention-field .mention-input { border-color: transparent; }
 .chat-bar-controls {
   /* Above the full-width Chat it shares the corner with, or the Chat's own
      box takes the presses meant for ▴ ▾. */
   position: absolute; right: 0; bottom: 0; z-index: 1;
-  display: flex; align-items: center; padding: 10px;
+  display: flex; align-items: center; gap: 4px; padding: 10px;
 }
 
-.chat-bar-grip {
-  color: var(--ink-muted); cursor: grab; user-select: none; font-size: 13px; line-height: 1;
-}
 .chat-bar-btn {
-  display: inline-grid; place-items: center; width: 26px; height: 26px; flex: none;
+  display: inline-grid; place-items: center; width: 28px; height: 28px; padding: 0; flex: none;
   background: none; border: 1px solid transparent; border-radius: 6px;
   color: var(--ink-soft); font-size: 15px; line-height: 1;
 }
 .chat-bar-btn:hover { color: var(--ink); background: var(--glass-chip-hover); }
+
+.chat-bar-grip {
+  display: inline-grid; place-items: center; width: 24px; height: 28px; padding: 0; flex: none;
+  background: none; border: 1px solid transparent; border-radius: 6px;
+  color: var(--ink-muted); cursor: grab; user-select: none; font-size: 14px; line-height: 1;
+}
+.chat-bar-grip:hover { color: var(--ink); background: var(--glass-chip-hover); }
 
 /* What came in while it was down: a count and one line of the newest. */
 .chat-bar-news {

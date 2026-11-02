@@ -69,6 +69,17 @@ const GROUND_FRAMES = "scripts/ground-frames.json";
 /** The directories a living ground is drawn from — what a reading goes stale against. */
 const GROUND_SOURCES = ["packages/web/src/components/themes", "packages/web/src/lib/groundfield.ts", "packages/web/src/lib/groundsleep.ts", "packages/web/src/lib/groundmotion.ts"];
 
+/** The canvas pan/zoom frame and flicker reading, written by `frames.mjs --record` (or fresh nightly into `ISOCAN_CANVAS_FRAMES`). */
+const CANVAS_FRAMES_DEFAULT = "scripts/canvas-frames.json";
+const CANVAS_FRAME_SOURCES = [
+  "packages/web/src/components/CanvasViewport.tsx",
+  "packages/web/src/components/ItemView.tsx",
+  "packages/web/src/lib/lookahead.ts",
+  "packages/web/src/lib/htmlsnapshot.ts",
+  "packages/web/src/lib/onscreen.ts",
+];
+const CANVAS_FRAMES_AGAIN = `node scripts/frames.mjs --html 12 --items 36 --scale 0.5 --throttle 1 --gestures pan,zoom --record ${CANVAS_FRAMES_DEFAULT}`;
+
 /** Semantic Zoom's faithfulness eval, written by `bench.mjs eval` (semantic-zoom phase 5). */
 const SUMMARY_EVAL = "docs/projects/semantic-zoom/bench/eval.json";
 /** What an eval reading goes stale against: the bench's prompts and fixture, the judge's words, and the product's prompt. */
@@ -368,6 +379,31 @@ const METRICS = {
       file: GROUND_FRAMES,
       // A ground whose frame got dearer, written the way a new reading would be.
       apply: (t) => t.replace(/("night": \{[^}]*"mainMsPerFrame": )[0-9.]+/, (_, head) => `${head}60`),
+    },
+  },
+  /**
+   * **Canvas pan and zoom responsiveness, and zero blank/flickering frames**
+   * (16 Oct 2026). The nightly `persona.yml` runs `frames.mjs` live into
+   * `ISOCAN_CANVAS_FRAMES` before taking numbers, so every morning checks the
+   * real built app; on push, `ratchet.mjs` reads `scripts/canvas-frames.json`
+   * so commits do not pay a browser walk.
+   */
+  "canvas-pan-zoom-p90-ms": {
+    what: "worst p90 frame gap (ms) across pan and zoom on a populated canvas — fresh nightly or last recorded reading",
+    take: () => canvasFrameReading().worstP90,
+    names: () => canvasFrameReading().lines,
+    breakIt: {
+      file: CANVAS_FRAMES_DEFAULT,
+      apply: (t) => t.replace(/("pan": \{[\s\S]*?"p90": )[0-9.]+/, (_, head) => `${head}120`),
+    },
+  },
+  "canvas-flicker-frames": {
+    what: "blank or flickering frames observed while panning and zooming a populated canvas",
+    take: () => canvasFrameReading().blankOrFlicker,
+    names: () => canvasFrameReading().lines,
+    breakIt: {
+      file: CANVAS_FRAMES_DEFAULT,
+      apply: (t) => t.replace(/("pan": \{[\s\S]*?"blankFrames": )[0-9]+/, (_, head) => `${head}4`),
     },
   },
   /**
@@ -934,6 +970,43 @@ function groundReading() {
     `${worst} ms is what \`ground-frame-ms\` prints: the largest (+) above. Again: node scripts/frames.mjs --grounds --record ${GROUND_FRAMES}`,
   ];
   return { worst, lines };
+}
+
+/**
+ * The canvas pan/zoom reading: worst p90 frame gap (ms) and total blank or
+ * flickering frames across pan and zoom. Nightly CI sets `ISOCAN_CANVAS_FRAMES`
+ * to a live reading just taken on that commit; push-time checks read the
+ * committed baseline file.
+ */
+function canvasFrameReading() {
+  const custom = process.env.ISOCAN_CANVAS_FRAMES;
+  const target = custom ? path.resolve(repo, custom) : path.join(repo, CANVAS_FRAMES_DEFAULT);
+  if (!existsSync(target)) {
+    throw new NoReading(`no canvas frame reading at ${target}; take it with: ${CANVAS_FRAMES_AGAIN}`);
+  }
+  const r = JSON.parse(readFileSync(target, "utf8"));
+  const gestures = Object.entries(r.gestures ?? {});
+  if (gestures.length === 0) throw new Error(`${target} contains no gestures`);
+  const worstP90 = Math.round(10 * Math.max(...gestures.map(([, g]) => Number(g.p90 ?? 0)))) / 10;
+  const blankOrFlicker = gestures.reduce((sum, [, g]) => sum + Number(g.blankFrames ?? 0) + Number(g.flickers ?? 0), 0);
+  let since;
+  if (custom) {
+    since = "live reading taken in this run";
+  } else {
+    try {
+      const changed = run("git", ["diff", "--name-only", r.commit, "--", ...CANVAS_FRAME_SOURCES]).trim().split("\n").filter(Boolean);
+      since = changed.length ? `STALE: ${changed.length} canvas viewport file(s) changed since ${r.commit} — take it again` : `no canvas viewport source has changed since ${r.commit}`;
+    } catch {
+      since = `cannot tell whether canvas viewport sources changed since ${r.commit} (that commit is not in this clone)`;
+    }
+  }
+  const lines = [
+    `read ${r.at} at ${r.commit} on ${r.machine}; ${r.chrome}`,
+    `page ${r.page}, CPU throttled ${r.throttle}x, ${r.html ?? 0} screens + ${r.items ?? 0} notes — ${since}`,
+    ...gestures.map(([name, g]) => `${name.padEnd(6)} frames=${g.frames} p50=${Number(g.p50).toFixed(1)} p90=${Number(g.p90).toFixed(1)} p99=${Number(g.p99).toFixed(1)} worst=${Number(g.worst).toFixed(1)} blank=${g.blankFrames ?? 0} flicker=${g.flickers ?? 0}`),
+    `worst p90 is ${worstP90} ms (\`canvas-pan-zoom-p90-ms\`); blank+flicker is ${blankOrFlicker} (\`canvas-flicker-frames\`). Again: ${CANVAS_FRAMES_AGAIN}`,
+  ];
+  return { worstP90, blankOrFlicker, lines };
 }
 
 /**

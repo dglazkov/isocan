@@ -79,6 +79,8 @@ export interface NewComment {
   goodnight?: import("./model.ts").GoodnightMark;
   /** Picked readings of vague words; see Comment.readings. */
   readings?: Array<{ word: string; reading: string }>;
+  /** A moment in the item, in seconds; see Comment.at. */
+  at?: number;
   /** Resolved #item-references (item ids); see Comment.items. */
   items?: string[];
   /** Public attachment intent; the home resolves it at one canvas revision. */

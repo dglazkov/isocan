@@ -12,6 +12,7 @@ import {
   type OverlayFacts,
   type WebHost,
 } from "@isocan/core";
+import { boardCriticDraft } from "@isocan/core/mood";
 import {
   CRITIC_CARD,
   CRITIC_PROP,
@@ -150,9 +151,37 @@ async function placeLens(host: WebHost, canvas: CanvasContents, draft: CriticDra
 
 const TICK_MS = 10_000;
 
+/**
+ * **A closed read stays closed** (20 Oct 2026). Dion: "when I load this
+ * canvas this right sidebar always shows up and I don't want it to." The
+ * close button only set component state, so every load opened the newest
+ * read again — however old it was, and however many times it had been
+ * closed. Which read this viewer closed is now remembered per canvas in this
+ * browser, so the card comes back only when the room is asked something NEW.
+ * Nothing is lost by it: the lead's posted read is a comment in the Chat.
+ * Local, not an op: closing a card is one person's view, not the canvas's.
+ */
+const dismissedKey = (canvasId: string) => `critique:room-dismissed:${canvasId}`;
+
+function readDismissed(canvasId: string): string | null {
+  try {
+    return localStorage.getItem(dismissedKey(canvasId));
+  } catch {
+    return null;
+  }
+}
+
+function rememberDismissed(canvasId: string, commentId: string): void {
+  try {
+    localStorage.setItem(dismissedKey(canvasId), commentId);
+  } catch {
+    /* Restricted storage: closed for this visit, which is what it was before. */
+  }
+}
+
 /** The read of the room, and the ear for a pause. Draws nothing until the lenses have spoken. */
-export function RoomOverlay({ canvas, host }: OverlayFacts) {
-  const [dismissed, setDismissed] = useState<string | null>(null);
+export function RoomOverlay({ canvasId, canvas, host }: OverlayFacts) {
+  const [dismissed, setDismissed] = useState<string | null>(() => readDismissed(canvasId));
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -205,14 +234,18 @@ export function RoomOverlay({ canvas, host }: OverlayFacts) {
 
   return (
     <section className="crit-dialog room-card" data-room-read={ask.commentId} aria-label="Read of the room">
-      <button type="button" className="crit-link room-close" aria-label="Close" onClick={() => setDismissed(ask.commentId)}>×</button>
+      <button type="button" className="room-close" aria-label="Close" onClick={() => { rememberDismissed(canvasId, ask.commentId); setDismissed(ask.commentId); }}>
+        <svg viewBox="0 0 16 16" width={14} height={14} aria-hidden fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round">
+          <path d="M4 4l8 8M12 4l-8 8" />
+        </svg>
+      </button>
       {reads.map((r) => {
         const item = canvas.items[r.itemId]!;
         const posted = postedRoomRead(canvas, ask, r.itemId);
         const { agree, split, blocker, alone } = r.read;
         return (
           <div key={r.itemId} className="crit-dialog" data-room-screen={r.itemId}>
-            <div>
+            <div className="room-head">
               <h3>Read of the room — “{item.title || "Untitled"}”</h3>
               <p className="crit-note">{ask.critics.map((c) => card(c)?.title ?? c).join(" · ")}</p>
             </div>
@@ -257,7 +290,7 @@ export function RoomOverlay({ canvas, host }: OverlayFacts) {
 /* ---- the critics in the room --------------------------------------------- */
 
 /** **Critics in the room** — the list with its switches, the starter lenses, a lens described, and the ask. */
-export function RoomDialog({ canvas, selection, args, canEdit, host }: DialogFacts) {
+export function RoomDialog({ canvas, groupMode, selection, args, canEdit, host }: DialogFacts) {
   const [critics, setCritics] = useState<CanvasCritic[] | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -295,6 +328,7 @@ export function RoomDialog({ canvas, selection, args, canEdit, host }: DialogFac
   const ask = screen && screen.properties[CRITIC_PROP] === undefined ? screen : undefined;
   const here = new Set((critics ?? []).map((c) => c.critic.name));
   const starters = STARTER_LENSES.filter((l) => !here.has(starterDraft(l).name));
+  const boardDraft = here.has("board") ? null : boardCriticDraft(canvas, groupMode);
 
   return (
     <div className="crit-dialog" data-critics-room>
@@ -324,7 +358,7 @@ export function RoomDialog({ canvas, selection, args, canEdit, host }: DialogFac
           })}
         </ul>
       )}
-      {starters.length > 0 && (
+      {(starters.length > 0 || boardDraft !== null) && (
         <div>
           <h3>Add a lens</h3>
           <div className="crit-actions room-starters">
@@ -333,6 +367,11 @@ export function RoomDialog({ canvas, selection, args, canEdit, host }: DialogFac
                 {l.agentName}
               </button>
             ))}
+            {boardDraft && (
+              <button type="button" className="btn" title={boardDraft.line} disabled={!canEdit || busy} data-critic-add="board" onClick={() => void act(() => placeLens(host, host.getCanvas(), boardDraft, critics ?? []))}>
+                {boardDraft.agentName}
+              </button>
+            )}
           </div>
         </div>
       )}

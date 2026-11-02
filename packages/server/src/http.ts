@@ -13,6 +13,7 @@ import { CanvasGoneAtHomeError, collectInbox, sequenceInbox } from "./inbox.ts";
 import type { JudgmentOptions } from "./judgment.ts";
 import type { SummaryOptions } from "./summaries.ts";
 import type { TextOptions } from "./text.ts";
+import type { ImageOptions } from "./image.ts";
 import type { LiveTokenOptions } from "./live-token.ts";
 import { registerModelRoutes } from "./model-routes.ts";
 import { registerKeyRoutes, type KeyRouteOptions } from "./key-routes.ts";
@@ -500,6 +501,9 @@ export interface RouteOptions {
   /** The talk module's Gemini Live tokens (`live-token.ts`): its key, rate and
    * transport. Absent, the key is `GEMINI_API_KEY`, else `keys.json`, read per call. */
   liveToken?: LiveTokenOptions;
+  /** The mood board's image model (`image.ts`): its key, model, rate and
+   * transport. Absent, the key is `GEMINI_API_KEY`, else `keys.json`, read per call. */
+  image?: ImageOptions;
   /** The machine-local key routes (`key-routes.ts`): the environment and the
    * provider transport they read. Absent, `process.env` and `fetch`. */
   keys?: KeyRouteOptions;

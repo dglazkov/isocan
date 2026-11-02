@@ -1,5 +1,5 @@
 import type { ActorJoins, ActorNames, CanvasContents, PresenceSession } from "@isocan/core";
-import { QUIET_AFTER_MS, sameActor } from "@isocan/core";
+import { QUIET_AFTER_MS, sameActor, threadTargetItem } from "@isocan/core";
 
 export { QUIET_AFTER_MS };
 import { actorNameIn, sessionName } from "./names.ts";
@@ -24,6 +24,96 @@ export function quietFor(
   return ms < 90_000 ? `${Math.round(ms / 1000)}s` : `${Math.round(ms / 60_000)}m`;
 }
 
+/**
+ * The world-space rectangle a working session is actively working inside.
+ *
+ * When a session works on a thread (`{ kind: "working", threadId }`), we
+ * check `threadTargetItem` first: if the thread is anchored to an item or its
+ * latest comment references a live item (like selecting a box and messaging in
+ * Chat), the agent works inside that item's bounds rather than around a distant
+ * thread pin.
+ */
+export function sessionWorkingBounds(
+  session: PresenceSession,
+  canvas: CanvasContents | null,
+): { x: number; y: number; width: number; height: number } | undefined {
+  if (session.activity?.kind !== "working") return undefined;
+  if ("itemId" in session.activity) {
+    const item = canvas?.items[session.activity.itemId];
+    return item ? { x: item.x, y: item.y, width: item.width, height: item.height } : undefined;
+  }
+  if ("threadId" in session.activity) {
+    const thread = canvas?.threads[session.activity.threadId];
+    if (canvas && thread) {
+      const target = threadTargetItem(canvas, thread);
+      if (target) {
+        return { x: target.x, y: target.y, width: target.width, height: target.height };
+      }
+      const at = threadWorldPos(canvas, thread);
+      return { x: at.x - 90, y: at.y - 60, width: 180, height: 120 };
+    }
+    return undefined;
+  }
+  return {
+    x: session.activity.x - 110,
+    y: session.activity.y - 75,
+    width: 220,
+    height: 150,
+  };
+}
+
+/**
+ * Pick the next cursor target strictly inside `bounds`, scanning along lines
+ * and between interior sections rather than hugging the outer border.
+ */
+export function nextWorkingWaypoint(
+  bounds: { x: number; y: number; width: number; height: number },
+  current: { x: number; y: number },
+  rng: () => number = Math.random,
+): { tx: number; ty: number; dwellMs: number } {
+  const padX = Math.min(Math.max(12, bounds.width * 0.08), bounds.width * 0.35);
+  const padTop = Math.min(Math.max(10, bounds.height * 0.14), bounds.height * 0.35);
+  // Extra bottom clearance so the cursor glyph + thought chip stay over the item.
+  const padBottom = Math.min(Math.max(18, bounds.height * 0.28), bounds.height * 0.45);
+  const minX = bounds.x + padX;
+  const maxX = Math.max(minX, bounds.x + bounds.width - padX);
+  const minY = bounds.y + padTop;
+  const maxY = Math.max(minY, bounds.y + bounds.height - padBottom);
+  const spanX = Math.max(1, maxX - minX);
+  const spanY = Math.max(1, maxY - minY);
+  const clampX = (x: number) => Math.max(minX, Math.min(maxX, x));
+  const clampY = (y: number) => Math.max(minY, Math.min(maxY, y));
+
+  const cx = clampX(current.x);
+  const cy = clampY(current.y);
+  const roll = rng();
+
+  if (roll < 0.18) {
+    // Brief thinking pause right where the cursor sits.
+    return { tx: cx, ty: cy, dwellMs: 450 + rng() * 650 };
+  }
+
+  if (roll < 0.72) {
+    // Local scan along the current line/region (mostly horizontal, small vertical drift).
+    const nearRightEdge = cx > minX + spanX * 0.72;
+    const dirX = nearRightEdge ? (rng() < 0.75 ? -1 : 1) : rng() < 0.72 ? 1 : -1;
+    const stepX = dirX * (0.12 + rng() * 0.28) * spanX;
+    const stepY = (rng() - 0.5) * 0.18 * spanY;
+    return {
+      tx: clampX(cx + stepX),
+      ty: clampY(cy + stepY),
+      dwellMs: 320 + rng() * 480,
+    };
+  }
+
+  // Reposition to another interior section of the item.
+  return {
+    tx: clampX(minX + (0.08 + rng() * 0.84) * spanX),
+    ty: clampY(minY + (0.08 + rng() * 0.84) * spanY),
+    dwellMs: 420 + rng() * 620,
+  };
+}
+
 /** Where a session stands in the world: the center of the item it declared it
  * is working on, its freestanding work point, or failing those its cursor.
  * Null for a session that has not stood anywhere yet. The minimap dot and
@@ -32,17 +122,9 @@ export function sessionLocus(
   session: PresenceSession,
   canvas: CanvasContents | null,
 ): { x: number; y: number } | null {
-  if (session.activity?.kind === "working") {
-    if ("itemId" in session.activity) {
-      const item = canvas?.items[session.activity.itemId];
-      if (item) return { x: item.x + item.width / 2, y: item.y + item.height / 2 };
-    } else if ("threadId" in session.activity) {
-      // Working on a thread stands you at its pin — where the question is.
-      const thread = canvas?.threads[session.activity.threadId];
-      if (thread && canvas) return threadWorldPos(canvas, thread);
-    } else {
-      return { x: session.activity.x, y: session.activity.y };
-    }
+  const bounds = sessionWorkingBounds(session, canvas);
+  if (bounds) {
+    return { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
   }
   return session.cursor;
 }

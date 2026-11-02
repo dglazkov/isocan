@@ -1,6 +1,7 @@
 import { selectCreatedItems } from "../lib/groupplacement.ts";
 import { createGroupNudger } from "../lib/groupgestures.ts";
-import { groupAncestors, groupScopeRoots, isGroupItem } from "@isocan/core";
+import { groundOf, groupAncestors, groupScopeRoots, isGroupItem } from "@isocan/core";
+import { useShallow } from "zustand/react/shallow";
 import { enterCanvasGroup, leaveCanvasGroup, openGroupCreation, changeCanvasGroup, groupsEnabled, groupTask, removeFromCanvasGroup } from "../lib/canvasgroups.ts";
 import { CanvasGroupScope } from "../components/CanvasGroupScope.tsx";
 import { presentedCanvas, presentedLocus } from "../lib/presentation.ts";
@@ -42,7 +43,8 @@ import { checkForUpdate, mayReloadUnseen } from "../lib/appversion.ts";
 import { arriveSketch, placeSketch } from "../lib/sketch.ts";
 import { CanvasViewport } from "../components/CanvasViewport.tsx";
 import { pageTitle } from "../lib/title.ts";
-import { groundTone } from "../lib/groundtone.ts";
+import { groundMidStyle, groundToken, groundToneAttr } from "../lib/groundtoken.ts";
+import { useGroundSamples } from "../lib/groundsample.ts";
 import { itemThread } from "../components/CommentLayer.tsx";
 
 /**
@@ -84,7 +86,6 @@ import type { PhoneVisit } from "../components/PhoneFace.tsx";
 const ChatPlace = lazy(() => import("../components/ChatBar.tsx"));
 const PhoneFace = lazy(() => import("../components/PhoneFace.tsx").then((m) => ({ default: m.PhoneFace })));
 const AwayPanel = lazy(() => import("../components/VisitDigest.tsx").then((m) => ({ default: m.AwayPanel })));
-const RipplePulse = lazy(() => import("../components/RipplePulse.tsx"));
 const StuckCard = lazy(() => import("../components/StuckCard.tsx"));
 const CanvasTools = lazy(() => import("../components/CanvasTools.tsx").then((m) => ({ default: m.CanvasTools })));
 /** Asked for by a keystroke and unmounted when closed, so it need not be in
@@ -126,6 +127,9 @@ import { noteVisit } from "../lib/seen.ts";
 import { OwnCursor } from "../components/OwnCursor.tsx";
 import { useCanvasHome } from "../lib/homes.ts";
 import { canEditNow, useCanEdit } from "../lib/capability.ts";
+import { chromeTweakMenu } from "../lib/chromemenu.tsx";
+import { UI_TWEAKS_PROP, toggleUiDevtools, useUiTweaksSignal } from "../lib/uitweaks.ts";
+import { CanvasArrivalVeil } from "../components/CanvasFinding.tsx";
 
 /* Below the imports, and it has to stay there: vite's dev transform rewrites
  * `import { lazy } from "react"` into a binding at the import's own position,
@@ -138,6 +142,7 @@ const ElsewherePage = lazy(() =>
 const CanvasGroupPanel = lazy(() =>
   import("../components/CanvasGroupPanel.tsx").then((m) => ({ default: m.CanvasGroupPanel })),
 );
+const UiDevtools = lazy(() => import("../components/UiDevtools.tsx"));
 
 /** Arrow keys → a world-space direction. */
 const NUDGES: Record<string, [number, number]> = {
@@ -240,17 +245,15 @@ export function CanvasPage(props: {
   const { canvasId } = useParams<{ canvasId: string }>();
   const where = useCanvasHome(canvasId ?? null);
   if (!canvasId) return null;
-  // A sentence, in the same voice the door uses while a pass is redeemed —
-  // not a spinner and not a blank page, for the fraction of a second a
-  // same-origin read of `/api/homes` takes.
-  if (where.state === "asking") return <div className="page-note">Finding this canvas…</div>;
   if (where.state === "elsewhere") {
     return <ElsewherePage canvasId={canvasId} home={where.home} />;
   }
+  const asking = where.state === "asking";
   return (
     <>
-      <TabTitle {...props} />
-      <CanvasSurface {...props} />
+      {!asking && <TabTitle {...props} />}
+      {!asking && <CanvasSurface {...props} />}
+      <CanvasArrivalVeil key={canvasId} canvasId={canvasId} asking={asking} />
     </>
   );
 }
@@ -285,9 +288,15 @@ function CanvasSurface({
   /* The token the canvas's own ground paints with, so the wash under the
      top controls is the colour of what it is washing. Null on a canvas with
      no ground, where the stylesheet's `--ground` fallback is right. */
-  const fadeTone = useCanvasStore((s) => groundTone(s.record ?? null));
-  /* Changes ripple (proactive-agent phase 6): the pulse loads where a screen has been edited, or one is marked a one-off. */
-  const ripples = useCanvasStore((s) => !!s.canvas && Object.values(s.canvas.items).some((i) => i.versions.length > 1 || i.properties.ripple));
+  const fadeTone = useCanvasStore((s) => groundToken(s.record ?? null));
+  /* Which ink the canvas's ground takes — dark, light or mid — stamped on
+     the page so the ground tier in styles.css switches with one attribute
+     (smart contrast). Absent on the dot grid. Derived in every browser from
+     the ground it draws; nothing is written for it. */
+  const groundHash = useCanvasStore((s) => (s.record ? groundOf(s.record) : null));
+  const groundSample = useGroundSamples((s) => (groundHash ? s.byHash[groundHash] : undefined));
+  const groundTone = useCanvasStore((s) => groundToneAttr(s.record ?? null, groundSample));
+  const groundMid = useCanvasStore(useShallow((s) => groundMidStyle(s.record ?? null, groundSample)));
   /* Stuck (proactive-agent phase 7): the card loads only while this person has said something in the last
      fifteen minutes (core's STUCK_WINDOW_MS, restated so the entry chunk does not carry the module). */
   const recentlyAsked = useCanvasStore((s) => {
@@ -309,6 +318,8 @@ function CanvasSurface({
   const semanticZoom = useUiStore((s) => s.experiments).includes("semantic.zoom");
   const moduleOverlaysVisible = modules().some((module) => module.overlays?.length);
   const groupDialogOpen = useUiStore((s) => s.groupDialog !== null);
+  const uiTweaks = useUiTweaksSignal();
+  const hasCanvasTweaks = useCanvasStore((s) => Boolean(s.record?.properties?.[UI_TWEAKS_PROP]));
   // The canvas's own title, for the tab. Subscribed separately from the
   // contents so a rename repaints the tab and an item move does not.
   const canvasTitle = useCanvasStore((s) => s.record?.title ?? null);
@@ -1060,6 +1071,9 @@ function CanvasSurface({
       } else if (e.key === "/" && !e.metaKey && !e.ctrlKey && !e.altKey && !e.repeat) {
         e.preventDefault();
         startCursorSignal();
+      } else if (e.altKey && !e.metaKey && !e.ctrlKey && e.code === "KeyD" && !e.repeat) {
+        e.preventDefault();
+        toggleUiDevtools();
       } else if (e.key === "?" && !e.metaKey && !e.ctrlKey && !e.repeat) {
         // The key every app with shortcuts has trained people to try.
         e.preventDefault();
@@ -1196,7 +1210,13 @@ function CanvasSurface({
     // `resizing-panel` while the panel's edge is being dragged: chrome that
     // steps aside for the panel eases to its new place, which is right for the
     // one step of opening and wrong for a width changing every frame.
-    <div className={`canvas-page${phone ? " phone-layout" : ""}${panelResizing ? " resizing-panel" : ""}${canEdit ? "" : " read-only"}`}>
+    <div
+      className={`canvas-page${phone ? " phone-layout" : ""}${panelResizing ? " resizing-panel" : ""}${canEdit ? "" : " read-only"}`}
+      data-ground-tone={groundTone}
+      data-ground-sample={groundSample}
+      style={groundMid as CSSProperties | undefined}
+      onContextMenu={chromeTweakMenu}
+    >
       {/* Covered, the canvas keeps its state and stops its paint:
           `visibility` preserves layout and the stores keep replaying, so Esc
           lands at the zoom you left without the covered surface spending
@@ -1217,7 +1237,7 @@ function CanvasSurface({
 
           The colour is the canvas's own ground where it has one, not the
           app's page ground: a starfield is dark in either app theme, and the
-          fade was washing it white from the top edge. `groundTone` names the
+          fade was washing it white from the top edge. `groundToken` names the
           same token the ground itself paints with, so the two cannot drift. */}
       {!workspace && <>
       {!topFadeHidden && (
@@ -1241,7 +1261,6 @@ function CanvasSurface({
       {/* The sprint's clock, when the Chat says one is running — derived,
           like `isocan sprint`; sits under the banners when one is up. */}
       <SprintChip lowered={Boolean(outdated) || Boolean(followedLabel)} canvasId={canvasId!} actor={actor} />
-      {!phone && ripples && <Suspense fallback={null}><RipplePulse canvasId={canvasId!} actor={actor} /></Suspense>}
       {!phone && recentlyAsked && <Suspense fallback={null}><StuckCard canvasId={canvasId!} actor={actor} /></Suspense>}
       {outdated && (
         <button className="follow-banner update-banner" onClick={() => location.reload()}>
@@ -1292,6 +1311,11 @@ function CanvasSurface({
       {helpOpen && (
         <Suspense fallback={null}>
           <HelpPanel />
+        </Suspense>
+      )}
+      {(uiTweaks.open || uiTweaks.hasLocal || hasCanvasTweaks) && (
+        <Suspense fallback={null}>
+          <UiDevtools canvasId={canvasId} actor={actor} />
         </Suspense>
       )}
       <OwnCursor actor={actor} />
