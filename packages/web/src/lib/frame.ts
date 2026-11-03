@@ -73,6 +73,9 @@ export function itemFrame(
  * plus the blob the manifest names — never the app origin, and there is no
  * "trusted" panel that skips the frame. When `origin` is null, or when
  * `blobHash` is not a bare hash token, this returns `null`.
+ * Panels have an opaque origin: ordinary items on the shared content origin
+ * must not access their documents and send operations with the panel's grant.
+ * This deliberately disables panel localStorage; ordinary item storage stays.
  */
 export function panelFrame(
   origin: ContentOrigin | null,
@@ -83,7 +86,7 @@ export function panelFrame(
   if (!/^[a-zA-Z0-9_-]+$/.test(blobHash)) return null;
   const path = origin.ticket ? origin.ticket(canvasId, blobHash) : blobUrl(canvasId, blobHash);
   if (path === null || !path.startsWith("/")) return null;
-  return { src: `${origin.base}${path}`, sandbox: "allow-scripts allow-same-origin" };
+  return { src: `${origin.base}${path}`, sandbox: "allow-scripts" };
 }
 
 /**

@@ -118,7 +118,7 @@ describe("a panel in the dock", () => {
     expect(listed[0].src).toBe("review.html");
     expect(listed[0].side).toBe("left");
     expect(listed[0].actor).toEqual(added.actor);
-    expect(listed[0].can.join("\n")).toContain("cannot send an operation");
+    expect(listed[0].can.join("\n")).toContain("narrow versioned postMessage door");
 
     // Phase 5: a panel's write is attributed to the panel's actor and not to
     // the person watching it, and `isocan activity <extension>` lists those ops.
