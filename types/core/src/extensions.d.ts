@@ -2,6 +2,7 @@ import type { Actor, CanvasContents, Item } from "./model.js";
 import type { Grant } from "./grants.js";
 import { type CommandMetadata } from "./commands.js";
 import { EXTENSION_ACTOR_PREFIX, EXTENSION_COLORS, extensionColor, isExtensionActor } from "./identity.js";
+import { type Operation } from "./ops.js";
 export { EXTENSION_ACTOR_PREFIX, EXTENSION_COLORS, extensionColor, isExtensionActor };
 export declare const TOOL_ROLE = "tool";
 /** The properties that make an item this canvas's tool. */
@@ -191,6 +192,69 @@ export declare function readPanelExtension(text: string, canvas: CanvasContents)
  * named as one.
  */
 export declare function panelCapabilities(panel: PanelExtension): string[];
+/**
+ * The narrow `postMessage` protocol version a hosted panel speaks to isocan
+ * (`docs/projects/extensions/phases.md`, phase 6).
+ */
+export declare const PANEL_BRIDGE_VERSION: 1;
+/** Inbound `postMessage` type a hosted panel sends when asking to perform an operation. */
+export declare const PANEL_OP_MESSAGE_TYPE: "isocan:panel-op";
+/** Outbound `postMessage` type the bridge answers a hosted panel with. */
+export declare const PANEL_OP_RESULT_TYPE: "isocan:panel-op-result";
+/**
+ * The ONLY object the narrow door ever hands back to a hosted panel frame
+ * (extensions phase 6) — never a store, a client, a badge or a snapshot.
+ */
+export type PanelOpResult = {
+    type: typeof PANEL_OP_RESULT_TYPE;
+    version: typeof PANEL_BRIDGE_VERSION;
+    requestId?: string;
+    ok: true;
+    seq: number;
+    id: string;
+} | {
+    type: typeof PANEL_OP_RESULT_TYPE;
+    version: typeof PANEL_BRIDGE_VERSION;
+    requestId?: string;
+    ok: false;
+    code: string;
+    error: string;
+};
+/** Outcome of reading a raw `postMessage` body at the panel's narrow door. */
+type PanelMessageRead = {
+    ok: true;
+    requestId?: string;
+    op: Operation;
+} | {
+    ok: false;
+    requestId?: string;
+    code: string;
+    error: string;
+};
+/**
+ * Validate an inbound `postMessage` payload at the panel's narrow door
+ * (extensions phase 6).
+ *
+ * Returns `null` when `raw` is not addressed to `isocan:panel-op`. When it is:
+ * - Refuses any `version` other than {@link PANEL_BRIDGE_VERSION} rather than
+ *   guessing at what an unknown version means.
+ * - Refuses any `op.type` outside the operation vocabulary, telling the panel
+ *   that proposing a new operation is proposing a product feature.
+ */
+export declare function readPanelOpMessage(raw: unknown): PanelMessageRead | null;
+/**
+ * Construct the sanitized operation result sent back to a hosted panel frame —
+ * never carrying a store, client, badge, token or canvas state.
+ */
+export declare function panelOpResult(outcome: {
+    ok: true;
+    seq: number;
+    id: string;
+} | {
+    ok: false;
+    code: string;
+    error: string;
+}, requestId?: string): PanelOpResult;
 /** Deterministic actor id for a panel item on a canvas (`ext_<suffix>`). */
 export declare function panelActorId(itemId: string): string;
 /** The `Actor` a panel item speaks and writes as on its canvas. */

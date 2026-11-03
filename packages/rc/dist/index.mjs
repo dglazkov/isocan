@@ -2380,6 +2380,8 @@ var init_extensions = __esm({
     "use strict";
     init_commands();
     init_identity();
+    init_ops();
+    init_opwords();
     panelActorRoute = (canvasId, itemId) => `/api/projects/${encodeURIComponent(canvasId)}/panels/${encodeURIComponent(itemId)}/actor`;
   }
 });
