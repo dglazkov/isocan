@@ -1,7 +1,8 @@
 # Journey guardrails — the walk
 
-**Where we are:** phase 1 CLOSED, phases 2–3 NOT STARTED, 5 November 2026.
-Next: phase 2, durable partial results and independent failure reporting. Work is isolated on a draft branch;
+**Where we are:** phases 1–2 CLOSED, phase 3 NOT STARTED, 5 November 2026.
+Next: phase 3, measured timing claims. One integrated deep suite and typecheck
+remain required before pushing the finished branch. Work is isolated on a draft branch;
 merge and deployment are outside this session's authorization.
 
 The November 2 run (41487853956) lost reporting before its failure verdict.
@@ -46,7 +47,8 @@ testing is unchanged. The full integrated pre-push gate belongs to phase 2.
 
 ## Phase 2 — A failure survives interrupted reporting
 
-**Status: NOT STARTED.** 5 November 2026.
+**Status: CLOSED.** 5 November 2026 — interruption, workflow shell and
+end-to-end selftest proofs passed on the draft branch.
 
 **Work:** persist a checkpoint before starting and after each journey; report
 incomplete runs honestly. Stream output, fail the walk before comment posting,
@@ -59,7 +61,22 @@ and runner regressions, then one integrated deep suite and typecheck before push
 
 ### Trajectory
 
-*nothing — implementation has not started.*
+- **2026-11-05** — A checkpoint must precede cleanup, not just the next
+  journey. The failure can otherwise vanish while Chrome is being stopped.
+  SIGKILL regressions preserve it during cleanup and the next rig's setup.
+- **2026-11-05** — The workflow now fails its walk step before network
+  reporting. Step budgets sum to 44 minutes inside a 45-minute job: 15 for
+  setup, 26 for walking, two for artifact upload and one for the comment.
+  Upload is best effort on cancellation, not a promise after a hard job kill.
+
+**Verification:** Node 24.13.0 focused workflow/progress run passed 76 tests
+in three files, exit 0. The conductor independently ran the preceding 73-test
+set and the real `--selftest --checkpoint /tmp/isocan-selftest-checkpoint.json`:
+exit 0 with the required deliberate failure, `complete:true`, `failing:1`,
+`cleanupComplete:true`, and setup/walk/cleanup durations in the checkpoint.
+The shipped workflow shell rejects a failed test, nonzero runner without FAIL,
+false clean exit, missing/incomplete checkpoint and failed tee; the shipped
+orchestrator survives SIGKILL with the prior failure preserved.
 
 ## Phase 3 — Timing claims measured in the browser
 

@@ -1,7 +1,7 @@
 ---
 status: partial
 since: 2026-11-05
-note: "Three phases: bounded browser readiness and CDP, durable interrupted-run evidence, and measured timing assertions. Phase 1 CLOSED on a draft branch; phases 2–3 are pending."
+note: "Three phases: bounded browser readiness and CDP, durable interrupted-run evidence, and measured timing assertions. Phases 1–2 CLOSED on a draft branch; phase 3 and final integrated gates are pending."
 ---
 
 # Journey guardrails

@@ -19,6 +19,7 @@
  *   node scripts/journeys.mjs --json       # the detail, for a person
  *   node scripts/journeys.mjs --failing    # one integer, for a persona's goal
  *   node scripts/journeys.mjs --selftest   # prove a journey can fail
+ *   node scripts/journeys.mjs --checkpoint /tmp/journeys.json # preserve interrupted progress
  *
  * **It boots its own daemon on its own port with its own temp home**, so it
  * never touches anybody's canvases and two runs cannot collide. `port: 0` is
@@ -41,6 +42,7 @@ import { fileURLToPath } from "node:url";
 import { browser, throughTheDoor } from "./lib/browser.mjs";
 import { reapOnExit, startDaemon as ownDaemon } from "./lib/daemon.mjs";
 import { waitForCanvas } from "./lib/canvas-ready.mjs";
+import { walkJourneys } from "./lib/journey-progress.mjs";
 
 const repo = fileURLToPath(new URL("..", import.meta.url));
 const cli = path.join(repo, "packages/cli/bin/isocan.js");
@@ -7298,36 +7300,24 @@ async function main() {
   // whose daemon went away calls `ensureDaemon`) inherits this, and so dies
   // with the run too rather than outliving it unowned.
   process.env.ISOCAN_DAEMON_GUARD_PID = String(process.pid);
-  const results = [];
-  const why = (err) => (err instanceof Error ? err.message : String(err));
-  for (const journey of list) {
-    // A rig of the journey's own: see `rig()` for what sharing one cost.
-    const booted = Date.now();
-    let r = null;
-    const result = { name: journey.name, what: journey.what };
-    try {
-      r = await rig();
-    } catch (err) {
-      results.push({ ...result, ok: false, ms: Date.now() - booted, why: `the rig did not start: ${why(err)}` });
-      continue;
-    }
-    const started = Date.now();
-    try {
-      const proof = await journey.run(r);
-      Object.assign(result, { ok: true, ms: Date.now() - started, ...(proof ? { proof } : {}) });
-    } catch (err) {
-      Object.assign(result, { ok: false, ms: Date.now() - started, why: why(err) });
-    }
-    try {
-      await r.close();
-    } catch (err) {
-      // A walk that passed and left a browser or daemon it could not stop
-      // did not pass: the next one would run beside it.
-      if (result.ok) Object.assign(result, { ok: false, why: `the walk passed, then its rig would not stop: ${why(err)}` });
-    }
-    result.setupMs = started - booted;
-    results.push(result);
-  }
+  const checkpoint = arg("--checkpoint");
+  if (argv.includes("--checkpoint") && (!checkpoint || checkpoint.startsWith("--"))) throw new Error("--checkpoint needs a file path");
+  const human = !asJson && !argv.includes("--failing");
+  const printResult = (x) => {
+    console.log(`${x.ok ? "  ok  " : "FAIL  "}${x.name.padEnd(22)} ${x.what}`);
+    if (!x.ok) console.log(`        ${x.why}`);
+  };
+  const results = await walkJourneys(list, {
+    rig, checkpoint,
+    report: ({ stage, journey, result }) => {
+      if (!human) return;
+      if (stage === "setup") console.log(`START ${journey.name}`);
+      // Report a failure immediately, even if cleanup never returns. A cleanup
+      // failure updates the final result and is printed separately below.
+      if (stage === "cleanup" && !result.ok) printResult(result);
+      if (stage === "result" && (result.ok || result.setupMs === undefined || result.why.includes("its rig would not stop"))) printResult(result);
+    },
+  });
 
   const failed = results.filter((x) => !x.ok);
   // One integer and nothing else, which is what a persona's goal can compare
@@ -7339,10 +7329,6 @@ async function main() {
   if (asJson) {
     console.log(JSON.stringify({ failing: failed.length, results }, null, 2));
   } else {
-    for (const x of results) {
-      console.log(`${x.ok ? "  ok  " : "FAIL  "}${x.name.padEnd(22)} ${x.what}`);
-      if (!x.ok) console.log(`        ${x.why}`);
-    }
     console.log(
       `\n${results.length - failed.length}/${results.length} journeys walked` +
         (failed.length ? ` — ${failed.length} failing` : ""),
