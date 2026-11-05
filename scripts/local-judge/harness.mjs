@@ -152,7 +152,8 @@ async function judgeB() {
     for (let k = 0; k < 100 && !(await b.ev("typeof window.__lab === 'object' && typeof window.__lab.route === 'function'").catch(() => false)); k++) await sleep(100);
     const backend = arg("--backend", "gpu");
     log(`B: ${missing.length} texts on ${backend}`);
-    const res = await b.ev(`window.__lab.route(${JSON.stringify({ backend, question: route.ROUTE_QUESTION, texts: missing, countTokens: true })}).catch((e) => ({ error: String(e && e.message || e) }))`);
+    // CPU batches measured 0.8–3 s per answer; allow 5 s each plus 2 min to load/compile.
+    const res = await b.ev(`window.__lab.route(${JSON.stringify({ backend, question: route.ROUTE_QUESTION, texts: missing, countTokens: true })}).catch((e) => ({ error: String(e && e.message || e) }))`, { timeoutMs: 120_000 + missing.length * 5_000 });
     if (res?.error) throw new Error(`the lab refused: ${res.error}`);
     if (res.crossOriginAttempts?.length || res.cspViolations?.length) log(`B privacy record: ${JSON.stringify({ crossOriginAttempts: res.crossOriginAttempts, cspViolations: res.cspViolations })}`);
     missing.forEach((t, i) => {

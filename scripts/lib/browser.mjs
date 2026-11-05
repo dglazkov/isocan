@@ -119,12 +119,17 @@ async function devtoolsEndpoint(dir, proc) {
 
 /** Poll an expression in the page until it is true, or say what was waited for. */
 export async function until(b, expression, what, ms = 15_000) {
-  const start = Date.now();
-  while (Date.now() - start < ms) {
-    if (await b.ev(expression).catch(() => false)) return;
-    await sleep(200);
+  const deadline = Date.now() + ms;
+  let lastError;
+  while (Date.now() < deadline) {
+    try {
+      if (await b.ev(expression, { timeoutMs: Math.max(1, deadline - Date.now()) })) return;
+      lastError = undefined;
+    } catch (error) { lastError = error; }
+    const remaining = deadline - Date.now();
+    if (remaining > 0) await sleep(Math.min(200, remaining));
   }
-  throw new Error(`timed out waiting for ${what}`);
+  throw new Error(`timed out waiting for ${what}${lastError ? `: ${lastError.message}` : ""}`);
 }
 
 /**
@@ -156,14 +161,110 @@ export async function throughTheDoor(b, origin, name, clientId = "browser") {
   })()`);
 }
 
+/** One CDP socket: every opening, reply and event wait has its own deadline. */
+function cdpChannel(socket, label, timeoutMs) {
+  let nextId = 0, stopped = null;
+  const pending = new Map(), waiters = new Map(), listeners = new Map();
+  const deadline = (ms) => {
+    if (!Number.isFinite(ms) || ms <= 0 || ms > 2 ** 31 - 1) throw new Error("CDP timeoutMs must be a positive finite timer duration");
+    return ms;
+  };
+  deadline(timeoutMs);
+  const waiting = (description, ms, remove) => {
+    deadline(ms);
+    let resolve, reject;
+    const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
+    // Event waits are armed before their triggering command. If that command
+    // fails, cleanup must not turn the abandoned event into an unhandled rejection.
+    // The ORIGINAL promise still rejects when awaited by its owner.
+    promise.catch(() => {});
+    const timer = setTimeout(() => finish(new Error(`${label} CDP timed out waiting for ${description} after ${ms}ms`)), ms);
+    let settled = false;
+    const finish = (error, value) => {
+      if (settled) return;
+      settled = true; clearTimeout(timer); remove();
+      if (error) reject(error); else resolve(value);
+    };
+    return { promise, finish };
+  };
+  const fail = (error) => {
+    if (stopped) return;
+    stopped = error;
+    opening.finish(error);
+    for (const entry of [...pending.values()]) entry.finish(error);
+    for (const group of [...waiters.values()]) for (const entry of [...group]) entry.finish(error);
+    listeners.clear();
+    socket.off("message", message);
+  };
+  const onOpen = () => opening.finish();
+  const opening = waiting("socket opening", timeoutMs, () => socket.off("open", onOpen));
+  const onError = (error) => fail(new Error(`${label} CDP socket error: ${error.message}`));
+  const onClose = () => {
+    fail(new Error(`${label} CDP socket closed`));
+    socket.off("close", onClose); socket.off("error", onError);
+  };
+  const message = (data) => {
+    let m;
+    try { m = JSON.parse(data.toString()); } catch (error) { fail(new Error(`${label} CDP invalid reply: ${error.message}`)); return; }
+    if (m.id) {
+      pending.get(m.id)?.finish(m.error ? new Error(`${label} CDP ${JSON.stringify(m.error)}`) : null, m.result);
+      return; // A late reply after timeout is not an event.
+    }
+    for (const listener of listeners.get(m.method) ?? []) listener(m.params, m.sessionId);
+    for (const entry of [...(waiters.get(m.method) ?? [])]) entry.finish(null, m.params);
+  };
+  socket.on("open", onOpen); socket.on("error", onError); socket.on("close", onClose); socket.on("message", message);
+  if (socket.readyState === 1) onOpen();
+  else if (socket.readyState >= 2) onClose();
+  return {
+    opened: opening.promise,
+    send: (method, params = {}, sessionId, { timeoutMs: ms = timeoutMs } = {}) => {
+      if (stopped) return Promise.reject(stopped);
+      if (socket.readyState !== 1) return Promise.reject(new Error(`${label} CDP socket is not open`));
+      const id = ++nextId;
+      const entry = waiting(method, ms, () => pending.delete(id));
+      pending.set(id, entry); // Arm before send: even a synchronous reply belongs to this call.
+      try {
+        socket.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }), (error) => {
+          if (error) entry.finish(new Error(`${label} CDP ${method} send failed: ${error.message}`));
+        });
+      } catch (error) { entry.finish(error); }
+      return entry.promise;
+    },
+    once: (method, { timeoutMs: ms = timeoutMs } = {}) => {
+      if (stopped) { const promise = Promise.reject(stopped); promise.catch(() => {}); return promise; }
+      if (!waiters.has(method)) waiters.set(method, new Set());
+      const group = waiters.get(method);
+      const entry = waiting(`event ${method}`, ms, () => {
+        group.delete(entry);
+        if (!group.size) waiters.delete(method);
+      });
+      group.add(entry);
+      return entry.promise;
+    },
+    on: (method, listener) => {
+      if (stopped) throw stopped;
+      if (!listeners.has(method)) listeners.set(method, new Set());
+      const group = listeners.get(method);
+      group.add(listener);
+      return () => { group.delete(listener); if (!group.size && listeners.get(method) === group) listeners.delete(method); };
+    },
+    dispose: () => fail(new Error(`${label} CDP connection disposed`)),
+  };
+}
+
 /**
  * `headless: false` omits `--headless=new`, so Chrome opens a visible window.
  * `args` are extra Chrome switches for a caller that measures something the
  * default browser cannot — `scripts/local-judge-measure.mjs` asks for WebGPU,
  * a resolver that reaches nothing but loopback, and a net log. They are
- * appended after the defaults and never replace them.
+ * appended after the defaults and never replace them. `timeoutMs` bounds each
+ * CDP open, reply and event wait (30 s by default). Long batch evaluations may
+ * pass their own finite bound to `ev(expression, { timeoutMs })`; polling uses
+ * its remaining budget instead, so a hung evaluate cannot outlive the poll.
  */
-export async function browser({ proxyServer = null, args = [], headless = true } = {}) {
+export async function browser({ proxyServer = null, args = [], headless = true, timeoutMs = 30_000 } = {}) {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0 || timeoutMs > 2 ** 31 - 1) throw new Error("CDP timeoutMs must be a positive finite timer duration");
   if (proxyServer !== null && !/^http:\/\/127\.0\.0\.1:\d+$/.test(proxyServer)) throw new Error("Browser proxy must be an owned loopback endpoint");
   // **`ws` before Chrome** (cleanup phase 4, DC-1, 27 Sep 2026). This import
   // came after the spawn, so on the release tree — which had no `ws` to give
@@ -203,7 +304,7 @@ export async function browser({ proxyServer = null, args = [], headless = true }
   // nothing held a handle to any more.
   const sockets = [];
   try {
-    return await drive(proc, dir, WebSocket, sockets);
+    return await drive(proc, dir, WebSocket, sockets, timeoutMs);
   } catch (err) {
     // A socket still connecting emits `error` when terminated, and with no
     // listener that would crash the process over the teardown of a failure
@@ -215,22 +316,15 @@ export async function browser({ proxyServer = null, args = [], headless = true }
   }
 }
 
-async function drive(proc, dir, WebSocket, sockets) {
+async function drive(proc, dir, WebSocket, sockets, timeoutMs) {
   const endpoint = await devtoolsEndpoint(dir, proc);
   // The browser endpoint, then a page target of our own — created rather than
   // discovered, so nothing depends on which targets happen to exist.
   const browserWs = new WebSocket(endpoint, { maxPayload: 1 << 28 });
   sockets.push(browserWs);
-  await new Promise((r, j) => { browserWs.once("open", r); browserWs.once("error", j); });
-  let bid = 0; const bpending = new Map();
-  browserWs.on("message", (d) => {
-    const m = JSON.parse(d.toString());
-    if (m.id && bpending.has(m.id)) { bpending.get(m.id)(m); bpending.delete(m.id); }
-  });
-  const bsend = (method, params = {}) => {
-    const mid = ++bid; browserWs.send(JSON.stringify({ id: mid, method, params }));
-    return new Promise((res, rej) => bpending.set(mid, (m) => (m.error ? rej(new Error(JSON.stringify(m.error))) : res(m.result))));
-  };
+  const browserChannel = cdpChannel(browserWs, "browser", timeoutMs);
+  await browserChannel.opened;
+  const bsend = browserChannel.send;
   const { targetId } = await bsend("Target.createTarget", { url: "about:blank" });
   const { targetInfos } = await bsend("Target.getTargets");
   const mine = targetInfos.find((t) => t.targetId === targetId);
@@ -238,25 +332,12 @@ async function drive(proc, dir, WebSocket, sockets) {
   const wsUrl = endpoint.replace(/\/devtools\/browser\/.*$/, `/devtools/page/${targetId}`);
   const ws = new WebSocket(wsUrl, { maxPayload: 1 << 28 });
   sockets.push(ws);
-  await new Promise((r, j) => { ws.once("open", r); ws.once("error", j); });
-  let id = 0; const pending = new Map(); let errors = [];
-  /** Callers waiting on a CDP EVENT rather than a reply — see `once`. */
-  const waiters = new Map();
-  const listeners = new Map();
-  ws.on("message", (d) => {
-    const m = JSON.parse(d.toString());
-    if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); return; }
-    for (const listener of listeners.get(m.method) ?? []) listener(m.params, m.sessionId);
-    if (m.method === "Runtime.exceptionThrown") errors.push((m.params.exceptionDetails?.exception?.description ?? "").split("\n")[0]);
-    const w = waiters.get(m.method);
-    if (w) { waiters.delete(m.method); w(m.params); }
-  });
-  // `sessionId` speaks to a target attached with `Target.setAutoAttach({ flatten: true })` —
-  // a Worker the page started — over this same socket.
-  const send = (method, params = {}, sessionId) => {
-    const mid = ++id; ws.send(JSON.stringify({ id: mid, method, params, ...(sessionId ? { sessionId } : {}) }));
-    return new Promise((res, rej) => pending.set(mid, (m) => (m.error ? rej(new Error(JSON.stringify(m.error))) : res(m.result))));
-  };
+  const pageChannel = cdpChannel(ws, "page", timeoutMs);
+  await pageChannel.opened;
+  let errors = [];
+  pageChannel.on("Runtime.exceptionThrown", (params) => errors.push((params.exceptionDetails?.exception?.description ?? "").split("\n")[0]));
+  // sessionId addresses a flattened Worker target over this same socket.
+  const send = pageChannel.send;
   await send("Page.enable"); await send("Runtime.enable");
   let closing;
   return {
@@ -265,12 +346,7 @@ async function drive(proc, dir, WebSocket, sockets) {
     pid: proc.pid,
     /** Observe every occurrence, including requests for images and frames.
      * Return an unsubscribe function so a journey can bound its observation. */
-    on: (method, listener) => {
-      if (!listeners.has(method)) listeners.set(method, new Set());
-      const group = listeners.get(method);
-      group.add(listener);
-      return () => { group.delete(listener); if (group.size === 0 && listeners.get(method) === group) listeners.delete(method); };
-    },
+    on: pageChannel.on,
     /**
      * **Arm a listener for one CDP event, BEFORE the thing that causes it.**
      *
@@ -278,9 +354,9 @@ async function drive(proc, dir, WebSocket, sockets) {
      * that a fast load wins, and the symptom of losing it is a wait that
      * never ends. So callers arm, then act, then await.
      */
-    once: (method) => new Promise((res) => waiters.set(method, res)),
-    ev: async (e) => {
-      const r = await send("Runtime.evaluate", { expression: e, returnByValue: true, awaitPromise: true });
+    once: pageChannel.once,
+    ev: async (e, options) => {
+      const r = await send("Runtime.evaluate", { expression: e, returnByValue: true, awaitPromise: true }, undefined, options);
       if (r.exceptionDetails) {
         const d = r.exceptionDetails;
         throw new Error(`probe threw: ${d.exception?.description ?? d.text}`.split("\n")[0]);
@@ -289,7 +365,7 @@ async function drive(proc, dir, WebSocket, sockets) {
     },
     takeErrors: () => { const e = errors; errors = []; return e; },
     close: () => closing ??= (async () => {
-      listeners.clear();
+      pageChannel.dispose(); browserChannel.dispose();
       // The browser control socket keeps Node alive just as the page socket
       // does. Close both, and terminate a peer that never finishes its close.
       await Promise.all([ws, browserWs].map((socket) => new Promise((resolve) => {

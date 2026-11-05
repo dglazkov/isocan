@@ -40,6 +40,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { browser, throughTheDoor } from "./lib/browser.mjs";
 import { reapOnExit, startDaemon as ownDaemon } from "./lib/daemon.mjs";
+import { waitForCanvas } from "./lib/canvas-ready.mjs";
 
 const repo = fileURLToPath(new URL("..", import.meta.url));
 const cli = path.join(repo, "packages/cli/bin/isocan.js");
@@ -336,8 +337,14 @@ async function rig() {
       });
     },
     go: async (route = "/") => {
+      const loaded = b.once("Page.loadEventFired");
       await b.send("Page.navigate", { url: origin + route });
-      await sleep(900);
+      await loaded;
+      if (/^\/p\/[^/]+$/.test(route)) {
+        await waitForCanvas(b, route);
+      } else {
+        await sleep(900);
+      }
     },
     /**
      * Browser, then daemon, then home. Each step runs even when the one
@@ -377,7 +384,8 @@ async function makeCanvas(rig, title) {
     return h.closest("a").getAttribute("href").split("/").pop();
   })()`);
   await rig.go(`/p/${id}`);
-  await untilOrSay(rig.b, `!!document.querySelector(".world")`, "the canvas to open");
+  // go waits for this canvas AND its arrival surface to finish. A .world
+  // alone also exists underneath the still-loading canvas-finding overlay.
   return id;
 }
 

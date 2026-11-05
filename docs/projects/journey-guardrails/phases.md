@@ -1,7 +1,7 @@
 # Journey guardrails — the walk
 
-**Where we are:** phases 1–3 NOT STARTED, 5 November 2026. Next: phase 1,
-bounded browser readiness and transport. Work is isolated on a draft branch;
+**Where we are:** phase 1 CLOSED, phases 2–3 NOT STARTED, 5 November 2026.
+Next: phase 2, durable partial results and independent failure reporting. Work is isolated on a draft branch;
 merge and deployment are outside this session's authorization.
 
 The November 2 run (41487853956) lost reporting before its failure verdict.
@@ -13,7 +13,8 @@ to explain away a slow runner. The design is in [design.md](design.md).
 
 ## Phase 1 — A browser either becomes ready or fails
 
-**Status: NOT STARTED.** 5 November 2026.
+**Status: CLOSED.** 5 November 2026 — readiness and transport proofs passed
+on the draft branch; nothing merged or deployed.
 
 **Work:** bound Chrome socket connection, CDP replies and event waits, release
 pending calls on disconnect, and retain owned cleanup. Wait for actual canvas
@@ -27,7 +28,21 @@ startup/teardown guards; built-browser `design-contract`, `design-lint`,
 
 ### Trajectory
 
-*nothing — implementation has not started.*
+- **2026-11-05** — `canvas-finding` is the class rendered by
+  `CanvasArrivalVeil`; `.world` can mount beneath it. Both Undo journeys passed
+  at native speed and the controlled 6× CPU probe also passed. The CI failures
+  remain observations, not confirmed product defects.
+- **2026-11-05** — The shared transport also serves long local-judge batches.
+  Those callers now declare a finite budget derived from their documented
+  CPU measurements instead of inheriting the 30-second interactive bound.
+
+**Verification:** conductor focused run: 6 files, 63 tests, exit 0 on Node
+24.13.0 (`browser-transport`, `browser-start`, `browser-teardown`, `canvas-ready`,
+`journeys`, `records`). Built app and isolated browser walks `design-contract`,
+`design-lint`, `text-tool`, and `--selftest` all exited 0. The selftest printed
+its intentional failure. Readiness tests execute the shipped expression against
+mounted, fading, permanently covered and wrong-route DOM states; pointer hit
+testing is unchanged. The full integrated pre-push gate belongs to phase 2.
 
 ## Phase 2 — A failure survives interrupted reporting
 

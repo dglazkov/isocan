@@ -1,3 +1,9 @@
+---
+status: partial
+since: 2026-11-05
+note: "Three phases: bounded browser readiness and CDP, durable interrupted-run evidence, and measured timing assertions. Phase 1 CLOSED on a draft branch; phases 2–3 are pending."
+---
+
 # Journey guardrails
 
 This discharges three harness debts: DOM presence mistaken for usable canvas,
