@@ -1,5 +1,5 @@
 import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, chmodSync } from "node:fs";
-import { execFileSync, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -100,7 +100,7 @@ describe("failure is recorded before optional network reporting", () => {
       });
       expect(done.status).toBe(9);
       expect(readFileSync(path.join(dir, "journeys-comment.md"), "utf8")).toContain("FAIL  pen");
-    } finally { rmSync(dir, { recursive: true, force: true }); }
+    } finally { rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
   });
 });
 

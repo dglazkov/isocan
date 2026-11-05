@@ -42,6 +42,7 @@ import { fileURLToPath } from "node:url";
 import { browser, throughTheDoor } from "./lib/browser.mjs";
 import { reapOnExit, startDaemon as ownDaemon } from "./lib/daemon.mjs";
 import { waitForCanvas } from "./lib/canvas-ready.mjs";
+import { observeGroundSleep, finishGroundSleep, movePointerFor } from "./lib/ground-timing.mjs";
 import { walkJourneys } from "./lib/journey-progress.mjs";
 
 const repo = fileURLToPath(new URL("..", import.meta.url));
@@ -1742,6 +1743,7 @@ export const JOURNEYS = [
         })()`);
 
         const y = spot.y + 190;
+        await observeGroundSleep(b);
         let awakeSeen = false;
         let shot = null;
         for (let i = 0; i <= 30; i++) {
@@ -1753,7 +1755,6 @@ export const JOURNEYS = [
             writeFileSync(shot, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
           }
         }
-        const stoppedAt = Date.now();
         const over = await lean(spot.x + 190);
         const across = await lean(far.x + 45);
         const nearLight = await lightAt(spot.x + 245, spot.y + 55);
@@ -1767,9 +1768,8 @@ export const JOURNEYS = [
         if (farLight === null) throw new Error("the far card is not on the page");
         if (farLight !== "") throw new Error(`a card far from every lit ribbon is lit: ${farLight}`);
 
-        await until(b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the aurora to fall asleep after the cursor stopped", 6000);
-        const sleptAfter = Date.now() - stoppedAt;
-        if (sleptAfter > 3500) throw new Error(`the aurora took ${sleptAfter}ms to fall asleep — the bound is 3500`);
+        const sleepTiming = await finishGroundSleep(b, "aurora");
+        const sleptAfter = sleepTiming.sleptAfterMs;
         const asleep = (await groundNow(b)).frames;
         await sleep(1500);
         const later = await groundNow(b);
@@ -1780,7 +1780,7 @@ export const JOURNEYS = [
         const leftLight = await lightAt(spot.x + 245, spot.y + 55);
         if (leftLean !== 0) throw new Error(`the ribbons still lean ${leftLean} after the aurora slept`);
         if (leftLight !== "") throw new Error(`the card is still lit after the aurora slept: ${leftLight}`);
-        Object.assign(proof, { awake: awakeSeen, frames: moving.frames - before, leanOver: over, leanAcross: across, nearLight: parseFloat(nearLight), farLight: "none", sleptAfterMs: sleptAfter, framesAsleep: 0, leanAfter: 0, lightCleared: true, screenshot: shot });
+        Object.assign(proof, { awake: awakeSeen, frames: moving.frames - before, leanOver: over, leanAcross: across, nearLight: parseFloat(nearLight), farLight: "none", sleptAfterMs: sleptAfter, sleepTiming, framesAsleep: 0, leanAfter: 0, lightCleared: true, screenshot: shot });
       }
       proof.reducedMotion = await stillUnderReducedMotion(rig, id, "aurora");
       return proof;
@@ -1853,6 +1853,7 @@ export const JOURNEYS = [
         const flat = await ripple(end.x, end.y);
         if (flat !== 0) throw new Error(`the water is not flat before anything touched it (${flat})`);
 
+        await observeGroundSleep(b);
         let awakeSeen = false;
         let shot = null;
         for (let i = 0; i <= 30; i++) {
@@ -1865,7 +1866,6 @@ export const JOURNEYS = [
             writeFileSync(shot, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
           }
         }
-        const stoppedAt = Date.now();
         const crossed = await ripple(end.x, end.y);
         const far = await ripple(end.x + 500, end.y + 420);
         const moving = await groundNow(b);
@@ -1874,16 +1874,15 @@ export const JOURNEYS = [
         if (!(crossed > 0.02)) throw new Error(`the water is flat (${crossed}) where the cursor just crossed it`);
         if (!(far < crossed / 4)) throw new Error(`the water far from the cursor stands ${far}, against ${crossed} under it`);
 
-        await until(b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the pond to fall asleep after the cursor stopped", 6000);
-        const sleptAfter = Date.now() - stoppedAt;
-        if (sleptAfter > 3500) throw new Error(`the pond took ${sleptAfter}ms to fall asleep — the bound is 3500`);
+        const sleepTiming = await finishGroundSleep(b, "pond");
+        const sleptAfter = sleepTiming.sleptAfterMs;
         const asleep = (await groundNow(b)).frames;
         await sleep(1500);
         const later = await groundNow(b);
         if (later.frames !== asleep || later.state !== "asleep") {
           throw new Error(`the pond drew ${later.frames - asleep} frames while asleep (state ${later.state})`);
         }
-        Object.assign(proof, { awake: awakeSeen, frames: moving.frames - before, rippleBefore: flat, rippleAtCrossed: crossed, rippleFar: far, sleptAfterMs: sleptAfter, framesAsleep: 0, screenshot: shot });
+        Object.assign(proof, { awake: awakeSeen, frames: moving.frames - before, rippleBefore: flat, rippleAtCrossed: crossed, rippleFar: far, sleptAfterMs: sleptAfter, sleepTiming, framesAsleep: 0, screenshot: shot });
       }
       proof.reducedMotion = await stillUnderReducedMotion(rig, id, "pond");
       return proof;
@@ -1961,6 +1960,7 @@ export const JOURNEYS = [
         const unraked = await raked(mid.x, mid.y);
         if (unraked !== 0) throw new Error(`the sand is raked before anything touched it (${unraked})`);
 
+        await observeGroundSleep(b);
         let awakeSeen = false;
         let shot = null;
         for (let i = 0; i <= 30; i++) {
@@ -1973,7 +1973,6 @@ export const JOURNEYS = [
             writeFileSync(shot, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
           }
         }
-        const stoppedAt = Date.now();
         const crossed = await raked(mid.x, mid.y);
         const far = { x: world.right - 220, y: world.bottom - 160 };
         const farRaked = await raked(far.x, far.y);
@@ -1983,9 +1982,8 @@ export const JOURNEYS = [
         if (!(crossed > 0.8)) throw new Error(`the sand is raked ${crossed} where the cursor just crossed it`);
         if (farRaked !== 0) throw new Error(`the sand is raked ${farRaked} far from anywhere the cursor went`);
 
-        await until(b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the garden to fall asleep after the cursor stopped", 6000);
-        const sleptAfter = Date.now() - stoppedAt;
-        if (sleptAfter > 3500) throw new Error(`the garden took ${sleptAfter}ms to fall asleep — the bound is 3500`);
+        const sleepTiming = await finishGroundSleep(b, "garden");
+        const sleptAfter = sleepTiming.sleptAfterMs;
         const asleep = (await groundNow(b)).frames;
         const held = await raked(mid.x, mid.y);
         await sleep(1500);
@@ -1997,15 +1995,14 @@ export const JOURNEYS = [
         if (!(held > 0.8)) throw new Error(`asleep ${sleptAfter}ms after the walk, the line has already softened to ${held}`);
         if (heldLater !== held) throw new Error(`the line softened while the garden slept (${held} → ${heldLater})`);
 
-        // Awake time elsewhere: about 3 s of it softens the line by about 3/20.
-        for (let i = 0; i < 100; i++) {
-          await b.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: far.x + (i % 2) * 8, y: far.y + ((i >> 1) % 2) * 8, button: "none", buttons: 0 });
-          await sleep(30);
-        }
-        await until(b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the garden to fall asleep after the second walk", 6000);
+        // CDP round trips count toward the three seconds too. A fixed 100
+        // moves plus 30ms sleeps took over 11s with 80ms response latency.
+        await observeGroundSleep(b);
+        const movement = await movePointerFor(b, (i) => ({ x: far.x + (i % 2) * 8, y: far.y + ((i >> 1) % 2) * 8 }));
+        const secondSleepTiming = await finishGroundSleep(b, "garden");
         const softened = await raked(mid.x, mid.y);
-        if (!(softened < held - 0.08 && softened > held - 0.4)) throw new Error(`after about 3 s awake elsewhere the line went ${held} → ${softened}; about ${(held - 0.17).toFixed(2)} was expected`);
-        Object.assign(proof, { awake: awakeSeen, frames: moving.frames - before, rakedBefore: unraked, rakedAtCrossed: crossed, rakedFar: farRaked, sleptAfterMs: sleptAfter, framesAsleep: 0, heldAsleep: heldLater, afterAwakeElsewhere: softened, screenshot: shot });
+        if (!(softened < held - 0.08 && softened > held - 0.4)) throw new Error(`after ${secondSleepTiming.inputDurationMs}ms of input elsewhere (${movement.moves} moves) the line went ${held} → ${softened}; about ${(held - 0.17).toFixed(2)} was expected`);
+        Object.assign(proof, { awake: awakeSeen, frames: moving.frames - before, rakedBefore: unraked, rakedAtCrossed: crossed, rakedFar: farRaked, sleptAfterMs: sleptAfter, sleepTiming, framesAsleep: 0, heldAsleep: heldLater, afterAwakeElsewhere: softened, movement, secondSleepTiming, screenshot: shot });
       }
       proof.reducedMotion = await stillUnderReducedMotion(rig, id, "zen");
       return proof;

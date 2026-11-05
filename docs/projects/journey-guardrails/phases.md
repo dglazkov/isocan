@@ -1,9 +1,9 @@
 # Journey guardrails — the walk
 
-**Where we are:** phases 1–2 CLOSED, phase 3 NOT STARTED, 5 November 2026.
-Next: phase 3, measured timing claims. One integrated deep suite and typecheck
-remain required before pushing the finished branch. Work is isolated on a draft branch;
-merge and deployment are outside this session's authorization.
+**Where we are:** phases 1–3 CLOSED on the draft branch, 5 November 2026.
+The scoped local proofs hold; no merge or deployment has occurred. Hosted
+journey failures outside these proofs remain open below. Final integration
+verification is recorded at the end of this page.
 
 The November 2 run (41487853956) lost reporting before its failure verdict.
 The November 5 run (42055435592, source 3299d27) completed 45/57 journeys:
@@ -80,7 +80,9 @@ orchestrator survives SIGKILL with the prior failure preserved.
 
 ## Phase 3 — Timing claims measured in the browser
 
-**Status: NOT STARTED.** 5 November 2026.
+**Status: CLOSED.** 5 November 2026 — isolated browser walks and controlled
+latency reproduce and correct the timing measurement error without changing
+product code or thresholds.
 
 **Work:** inspect and reproduce the November 5 ground-motion and timing failures
 with isolated browser walks. Record elapsed time and measurement boundaries;
@@ -93,4 +95,42 @@ paid reviewer is required merely to classify these findings.
 
 ### Trajectory
 
-*nothing — implementation has not started.*
+- **2026-11-05** — One hundred pointer calls plus 30 ms sleeps are not three
+  seconds. Injecting 80 ms response latency made Zen's movement last 12,081.7 ms
+  and fail its unchanged softening assertion. The duration-based loop passed
+  the same experiment with 2,959.1 ms of browser input and 26 real pointer moves.
+- **2026-11-05** — Aurora, Pond and Zen now measure trusted pointer input to
+  sleep transition inside the browser. A host read four seconds late preserves
+  the observed 2,500 ms transition; a real 3,501 ms transition still fails the
+  unchanged 3,500 ms bound.
+- **2026-11-05** — Open: the hosted run's ground-motion two-frame observation
+  did not reproduce locally (Full 35 frames, Calm one). A hosted rerun after
+  owner-approved merge is needed to classify the CI environment differences.
+- **2026-11-05** — Open: meadow-others, snow, lift, chat-bottom,
+  proactive-brief-card and proactive-words were not investigated in this scoped
+  change. Other ground timing callers remain unchanged and require their own
+  browser proof before adopting the new clock.
+
+**Verification:** Node 24.13.0 baseline walks `ground-motion`, `zen`, `aurora`
+and `pond` passed. Final changed walks passed: Zen sleep 1,550 ms and input
+2,990.3 ms; Aurora sleep 2,532 ms; Pond sleep 2,616.5 ms. Under the same 80 ms
+injected delay, corrected Zen softened from 0.95006 to 0.78840 and passed,
+compared with 0.94923 to 0.33759 and failure before the correction. Conductor
+focused run: 68 tests in five files, exit 0. No full 57-journey walk was repeated.
+
+## Integrated verification
+
+One `npm run test:deep` run on Node 24.13.0 completed in 483 seconds:
+895 files passed, one failed and 11 skipped; 9,428 tests passed, one failed and
+115 skipped. Its sole failure was the repository cleanup guard: eight new test
+scratch-directory removals lacked retry options. Those calls now use the
+existing bounded retry policy; the affected progress/journey tests and teardown
+guard passed all 48 tests. Only test cleanup options and removal of an unused test import changed in
+code after that run;
+the expensive whole suite was not repeated. Firestore-dependent tests remain
+for the strict CI lane (112 skips), alongside three existing optional cases.
+The full log and focused correction evidence are retained with this task.
+Workspace typechecks passed. The root test typecheck found one unused import;
+removing it made the root check pass. Final record, changelog, cleanup and
+journey checks passed all 62 tests; project status lint and the generated
+roadmap check were clean. Verification used Node 24.13.0; CI pins 24.22.1.

@@ -1,7 +1,7 @@
 ---
-status: partial
+status: built
 since: 2026-11-05
-note: "Three phases: bounded browser readiness and CDP, durable interrupted-run evidence, and measured timing assertions. Phases 1–2 CLOSED on a draft branch; phase 3 and final integrated gates are pending."
+note: "Three phases: bounded browser readiness and CDP, durable interrupted-run evidence, and measured timing assertions. Phases 1–3 CLOSED with local proofs on a draft branch; hosted observations and strict CI remain explicit follow-up."
 ---
 
 # Journey guardrails
@@ -12,8 +12,10 @@ and its reporting finish.
 
 Readiness observes the application's actual loading surfaces with an explicit
 deadline. It neither removes overlays nor bypasses the existing pointer hit
-test. The `canvas-finding` loading surface and arrival veil must be observed
-separately; their shared effect does not establish a shared cause.
+test. Source inspection confirmed that `canvas-finding` is rendered by
+`CanvasArrivalVeil`: the world can mount underneath it. The reported Undo
+obstructions did not reproduce locally, so the guard establishes readiness
+without claiming a confirmed product defect.
 
 The shared browser helper owns request timers, event waits and socket lifecycle.
 A timeout names the operation; a closed connection rejects pending work. A

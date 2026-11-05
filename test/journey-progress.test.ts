@@ -30,7 +30,7 @@ describe("durable journey progress", () => {
       expect(results[0].cleanupMs).toBeGreaterThanOrEqual(0);
       expect(verifyJourneyCheckpoint(checkpoint)).toMatchObject({ complete: true, failing: 0, active: null, results });
       expect(readdirSync(dir)).toEqual(["checkpoint.json"]);
-    } finally { rmSync(dir, { recursive: true, force: true }); }
+    } finally { rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
   });
 
   it.each(["setup", "walk", "cleanup"])("records a %s failure and still walks the next journey", async (stage) => {
@@ -52,7 +52,7 @@ describe("durable journey progress", () => {
       expect(closes).toBe(stage === "setup" ? 1 : 2);
       expect(load(checkpoint)).toMatchObject({ complete: true, failing: 1, active: null });
       expect(() => verifyJourneyCheckpoint(checkpoint)).toThrow("records 1 failing");
-    } finally { rmSync(dir, { recursive: true, force: true }); }
+    } finally { rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
   });
 
   it("closes the owned rig even when writing its next checkpoint fails", async () => {
@@ -63,12 +63,12 @@ describe("durable journey progress", () => {
         checkpoint,
         rig: async () => {
           // Make the next write impossible after a rig has been acquired.
-          rmSync(dir, { recursive: true });
+          rmSync(dir, { recursive: true, maxRetries: 5, retryDelay: 100 });
           return { close: async () => { closed = true; } };
         },
       })).rejects.toThrow();
       expect(closed).toBe(true);
-    } finally { rmSync(dir, { recursive: true, force: true }); }
+    } finally { rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
   });
 
   it.each(["cleanup", "next-setup"])("survives SIGKILL during %s with the known failure intact", async (hang) => {
@@ -101,7 +101,7 @@ await walkJourneys([
         results: [{ name: "one", ok: false, why: "known assertion failure", cleanupComplete: hang !== "cleanup" }],
       });
       expect(() => verifyJourneyCheckpoint(checkpoint)).toThrow("incomplete or inconsistent");
-    } finally { child.kill("SIGKILL"); await exited; rmSync(dir, { recursive: true, force: true }); }
+    } finally { child.kill("SIGKILL"); await exited; rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
   });
 
   it("refuses missing, malformed, inconsistent and unfinished evidence", async () => {
@@ -115,7 +115,7 @@ await walkJourneys([
         writeFileSync(checkpoint, JSON.stringify({ ...clean, ...changed }));
         expect(() => verifyJourneyCheckpoint(checkpoint)).toThrow("incomplete or inconsistent");
       }
-    } finally { rmSync(dir, { recursive: true, force: true }); }
+    } finally { rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
   });
 });
 
@@ -140,5 +140,5 @@ it.each(["--json", "--failing", "--only"])("preserves %s output and exit semanti
     if (mode === "--json") expect(JSON.parse(lines.join("\n"))).toMatchObject({ failing: 1, results: [{ name: "one", ok: false }] });
     else if (mode === "--failing") expect(lines).toEqual(["1"]);
     else { expect(lines).toEqual([]); expect(readdirSync(dir)).toEqual([]); }
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+  } finally { rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
 });
