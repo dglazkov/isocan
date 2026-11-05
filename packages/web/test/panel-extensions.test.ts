@@ -6,12 +6,23 @@ import { describe, expect, it } from "vitest";
 import {
   EXTENSION_COLORS,
   IDENTITY_COLORS,
+  PANEL_BRIDGE_VERSION,
+  PANEL_OP_MESSAGE_TYPE,
+  PANEL_OP_RESULT_TYPE,
+  panelActorId,
+  panelActorRoute,
+  panelSubject,
   readPanelExtension,
   type CanvasContents,
   type Item,
+  type PanelOpResult,
 } from "@isocan/core";
 import { ExtensionPanelSurface } from "../src/components/ExtensionPanel.tsx";
-import { panelFrame, type ContentOrigin } from "../src/lib/frame.ts";
+import { itemFrame, panelFrame, type ContentOrigin } from "../src/lib/frame.ts";
+import {
+  bridgePanelFrame,
+  clearPanelBridgeCredentials,
+} from "../src/lib/panelBridge.ts";
 import {
   extensionColor,
   panelUnavailableSentence,
@@ -93,7 +104,8 @@ describe("extensions phase 4: the panel frame on the content origin", () => {
     expect(html).toContain(
       'src="http://127.0.0.1:4442/api/projects/prj_acme/blobs/hash_itm_page"',
     );
-    expect(html).toContain('sandbox="allow-scripts allow-same-origin"');
+    expect(html).toContain('sandbox="allow-scripts"');
+    expect(itemFrame(contentOrigin, "prj_acme", "hash_itm_page")?.sandbox).toBe("allow-scripts allow-same-origin");
 
     // Never falls back to the app origin when contentBase() is null.
     expect(panelFrame(null, "prj_acme", "hash_itm_page")).toBeNull();
@@ -209,5 +221,341 @@ describe("extensions phase 4: the panel frame on the content origin", () => {
     openPanel("prj_acme", null, false, false);
     expect(useUiStore.getState().extensionPanelOpen).toBe(false);
     expect(useUiStore.getState().extensionPanelId).toBeNull();
+  });
+});
+
+describe("extensions phase 6: the narrow door (postMessage bridge)", () => {
+  function makeMockWindow() {
+    const listeners = new Set<(e: MessageEvent) => void>();
+    return {
+      addEventListener(type: string, fn: EventListener) {
+        if (type === "message") listeners.add(fn as (e: MessageEvent) => void);
+      },
+      removeEventListener(type: string, fn: EventListener) {
+        if (type === "message") listeners.delete(fn as (e: MessageEvent) => void);
+      },
+      dispatch(event: Partial<MessageEvent>) {
+        for (const fn of listeners) fn(event as MessageEvent);
+      },
+    };
+  }
+
+  it.each(["detach", "replace"])("does not dispatch after delayed enrollment when the frame is %s", async (change) => {
+    clearPanelBridgeCredentials();
+    const win = makeMockWindow();
+    const replies: unknown[] = [];
+    const frame = { postMessage: (value: unknown) => replies.push(value) } as unknown as Window;
+    let current: Window | null = frame;
+    let enrolled!: (response: Response) => void;
+    const calls: string[] = [];
+    const cleanup = bridgePanelFrame({ canvasId: "prj_late", itemId: "itm_panel", win,
+      frameWindow: () => current, fetchImpl: async (input) => {
+        calls.push(String(input));
+        return new Promise<Response>((resolve) => { enrolled = resolve; });
+      } });
+    win.dispatch({ origin: "null", source: frame, data: { type: PANEL_OP_MESSAGE_TYPE, version: 1,
+      op: { type: "item.move", itemId: "itm_page", x: 1, y: 2 } } });
+    if (change === "detach") cleanup();
+    else current = { postMessage: () => { throw new Error("replacement received stale reply"); } } as unknown as Window;
+    enrolled(new Response(JSON.stringify({ token: "synthetic", actor: { id: "ext_panel", name: "Acme" } })));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(calls).toEqual([panelActorRoute("prj_late", "itm_panel")]);
+    expect(replies).toEqual([]);
+    cleanup();
+  });
+
+  it("drops a delayed operation reply after teardown", async () => {
+    clearPanelBridgeCredentials();
+    const win = makeMockWindow(), replies: unknown[] = [];
+    const frame = { postMessage: (value: unknown) => replies.push(value) } as unknown as Window;
+    let complete!: (response: Response) => void;
+    const cleanup = bridgePanelFrame({ canvasId: "prj_response", itemId: "itm_panel", win,
+      frameWindow: () => frame, fetchImpl: async (input) => {
+        if (String(input).endsWith("/actor")) return new Response(JSON.stringify({ token: "synthetic", actor: { id: "ext_panel", name: "Acme" } }));
+        return new Promise<Response>((resolve) => { complete = resolve; });
+      } });
+    win.dispatch({ origin: "null", source: frame, data: { type: PANEL_OP_MESSAGE_TYPE, version: 1,
+      op: { type: "item.move", itemId: "itm_page", x: 1, y: 2 } } });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    cleanup();
+    complete(new Response(JSON.stringify({ seq: 1, envelope: { id: "op_late" } })));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(replies).toEqual([]);
+  });
+
+  it("requires a live bound frame and its exact message source", async () => {
+    clearPanelBridgeCredentials();
+    const win = makeMockWindow();
+    const frame = { postMessage() {} } as unknown as Window;
+    let currentFrame: Window | null = frame;
+    const requests: string[] = [];
+    const replies: PanelOpResult[] = [];
+    const cleanup = bridgePanelFrame({
+      canvasId: "prj_acme",
+      itemId: "itm_panel",
+      frameWindow: () => currentFrame,
+      win,
+      fetchImpl: async (input) => {
+        requests.push(String(input));
+        return new Response("{}", { status: 403 });
+      },
+      onReply: (reply) => replies.push(reply),
+    });
+    const data = {
+      type: PANEL_OP_MESSAGE_TYPE,
+      version: PANEL_BRIDGE_VERSION,
+      op: { type: "item.move", itemId: "itm_page", x: 10, y: 20 },
+    };
+    win.dispatch({ origin: "null", source: null, data });
+    win.dispatch({ origin: "null", source: {} as Window, data });
+    currentFrame = null;
+    win.dispatch({ origin: "null", source: frame, data });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(requests).toEqual([]);
+    expect(replies).toEqual([]);
+    cleanup();
+  });
+
+  it("ignores nonopaque messages even from the bound window", async () => {
+    clearPanelBridgeCredentials();
+    const win = makeMockWindow();
+    const calls: string[] = [];
+    const replies: PanelOpResult[] = [];
+    const frameReplies: unknown[] = [];
+    const fakeFrame = {
+      postMessage(msg: unknown) {
+        frameReplies.push(msg);
+      },
+    } as unknown as Window;
+
+    const cleanup = bridgePanelFrame({
+      canvasId: "prj_acme",
+      itemId: "itm_panel",
+      frameWindow: () => fakeFrame,
+      win,
+      fetchImpl: async (input) => {
+        calls.push(String(input));
+        return new Response("{}", { status: 200 });
+      },
+      onReply: (res) => replies.push(res),
+    });
+
+    for (const badOrigin of [
+      "http://127.0.0.1:4441",
+      "https://evil.example",
+      "http://127.0.0.1:4442",
+      "",
+    ]) {
+      win.dispatch({
+        origin: badOrigin,
+        source: fakeFrame,
+        data: {
+          type: PANEL_OP_MESSAGE_TYPE,
+          version: PANEL_BRIDGE_VERSION,
+          requestId: "req_ignore",
+          op: { type: "item.move", itemId: "itm_page", x: 10, y: 20 },
+        },
+      });
+    }
+
+    await new Promise((r) => setTimeout(r, 20));
+    expect(calls).toEqual([]);
+    expect(replies).toEqual([]);
+    expect(frameReplies).toEqual([]);
+    cleanup();
+  });
+
+  it("refuses an unknown protocol version rather than guessing at it", async () => {
+    clearPanelBridgeCredentials();
+    const win = makeMockWindow();
+    const calls: string[] = [];
+    const frameReplies: Array<{ msg: PanelOpResult; targetOrigin: string }> = [];
+    const fakeFrame = {
+      postMessage(msg: PanelOpResult, targetOrigin: string) {
+        frameReplies.push({ msg, targetOrigin });
+      },
+    } as unknown as Window;
+
+    const cleanup = bridgePanelFrame({
+      canvasId: "prj_acme",
+      itemId: "itm_panel",
+      frameWindow: () => fakeFrame,
+      win,
+      fetchImpl: async (input) => {
+        calls.push(String(input));
+        return new Response("{}", { status: 200 });
+      },
+    });
+
+    win.dispatch({
+      origin: "null",
+      source: fakeFrame,
+      data: {
+        type: PANEL_OP_MESSAGE_TYPE,
+        version: 2,
+        requestId: "req_v2",
+        op: { type: "item.move", itemId: "itm_page", x: 10, y: 20 },
+      },
+    });
+
+    expect(calls).toEqual([]);
+    expect(frameReplies).toHaveLength(1);
+    expect(frameReplies[0]!.targetOrigin).toBe("*");
+    expect(frameReplies[0]!.msg).toEqual({
+      type: PANEL_OP_RESULT_TYPE,
+      version: PANEL_BRIDGE_VERSION,
+      requestId: "req_v2",
+      ok: false,
+      code: "bad-version",
+      error: expect.stringContaining("not supported"),
+    });
+    expect(Object.isFrozen(frameReplies[0]!.msg)).toBe(true);
+    cleanup();
+  });
+
+  it("refuses an operation outside the vocabulary, tells the panel that proposing a new op is proposing a product feature, and writes nothing", async () => {
+    clearPanelBridgeCredentials();
+    const win = makeMockWindow();
+    const calls: string[] = [];
+    const frameReplies: PanelOpResult[] = [];
+    const fakeFrame = {
+      postMessage(msg: PanelOpResult) {
+        frameReplies.push(msg);
+      },
+    } as unknown as Window;
+
+    const cleanup = bridgePanelFrame({
+      canvasId: "prj_acme",
+      itemId: "itm_panel",
+      frameWindow: () => fakeFrame,
+      win,
+      fetchImpl: async (input) => {
+        calls.push(String(input));
+        return new Response("{}", { status: 200 });
+      },
+    });
+
+    win.dispatch({
+      origin: "null",
+      source: fakeFrame,
+      data: {
+        type: PANEL_OP_MESSAGE_TYPE,
+        version: PANEL_BRIDGE_VERSION,
+        requestId: "req_unknown",
+        op: { type: "panel.secretWrite", itemId: "itm_page" },
+      },
+    });
+
+    expect(calls).toEqual([]);
+    expect(frameReplies).toEqual([
+      {
+        type: PANEL_OP_RESULT_TYPE,
+        version: PANEL_BRIDGE_VERSION,
+        requestId: "req_unknown",
+        ok: false,
+        code: "unknown-op",
+        error: expect.stringContaining("proposing a new op is proposing a product feature"),
+      },
+    ]);
+    cleanup();
+  });
+
+  it("stamps valid operations with the panel's actor, sends them through /api/ops, and never hands the frame any object other than the frozen PanelOpResult", async () => {
+    clearPanelBridgeCredentials();
+    const win = makeMockWindow();
+    const requests: Array<{ url: string; headers: Record<string, string>; body: unknown }> = [];
+    const frameReplies: PanelOpResult[] = [];
+    const fakeFrame = {
+      postMessage(msg: PanelOpResult) {
+        frameReplies.push(msg);
+      },
+    } as unknown as Window;
+
+    const cleanup = bridgePanelFrame({
+      canvasId: "prj_acme",
+      itemId: "itm_panel",
+      frameWindow: () => fakeFrame,
+      win,
+      fetchImpl: async (input, init) => {
+        const url = String(input);
+        const headers = (init?.headers ?? {}) as Record<string, string>;
+        const body = init?.body ? JSON.parse(String(init.body)) : null;
+        requests.push({ url, headers, body });
+
+        if (url === panelActorRoute("prj_acme", "itm_panel")) {
+          return new Response(
+            JSON.stringify({
+              actor: { id: panelActorId("itm_panel"), name: "Acme Review" },
+              color: "#5b7a8c",
+              grant: {
+                id: "gnt_panel_1",
+                canvasId: "prj_acme",
+                subject: panelSubject("itm_panel"),
+                grantedBy: "bdg_owner",
+                at: "2026-09-06T00:00:00Z",
+              },
+              badgeId: "bdg_panel_secret",
+              token: "tok_panel_secret_do_not_leak",
+            }),
+            { status: 200 },
+          );
+        }
+        if (url === "/api/ops") {
+          return new Response(
+            JSON.stringify({
+              seq: 17,
+              envelope: {
+                id: "op_17",
+                canvasId: "prj_acme",
+                actor: { id: panelActorId("itm_panel"), name: "Acme Review" },
+                timestamp: "2026-09-06T00:00:01Z",
+                op: (body as { op: unknown }).op,
+              },
+              internalStoreHandle: { secret: "never_leak" },
+            }),
+            { status: 200 },
+          );
+        }
+        return new Response("not found", { status: 404 });
+      },
+    });
+
+    win.dispatch({
+      origin: "null",
+      source: fakeFrame,
+      data: {
+        type: PANEL_OP_MESSAGE_TYPE,
+        version: PANEL_BRIDGE_VERSION,
+        requestId: "req_move_1",
+        op: { type: "item.move", itemId: "itm_page", x: 120, y: 240 },
+      },
+    });
+
+    await new Promise((r) => setTimeout(r, 20));
+    expect(requests).toHaveLength(2);
+    expect(requests[1]!.url).toBe("/api/ops");
+    expect(requests[1]!.headers["Authorization"]).toBe("Bearer tok_panel_secret_do_not_leak");
+    expect(requests[1]!.body).toMatchObject({
+      canvasId: "prj_acme",
+      actor: { id: panelActorId("itm_panel"), name: "Acme Review" },
+      op: { type: "item.move", itemId: "itm_page", x: 120, y: 240 },
+    });
+
+    expect(frameReplies).toHaveLength(1);
+    const reply = frameReplies[0]!;
+    expect(Object.isFrozen(reply)).toBe(true);
+    expect(Object.keys(reply).sort()).toEqual(["id", "ok", "requestId", "seq", "type", "version"]);
+    expect(reply).toEqual({
+      type: PANEL_OP_RESULT_TYPE,
+      version: PANEL_BRIDGE_VERSION,
+      requestId: "req_move_1",
+      ok: true,
+      seq: 17,
+      id: "op_17",
+    });
+    expect(JSON.stringify(reply)).not.toContain("tok_panel_secret_do_not_leak");
+    expect(JSON.stringify(reply)).not.toContain("bdg_panel_secret");
+    expect(JSON.stringify(reply)).not.toContain("never_leak");
+    cleanup();
   });
 });
