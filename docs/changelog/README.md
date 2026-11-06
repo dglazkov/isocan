@@ -17,6 +17,7 @@ screen per day, one row per week, open to anyone with the address.
 
 | Day | | What happened |
 | --- | --- | --- |
+| **[5 Nov](2026-11-05.md)** | Journey guardrails | Bounded canvas readiness and browser transport; failure evidence and timing investigation on a draft branch. |
 | **[31 Oct](2026-10-31.md)** | *Draft* | Not written up yet: the day's commits, quoted in full. Whoever writes the entry replaces this row. |
 | **[30 Oct](2026-10-30.md)** | *Draft* | Not written up yet: the day's commits, quoted in full. Whoever writes the entry replaces this row. |
 | **[29 Oct](2026-10-29.md)** | *Draft* | Not written up yet: the day's commits, quoted in full. Whoever writes the entry replaces this row. |

@@ -50,7 +50,7 @@ function closeWith(source: string, proc: ProcessEvents, time: ReturnType<typeof 
   // The sockets have already closed: the subject is the unchanged TERM/KILL
   // sequencing and profile cleanup, not a second simulated websocket protocol.
   const make = new Function("io", `const { proc, rm, rmSync, setTimeout, clearTimeout } = io;
-    const listeners = new Map(), ws = { readyState: 3 }, browserWs = ws, WebSocket = { CLOSED: 3 }, dir = "owned-profile";
+    const pageChannel = { dispose() {} }, browserChannel = pageChannel, ws = { readyState: 3 }, browserWs = ws, WebSocket = { CLOSED: 3 }, dir = "owned-profile";
     let closing; return ${source};`);
   return make({ proc, rm: remove, rmSync: removeSync, ...time }) as () => Promise<void>;
 }
