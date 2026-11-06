@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "date": "2026-11-05",
+  "date": "2026-11-06",
   "shapedBy": "default",
   "readyBy": null,
   "willNotTouch": [],
@@ -11,7 +11,7 @@
   "items": [
     {
       "id": "measures",
-      "title": "Measure the practice: 39 measures; outside or broken on 2026-11-04: long_files, phases_without_issue, phases_stuck, escapes, changelog_gaps, verify_owed, lint, issues_unnamed, issues_done_open, dependency_age",
+      "title": "Measure the practice: 39 measures; outside or broken on 2026-11-05: long_files, phases_without_issue, phases_stuck, escapes, changelog_gaps, verify_owed, lint, issues_unnamed, issues_done_open, dependency_age",
       "kind": "measure",
       "source": "default",
       "number": null,
@@ -20,16 +20,16 @@
       "status": "done",
       "result": {
         "note": "12 ok, 10 outside, 17 n/a, 0 broken",
-        "link": "docs/practice/2026-11-05.md"
+        "link": "docs/practice/2026-11-06.md"
       }
     },
     {
-      "id": "health-phases-without-issue",
-      "title": "Proposal from 2026-11-04: Open an issue on dglazkov/isocan for critique, design-partner, durable-agents, extensions, hosted-sharing, living-grounds and 13 more and set `issue:` in each project's primary doc front matter (open phases critique/1, critique/4, design-partner/7, durable-agents/0, durabl…",
+      "id": "health-phases-stuck",
+      "title": "Proposal from 2026-11-05: Move design-competition/0 (planned; docs/projects/design-competition/phases.md untouched since 2026-09-13, 53 days): take its next action, or mark it RETIRED. 64 more after it.",
       "kind": "review",
-      "source": "health:phases_without_issue",
+      "source": "health:phases_stuck",
       "number": {
-        "measure": "phases_without_issue",
+        "measure": "phases_stuck",
         "bound": 0,
         "better": "lower"
       },
