@@ -17,6 +17,7 @@ screen per day, one row per week, open to anyone with the address.
 
 | Day | | What happened |
 | --- | --- | --- |
+| **[2 Nov](2026-11-02.md)** | *Draft* | Not written up yet: the day's commits, quoted in full. Whoever writes the entry replaces this row. |
 | **[1 Nov](2026-11-01.md)** | Browser launches without code-sign clones | The shared Chrome launcher and screenshot guide disable macOS code-sign cloning; nightly practice and persona reports were retained. |
 | **[31 Oct](2026-10-31.md)** | *Draft* | Not written up yet: the day's commits, quoted in full. Whoever writes the entry replaces this row. |
 | **[30 Oct](2026-10-30.md)** | *Draft* | Not written up yet: the day's commits, quoted in full. Whoever writes the entry replaces this row. |
