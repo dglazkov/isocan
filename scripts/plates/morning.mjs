@@ -39,6 +39,13 @@ import { status as productionStatus, productionLines } from './production.mjs';
 // (plates phase 81: the branch keel-verify, below): each one that failed in the
 // day before the night started is a line first under "Your next".
 //
+// Decisions due for their check (plates phase 150) are a structured input,
+// `checks`: { due: [the board's check items: { title, why, ref }], unread }.
+// plates's `plates morning` reads them plates-side (lib/decision-loop.mjs,
+// the board's own due computation) and passes them in; each due check is one
+// line under "Your next", linked to its record. Without the input, or with
+// none due, the brief says nothing about checks.
+//
 // Exit: 0 done (sent, already sent, or not yet over); 2 usage, no plan for
 // the night, no assignee, or an input it cannot read; 1 a GitHub write
 // failed (the workflow goes red). gh is process.env.PLATES_GH || 'gh'.
@@ -144,7 +151,7 @@ const hasOrigin = root => git(root, ['remote', 'get-url', 'origin']).status === 
  * read from there too (healthAround).
  */
 export async function finalPlan({ root, date, namesEvidence = false, consumer = 'morning-brief' }) {
-  const context=namesEvidenceContext(namesEvidence), observation=namesObservation(consumer==='morning-final'?'finalization':consumer==='board'?'board':'brief',context);
+  const context=namesEvidenceContext(namesEvidence), observation=namesObservation(consumer==='morning-final'?'finalization':consumer==='home'?'home':'brief',context);
   const traces=[];
   const places = [];
   const remote = hasOrigin(root);
@@ -322,12 +329,15 @@ export function keptResults(results, now = Date.now(), { production = null } = {
   const latest = new Map();
   for (const r of sorted) if (!latest.has(r.site)) latest.set(r.site, r);
   const prod = production ? latest.get(production) : sorted[0];
-  const pinned = new Set([prod, ...[...latest.values()].filter(r => r !== prod).slice(0, VERIFY_MAX - 1)].filter(Boolean));
+  let previews = [...latest.values()].filter(r => r !== prod).slice(0, VERIFY_MAX - 1);
+  const pinned = new Set([prod, ...previews].filter(Boolean));
   let rest = sorted.filter((r, i) => !pinned.has(r) && (i < VERIFY_KEEP || (!r.ok && Date.parse(r.at) > now - VERIFY_HOLD_MS)));
-  const size = () => JSON.stringify({ results: [...pinned, ...rest] }, null, 2).length;
+  const kept = () => [...(prod ? [prod] : []), ...previews, ...rest];
+  const size = () => JSON.stringify({ results: kept() }, null, 2).length;
   rest = rest.slice(0, Math.max(0, VERIFY_MAX - pinned.size));
   while (rest.length && size() > MAX_BYTES * 0.75) rest = rest.slice(0, -1);
-  return [...pinned, ...rest].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  while (previews.length && size() > MAX_BYTES * 0.75) previews = previews.slice(0, -1);
+  return kept().sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
 }
 const FULL_SHA = /^[0-9a-f]{40}([0-9a-f]{24})?$/;
 
@@ -353,29 +363,114 @@ export function verifyResults(text) {
   return results.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
 }
 
+// ---- production's deploys (plates phase 177) --------------------------------------
+//
+// A Vercel target's plates promote (the delivery practice's
+// scripts/plates/vercel.mjs) adds one JSON line per deploy to deploys.jsonl
+// beside verify.json: { schema: 1, at, project, commit, action ('deploy',
+// 'back' or 'verify'), deployment, target (the rollback target read before
+// it), checks: [{ check, ok, detail }], ok, failed (the first check that did
+// not hold, or null), rolledBack (false, true or 'failed'), serving }. A
+// rollback is a line in the brief and the owner's item until a later deploy
+// passes; a rollback that failed is the first thing the owner sees.
+
+export const DEPLOY_FILE = 'deploys.jsonl';
+/** At most this many deploys are kept, the oldest dropped first; the newest that passed always stays (plates promote --back reads it). */
+export const DEPLOYS_KEEP = 200;
+const DEPLOY_ACTIONS = ['deploy', 'back', 'verify'];
+const deploymentOf = d => (d && typeof d === 'object' && typeof d.id === 'string' && /^[\w.-]{1,100}$/.test(d.id) ? { id: d.id, url: typeof d.url === 'string' ? one(d.url).slice(0, 300) : null, ...(typeof d.commit === 'string' && FULL_SHA.test(d.commit) ? { commit: d.commit } : {}) } : null);
+
+/** One recorded deploy, checked: the record, or null when it is not one. */
+function deployResultOf(r) {
+  if (!r || typeof r !== 'object' || Array.isArray(r) || r.schema !== 1) return null;
+  if (!FULL_SHA.test(r.commit ?? '') || typeof r.ok !== 'boolean' || typeof r.at !== 'string' || !Number.isFinite(Date.parse(r.at)) || !DEPLOY_ACTIONS.includes(r.action)) return null;
+  if (![false, true, 'failed'].includes(r.rolledBack) || !Array.isArray(r.checks)) return null;
+  const checks = r.checks.map(c => (c && typeof c.check === 'string' && typeof c.ok === 'boolean' ? { check: one(c.check).slice(0, 40), ok: c.ok, detail: typeof c.detail === 'string' ? one(c.detail).slice(0, 500) : null } : null));
+  if (checks.some(c => !c)) return null;
+  if (r.ok && (r.rolledBack !== false || checks.some(c => !c.ok))) return null;
+  return { at: r.at, project: typeof r.project === 'string' ? one(r.project).slice(0, 100) : null, commit: r.commit, action: r.action, ok: r.ok,
+    deployment: deploymentOf(r.deployment), target: deploymentOf(r.target), serving: deploymentOf(r.serving), checks,
+    failed: typeof r.failed === 'string' ? one(r.failed).slice(0, 40) : null, rolledBack: r.rolledBack };
+}
+
+/** deploys.jsonl's text as its records, newest first; a throw (MorningError) when a line is not a deploy record. */
+export function deployResults(text) {
+  if (text.length > MAX_BYTES) throw new MorningError(`${DEPLOY_FILE} is larger than ${MAX_BYTES} bytes`);
+  const out = [];
+  String(text).split('\n').forEach((line, i) => {
+    if (!line.trim()) return;
+    let data;
+    try { data = JSON.parse(line); } catch { throw new MorningError(`${DEPLOY_FILE} line ${i + 1} is not JSON`); }
+    const r = deployResultOf(data);
+    if (!r) throw new MorningError(`${DEPLOY_FILE} line ${i + 1} is not a deploy record ({ schema: 1, at, commit, action, ok, checks, rolledBack })`);
+    out.push(r);
+  });
+  return out.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+}
+
+/**
+ * The rollbacks still open, newest first: each deploy that rolled back (or
+ * whose rollback failed) with no deploy that passed after it. A passing
+ * deploy closes every rollback before it. Pure.
+ */
+export function openRollbacks(deploys) {
+  const sorted = [...deploys].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  const passed = sorted.findIndex(r => r.ok);
+  return (passed < 0 ? sorted : sorted.slice(0, passed)).filter(r => r.rolledBack !== false);
+}
+
+/**
+ * The rollbacks the brief for the night `date` carries: each deploy that rolled
+ * back, or whose rollback failed, recorded in the day before the night started,
+ * so each one reaches one brief, and only one (as verifyFailuresFor). Pure.
+ */
+export function rollbacksFor(deploys, date) {
+  const end = Date.parse(`${date}T${pad(NIGHT_AT.hour)}:${pad(NIGHT_AT.minute)}:00Z`), start = end - 24 * 3600 * 1000;
+  return deploys.filter(r => r.rolledBack !== false && Date.parse(r.at) >= start && Date.parse(r.at) < end);
+}
+
+/** One rollback, as the brief and the owner's docket say it. */
+export function rollbackLine(r) {
+  const failed = r.failed ?? 'a check';
+  const why = r.checks.find(c => c.check === r.failed)?.detail;
+  const deployment = r.deployment?.id ? ` (${r.deployment.id})` : '';
+  if (r.rolledBack === 'failed') return `Production's rollback FAILED: ${failed} failed on \`${r.commit.slice(0, 7)}\`${deployment} at ${r.at}${why ? ` (${why})` : ''}, and moving back to ${r.target?.id ?? 'the recorded deployment'} did not take: production may be serving the failed deploy. Check it now: plates promote --back.`;
+  return `Production rolled back: ${failed} failed on \`${r.commit.slice(0, 7)}\`${deployment} at ${r.at}${why ? ` (${why})` : ''}. It serves ${r.serving?.id ?? r.target?.id ?? 'the recorded deployment'} again, until a deploy passes.`;
+}
+
 /**
  * The project's recorded verifies, from origin's keel-verify branch: { results }
  * or { results: [], unread } when the branch cannot be read (never "no
  * failures"); { results: [] } when there is no branch yet.
  */
 export function readVerify(root, {namesEvidence=false,consumer='morning-brief'}={}) {
-  const context=namesEvidenceContext(namesEvidence), observation=namesObservation(consumer==='board'?'board':'brief',context);
+  const context=namesEvidenceContext(namesEvidence), observation=namesObservation(consumer==='home'?'home':'brief',context);
   const traces=readNames('git ref:keel-verify').map(branch=>({ref:`refs/heads/${branch}`,path:VERIFY_FILE,commitSha:null,blobSha:null,sha256:null,state:'unavailable',absence:null}));
-  let results=[], unread;
+  let results=[], deploys=[], unread;
   try {
     if (!hasOrigin(root)) throw new Error('no origin to read verification history');
     for(const trace of traces) {
-      const text=remoteFile(root,trace.ref.slice('refs/heads/'.length),VERIFY_FILE,trace);
+      const branch=trace.ref.slice('refs/heads/'.length);
+      const text=remoteFile(root,branch,VERIFY_FILE,trace);
+      if(trace.absence==='ref') continue;
       if(text!==null) results.push(...verifyResults(text));
+      // Phase 177: the deploy records beside it (a Vercel target's plates promote).
+      const lines=remoteFile(root,branch,DEPLOY_FILE);
+      if(lines!==null) deploys.push(...deployResults(lines));
+      if(text===null&&lines===null) {
+        Object.assign(trace,{state:'unavailable',absence:null});
+        throw new MorningError(`${branch} exists on origin and holds no ${VERIFY_FILE}`);
+      }
     }
     results.sort((a,b)=>Date.parse(b.at)-Date.parse(a.at));
-  } catch(e) {results=[];unread=one(e?.message??e);}
+    deploys.sort((a,b)=>Date.parse(b.at)-Date.parse(a.at));
+  } catch(e) {results=[];deploys=[];unread=one(e?.message??e);}
   if(observation) {
     const projection=namesFragment(observation,'verify',JSON.stringify(results.map(({sha,ok,at})=>({sha,ok,at}))));
     for(const trace of traces) namesRead(observation,context,trace,{consumer,sourceKind:'verify',contributed:!unread&&trace.state==='read',outputSection:'verify',projection});
     if(unread) namesGap(observation,'verify-unavailable');
   }
-  return {results,...(unread?{unread}:{}),...(observation?{observation}:{})};
+  return {results,deploys,...(unread?{unread}:{}),...(observation?{observation}:{})};
 }
 
 /** Production's origin, .plates/plates.json "delivery".site, or null when it names none (or none that parses). */
@@ -432,6 +527,23 @@ const itemLine = (it, health, tail = []) => {
 };
 const isPr = link => /^https:\/\/[^/]+\/[^/]+\/[^/]+\/pull\/\d+$/.test(link ?? '');
 
+/** Where the owner opens a decision record: on GitHub when the repo is known, else its path. */
+export const recordLink = (repo, ref) => (repo ? `https://github.com/${repo}/blob/HEAD/${encodeURI(ref)}` : ref);
+
+/** The structured due-check input, checked: { due, unread } or null. */
+function checksOf(checks) {
+  if (checks == null) return null;
+  const bad = () => new MorningError('checks is { due: [{ title, why, ref }], unread }');
+  if (typeof checks !== 'object' || Array.isArray(checks) || !Array.isArray(checks.due ?? [])) throw bad();
+  const due = checks.due ?? [];
+  if (due.some(c => !c || typeof c !== 'object' || ![c.title, c.why, c.ref].every(v => typeof v === 'string' && v.trim()))) throw bad();
+  return { due, unread: checks.unread ? one(checks.unread) : null };
+}
+const checkLine = c => {
+  const title = one(c.title), link = c.link ? one(c.link) : null;
+  return `${title[0].toUpperCase()}${title.slice(1)} (${link && link !== c.ref ? `[${one(c.ref)}](${link})` : `\`${one(c.ref)}\``}): ${one(c.why)}`;
+};
+
 // Observation is an output mode, never a completion rule or a publication intent.
 function checkReportMode(mode, readOnly = true) {
   if (!['final', 'observation'].includes(mode)) throw new MorningError('reportMode must be final or observation');
@@ -463,8 +575,9 @@ function deliveryView(delivery) {
  * review, triage), failed and why, left alone (skipped, left alone, will not
  * touch), not finished (by readyBy when it passed), and the owner's next.
  */
-export function renderBrief({ plan, now = new Date(), health = {}, links = {}, verify = null, production = null, reportMode = 'final', delivery = null }) {
+export function renderBrief({ plan, now = new Date(), health = {}, links = {}, verify = null, production = null, reportMode = 'final', delivery = null, checks = null }) {
   checkReportMode(reportMode);
+  const due = checksOf(checks);
   const deliveryObservation = reportMode === 'observation' ? deliveryView(delivery) : null;
   const r = readiness(plan, now);
   const done = plan.items.filter(i => i.kind === 'build' && i.status === 'done');
@@ -474,13 +587,19 @@ export function renderBrief({ plan, now = new Date(), health = {}, links = {}, v
   const open = plan.items.filter(i => !TERMINAL.includes(i.status));
   const unfinishedHead = r.late ? `## Not finished by ${r.readyBy}` : '## Still going';
   const next = [
+    // A rollback that failed is above everything (phase 177): production may be serving the failed deploy.
+    ...(verify?.rollbacks ?? []).filter(r => r.rolledBack === 'failed').map(rollbackLine),
     ...productionLines(production),
-    // Production first: a failed verify (phase 81), and a verify record that could not be read, never silence.
+    // Production first: a rollback (phase 177), a failed verify (phase 81), and a verify record that could not be read, never silence.
+    ...(verify?.rollbacks ?? []).filter(r => r.rolledBack === true).map(rollbackLine),
     ...(verify?.failed ?? []).map(verifyLine),
     ...(verify?.unread ? [`The verify record (${VERIFY_BRANCH}:${VERIFY_FILE}) could not be read: ${one(verify.unread)}. Whether production passed is unknown.`] : []),
     ...done.filter(i => isPr(i.result?.link)).map(i => `Review and merge ${i.result.link} (\`${i.id}\`): a person merges.`),
     ...failed.map(i => `Look at why \`${i.id}\` failed: ${i.result?.note ? one(i.result.note) : 'no reason was recorded'}.`),
     ...(r.late ? open.filter(i => i.kind === 'build').map(i => `\`${i.id}\` was not finished by ${r.readyBy}: its pass may still finish it, or tomorrow's plan takes it up.`) : []),
+    // Decisions that came back to be checked (phase 150), each once, linked to its record.
+    ...(due?.due ?? []).map(checkLine),
+    ...(due?.unread ? [`The decision records could not be read: ${due.unread}. Whether a decision is due for its check is unknown.`] : []),
     ...plan.leftOpen.map(l => `Left open: ${one(l)}`),
   ];
   const by = plan.shapedBy === 'owner' ? 'shaped by the owner' : 'plates\'s default plan';
@@ -519,7 +638,7 @@ const dateOf = (date, now) => {
 export async function brief(options) {
   return briefWithConfig(options, await configOf(options.root));
 }
-async function briefWithConfig({ root, date, env = process.env, now = new Date(), namesEvidence = false, reportMode = 'final', delivery = null }, config) {
+async function briefWithConfig({ root, date, env = process.env, now = new Date(), namesEvidence = false, reportMode = 'final', delivery = null, checks = null }, config) {
   checkReportMode(reportMode);
   const night = dateOf(date, now);
   const found = await finalPlan({ root, date: night, namesEvidence });
@@ -532,17 +651,19 @@ async function briefWithConfig({ root, date, env = process.env, now = new Date()
   if (Array.isArray(config.practices) && config.practices.includes('delivery')) {
     const v = readVerify(root,{namesEvidence});
     verifyObservation=v.observation;
-    verify = { failed: verifyFailuresFor(v.results, night, { production: productionOf(config) }), unread: v.unread ?? null };
+    verify = { failed: verifyFailuresFor(v.results, night, { production: productionOf(config) }), rollbacks: rollbacksFor(v.deploys ?? [], night), unread: v.unread ?? null };
   }
   const production = await productionStatus({root,config,now});
-  const b = renderBrief({ plan: found.plan, now, health, links, verify, production, reportMode, delivery });
+  const given = checksOf(checks);
+  const linked = given && { ...given, due: given.due.map(c => ({ ...c, link: recordLink(repoOf(config, env), c.ref) })) };
+  const b = renderBrief({ plan: found.plan, now, health, links, verify, production, reportMode, delivery, checks: linked });
   const observation=found.observation;
   if(observation && verifyObservation) {
     const projection=namesFragment(observation,'verify-displayed',JSON.stringify((verify?.failed??[]).map(({sha,ok,at})=>({sha,ok,at}))));
     observation.reads.push(...verifyObservation.reads.map(r=>({...r,outputProjection:projection})));
     observation.gaps.push(...verifyObservation.gaps);
   }
-  return { data: { ok: true, date: night, title: reportMode === 'observation' ? `Morning observation, ${night}` : titleOf(night), ...(b.report ? { report: b.report, delivery: b.delivery } : {}), from: found.from, sources: found.sources, readiness: b.readiness, sections: b.sections, next: b.next, links, verify, production, markdown: b.markdown, plan: found.plan, ...(observation?{observation}:{}) }, text: b.markdown.trimEnd() };
+  return { data: { ok: true, date: night, title: reportMode === 'observation' ? `Morning observation, ${night}` : titleOf(night), ...(b.report ? { report: b.report, delivery: b.delivery } : {}), from: found.from, sources: found.sources, readiness: b.readiness, sections: b.sections, next: b.next, links, verify, production, ...(linked ? { checks: linked } : {}), markdown: b.markdown, plan: found.plan, ...(observation?{observation}:{}) }, text: b.markdown.trimEnd() };
 }
 
 // ---- sending -----------------------------------------------------------------
@@ -593,13 +714,13 @@ export function assigneeOf(config) {
  * issues are closed. An issue with that title already (open or closed) is
  * this night's brief: nothing is sent again.
  */
-export async function send({ root, date, env = process.env, now = new Date(), namesEvidence = false, reportMode = 'final' }) {
+export async function send({ root, date, env = process.env, now = new Date(), namesEvidence = false, reportMode = 'final', checks = null }) {
   checkReportMode(reportMode, false);
   const config = await configOf(root);
   const assignee = assigneeOf(config);
   // Pin the checkout identity once: later gh calls must not follow a changed default.
   config.repo = sendRepository(root, config, env);
-  const b = await briefWithConfig({ root, date, env, now, namesEvidence }, config);
+  const b = await briefWithConfig({ root, date, env, now, namesEvidence, checks }, config);
   const observation=b.data.observation, context=namesEvidenceContext(namesEvidence);
   const observeIssue=(number,intended,{before=null,outcome='confirmed'}={})=>{
     if(!observation) return;
