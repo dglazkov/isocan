@@ -307,27 +307,31 @@ export function FocusHeader({
             >
               {autoAdvance.on ? "❚❚ Auto" : "▶ Auto"}
             </button>
-            <input
-              className="fullscreen-autoadvance-seconds"
-              type="number"
-              min={2}
-              max={600}
-              step={1}
-              aria-label="Seconds per slide"
-              title="Seconds per slide"
-              defaultValue={autoAdvance.seconds}
-              key={autoAdvance.seconds}
-              onBlur={(e) => {
-                // An emptied field keeps the pace it had, not a surprise one.
-                const typed = e.currentTarget.value.trim();
-                if (typed) autoAdvance.onSeconds(Number(typed));
-                else e.currentTarget.value = String(autoAdvance.seconds);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") e.currentTarget.blur();
-              }}
-            />
-            <span className="fullscreen-autoadvance-unit" aria-hidden="true">s</span>
+            {/* One field, the unit inside its border: a bare "s" after the box
+                read as belonging to the button beside it. */}
+            <label className="fullscreen-autoadvance-field">
+              <input
+                className="fullscreen-autoadvance-seconds"
+                type="number"
+                min={2}
+                max={600}
+                step={1}
+                aria-label="Seconds per slide"
+                title="Seconds per slide"
+                defaultValue={autoAdvance.seconds}
+                key={autoAdvance.seconds}
+                onBlur={(e) => {
+                  // An emptied field keeps the pace it had, not a surprise one.
+                  const typed = e.currentTarget.value.trim();
+                  if (typed) autoAdvance.onSeconds(Number(typed));
+                  else e.currentTarget.value = String(autoAdvance.seconds);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") e.currentTarget.blur();
+                }}
+              />
+              <span className="fullscreen-autoadvance-unit" aria-hidden="true">s</span>
+            </label>
           </span>
         )}
         {mode === "view" && onToggleNotes && (

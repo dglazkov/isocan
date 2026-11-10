@@ -254,16 +254,36 @@ html[data-morph="playing"] .fullscreen-stage { opacity: 0; }
 
 /* The deck turning itself (FocusHeader): the play button, then how many
    seconds a slide stays. Narrow on purpose — three digits and a unit. */
-.fullscreen-autoadvance { display: inline-flex; align-items: center; gap: 4px; }
-.fullscreen-autoadvance-seconds {
-  width: 3.4em;
-  font: inherit;
+.fullscreen-autoadvance { display: inline-flex; align-items: center; gap: 6px; }
+/* The box is the label, so the number and its unit sit inside one border. */
+.fullscreen-autoadvance-field {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 1px;
+  /* The same height as the buttons beside it (12px, line-height 1, 6px). */
   font-size: 12px;
-  padding: 3px 4px;
+  line-height: 1;
+  padding: 6px 8px 6px 6px;
   border: 1px solid var(--line);
   border-radius: 7px;
   background: var(--chip);
+  cursor: text;
+}
+.fullscreen-autoadvance-field:focus-within { border-color: var(--ink-soft); }
+.fullscreen-autoadvance-seconds {
+  width: 2.2em;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
   color: var(--ink);
   text-align: right;
+  -moz-appearance: textfield;
+  appearance: textfield;
 }
+.fullscreen-autoadvance-seconds::-webkit-inner-spin-button,
+.fullscreen-autoadvance-seconds::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .fullscreen-autoadvance-unit { font-size: 12px; color: var(--ink-soft); }
