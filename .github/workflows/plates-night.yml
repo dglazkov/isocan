@@ -377,7 +377,7 @@ jobs:
       # is not in the index, so diff reads it as no change (ledger's audit
       # agent lost every report to that). Only the night's data is committed:
       # exact health pages written by improve (including earlier remeasurements,
-      # never the whole directory), the inbox and bounds; tracked deletions are
+      # never the whole directory) and tonight's reconciliation sidecar, the inbox and bounds; tracked deletions are
       # its deletion. Paths are literal (GIT_LITERAL_PATHSPECS), never
       # pathspec magic. A page the project ignores is red: it would never be
       # committed (ledger lost its pages that way), so the probe is a dated
@@ -447,6 +447,13 @@ jobs:
                 if (stat.isSymbolicLink() || (i === path.split("/").length - 1 ? !stat.isFile() : !stat.isDirectory())) fail("health page is not a regular confined file");
               }
             }
+            // The reconciliation sidecar improve writes beside the page of this night, when there is one: the page names it.
+            const sidecar = `${health}/${day}.reconciliation.json`;
+            try {
+              const stat = lstatSync(resolve(root, sidecar));
+              if (stat.isSymbolicLink() || !stat.isFile()) fail("reconciliation sidecar is not a regular confined file");
+              paths.push(sidecar);
+            } catch (error) { if (error.code !== "ENOENT") throw error; }
             process.stdout.write(paths.join("\0") + "\0");
           ' "$RUNNER_TEMP/improve.json" > "$RUNNER_TEMP/health-paths.bin"
           HEALTH_PATHS=()
@@ -482,7 +489,8 @@ jobs:
           # check-ignore refuses literal pathspecs; every git call after it reads paths literally.
           export GIT_LITERAL_PATHSPECS=1
           PATHS=("${HEALTH_PATHS[@]}")
-          for p in docs/inbox docs/INBOX.md .plates/bounds.json; do
+          # docs/reviews: the personas' pages the plan's persona run wrote (phase 75); a project without personas has none.
+          for p in docs/inbox docs/INBOX.md .plates/bounds.json docs/reviews; do
             if [ -e "$p" ] || [ -n "$(git ls-files -- "$p")" ]; then PATHS+=("$p"); fi
           done
           if [ "${#PATHS[@]}" = 0 ] || [ -z "$(git status --porcelain -- "${PATHS[@]}")" ]; then

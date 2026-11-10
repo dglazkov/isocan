@@ -267,6 +267,8 @@
      stage.ts is the same number, and floats.test.ts holds them together —
      framing reserves this, so a drift means items parked under the chrome. */
   --topbar: 54px;
+  /* The left dock's width (`PANEL_WIDTH` in stage.ts). */
+  --panel-w: 340px;
   /* Snapping feedback: blue says "aligned to this line", purple says "these
      two gaps are equal". */
   --guide-spacing: #8b46e0;
@@ -880,6 +882,14 @@ img { height: auto; }
 @media (max-width: 480px) {
   .identity-popover,
   .identity-popover:has(> .terminal-menu) { position: fixed; top: auto; left: 16px; right: 16px; width: auto; margin-top: 8px; }
+  /* Inside `.bar-cluster.floats`, `backdrop-filter` makes the cluster a
+     containing block for `position: fixed`; anchor against the right edge of
+     the cluster and size against the viewport instead. */
+  .bar-cluster .identity-popover,
+  .bar-cluster .identity-popover:has(> .terminal-menu) {
+    position: absolute; top: calc(100% + 8px); left: auto; right: 0;
+    width: calc(100vw - 2 * var(--edge)); margin-top: 0;
+  }
 }
 .terminal-menu { display: flex; flex-direction: column; gap: 10px; }
 /* The line itself: monospace, selectable, and allowed to wrap — the address
@@ -3434,6 +3444,14 @@ button.mt-card:hover { border-color: var(--accent); }
 @media (max-width: 460px) {
   .minimap-dock:not(.folded) { bottom: calc(var(--edge) + var(--zoom-row) + 8px); }
 }
+/* With the left dock open (340px + 20px = 360px), the map's right edge shifts
+   by 340px to 528px, moving the zoom-row collision from 460px to 460 + 340 =
+   800px. Lift above the zoom row across the same margin. */
+@media (max-width: 800px) {
+  .canvas-page:has(> .dock-panel) .minimap-dock:not(.folded) {
+    bottom: calc(var(--edge) + var(--zoom-row) + 8px);
+  }
+}
 .minimap-panel {
   /* Claimed back from the dock above — this one is drawn, so it is clickable
      (the folded rule below hands it straight back). */
@@ -3731,8 +3749,8 @@ button.mt-card:hover { border-color: var(--accent); }
   display: flex; flex-direction: column; gap: 8px;
   pointer-events: none;
 }
-.module-overlays-left { left: calc(var(--edge) + 44px); }
-.module-overlays-right { right: calc(var(--edge) + 44px); }
+.module-overlays-left { left: calc(var(--edge) + 56px); }
+.module-overlays-right { right: calc(var(--edge) + 60px); }
 .module-overlay { pointer-events: auto; position: relative; display: flex; flex-direction: column; }
 
 .tool-rail {
@@ -3897,13 +3915,17 @@ button.mt-card:hover { border-color: var(--accent); }
 
 /* ---------- trash panel ---------- */
 .trash-panel {
-  position: absolute; top: 48px; right: 0; bottom: 0; width: 300px; z-index: var(--z-dock);
+  position: absolute; top: calc(var(--topbar) + var(--edge)); right: 76px;
+  bottom: calc(var(--edge) + 53px); width: 300px; z-index: var(--z-dock);
   background: var(--glass);
   -webkit-backdrop-filter: var(--glass-filter);
   backdrop-filter: var(--glass-filter);
-  border-left: 1px solid var(--glass-border);
+  border: 1px solid var(--glass-border); border-radius: var(--r-float);
   box-shadow: var(--shadow-glass);
-  display: flex; flex-direction: column;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+@media (max-width: 639px) {
+  .trash-panel { left: var(--edge); right: var(--edge); width: auto; }
 }
 .trash-panel header { display: flex; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--line-soft); font-weight: 600; }
 .trash-panel header .spacer { flex: 1; }
@@ -5506,7 +5528,7 @@ button.mt-card:hover { border-color: var(--accent); }
   transform: translateX(-50%);
   bottom: 16px;
   z-index: var(--z-float);
-  width: min(760px, calc(100vw - 32px));
+  width: min(760px, calc(100vw - 440px));
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -5525,10 +5547,32 @@ button.mt-card:hover { border-color: var(--accent); }
   font-size: 13px;
   padding: 12px;
 }
-/* With the Chat as the bottom bar, History takes the top instead — under the
-   top bar's clusters (`.toolbar`: `--edge` down, 34px tall) with a gap —
-   because the bar sits higher than it and covered the rail (`Scrubber`). */
-.scrubber.at-top { bottom: auto; top: calc(var(--edge) + 34px + 12px); }
+@media (max-width: 759px) {
+  .scrubber { width: calc(100vw - 32px); }
+}
+
+/* Transient menus, hover peeks and toasts portalled to `document.body` sit at
+   `--z-popover` (40) or `--z-toast` (45) on the canvas, which leaves them
+   underneath full-screen covers (`.workbench`, `.fullscreen`, `.module-page` at
+   `--z-fullscreen`: 55). Lift them over covers whenever one is mounted while
+   keeping dialogs (`--z-dialog`: 100) strictly above everything. */
+body:has(.workbench) .mention-menu,
+body:has(.fullscreen) .mention-menu,
+body:has(.module-page) .mention-menu,
+body:has(.workbench) .hover-card,
+body:has(.fullscreen) .hover-card,
+body:has(.module-page) .hover-card,
+body:has(.workbench) .wb-peek,
+body:has(.fullscreen) .wb-peek,
+body:has(.module-page) .wb-peek,
+body:has(.workbench) .context-menu,
+body:has(.fullscreen) .context-menu,
+body:has(.module-page) .context-menu,
+body:has(.workbench) .proposal-toast,
+body:has(.fullscreen) .proposal-toast,
+body:has(.module-page) .proposal-toast {
+  z-index: var(--z-modal);
+}
 
 /* ---------- what's new ---------- */
 /* **The day in the margin, the notes as prose.** In a narrow column every
@@ -5962,7 +6006,8 @@ button.mt-card:hover { border-color: var(--accent); }
 .item.canvas-group .group-brief p { white-space: normal; margin: 0; }
 .item.canvas-group .group-brief p + p { margin-top: 0.5em; }
 .group-member-count { flex-shrink: 0; margin-left: auto; padding-left: 16px; font-size: 14px; font-weight: 400; }
-.canvas-group-scope { position: absolute; top: 62px; left: 16px; z-index: var(--z-bar); display: flex; align-items: center; padding: 6px; gap: 5px; max-width: calc(100% - 100px); overflow-x: auto; }
+.canvas-group-scope { position: absolute; top: calc(var(--topbar) + var(--edge)); left: calc(var(--edge) + 56px); z-index: var(--z-bar); display: flex; align-items: center; padding: 6px; gap: 5px; max-width: calc(100% - 156px); overflow-x: auto; }
+.canvas-page:has(> .dock-panel) .canvas-group-scope { left: calc(var(--edge) + var(--panel-w) + 12px); max-width: calc(100% - var(--panel-w) - 112px); }
 .canvas-group-scope button { white-space: nowrap; border: 0; background: transparent; color: var(--ink); cursor: pointer; padding: 6px 9px; }
 .canvas-group-scope button[aria-current] { font-weight: 700; color: var(--accent-text); }
 .canvas-group-form { display: flex; flex-direction: column; gap: 14px; padding: 20px; }

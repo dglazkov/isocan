@@ -3,6 +3,23 @@
    visit: moved out of `styles.css` on 27 Sep 2026 (the lazy-only queue,
    cleanup phase 6). `.scrubber` itself stays there — eager code names it. */
 
+/* With the Chat as the bottom bar, History takes the top instead — under the
+   top bar's clusters (`.toolbar`: `--edge` down, 34px tall) with a gap —
+   because the bar sits higher than it and covered the rail (`Scrubber`). */
+.scrubber.at-top { bottom: auto; top: calc(var(--edge) + 34px + 12px); }
+.canvas-page:has(> .follow-banner) .scrubber.at-top,
+.canvas-page:has(> .sprint-chip) .scrubber.at-top { top: calc(var(--edge) + 34px + 48px); }
+body:has(.canvas-page > .dock-panel) .scrubber:not(.at-top) {
+  left: calc(var(--edge) + var(--panel-w) + 16px);
+  right: calc(var(--edge) + 200px);
+  transform: none;
+  margin: 0 auto;
+  width: auto;
+  max-width: 760px;
+}
+.canvas-page:has(> .scrubber:not(.at-top)) .minimap-dock { bottom: 154px; }
+.canvas-page:has(> .scrubber:not(.at-top)) .sketch-bar { bottom: auto; top: calc(var(--topbar) + 12px); }
+
 .scrub-head {
   display: flex;
   align-items: center;
@@ -97,6 +114,9 @@
   pointer-events: none;
   z-index: 3;
 }
+/* When History stands at the top (`.scrubber.at-top`), a card above the rail
+   clips off the top of the viewport; flip it under the rail instead. */
+.scrubber.at-top .scrub-peek { bottom: auto; top: calc(100% + 10px); }
 .scrub-peek-when {
   display: flex; align-items: baseline; gap: 8px;
   font-size: 11.5px; font-weight: 600; color: var(--ink);

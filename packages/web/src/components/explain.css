@@ -3,8 +3,9 @@
    Its measures are the morning panel's (morning.css), restated here so this
    chunk carries one sheet of its own. */
 .explain-panel {
-  position: fixed; top: 64px; right: 16px; z-index: var(--z-float);
-  width: min(360px, calc(100% - 32px)); max-height: calc(100% - 200px);
+  position: fixed; top: calc(var(--topbar) + var(--edge)); right: calc(var(--edge) + 60px); z-index: var(--z-float);
+  width: min(360px, calc(100% - 2 * var(--edge) - 60px));
+  max-height: calc(100% - var(--topbar) - 2 * var(--edge) - var(--zoom-row) - 10px);
   display: flex; flex-direction: column; overflow: hidden;
   padding: 12px; font-size: 12.5px; line-height: 1.45;
   background: var(--glass);
@@ -12,6 +13,9 @@
   backdrop-filter: var(--glass-filter);
   color: var(--ink);
   border: 1px solid var(--glass-border); border-radius: var(--radius); box-shadow: var(--shadow-glass);
+}
+@media (max-width: 639px) {
+  .explain-panel { right: var(--edge); width: calc(100% - 2 * var(--edge)); }
 }
 .explain-panel h3 { margin: 0 32px 8px 0; font-size: 13px; }
 .explain-panel h4 { margin: 12px 0 4px; font-size: 11px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.04em; }

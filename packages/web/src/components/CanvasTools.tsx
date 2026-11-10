@@ -371,7 +371,23 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
           here — files, a site, a Google Doc, a canvas. It was three buttons
           and a hidden fourth; the popover reads what it is given and says
           what it would do, so one field is enough. See AddPopover. */}
-      {adding && adding !== "file" && <Suspense fallback={null}><AddPopover canvasId={canvasId} actor={actor} onFiles={() => fileInput.current?.click()} /></Suspense>}
+      {adding && adding !== "file" ? (
+        <Suspense fallback={null}><AddPopover canvasId={canvasId} actor={actor} onFiles={() => fileInput.current?.click()} /></Suspense>
+      ) : (
+        <div className="add-door">
+          <button
+            className="tool-btn"
+            data-tip="Add to the canvas — files, a site, a Google Doc, or a canvas"
+            aria-label="Add"
+            aria-pressed={false}
+            onClick={() => useUiStore.getState().setAdding("any")}
+          >
+            <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+              <path d="M9 3v12M3 9h12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+      )}
       <input
         ref={fileInput}
         type="file"
