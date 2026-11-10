@@ -97,9 +97,17 @@ export default defineConfig({
      * to 2, and the release run's slowest shard went from 457–568 s to 702 s:
      * at that size the third worker's overlap with its children paid for
      * itself, and no shard had been timing out. So this is the laptop's rule —
-     * the machine with fourteen cores, other sessions, and the flakes.
+     * the machine with fourteen cores, other sessions, and the flakes. Capped
+     * so many-core workstations (`availableParallelism() === 200`) do not fork
+     * hundreds of workers across top-level and nested board `vitest` runs.
      */
-    ...(runningDeep() && !process.env["CI"] ? { maxWorkers: Math.max(2, Math.floor(availableParallelism() / 2)) } : {}),
+    ...(process.env["CI"]
+      ? {}
+      : {
+          maxWorkers: runningDeep()
+            ? Math.min(12, Math.max(2, Math.floor(availableParallelism() / 2)))
+            : Math.min(16, Math.max(2, availableParallelism() - 1)),
+        }),
     // Runs ONCE, in the main process, before any worker exists — which is the
     // only place a Firestore emulator can be started and have every worker
     // inherit its address. See test/emulator.ts for the three tiers and for

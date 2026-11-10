@@ -4,8 +4,9 @@
    nothing. The thumb's zones are the danger and warn tokens washed thin; the
    notice that these are simulations wears the warn rule, and stays. */
 .walk-panel {
-  position: fixed; top: 64px; right: 16px; z-index: var(--z-float);
-  width: min(880px, calc(100% - 32px)); max-height: calc(100% - 80px);
+  position: fixed; top: calc(var(--topbar) + var(--edge)); right: calc(var(--edge) + 60px); z-index: var(--z-float);
+  width: min(880px, calc(100% - 2 * var(--edge) - 60px));
+  max-height: calc(100% - var(--topbar) - 2 * var(--edge) - var(--zoom-row) - 10px);
   display: flex; flex-direction: column; overflow: hidden;
   padding: 12px; font-size: 12.5px; line-height: 1.45;
   background: var(--glass);
@@ -13,6 +14,11 @@
   backdrop-filter: var(--glass-filter);
   color: var(--ink);
   border: 1px solid var(--glass-border); border-radius: var(--radius); box-shadow: var(--shadow-glass);
+}
+body:has(.canvas-page > .dock-panel) .walk-panel { max-width: calc(100vw - var(--panel-w) - 168px - 2 * var(--edge) - 72px); }
+body:has(.canvas-page > .rail-strip) .walk-panel { max-width: calc(100vw - 168px - 2 * var(--edge) - 72px); }
+@media (max-width: 639px) {
+  .walk-panel { right: var(--edge); max-width: none; width: calc(100% - 2 * var(--edge)); }
 }
 .walk-panel h3 { margin: 0 32px 8px 0; font-size: 13px; }
 .walk-panel h4 { margin: 0 0 4px; font-size: 11px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.04em; }

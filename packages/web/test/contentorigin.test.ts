@@ -7,7 +7,7 @@ import {
   contentOrigin,
   ensureTickets,
 } from "../src/lib/contentBase.ts";
-import { itemFrame } from "../src/lib/frame.ts";
+import { ITEM_FRAME_LINKS, itemFrame } from "../src/lib/frame.ts";
 
 /**
  * The content-origin plan's invariants 1 and 2 as tests
@@ -30,7 +30,7 @@ describe("invariant 2: the sandbox upgrade is keyed to the split, never to a fla
     for (const base of ["http://127.0.0.1:4442", "https://isocan.store"]) {
       const frame = itemFrame(unsigned(base), "prj_1", "blob_abc");
       expect(frame?.src).toBe(`${base}${blobUrl("prj_1", "blob_abc")}`);
-      expect(frame?.sandbox).toBe("allow-scripts allow-same-origin");
+      expect(frame?.sandbox).toBe(`allow-scripts allow-same-origin ${ITEM_FRAME_LINKS}`);
     }
   });
 
@@ -41,7 +41,7 @@ describe("invariant 2: the sandbox upgrade is keyed to the split, never to a fla
     };
     const frame = itemFrame(signed, "prj_1", "blob_abc");
     expect(frame?.src).toBe("https://isocan.store/api/projects/prj_1/blobs/blob_abc?exp=99&sig=zzz");
-    expect(frame?.sandbox).toBe("allow-scripts allow-same-origin");
+    expect(frame?.sandbox).toBe(`allow-scripts allow-same-origin ${ITEM_FRAME_LINKS}`);
   });
 
   it("a ticket that has not landed is NOTHING, never an app-origin frame", () => {
@@ -85,6 +85,42 @@ describe("invariant 2: the sandbox upgrade is keyed to the split, never to a fla
     expect(source).not.toMatch(/className="html-view"\s+src=\{url\}\s+sandbox="/);
     // And nothing outside frame.ts may write the grant by hand.
     expect(source).not.toContain('sandbox="allow-scripts allow-same-origin"');
+  });
+});
+
+describe("links out of an item open a new tab, on a content origin only", () => {
+  const tokens = (sandbox: string) => sandbox.split(/\s+/).filter(Boolean);
+  const shapes = [
+    unsigned("http://127.0.0.1:4442"),
+    unsigned("https://isocan.store"),
+    { base: "https://isocan.store", ticket: () => "/api/projects/p/blobs/b?exp=1&sig=s" },
+  ];
+
+  it("a content-origin frame lets a target=_blank click open an ordinary tab", () => {
+    // A slide's `tabletop.google ↗` pill does nothing without allow-popups,
+    // and opens a broken, still-sandboxed tab without the escape.
+    for (const origin of shapes) {
+      const granted = tokens(itemFrame(origin, "prj_1", "blob_abc")!.sandbox);
+      expect(granted).toContain("allow-popups");
+      expect(granted).toContain("allow-popups-to-escape-sandbox");
+    }
+  });
+
+  it("no frame may navigate the canvas tab itself, whatever it opens", () => {
+    // Opening a NEW tab is the grant; taking the top window is not. Any
+    // allow-top-navigation variant would let a page replace the canvas.
+    const origins = [null, ...shapes];
+    for (const origin of origins) {
+      const granted = tokens(itemFrame(origin, "prj_1", "blob_abc")!.sandbox);
+      expect(granted.filter((t) => t.startsWith("allow-top-navigation"))).toEqual([]);
+    }
+  });
+
+  it("with no content origin the frame stays sealed: no popups, today's frame", () => {
+    // Invariant 1 again, for this grant: the unconfigured home is unchanged,
+    // and its app-origin `sandbox allow-scripts` header would veto popups anyway.
+    const granted = tokens(itemFrame(null, "prj_1", "blob_abc")!.sandbox);
+    expect(granted).toEqual(["allow-scripts"]);
   });
 });
 

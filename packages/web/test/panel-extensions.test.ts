@@ -18,7 +18,7 @@ import {
   type PanelOpResult,
 } from "@isocan/core";
 import { ExtensionPanelSurface } from "../src/components/ExtensionPanel.tsx";
-import { itemFrame, panelFrame, type ContentOrigin } from "../src/lib/frame.ts";
+import { ITEM_FRAME_LINKS, itemFrame, panelFrame, type ContentOrigin } from "../src/lib/frame.ts";
 import {
   bridgePanelFrame,
   clearPanelBridgeCredentials,
@@ -105,7 +105,7 @@ describe("extensions phase 4: the panel frame on the content origin", () => {
       'src="http://127.0.0.1:4442/api/projects/prj_acme/blobs/hash_itm_page"',
     );
     expect(html).toContain('sandbox="allow-scripts"');
-    expect(itemFrame(contentOrigin, "prj_acme", "hash_itm_page")?.sandbox).toBe("allow-scripts allow-same-origin");
+    expect(itemFrame(contentOrigin, "prj_acme", "hash_itm_page")?.sandbox).toBe(`allow-scripts allow-same-origin ${ITEM_FRAME_LINKS}`);
 
     // Never falls back to the app origin when contentBase() is null.
     expect(panelFrame(null, "prj_acme", "hash_itm_page")).toBeNull();

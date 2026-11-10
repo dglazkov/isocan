@@ -45,7 +45,18 @@
   transform: translateY(-50%);
   max-height: calc(100vh - 2 * var(--edge)); overflow: auto;
 }
-.add-popover { width: 340px; }
+/* Portalled to `document.body` so `.tool-rail`'s `backdrop-filter` neither
+   traps `position: fixed`, lowers it below `--z-bar`, nor clips it when the
+   expanded narrow rail scrolls. */
+body > .add-popover {
+  position: fixed; top: 50%; right: calc(var(--edge) + 40px + 20px);
+  transform: translateY(-50%);
+  max-height: calc(100vh - 2 * var(--edge)); overflow: auto;
+}
+.add-popover { width: min(340px, calc(100vw - 2 * var(--edge))); }
+@media (max-width: 639px) {
+  body > .add-popover { left: var(--edge); right: var(--edge); width: auto; }
+}
 /* The field, the pills and the inherit line all size to the panel, so
    mounting or unmounting any of them cannot move its edge. */
 .add-preview { font-size: 11px; color: var(--ink-muted); white-space: normal; min-height: 1.3em; }

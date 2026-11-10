@@ -54,8 +54,11 @@ import { classesOf, eagerWebFiles, namedBy, sources } from "./cssuse.ts";
  * 318 became 317 on 2 Oct 2026: the identity menu's doors became menu rows,
  * which dropped two of its rules and shared two more with eager or existing
  * ones, adding back only `.identity-action-words`.
+ *
+ * 317 became 316 on 21 Oct 2026: `.scrubber.at-top` moved out of `styles.css`
+ * into `scrubber.css` beside History's own rules.
  */
-const CEILING = 317;
+const CEILING = 316;
 
 const eagerFiles = eagerWebFiles();
 const isLazyWeb = (file: string) => file.startsWith("packages/web/src/") && !eagerFiles.has(file);

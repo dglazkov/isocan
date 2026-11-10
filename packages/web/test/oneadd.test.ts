@@ -22,6 +22,7 @@ const cli = read("../../cli/src/main.ts");
 describe("the rail has one Add door", () => {
   it("mounts the popover once and no separate upload, site or canvas button", () => {
     expect(tools).toContain("<AddPopover canvasId={canvasId} actor={actor} onFiles=");
+    expect(tools).toContain('aria-label="Add"');
     expect(tools).not.toContain("ProjectSite");
     expect(tools).not.toContain("PlaceCanvas");
     expect(tools).not.toContain("UPLOAD");

@@ -13,7 +13,9 @@ import { namesEvidenceContext, namesObservation, namesGap, namesFragment, namesS
 // The newest by createdAt is kept. Each older one, oldest first:
 //   - it holds only data (DATA: docs/health/, docs/inbox/, docs/INBOX.md,
 //     .plates/bounds.json, the night's plan records (docs/night/YYYY-MM-DD.json),
-//     and the dated pages (<dir>/YYYY-MM-DD.md) in the
+//     the personas' review pages (docs/reviews/YYYY-MM-DD-<persona>.md),
+//     and the dated pages (<dir>/YYYY-MM-DD.md, and each one's
+//     YYYY-MM-DD.reconciliation.json) in the
 //     health directory .plates/plates.json "health" names, when it names one; for keel-loop/ instead docs/loop/ and docs/LOOP.md,
 //     DATA_BY_PREFIX, plus the files .plates/plates.json "loop" "afterRenderWrites"
 //     names) and GitHub says MERGEABLE → squash-merged, branch kept;
@@ -35,11 +37,13 @@ import { join } from 'node:path';
 import { isMain, rootOf, main, healthDirOf, HEALTH_DIR } from './lib.mjs';
 
 export const DATA_DIRS = ['docs/inbox/'];
-/** A health directory's dated pages: the night's data there, never its other files (an index, a shared script). */
-export const datedPages = dir => new RegExp(`^${dir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/\\d{4}-\\d{2}-\\d{2}\\.md$`);
+/** A health directory's dated pages and their reconciliation sidecars (phase 153): the night's data there, never its other files (an index, a shared script). */
+export const datedPages = dir => new RegExp(`^${dir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/\\d{4}-\\d{2}-\\d{2}(?:\\.md|\\.reconciliation\\.json)$`);
 /** The night's plan as it ended (phase 73): docs/night/<date>.json, one dated file, never the directory's other files. */
 export const NIGHT_RECORDS = /^docs\/night\/\d{4}-\d{2}-\d{2}\.json$/;
-export const DATA_PAGES = [datedPages(HEALTH_DIR), NIGHT_RECORDS];
+/** A persona's review page (phase 75): docs/reviews/<date>-<persona>.md, which the night plan's persona run writes; never the directory's other files. */
+export const REVIEW_PAGES = /^docs\/reviews\/\d{4}-\d{2}-\d{2}-[a-z0-9][a-z0-9-]*\.md$/;
+export const DATA_PAGES = [datedPages(HEALTH_DIR), NIGHT_RECORDS, REVIEW_PAGES];
 export const DATA_FILES = ['docs/INBOX.md', '.plates/bounds.json'];
 /**
  * A queue whose data is something else: its own paths, instead of the
