@@ -3,6 +3,7 @@ import { isGroupItem, groupContentBox } from "@isocan/core";
 import { creationDestination, QueuedItemError, selectCreatedItems } from "../lib/groupplacement.ts";
 import { groupsEnabled, openGroupCreation } from "../lib/canvasgroups.ts";
 import { useEffect, useId, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import type { Actor, Canvas, AddKind, Addable, Item, Placement } from "@isocan/core";
 import {
   CANVAS_ITEM_SIZE,
@@ -287,7 +288,7 @@ export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; act
           <path d="M9 3v12M3 9h12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
         </svg>
       </button>
-      {open && adding !== "file" && (
+      {open && adding !== "file" && createPortal(
         <form ref={float.ref} className="site-popover canvas-picker add-popover" style={float.style} onSubmit={submit}>
           <FloatingHandles box={float} />
           <input
@@ -354,7 +355,8 @@ export function AddPopover({ canvasId, actor, onFiles }: { canvasId: string; act
             {pinned.kind === "doc" ? "Add document" : pinned.kind === "site" ? "Add site" : pinned.kind === "canvas" || pinned.kind === "search" ? "Place canvas" : "Add"}
           </button>
           {error && <div className="site-error" id={errorId} role="alert">{error}</div>}
-        </form>
+        </form>,
+        document.body,
       )}
     </div>
   );

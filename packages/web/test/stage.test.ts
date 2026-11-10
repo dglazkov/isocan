@@ -180,7 +180,7 @@ describe("the stage, asked directly", () => {
 
   it("treats an open dock as the reservation, not an addition to it", () => {
     const trash = stageRect(ui({ trashOpen: true }), win);
-    expect(trash.x + trash.width).toBe(win.innerWidth - TRASH_WIDTH);
+    expect(trash.x + trash.width).toBe(win.innerWidth - TRASH_WIDTH - MARKS_GUTTER);
     const marks = stageRect(ui({ marksOpen: true }), win);
     expect(marks.x + marks.width).toBe(win.innerWidth - MARKS_WIDTH - MARKS_GUTTER);
   });

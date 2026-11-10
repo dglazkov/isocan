@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
@@ -53,6 +54,7 @@ describe("the layer scale", () => {
       "--z-popover",
       "--z-toast",
       "--z-overlay",
+      "--z-fullscreen",
       "--z-modal",
       "--z-dialog",
     ]) {
@@ -60,7 +62,7 @@ describe("the layer scale", () => {
     }
   });
 
-  it("keeps the scale in order: docked < floating < bars < popovers < modals", () => {
+  it("keeps the scale in order: docked < floating < bars < popovers < covers < modals", () => {
     const value = (token: string): number => {
       const match = css.match(new RegExp(`${token}:\\s*(\\d+)`));
       expect(match, `${token} has no number`).toBeTruthy();
@@ -74,6 +76,7 @@ describe("the layer scale", () => {
       "--z-popover",
       "--z-toast",
       "--z-overlay",
+      "--z-fullscreen",
       "--z-modal",
       "--z-dialog",
     ].map(value);
@@ -346,5 +349,65 @@ describe("the phone face's Inbox sits between the face and a presentation", () =
     const fullscreen = layer("packages/web/src/styles.css", ".fullscreen");
     expect(inbox, "the face paints over its own Inbox slot").toBeGreaterThan(face);
     expect(inbox, "the Inbox shows through a presentation").toBeLessThan(fullscreen);
+  });
+});
+
+describe("inline z-index and cover/rail layer invariants", () => {
+  const srcRoot = fileURLToPath(new URL("../src", import.meta.url));
+  function codeFiles(dir: string): string[] {
+    const out: string[] = [];
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) out.push(...codeFiles(full));
+      else if (/\.(ts|tsx)$/.test(entry.name)) out.push(full);
+    }
+    return out;
+  }
+
+  it("never sets a raw inline zIndex >= LOCAL_MAX in TypeScript/TSX", () => {
+    const files = codeFiles(srcRoot);
+    expect(files.length).toBeGreaterThan(20);
+    const bad: string[] = [];
+    for (const file of files) {
+      const text = withoutComments(readFileSync(file, "utf8"));
+      for (const match of text.matchAll(/\bzIndex\s*:\s*(-?\d+)/g)) {
+        const n = Number(match[1]);
+        if (n >= LOCAL_MAX) bad.push(`${path.relative(srcRoot, file)}: zIndex: ${n}`);
+      }
+    }
+    expect(bad, "inline numeric zIndex bypasses the :root scale").toEqual([]);
+  });
+
+  it("lifts portalled menus, hover cards and peeks above full-screen covers", () => {
+    for (const cover of [".workbench", ".fullscreen", ".module-page"]) {
+      for (const surface of [".mention-menu", ".hover-card", ".wb-peek", ".context-menu", ".proposal-toast"]) {
+        const rule = rules().find((r) => selectorsOf(r).includes(`body:has(${cover}) ${surface}`));
+        expect(rule, `${surface} falls behind ${cover}`).toBeTruthy();
+        expect(rule!.body).toMatch(/z-index:\s*var\(--z-modal\)/);
+      }
+    }
+  });
+
+  it("flips the History hover peek downward when the scrubber sits at the top", () => {
+    const scrubberCss = readFileSync(
+      fileURLToPath(new URL("../src/components/scrubber.css", import.meta.url)),
+      "utf8",
+    );
+    expect(scrubberCss).toMatch(/\.scrubber\.at-top\s+\.scrub-peek\s*\{[^}]*bottom:\s*auto;\s*top:\s*calc\(100%\s*\+\s*10px\)/);
+  });
+
+  it("keeps floating right-side panels and trash clear of the tool rail and zoom bar", () => {
+    const trash = rules().find((r) => selectorsOf(r).includes(".trash-panel") && r.at.length === 0);
+    expect(trash?.body).toContain("right: 76px");
+    expect(trash?.body).toContain("bottom: calc(var(--edge) + 53px)");
+    for (const [file, sel] of [
+      ["packages/web/src/components/explain.css", ".explain-panel"],
+      ["packages/web/src/components/walk.css", ".walk-panel"],
+    ] as const) {
+      const sheet = appSheets.find((s) => s.file === file)!;
+      const rule = rules(sheet.text).find((r) => selectorsOf(r).includes(sel) && r.at.length === 0);
+      expect(rule?.body, `${sel} covers .tool-rail`).toContain("right: calc(var(--edge) + 60px)");
+      expect(rule?.body, `${sel} covers .zoom-controls`).toContain("--zoom-row");
+    }
   });
 });
