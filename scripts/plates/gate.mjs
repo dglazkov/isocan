@@ -55,6 +55,7 @@ import { timedCommand, record, where, sha12 } from './test-ledger.mjs';
 import { gateWorkflowOf, gateEnv, isMain, main } from './lib.mjs';
 
 export const CHECK = 'npm run check';
+export const DEFER_ENV = 'PLATES_DEFER_GATE';
 export const DAY = 86_400_000;
 /** What a docs-only commit records instead of running the suite. */
 export const DOCS_ONLY = 'skipped: docs only';
@@ -355,6 +356,7 @@ export async function recordSkip(root, { skip, command }) {
 export async function gate({ root, config, env = process.env, ci = false, now = Date.now(), stdio = 'inherit', request, download }) {
   gateReuseAge(config);
   const command = config.check ?? CHECK;
+  if (!ci && env[DEFER_ENV] === '1') return { action: 'deferred', command, status: 0 };
   const reasons = [];
   if (!ci) {
     const reuse = await reusableGate({ root, config, env, now, request, download });
@@ -369,7 +371,7 @@ export async function gate({ root, config, env = process.env, ci = false, now = 
   if (docsOnlyOf(config)) reasons.push(`not skipped: ${skip.reason}`);
   // Never a test runner's context (lesson 14); the project's .plates/plates.json `env` over it. CI's step
   // holds GH_TOKEN for the docs-only read alone: the check runs without it, as it did before this script.
-  const own = ci ? Object.fromEntries(Object.entries(env).filter(([k]) => k !== 'GH_TOKEN')) : env;
+  const own = Object.fromEntries(Object.entries(env).filter(([k]) => k !== DEFER_ENV && (!ci || k !== 'GH_TOKEN')));
   const r = await timedCommand(command, { cwd: root, env: gateEnv(own, config), preparedEnv: true, configured: true, stdio });
   if (r.error) throw new GateError(`could not run \`${command}\`: ${r.error.message}`);
   return { action: 'ran', command, status: r.status ?? 1, signal: r.signal ?? null, ms: r.ms, reasons };
@@ -377,6 +379,7 @@ export async function gate({ root, config, env = process.env, ci = false, now = 
 
 /** What the gate says it did, one line. */
 export function gateLine(g) {
+  if (g.action === 'deferred') return `plates gate: deferred \`${g.command}\` to plates integrate`;
   if (g.action === 'reused') return `plates gate: reused CI's result for ${g.sha.slice(0, 7)} (${g.workflow} run ${g.runId}, attempt ${g.attempt}, ${Math.round(g.ageMs / 60000)} minutes old): \`${g.command}\` passed with ${g.tests} tests; not run here`;
   if (g.action === 'skipped') return `plates gate: ${DOCS_ONLY}: the ${g.changed.length} path${g.changed.length === 1 ? '' : 's'} changed since ${g.base.slice(0, 7)} (the last fully tested commit) are all in "delivery".docsOnly`;
   return `plates gate: ran \`${g.command}\`: exit ${g.status}${g.reasons.length ? ` (${g.reasons.join('; ')})` : ''}`;

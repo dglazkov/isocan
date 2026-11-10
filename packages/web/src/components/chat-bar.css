@@ -3,7 +3,11 @@
 
 .chat-bar {
   position: absolute; left: 0; right: 0; bottom: var(--edge); margin: 0 auto;
-  width: min(720px, calc(100vw - 32px));
+  /* Leave 220px on each side so the bottom-left minimap (20 + 168 = 188px) and
+     bottom-right zoom bar (~209px) sit cleanly beside the Chat bar across
+     laptop and split-screen widths; below 760px the bar takes full width and
+     the corner controls step above it. */
+  width: min(720px, calc(100vw - 440px));
   /* Over the canvas and its floating chrome, under menus and dialogs — and its
      own popovers (the mention menu is portalled) ride above it. */
   z-index: var(--z-bar);
@@ -76,8 +80,18 @@
 .chat-bar-preview { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .chat-bar-news:hover .chat-bar-preview { color: var(--ink); }
 
-/* The wet-ink bar shares the bottom centre: it steps up over the Chat. */
-.canvas-page:has(> .chat-bar) .sketch-bar { bottom: calc(var(--edge) + 64px); }
+/* When the Chat bar occupies the bottom centre — closed, with selection pills,
+   with an unread banner, or expanded open — the wet-ink status pill takes the
+   top centre slot under the toolbar (the same move `.scrubber.at-top` makes),
+   and steps clear if `.scrubber.at-top` is there too. */
+.canvas-page:has(> .chat-bar) .sketch-bar { bottom: auto; top: calc(var(--topbar) + 12px); }
+.canvas-page:has(> .chat-bar):has(> .scrubber.at-top) .sketch-bar { bottom: auto; top: calc(var(--topbar) + 152px); }
+
+@media (max-width: 759px) {
+  .chat-bar, .chat-zone-bottom { width: min(720px, calc(100vw - 32px)); }
+  .canvas-page:has(> .chat-bar) .zoom-controls,
+  .canvas-page:has(> .chat-bar) .minimap-dock { bottom: calc(var(--edge) + 64px); }
+}
 
 /* ---------- moving it ---------- */
 body.chat-dragging, body.chat-dragging * { cursor: grabbing !important; user-select: none; }
@@ -92,7 +106,7 @@ body.chat-dragging, body.chat-dragging * { cursor: grabbing !important; user-sel
 .chat-zone-left { top: calc(var(--topbar) + var(--edge)); left: var(--edge); bottom: var(--edge); }
 .chat-zone-bottom {
   left: 0; right: 0; bottom: var(--edge); margin: 0 auto; height: 64px;
-  width: min(720px, calc(100vw - 32px));
+  width: min(720px, calc(100vw - 440px));
 }
 /* Nearer is tinted; in reach is solid. A tint, not opacity: the slot's
    words stay at their own contrast. */

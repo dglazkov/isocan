@@ -1,5 +1,6 @@
 import "./agent-row.css";
 import { lazy, Suspense, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import type { AgentRow } from "@isocan/core";
 import {
@@ -169,7 +170,7 @@ export function AgentRowView({
         onPointerEnter={enter}
         onPointerLeave={() => setPeekAt(null)}
       >
-        {peekAt && canvas && (
+        {peekAt && canvas && createPortal(
           <div className="wb-peek" style={{ left: peekAt.x, top: peekAt.y }}>
             <ul className="wb-trail">
               {recentActivity(canvas, row.actorId, 8).map((act, i) => (
@@ -182,7 +183,8 @@ export function AgentRowView({
                 <li className="wb-quiet">nothing on this canvas yet</li>
               )}
             </ul>
-          </div>
+          </div>,
+          document.body,
         )}
         <span className="wb-row-head as-line">
           {/* **The two states must not look alike** (#197 D3, 7 Sep 2026).
@@ -275,7 +277,7 @@ export function AgentRowView({
         onPointerEnter={enter}
         onPointerLeave={() => setPeekAt(null)}
       >
-        {peekAt && canvas && (
+        {peekAt && canvas && createPortal(
           <div className="wb-peek" style={{ left: peekAt.x, top: peekAt.y }}>
             <ul className="wb-trail">
               {recentActivity(canvas, row.actorId, 8).map((act, i) => (
@@ -285,7 +287,8 @@ export function AgentRowView({
                 </li>
               ))}
             </ul>
-          </div>
+          </div>,
+          document.body,
         )}
         <span className="wb-row-head as-line">
           <span className="wb-dot hollow" style={{ borderColor: color }} aria-hidden />
@@ -320,7 +323,7 @@ export function AgentRowView({
       {/* The peek: hover answers "what have they been up to" without a
           click — the FaceCard's manners, in the room. The expanded row
           already shows the record, so the peek stands down for it. */}
-      {peekAt && !open && canvas && (
+      {peekAt && !open && canvas && createPortal(
         <div className="wb-peek" style={{ left: peekAt.x, top: peekAt.y }}>
           <ul className="wb-trail">
             {recentActivity(canvas, row.actorId, 8).map((act, i) => (
@@ -333,7 +336,8 @@ export function AgentRowView({
               <li className="wb-quiet">nothing on this canvas yet</li>
             )}
           </ul>
-        </div>
+        </div>,
+        document.body,
       )}
       {onFollow && (
         <button

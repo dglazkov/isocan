@@ -32,7 +32,7 @@
  * for the same reason: "0 contrast failures" and "nothing could be measured"
  * must never render the same. Broken reads amber and says which command failed.
  */
-import { execSync, execFileSync } from "node:child_process";
+import { exec, execSync, execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -142,21 +142,52 @@ const personas = () => {
  * command that fails, or prints something that is not a number, is a BROKEN
  * INSTRUMENT and says so. It is never read as zero.
  */
-function take(goal) {
-  let out;
-  try {
-    out = execSync(goal.measuredBy, { cwd: repo, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-  } catch (err) {
-    // A recorded reading nobody has taken yet (`scripts/lib/reading.mjs`): said, never a number, never broken.
-    const line = unreadOf(err);
-    if (line) return { unread: line };
-    return { broken: `the command failed: ${String(err.stderr ?? err.message).trim().slice(0, 240)}` };
-  }
+const premeasured = new Map();
+function parseReading(out) {
   const value = Number(out.trim().split(/\s+/).pop());
   if (!Number.isFinite(value)) {
     return { broken: `expected a number on stdout, got ${JSON.stringify(out.trim().slice(0, 80))}` };
   }
   return { value };
+}
+function failedReading(err) {
+  // A recorded reading nobody has taken yet (`scripts/lib/reading.mjs`): said, never a number, never broken.
+  const line = unreadOf(err);
+  if (line) return { unread: line };
+  return { broken: `the command failed: ${String(err.stderr ?? err.message).trim().slice(0, 240)}` };
+}
+function takeAsync(cmd) {
+  return new Promise((resolve) => {
+    exec(cmd, { cwd: repo, encoding: "utf8" }, (err, stdout, stderr) => {
+      if (err) resolve(failedReading(Object.assign(err, { stdout, stderr })));
+      else resolve(parseReading(stdout));
+    });
+  });
+}
+async function warmReadings(list, concurrency = 4) {
+  const cmds = [...new Set(list.flatMap((p) => p.goals.map((g) => g.measuredBy)))].filter(
+    (cmd) => !premeasured.has(cmd),
+  );
+  let i = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, cmds.length) }, async () => {
+      while (i < cmds.length) {
+        const cmd = cmds[i++];
+        premeasured.set(cmd, await takeAsync(cmd));
+      }
+    }),
+  );
+}
+function take(goal) {
+  const cached = premeasured.get(goal.measuredBy);
+  if (cached) return cached;
+  let out;
+  try {
+    out = execSync(goal.measuredBy, { cwd: repo, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  } catch (err) {
+    return failedReading(err);
+  }
+  return parseReading(out);
 }
 const met = (goal, value) =>
   goal.bound.kind === "at most" ? value <= goal.bound.value : value >= goal.bound.value;
@@ -975,6 +1006,10 @@ all.forEach((p, i) => {
 });
 
 const STATUS_TITLE = "Tree status";
+
+if (wantPanel("build") || wantPanel("brief") || wantPanel("status") || wantPanel("personas")) {
+  await warmReadings(all);
+}
 
 if (wantPanel("build")) {
   await publish("build", "Build", buildPanel(ci(), readBoard(), f), LAYOUT.build);

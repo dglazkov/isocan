@@ -170,7 +170,7 @@ export function CursorLayer({ actor = null }: { actor?: Actor | null } = {}) {
   }, [nextSignalExpiry]);
 
   return (
-    <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 25 }}>
+    <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: "var(--z-canvas)" }}>
       {visible.map((session) => {
         const rec = animated.current.get(session.sessionId);
         const fallback = session.cursor;

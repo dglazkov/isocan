@@ -443,17 +443,27 @@ export async function readInputs({ root, config, env = process.env, date }) {
  * --all` measures every persona (writing its review pages, as it always
  * does) and each missed goal becomes a build item with its number, each
  * broken one a review item (planCandidates). No persona files is no items,
- * never a failure; a persona file that cannot be read is an input the plan
- * cannot read.
+ * never a failure. A run that fails (a persona file that cannot be read, one
+ * changed while it ran, a review page it refuses to write) does not fail the
+ * night: it is one review item saying why (PERSONAS_RUN), and no goal is read
+ * from it (phase 75). A project without the personas practice runs nothing.
  */
+export const PERSONAS_RUN = 'personas-run';
 export async function personaCandidates({ root, config, env, date, inputs }) {
   if (!(config?.practices ?? []).includes('personas') || !existsSync(join(root, 'scripts/plates/persona.mjs'))) return [];
-  const persona = await practiceScript(root, 'scripts/plates/persona.mjs', 'the personas');
-  if (!(await persona.readPersonas(root)).length) return [];
-  const r = await persona.run({ root, all: true, date, env });
+  let personas;
+  try {
+    const persona = await practiceScript(root, 'scripts/plates/persona.mjs', 'the personas');
+    if (!(await persona.readPersonas(root)).length) return [];
+    const r = await persona.run({ root, all: true, date, env });
+    personas = { persona, list: r.data.personas };
+  } catch (e) {
+    return [item({ id: PERSONAS_RUN, kind: 'review', source: 'default', lane: 'night',
+      title: short(`The personas could not be run tonight: ${String(e?.message ?? e).split('\n')[0]}. No persona goal is read until plates persona run --all passes.`, 300) })];
+  }
   // A missed goal's build goes to the climb job that measures it, else it is triage (phase 78).
   const jobs = inputs?.jobs ?? await climbJobs(root, config);
-  return r.data.personas.flatMap(p => persona.planCandidates(p, { jobs }));
+  return personas.list.flatMap(p => personas.persona.planCandidates(p, { jobs }));
 }
 
 /**

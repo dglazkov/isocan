@@ -1,0 +1,97 @@
+{
+  "schema": 1,
+  "date": "2026-11-08",
+  "shapedBy": "default",
+  "readyBy": null,
+  "willNotTouch": [],
+  "settledToday": [],
+  "leftOpen": [
+    "48 more untriaged Loop findings wait (docs/loop/)"
+  ],
+  "items": [
+    {
+      "id": "measures",
+      "title": "Measure the practice: 39 measures; outside or broken on 2026-11-07: drafts_waiting, long_files, phases_without_issue, phases_stuck, escapes, changelog_gaps, verify_owed, lint, issues_unnamed, issues_done_open, dependency_age",
+      "kind": "measure",
+      "source": "default",
+      "number": null,
+      "lane": "night",
+      "budget": null,
+      "status": "done",
+      "result": {
+        "note": "11 ok, 11 outside, 17 n/a, 0 broken",
+        "link": "docs/practice/2026-11-08.md"
+      }
+    },
+    {
+      "id": "health-phases-stuck",
+      "title": "Proposal from 2026-11-07: Move design-competition/0 (planned; docs/projects/design-competition/phases.md untouched since 2026-09-13, 55 days): take its next action, or mark it RETIRED. 65 more after it.",
+      "kind": "review",
+      "source": "health:phases_stuck",
+      "number": {
+        "measure": "phases_stuck",
+        "bound": 0,
+        "better": "lower"
+      },
+      "lane": "night",
+      "budget": null,
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "loop-absence-of-agent-proposal-staging-overlays",
+      "title": "Triage the Loop finding: Absence of agent proposal staging overlays",
+      "kind": "triage",
+      "source": "loop:absence-of-agent-proposal-staging-overlays",
+      "number": null,
+      "lane": "loop",
+      "budget": null,
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "loop-absence-of-spatial-agent-activity-feeds-and-status",
+      "title": "Triage the Loop finding: Absence of spatial agent activity feeds and status indicators",
+      "kind": "triage",
+      "source": "loop:absence-of-spatial-agent-activity-feeds-and-status",
+      "number": null,
+      "lane": "loop",
+      "budget": null,
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "loop-absence-of-spatial-api-contract-mock-payload-binding-no",
+      "title": "Triage the Loop finding: Absence of spatial API contract mock payload binding nodes",
+      "kind": "triage",
+      "source": "loop:absence-of-spatial-api-contract-mock-payload-binding-nodes",
+      "number": null,
+      "lane": "loop",
+      "budget": null,
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "loop-absence-of-spatial-component-accessibility-focus-sequen",
+      "title": "Triage the Loop finding: Absence of spatial component accessibility focus sequence nodes",
+      "kind": "triage",
+      "source": "loop:absence-of-spatial-component-accessibility-focus-sequence",
+      "number": null,
+      "lane": "loop",
+      "budget": null,
+      "status": "planned",
+      "result": null
+    },
+    {
+      "id": "loop-absence-of-spatial-design-review-presentation-mode-path",
+      "title": "Triage the Loop finding: Absence of spatial design review presentation mode pathways",
+      "kind": "triage",
+      "source": "loop:absence-of-spatial-design-review-presentation-mode-pathways",
+      "number": null,
+      "lane": "loop",
+      "budget": null,
+      "status": "planned",
+      "result": null
+    }
+  ]
+}

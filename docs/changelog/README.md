@@ -17,6 +17,11 @@ screen per day, one row per week, open to anyone with the address.
 
 | Day | | What happened |
 | --- | --- | --- |
+| **[10 Nov](2026-11-10.md)** | Links out of an item open a new tab; every layer walked in a browser | Content-origin item frames gain `allow-popups allow-popups-to-escape-sandbox` (never top navigation), so a slide's `↗` link opens a new tab (`contentorigin.test.ts`). Landed the 21 October layers session: `scripts/journey-layers.mjs` walks 18 scenes in headless Chrome against four layer invariants, and every defect it caught is fixed — `AddPopover` and `.wb-peek` portalled out of `backdrop-filter` traps, transient menus lifted above full-screen covers, the top scrubber's peek flipped downward, and co-resident bottom/left/right chrome cleared (`layers.test.ts`, `oneadd.test.ts`; lesson 128). Off CI, vitest caps its workers; the rc room test and the canvas board got faster and deterministic. |
+| **[4 Nov](2026-11-04.md)** | *Draft* | Not written up yet: the day's commits, quoted in full. Whoever writes the entry replaces this row. |
+| **[3 Nov](2026-11-03.md)** | *Draft* | Not written up yet: the day's commits, quoted in full. Whoever writes the entry replaces this row. |
+| **[2 Nov](2026-11-02.md)** | *Draft* | Not written up yet: the day's commits, quoted in full. Whoever writes the entry replaces this row. |
+| **[1 Nov](2026-11-01.md)** | Browser launches without code-sign clones | The shared Chrome launcher and screenshot guide disable macOS code-sign cloning; nightly practice and persona reports were retained. |
 | **[31 Oct](2026-10-31.md)** | *Draft* | Not written up yet: the day's commits, quoted in full. Whoever writes the entry replaces this row. |
 | **[30 Oct](2026-10-30.md)** | *Draft* | Not written up yet: the day's commits, quoted in full. Whoever writes the entry replaces this row. |
 | **[29 Oct](2026-10-29.md)** | *Draft* | Not written up yet: the day's commits, quoted in full. Whoever writes the entry replaces this row. |
