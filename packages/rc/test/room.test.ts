@@ -47,17 +47,32 @@ class HandClock {
   now = 1_000_000;
   private timers: { at: number; fire: () => void }[] = [];
 
+  after(ms: number, run: () => void): () => void {
+    const timer = {
+      at: this.now + ms,
+      fire: () => {
+        this.timers = this.timers.filter((t) => t !== timer);
+        run();
+      },
+    };
+    this.timers.push(timer);
+    return () => {
+      this.timers = this.timers.filter((t) => t !== timer);
+    };
+  }
+
   sleep = (ms: number, signal: AbortSignal): Promise<void> =>
     new Promise((resolve) => {
       if (signal.aborted) return resolve();
-      const timer = { at: this.now + ms, fire: () => done() };
-      const done = () => {
-        this.timers = this.timers.filter((t) => t !== timer);
-        signal.removeEventListener("abort", done);
+      const cancel = this.after(ms, () => {
+        signal.removeEventListener("abort", onAbort);
+        resolve();
+      });
+      const onAbort = () => {
+        cancel();
         resolve();
       };
-      this.timers.push(timer);
-      signal.addEventListener("abort", done, { once: true });
+      signal.addEventListener("abort", onAbort, { once: true });
     });
 
   /** Move time forward, firing every timer on the way in order, and letting
@@ -66,7 +81,10 @@ class HandClock {
     const until = this.now + ms;
     for (;;) {
       await drain();
-      const next = [...this.timers].sort((a, b) => a.at - b.at)[0];
+      let next: { at: number; fire: () => void } | undefined;
+      for (const t of this.timers) {
+        if (!next || t.at < next.at) next = t;
+      }
       if (!next || next.at > until) break;
       this.now = next.at;
       next.fire();
@@ -309,22 +327,29 @@ class AcmeHome {
    * aborts — which rejects, the way an aborted fetch does. */
   private wait(ms: number, signal: AbortSignal | undefined): Promise<void> {
     return new Promise((resolve, reject) => {
-      const timeUp = new AbortController();
-      const finish = () => {
-        timeUp.abort();
+      let settled = false;
+      const cleanup = () => {
+        cancel();
+        const idx = this.waiters.indexOf(finish);
+        if (idx >= 0) this.waiters.splice(idx, 1);
         signal?.removeEventListener("abort", aborted);
+      };
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        cleanup();
         resolve();
       };
       const aborted = () => {
-        timeUp.abort();
+        if (settled) return;
+        settled = true;
+        cleanup();
         reject(new DOMException("aborted", "AbortError"));
       };
+      const cancel = this.clock.after(ms, finish);
       if (signal?.aborted) return aborted();
       signal?.addEventListener("abort", aborted, { once: true });
       this.waiters.push(finish);
-      void this.clock.sleep(ms, timeUp.signal).then(() => {
-        if (!timeUp.signal.aborted) finish();
-      });
     });
   }
 }
