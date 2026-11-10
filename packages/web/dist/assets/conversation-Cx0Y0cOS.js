@@ -1,0 +1,1 @@
+import{g as i,bg as r,bh as c,G as d,bi as p}from"./index-C37GtGg_.js";function g(a,o){const e=i.getState();if(e.canvasId!==a)return;const t=e.canvas?.threads[o];if(t?.main)r(a,!0);else if(t&&e.canvas){const s=c(e.canvas,t),n=d.getState();n.setViewport(p(n.viewport,s.x,s.y,window.innerWidth,window.innerHeight)),n.setOpenThread(t.id)}}export{g as openConversation};

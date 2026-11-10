@@ -1506,6 +1506,15 @@ then stacks a new version on top of it and buries the choice. If you do need
 the path (an editor, a build, a test run), write it out first with `isocan
 save <item>` so the two agree before you start.
 
+## Links out of an HTML item
+
+A link with `target="_blank" rel="noopener"` opens a new tab when a person
+clicks it — a slide's `example.com ↗` pill works in full screen. That holds on
+a home that serves items from a content origin (hosted homes do). A page still
+cannot navigate the canvas tab itself, and `fetch` stays closed. A local home
+with no content origin keeps item frames fully sealed, so there the click does
+nothing.
+
 ## A live React component as a canvas item
 
 An HTML item runs its own inline scripts, and the frame's content policy
