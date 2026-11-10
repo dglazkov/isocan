@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { FrameAnchor } from "../lib/frameanchor.ts";
-import type { Actor } from "@isocan/core";
+import type { Actor, Item } from "@isocan/core";
 import { deckTransitionOf, sourceOf, canvasPath, deckStep, itemPath, workbenchItemPath, nodeCapabilitiesFor, isFramedItem, noteFor, visualFaceOf, isDesignSystem, isTextItem } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -17,6 +17,7 @@ import { findNextItem, type Direction } from "../lib/spatialnav.ts";
 import { FLIP_NEXT, FLIP_PREV, REST_AFTER_MS, flipTo, framingOf } from "../lib/deckflip.ts";
 import { revealItem } from "../lib/zoomactions.ts";
 import { isTyping } from "../lib/keys.ts";
+import { nextInLoop, reclaimKeyboard } from "../lib/presenting.ts";
 
 const DIRECTIONS = new Set<string>(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
 
@@ -81,6 +82,28 @@ export function FullScreen({
   }, [itemId]);
 
   const back = () => navigate(canvasPath(canvasId));
+
+  /**
+   * Turn the deck to `next` the way an arrow does: the selection and the camera
+   * underneath follow, and the deck's own transition plays. Which motion is the
+   * canvas's choice (`deckTransitionOf`). A screen or a site is an iframe, which
+   * photographs blank, so two frames are animated live and a frame beside
+   * anything else cuts. See `flipTo`.
+   */
+  const turnTo = (next: Item, forward: boolean) => {
+    const canvas = useCanvasStore.getState().canvas;
+    if (!canvas) return;
+    useUiStore.getState().select(next.id);
+    revealItem(next.id);
+    const here = canvas.items[itemId];
+    flipTo(
+      navigate,
+      itemPath(canvasId, next.id),
+      forward ? "next" : "prev",
+      framingOf(here !== undefined && isFramedItem(here), isFramedItem(next)),
+      deckTransitionOf(useCanvasStore.getState().record ?? {}),
+    );
+  };
 
   // Esc is the way out, and it is bound HERE rather than in the page's key
   // handler on purpose: full screen is the outermost layer, so it must answer
@@ -169,26 +192,79 @@ export function FullScreen({
         const forward = FLIP_NEXT.has(e.key);
         const next = deckStep(canvas, itemId, forward ? 1 : -1);
         if (!next) return; // the deck's edge: stay put rather than wrap
-        useUiStore.getState().select(next.id);
-        revealItem(next.id);
         // The deck's transition, not a cut — the motion belongs to the deck
         // flip alone; ⌘-arrows above are a spatial walk and stay instant.
-        // Which motion is the canvas's choice (`deckTransitionOf`). A screen
-        // or a site is an iframe, which photographs blank, so two frames are
-        // animated live and a frame beside anything else cuts. See `flipTo`.
-        const here = canvas.items[itemId];
-        flipTo(
-          navigate,
-          itemPath(canvasId, next.id),
-          forward ? "next" : "prev",
-          framingOf(here !== undefined && isFramedItem(here), isFramedItem(next)),
-          deckTransitionOf(useCanvasStore.getState().record ?? {}),
-        );
+        turnTo(next, forward);
       }
     }
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   });
+
+  /**
+   * **The keyboard stays with the presenter.** Every key above is heard on
+   * this window, and a slide is a cross-origin frame: once focus is inside
+   * it, its key presses go to that page and never reach here. One click on
+   * the slide did that — and coming back to the tab is usually a click on the
+   * slide — after which the arrows and Esc did nothing (Dion, 10 Nov 2026).
+   * So when focus lands in the slide's frame, take it back once the click has
+   * gone through (see `reclaimKeyboard`). The window's `blur` is how this
+   * page hears focus leave for a frame; `focus` and `visibilitychange` cover
+   * a tab returned to with the frame already holding it.
+   */
+  useEffect(() => {
+    let frame = 0;
+    const reclaim = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        if (document.visibilityState === "visible") reclaimKeyboard(document);
+      });
+    };
+    // A frame later, not inside `blur`: a blur taken back from within the
+    // handler does not stick (measured). A key pressed within that one frame
+    // of the click is the slide's; a person's next key is not that quick.
+    window.addEventListener("blur", reclaim);
+    window.addEventListener("focus", reclaim);
+    document.addEventListener("visibilitychange", reclaim);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("blur", reclaim);
+      window.removeEventListener("focus", reclaim);
+      document.removeEventListener("visibilitychange", reclaim);
+    };
+  }, []);
+
+  /**
+   * **The deck turning itself.** Each slide starts its own clock, so a slide
+   * turned by hand gets the whole interval again rather than the remainder
+   * of the last one; from the last slide it loops to the first
+   * (`nextInLoop`). A deck of one has nowhere to go and nothing runs.
+   * Leaving full screen stops it with everything else here.
+   */
+  const autoAdvance = useUiStore((s) => s.autoAdvance);
+  const autoAdvanceSeconds = useUiStore((s) => s.autoAdvanceSeconds);
+  useEffect(() => {
+    if (!autoAdvance || phone) return;
+    const timer = window.setTimeout(() => {
+      const canvas = useCanvasStore.getState().canvas;
+      const next = canvas ? nextInLoop(canvas, itemId) : null;
+      if (next) turnTo(next, true);
+    }, autoAdvanceSeconds * 1000);
+    return () => clearTimeout(timer);
+    // turnTo reads everything else from the stores when it fires.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoAdvance, autoAdvanceSeconds, itemId, phone]);
+  // Stop when full screen is left — not when it merely turns to the next
+  // slide, which may mount this anew: so look a beat later for any full screen
+  // still on the page.
+  useEffect(
+    () => () => {
+      window.setTimeout(() => {
+        if (!document.querySelector(".fullscreen")) useUiStore.getState().setAutoAdvance(false);
+      }, 0);
+    },
+    [],
+  );
 
   /**
    * **The speaker notes, when the presenter asked for them.** The note is a
@@ -285,6 +361,12 @@ export function FullScreen({
           onBack={back}
           presenterNotes={presenterNotes}
           onToggleNotes={() => useUiStore.getState().setPresenterNotes(!presenterNotes)}
+          autoAdvance={{
+            on: autoAdvance,
+            seconds: autoAdvanceSeconds,
+            onToggle: () => useUiStore.getState().setAutoAdvance(!autoAdvance),
+            onSeconds: (seconds) => useUiStore.getState().setAutoAdvanceSeconds(seconds),
+          }}
         />
       )}
       {/* The morph's twins, when the deck is set to morph (MorphStage) —

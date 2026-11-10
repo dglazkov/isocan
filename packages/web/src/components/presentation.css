@@ -251,3 +251,19 @@ html[data-morph="playing"] .fullscreen-stage { opacity: 0; }
 /* A third twin — the slide on the other side — has no part in this morph,
    and would show through wherever the two at work are see-through. */
 .morph-stage[data-playing] .morph-frame:not([data-role]) { opacity: 0; }
+
+/* The deck turning itself (FocusHeader): the play button, then how many
+   seconds a slide stays. Narrow on purpose — three digits and a unit. */
+.fullscreen-autoadvance { display: inline-flex; align-items: center; gap: 4px; }
+.fullscreen-autoadvance-seconds {
+  width: 3.4em;
+  font: inherit;
+  font-size: 12px;
+  padding: 3px 4px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--chip);
+  color: var(--ink);
+  text-align: right;
+}
+.fullscreen-autoadvance-unit { font-size: 12px; color: var(--ink-soft); }

@@ -9,6 +9,7 @@ import type { Guide, SpacingGuide } from "../lib/snap.ts";
 import type { Viewport } from "../lib/viewport.ts";
 import { chooseMinimap, minimapShown, narrowNow, type MinimapFold } from "../lib/minimapfold.ts";
 import { readChatAt, type ChatAt } from "../lib/chatplace.ts";
+import { AUTO_ADVANCE_DEFAULT_S, autoAdvanceSeconds as clampAutoAdvance } from "../lib/presenting.ts";
 
 /** The pointer tools on the right rail. */
 export type Tool = "select" | "hand" | "comment" | "zoom" | "pen" | "text";
@@ -228,6 +229,15 @@ interface UiStore {
    *  mode you flip, remembered per browser like the minimap. */
   presenterNotes: boolean;
   setPresenterNotes: (on: boolean) => void;
+  /** Full screen turns the deck by itself, looping from the last slide to
+   *  the first. This tab's, and only while it lasts: pressing play is an act,
+   *  so a reload does not start a deck turning on its own. */
+  autoAdvance: boolean;
+  setAutoAdvance: (on: boolean) => void;
+  /** Seconds between slides when it does — remembered per browser, like the
+   *  notes, so a presenter's pace is there next time. */
+  autoAdvanceSeconds: number;
+  setAutoAdvanceSeconds: (seconds: number) => void;
   /** The docked files panel — the canvas as a list of files. Shares the left
    * dock with the main thread (see lib/panels.ts). */
   filesPanelOpen: boolean;
@@ -432,6 +442,7 @@ interface UiStore {
 const INK_KEY = "isocan.ink";
 const MINIMAP_KEY = "isocan.minimap";
 const PRESENTER_NOTES_KEY = "isocan.presenterNotes";
+const AUTO_ADVANCE_KEY = "isocan.autoAdvanceSeconds";
 const PANEL_WIDTH_KEY = "isocan.panelWidth";
 const WB_AGENTS_WIDTH_KEY = "isocan.wb.agents.width";
 /** The workbench agent column's floor — V1's fixed grid, now the reset. */
@@ -551,6 +562,15 @@ function readHiddenChrome(): string[] {
 
 function writeHiddenChrome(ids: string[]): void {
   writeIdList(HIDDEN_CHROME_KEY, ids);
+}
+
+function readAutoAdvanceSeconds(): number {
+  try {
+    const raw = localStorage.getItem(AUTO_ADVANCE_KEY);
+    return raw === null ? AUTO_ADVANCE_DEFAULT_S : clampAutoAdvance(raw);
+  } catch {
+    return AUTO_ADVANCE_DEFAULT_S;
+  }
 }
 
 function readFlag(key: string, fallback: boolean): boolean {
@@ -744,6 +764,8 @@ export const useUiStore = create<UiStore>((set, get) => {
     minimapFold,
     cursorGlow: readFlag(GLOW_KEY, true),
     presenterNotes: readFlag(PRESENTER_NOTES_KEY, false),
+    autoAdvance: false,
+    autoAdvanceSeconds: readAutoAdvanceSeconds(),
     panelWidth: readPanelWidth(),
     panelResizing: false,
     panning: false,
@@ -966,6 +988,16 @@ export const useUiStore = create<UiStore>((set, get) => {
     setPresenterNotes: (presenterNotes) => {
       writeFlag(PRESENTER_NOTES_KEY, presenterNotes);
       set({ presenterNotes });
+    },
+    setAutoAdvance: (autoAdvance) => set({ autoAdvance }),
+    setAutoAdvanceSeconds: (seconds) => {
+      const autoAdvanceSeconds = clampAutoAdvance(seconds);
+      try {
+        localStorage.setItem(AUTO_ADVANCE_KEY, String(autoAdvanceSeconds));
+      } catch {
+        // Private mode or blocked storage: the pace holds for this tab.
+      }
+      set({ autoAdvanceSeconds });
     },
     setCursorGlow: (cursorGlow) => {
       writeFlag(GLOW_KEY, cursorGlow);
