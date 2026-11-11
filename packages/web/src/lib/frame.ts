@@ -25,6 +25,29 @@ export interface ContentOrigin {
 }
 
 /**
+ * **Links out of an item open a new tab** — the only escape a content-origin
+ * item frame is granted beyond scripts and its own storage.
+ *
+ * A deck slide that says `tabletop.google ↗` should open tabletop.google when
+ * somebody clicks it in full screen. Without `allow-popups` the browser drops
+ * a `target="_blank"` click (and a gesture's `window.open`) on the floor;
+ * without `allow-popups-to-escape-sandbox` the new tab would inherit this
+ * frame's sandbox, and almost no real site works sandboxed.
+ *
+ * What it does not grant, on purpose: no `allow-top-navigation*`, so a page
+ * still cannot take the canvas tab with it; and the tab it opens is a fresh
+ * top-level context on the target's own origin, which reaches nothing of the
+ * app's (the content origin holds no cookie, badge or API to begin with).
+ * Browsers only open a popup from a user gesture, so a page cannot spray tabs.
+ *
+ * Content-origin frames only. A home with no content origin keeps today's
+ * frame byte for byte (invariant 1), and its app origin answers blob reads
+ * with a `sandbox allow-scripts` response header that would intersect any
+ * popup grant away regardless.
+ */
+export const ITEM_FRAME_LINKS = "allow-popups allow-popups-to-escape-sandbox";
+
+/**
  * The ONE builder of an item frame's `src` and `sandbox` — invariant 2 of
  * `docs/projects/atlas/content-origin-plan.md`, as code: the sandbox upgrade
  * is keyed to the split, never to a flag. `allow-same-origin` appears if and
@@ -61,7 +84,7 @@ export function itemFrame(
   }
   const path = origin.ticket ? origin.ticket(canvasId, blobHash) : blobUrl(canvasId, blobHash);
   if (path === null) return null;
-  return { src: `${origin.base}${path}`, sandbox: "allow-scripts allow-same-origin" };
+  return { src: `${origin.base}${path}`, sandbox: `allow-scripts allow-same-origin ${ITEM_FRAME_LINKS}` };
 }
 
 /**

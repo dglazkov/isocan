@@ -164,7 +164,7 @@ export function railIsOpen(ui: DockState): boolean {
 export function dockEdges(ui: DockState): { left: number; dockRight: number } {
   return {
     left: railSpan(railIsOpen(ui) ? ui.panelWidth : STRIP_WIDTH),
-    dockRight: ui.trashOpen ? TRASH_WIDTH : ui.marksOpen ? MARKS_WIDTH + MARKS_GUTTER : 0,
+    dockRight: ui.trashOpen ? TRASH_WIDTH + MARKS_GUTTER : ui.marksOpen ? MARKS_WIDTH + MARKS_GUTTER : 0,
   };
 }
 

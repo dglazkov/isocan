@@ -37,5 +37,7 @@
   "prs_stale": 0,
   "reviews_unanswered": 0,
   "dependency_age": 0,
+  "failures_untaught": 50,
+  "decisions_checked_late": 50,
   "conduct_cost": 0
 }

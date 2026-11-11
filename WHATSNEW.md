@@ -21,6 +21,17 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 10 November 2026
+
+- **Slides turn themselves.** In full screen, press **▶ Auto** in the top
+  bar and the deck moves to the next slide every 10 seconds, looping from the
+  last slide back to the first. Change the seconds in the box beside it;
+  your browser remembers the pace. Turning a slide by hand gives it the full
+  interval again, and leaving full screen stops it.
+- **The arrow keys keep working while you present.** Clicking on a slide —
+  or coming back to the tab — no longer leaves → and ← (and Esc) doing
+  nothing.
+
 ## 25 October 2026
 
 - **Make a drawing move.** With **Motion** on in Settings → Experiments,

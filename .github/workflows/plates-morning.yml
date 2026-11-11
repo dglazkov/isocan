@@ -744,11 +744,11 @@ jobs:
             await writeFile(join(process.env.RUNNER_TEMP,"names-loader.mjs"),NAMES_OBSERVATION_LOADER,{flag:"wx",mode:0o600});
             await appendFile(process.env.GITHUB_ENV,"PLATES_NAMES_RUNTIME_ROOT="+dest+"\n");
           '
-      - name: Observe the actual board
-        id: board
+      - name: Observe the actual home
+        id: home
         run: |
-          PLATES_NAMES_IMPORTS_FILE="$RUNNER_TEMP/names-imports-board.json" PLATES_NAMES_EVIDENCE_REPOSITORY_ID="$GITHUB_REPOSITORY_ID" \
-          node --import "$RUNNER_TEMP/names-loader.mjs" "$PLATES_NAMES_RUNTIME_ROOT/bin/plates.mjs" board --names-evidence --fresh --json > "$RUNNER_TEMP/names-board.json"
+          PLATES_NAMES_IMPORTS_FILE="$RUNNER_TEMP/names-imports-home.json" PLATES_NAMES_EVIDENCE_REPOSITORY_ID="$GITHUB_REPOSITORY_ID" \
+          node --import "$RUNNER_TEMP/names-loader.mjs" "$PLATES_NAMES_RUNTIME_ROOT/bin/plates.mjs" home --names-evidence --fresh --json > "$RUNNER_TEMP/names-home.json"
       - name: Collect managed-name observations
         id: names_collect
         if: always()
@@ -766,7 +766,7 @@ jobs:
             const {collectNamesRun,decodeNamesProducerTransfer}=await import(pathToFileURL(runtime+"/lib/names-verify.mjs"));
             const {namesGithub}=await import(pathToFileURL(runtime+"/lib/names-actions.mjs"));
             const inputs=[["finalization","FINALIZATION"],["final-pr","FINAL_PR"],["brief","BRIEF"]].map(([producerId,key])=>process.env[key]?decodeNamesProducerTransfer(process.env[key]):{producerId,value:null,loads:[],loadGaps:["missing-job-output"]});
-            inputs.push({producerId:"board",path:temp+"/names-board.json",imports:temp+"/names-imports-board.json"});
+            inputs.push({producerId:"home",path:temp+"/names-home.json",imports:temp+"/names-imports-home.json"});
             const originatingNight=JSON.parse(Buffer.from(process.env.NIGHT_ORIGIN,"base64").toString("utf8"));
             const directory=temp+"/names-observation";
             const result=await collectNamesRun({root:process.cwd(),kind:"morning",directory,inputs,originatingNight,installedRuntime:{root:runtime,repo:"dalmaer/plates",entrypoint:"bin/plates.mjs"}},namesGithub(process.env));

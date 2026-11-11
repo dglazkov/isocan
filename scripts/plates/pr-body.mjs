@@ -10,10 +10,13 @@ import { writeName } from './names.mjs';
 //   ## Evidence      what was measured: the gate's line, rows of before and
 //                    after. None is written as "Evidence: none recorded.";
 //                    the section is never dropped.
-//   ## Merge danger  a two-way door (reverting the merge restores everything)
-//                    or a one-way door (something leaves the repo), and the
-//                    blast radius in Real surfaces terms (phase 32), and
-//                    any changed output with why it is harmless (phase 36).
+//   ## Merge danger  the door, derived from the change's door class (phase
+//                    145): reversible or windowed (undoable for a stated
+//                    window) is a two-way door, irreversible a one-way door
+//                    (something leaves the repo), and the line names the
+//                    class; then the blast radius in Real surfaces terms
+//                    (phase 32), and any changed output with why it is
+//                    harmless (phase 36).
 //
 // then the caller's notes, then the keel-impact block (phase 26) last.
 //
@@ -32,6 +35,8 @@ import { isMain, main } from './lib.mjs';
 /** Real surfaces (phase 32): the same terms as the phases practice's scripts/roadmap.mjs SURFACES. */
 export const SURFACES = Object.freeze(['published package', 'workflow shell', 'adopted project', "owner's machine", 'GitHub API', 'fleet over time']);
 export const DOORS = Object.freeze({ 'two-way': 'Two-way door', 'one-way': 'One-way door' });
+/** Door classes (phase 145) and the door each makes: the same words as plates's lib/doors.mjs; a test holds them equal. */
+export const DOOR_CLASSES = Object.freeze({ reversible: 'two-way', windowed: 'two-way', irreversible: 'one-way' });
 export const NO_EVIDENCE = 'Evidence: none recorded.';
 
 export class PrBodyError extends Error {
@@ -108,9 +113,29 @@ function evidence(e = {}) {
   ];
 }
 
+/**
+ * The change's door class: danger.class (reversible, windowed with its window,
+ * irreversible). An older caller's danger.door alone reads as its class
+ * (two-way reversible, one-way irreversible); both given must agree.
+ */
+function doorClass(d) {
+  const classes = Object.keys(DOOR_CLASSES).join(', ');
+  if (d.door !== undefined && !Object.hasOwn(DOORS, d.door)) fail(`danger.door is "${d.door}"; use two-way or one-way`);
+  if (d.class === undefined) {
+    if (d.door === undefined) fail(`danger.class is required: ${classes}`);
+    return { cls: d.door === 'one-way' ? 'irreversible' : 'reversible', door: d.door };
+  }
+  if (!Object.hasOwn(DOOR_CLASSES, d.class)) fail(`danger.class is "${d.class}"; use ${classes}`);
+  const door = DOOR_CLASSES[d.class];
+  if (d.door !== undefined && d.door !== door) fail(`danger.door ${d.door} contradicts danger.class ${d.class} (a ${door} door)`);
+  if (d.class === 'windowed') return { cls: d.class, door, window: text(d.window, 'danger.window (a windowed door states its window)') };
+  if (d.window !== undefined) fail(`danger.window is only for a windowed door, not ${d.class}`);
+  return { cls: d.class, door };
+}
+
 function danger(d) {
-  if (!d || typeof d !== 'object') fail('danger is required: { door, why, surfaces }');
-  if (!Object.hasOwn(DOORS, d.door)) fail(`danger.door is "${d.door}"; use two-way or one-way`);
+  if (!d || typeof d !== 'object') fail('danger is required: { class, why, surfaces }');
+  const { cls, door: kind, window } = doorClass(d);
   const why = text(d.why, 'danger.why');
   const surfaces = d.surfaces ?? [];
   if (!Array.isArray(surfaces)) fail('danger.surfaces must be a list of Real surfaces terms');
@@ -121,7 +146,7 @@ function danger(d) {
   if (!Array.isArray(changed)) fail('danger.changed must be a list of { path, why }');
   const listed = changed.map((c, i) => `- \`${text(c?.path, `danger.changed[${i}].path`)}\`: ${text(c?.why, `danger.changed[${i}].why`)}`);
   const lead = d.changedLead ? text(d.changedLead, 'danger.changedLead') : 'Changed, and why it is harmless (the person decides):';
-  const door = [`${DOORS[d.door]}: ${why}`, '', `Blast radius: ${radius}.`];
+  const door = [`${DOORS[kind]} (${cls}${window ? `, ${window}` : ''}): ${why}`, '', `Blast radius: ${radius}.`];
   return listed.length ? [...door, '', lead, '', ...listed] : door;
 }
 
