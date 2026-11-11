@@ -26,6 +26,8 @@ second week.
 - **Space shows the bar while you present.** In full screen, press Space to
   bring up the top bar without reaching for the mouse, and again to put it
   away. Shown this way it stays until you press Space or move the mouse.
+- **A starts and stops the slides.** In full screen, press A to set the deck
+  turning itself (the same as **▶ Auto**), and A again to stop it.
 - **→ on the last slide goes back to the first.** Moving forward past the end
   of a deck brings you round to the start; ← on the first slide still stays
   put.
