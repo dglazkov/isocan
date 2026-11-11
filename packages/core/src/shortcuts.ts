@@ -70,6 +70,7 @@ export const SHORTCUTS: Shortcut[] = [
   },
   { keys: ["⌘←", "⌘→", "⌘↑", "⌘↓"], does: "Jump to the nearest item that way", group: "Moving around", note: "Only items clear of the edge you leave — something overlapping you is beside you, not above it. In full screen the next item opens full screen too: a row of screens is a slideshow" },
   { keys: ["←", "→", "↑", "↓", "PgUp", "PgDn"], does: "Flip through the slides", group: "Moving around", note: "Full screen only. Items marked 🎬 (right-click → Make this a slide) are the deck, in reading order; with none marked, every item is. Page Up/Down flip too, so a presenter's clicker works. Forward from the last slide comes round to the first" },
+  { keys: ["A"], does: "Start or stop the slides turning themselves, in full screen", group: "Moving around", note: "The ▶ Auto button in the bar: the next slide every few seconds, looping from the last to the first" },
   { keys: ["Space"], does: "Show or hide the bar, in full screen", group: "Moving around", note: "Shown this way it stays until you press Space again or move the mouse" },
   { keys: ["N"], does: "Speaker notes, in full screen", group: "Moving around" },
   { keys: ["Scroll", "Pinch"], does: "Pan and zoom", group: "Moving around" },

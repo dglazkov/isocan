@@ -174,6 +174,17 @@ export function FullScreen({
         if (!phone) ui.setPresenterNotes(!ui.presenterNotes);
         return;
       }
+      // A: the deck turns itself (▶ Auto in the bar), or stops. A key so a
+      // presenter can set a talk running without reaching for the bar. Not
+      // on a phone, which has no timer (see the auto-advance effect).
+      if (!e.metaKey && !e.ctrlKey && !e.altKey && (e.key === "a" || e.key === "A")) {
+        if (isTyping(e.target) || phone) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const ui = useUiStore.getState();
+        ui.setAutoAdvance(!ui.autoAdvance);
+        return;
+      }
       // Bare arrows flip the deck (#87): the items marked as slides, in
       // reading order — or every item, with none marked, because a canvas of
       // screens is already a deck and marking narrows it rather than turning

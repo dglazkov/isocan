@@ -28,6 +28,12 @@ describe("full screen presents", () => {
     expect(view).toMatch(/navigate\(itemPath\(canvasId, next\.id\)\)/);
   });
 
+  it("starts and stops the deck turning itself on A, as ▶ Auto does", () => {
+    const row = SHORTCUTS.find((s) => s.keys.includes("A") && /turning themselves/.test(s.does));
+    expect(row, "A must be in the shortcut list").toBeTruthy();
+    expect(view).toMatch(/e\.key === "a" \|\| e\.key === "A"\)\) \{[\s\S]{0,200}setAutoAdvance\(!ui\.autoAdvance\)/);
+  });
+
   it("gives the slide the whole window", () => {
     // The bar used to take a slice off the top of every slide. Its own comment
     // argued against that — "every pixel this takes is one the thing you are

@@ -301,8 +301,8 @@ export function FocusHeader({
               aria-pressed={autoAdvance.on}
               title={
                 autoAdvance.on
-                  ? "Stop turning the slides by themselves"
-                  : `Turn to the next slide every ${autoAdvance.seconds} s, looping from the last to the first`
+                  ? "Stop turning the slides by themselves (A)"
+                  : `Turn to the next slide every ${autoAdvance.seconds} s, looping from the last to the first (A)`
               }
             >
               {autoAdvance.on ? "❚❚ Auto" : "▶ Auto"}
