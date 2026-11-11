@@ -37,7 +37,7 @@ describe("full screen presents", () => {
   });
 
   it("rests the chrome when nothing is moving, and a pointer brings it back", () => {
-    expect(view).toMatch(/setResting\(true\), REST_AFTER_MS/);
+    expect(view).toMatch(/setTimeout\(rest, REST_AFTER_MS\)/);
     expect(view).toMatch(/addEventListener\("pointermove", wake/);
     expect(css).toMatch(/\.fullscreen\.resting \.fs-bar \{ opacity: 0/);
   });

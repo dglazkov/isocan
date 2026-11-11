@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest";
 import type { CanvasContents, Item } from "@isocan/core";
-import { AUTO_ADVANCE_DEFAULT_S, autoAdvanceSeconds, nextInLoop, reclaimKeyboard, stageFrameHolding } from "../src/lib/presenting.ts";
+import { AUTO_ADVANCE_DEFAULT_S, autoAdvanceSeconds, nextInLoop, reclaimKeyboard, spaceTogglesChrome, stageFrameHolding } from "../src/lib/presenting.ts";
 
 /**
  * **Presenting keeps the keyboard, and a deck left running loops.**
@@ -84,5 +84,33 @@ describe("a deck left running", () => {
     expect(autoAdvanceSeconds(0)).toBe(2);
     expect(autoAdvanceSeconds(7.4)).toBe(7);
     expect(autoAdvanceSeconds(99_999)).toBe(600);
+  });
+});
+
+describe("Space and the bar", () => {
+  const space = (target: EventTarget | null, mods: Partial<KeyboardEvent> = {}) =>
+    spaceTogglesChrome({ code: "Space", key: " ", metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, target, ...mods });
+
+  it("shows or hides the bar from the slide itself", () => {
+    expect(space(document.body)).toBe(true);
+  });
+
+  it("leaves Space to a field being typed in", () => {
+    const field = document.createElement("input");
+    document.body.append(field);
+    expect(space(field)).toBe(false);
+    field.remove();
+  });
+
+  it("is not a modified Space, nor any other key", () => {
+    expect(space(document.body, { shiftKey: true })).toBe(false);
+    expect(spaceTogglesChrome({ code: "KeyA", key: "a", metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, target: document.body })).toBe(false);
+  });
+
+  it("takes Space from a button a click left focused, so ▶ Auto is not pressed twice", () => {
+    const button = document.createElement("button");
+    document.body.append(button);
+    expect(space(button)).toBe(true);
+    button.remove();
   });
 });

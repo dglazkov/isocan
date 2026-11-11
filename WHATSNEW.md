@@ -21,6 +21,15 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 11 November 2026
+
+- **Space shows the bar while you present.** In full screen, press Space to
+  bring up the top bar without reaching for the mouse, and again to put it
+  away. Shown this way it stays until you press Space or move the mouse.
+- **→ on the last slide goes back to the first.** Moving forward past the end
+  of a deck brings you round to the start; ← on the first slide still stays
+  put.
+
 ## 10 November 2026
 
 - **Slides turn themselves.** In full screen, press **▶ Auto** in the top

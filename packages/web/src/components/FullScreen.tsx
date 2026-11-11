@@ -17,7 +17,7 @@ import { findNextItem, type Direction } from "../lib/spatialnav.ts";
 import { FLIP_NEXT, FLIP_PREV, REST_AFTER_MS, flipTo, framingOf } from "../lib/deckflip.ts";
 import { revealItem } from "../lib/zoomactions.ts";
 import { isTyping } from "../lib/keys.ts";
-import { nextInLoop, reclaimKeyboard } from "../lib/presenting.ts";
+import { nextInLoop, reclaimKeyboard, spaceTogglesChrome } from "../lib/presenting.ts";
 
 const DIRECTIONS = new Set<string>(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
 
@@ -190,8 +190,11 @@ export function FullScreen({
         const canvas = useCanvasStore.getState().canvas;
         if (!canvas) return;
         const forward = FLIP_NEXT.has(e.key);
-        const next = deckStep(canvas, itemId, forward ? 1 : -1);
-        if (!next) return; // the deck's edge: stay put rather than wrap
+        // Forward past the last slide comes round to the first — the same
+        // loop auto-advance makes. Back from the first stays put: a presenter
+        // stepping back to the title should not land on the closing slide.
+        const next = forward ? nextInLoop(canvas, itemId) : deckStep(canvas, itemId, -1);
+        if (!next) return;
         // The deck's transition, not a cut — the motion belongs to the deck
         // flip alone; ⌘-arrows above are a spatial walk and stay instant.
         turnTo(next, forward);
@@ -309,18 +312,31 @@ export function FullScreen({
    * view on every slide, which is worse than leaving it up. Moving the mouse
    * is the honest signal that somebody wants a control.
    *
+   * **Space is the one key that does**, because it asks for exactly that:
+   * show me the bar, or put it away. Shown by Space it stays up (no fade)
+   * until Space again or the pointer takes over, so a presenter can reach for
+   * a control without racing a timer.
+   *
    * Focus brings it back regardless of the pointer: somebody arriving at
    * "← Canvas" by keyboard must be able to see where they are, and a focus
    * ring on an invisible button is the worst of both.
    */
   const [resting, setResting] = useState(false);
   useEffect(() => {
-    let timer = window.setTimeout(() => setResting(true), REST_AFTER_MS);
+    let restingNow = false;
+    let timer = 0;
+    const rest = () => {
+      clearTimeout(timer);
+      restingNow = true;
+      setResting(true);
+    };
     const wake = () => {
+      restingNow = false;
       setResting(false);
       clearTimeout(timer);
-      timer = window.setTimeout(() => setResting(true), REST_AFTER_MS);
+      timer = window.setTimeout(rest, REST_AFTER_MS);
     };
+    timer = window.setTimeout(rest, REST_AFTER_MS);
     /**
      * **Typing into a FIELD wakes it; typing to flip a slide does not.**
      *
@@ -334,14 +350,27 @@ export function FullScreen({
     const typingWake = (event: KeyboardEvent) => {
       if (isTyping(event.target)) wake();
     };
+    const toggleChrome = (event: KeyboardEvent) => {
+      if (!spaceTogglesChrome(event)) return;
+      event.preventDefault(); // a slide that scrolls would scroll
+      event.stopPropagation(); // the canvas underneath borrows the Hand on Space
+      if (event.repeat) return;
+      if (restingNow) {
+        // Shown by Space, it stays: no fade until the pointer takes over.
+        wake();
+        clearTimeout(timer);
+      } else rest();
+    };
     window.addEventListener("pointermove", wake, { passive: true });
     window.addEventListener("focusin", wake);
     window.addEventListener("keydown", typingWake);
+    window.addEventListener("keydown", toggleChrome, true);
     return () => {
       clearTimeout(timer);
       window.removeEventListener("pointermove", wake);
       window.removeEventListener("focusin", wake);
       window.removeEventListener("keydown", typingWake);
+      window.removeEventListener("keydown", toggleChrome, true);
     };
   }, []);
 

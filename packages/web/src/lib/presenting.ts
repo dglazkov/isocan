@@ -53,3 +53,23 @@ export function nextInLoop(canvas: CanvasContents, itemId: string): Item | null 
   const next = deckStep(canvas, itemId, 1) ?? deck(canvas)[0] ?? null;
   return next && next.id !== itemId ? next : null;
 }
+
+/**
+ * **Space shows or hides the bar while presenting.** Reaching for the top
+ * edge with the mouse in front of a room is the clumsy way to find the
+ * controls; Space is the big key under your thumb. Never while somebody is
+ * typing (it is a space), and never on a control somebody reached by
+ * keyboard (Space presses it) — but a button merely left focused by a click
+ * (▶ Auto, Notes) does not keep Space, or the second press would stop the
+ * deck instead of hiding the bar.
+ */
+export function spaceTogglesChrome(e: Pick<KeyboardEvent, "code" | "key" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey" | "target">): boolean {
+  if (e.code !== "Space" && e.key !== " ") return false;
+  if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return false;
+  const el = e.target as Element | null;
+  if (!el || typeof el.closest !== "function") return true;
+  if (el.closest("input, textarea, select, [contenteditable=''], [contenteditable='true']")) return false;
+  const control = el.closest("button, a, [role='button']");
+  if (control && control.matches(":focus-visible")) return false;
+  return true;
+}
