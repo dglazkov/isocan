@@ -238,7 +238,8 @@ async function main() {
       }, 5000);
       process.stderr.write(`[${key}] measuring, n=${rows}\n`);
       try {
-        results[key] = await b.ev(`window.__lab.run(${JSON.stringify({ backend, n: rows, ...labExtra })}).catch((e) => ({ error: String(e && e.message || e) }))`);
+        // CPU batches measured 0.8–3 s per answer; allow 5 s each plus 2 min to load/compile.
+        results[key] = await b.ev(`window.__lab.run(${JSON.stringify({ backend, n: rows, ...labExtra })}).catch((e) => ({ error: String(e && e.message || e) }))`, { timeoutMs: 120_000 + rows * 5_000 });
       } finally {
         clearInterval(sampler);
         clearInterval(progress);

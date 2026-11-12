@@ -1,5 +1,5 @@
-import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
-import { execFileSync } from "node:child_process";
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, chmodSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -22,75 +22,150 @@ const frames = read("../scripts/frames.mjs");
 const persona = read("../.agents/personas/journeys.md");
 const workflow = read("../.github/workflows/journeys.yml");
 
-describe("the workflow reports unsuccessful runs", () => {
-  // Execute the shipped shell, with only the expensive browser runner
-  // replaced. Testing a second implementation of the verdict would miss
-  // the original bug: ignoring a nonzero exit unless stdout said FAIL.
-  const step = workflow.split("- name: Walk them")[1]!.split("- name: Say so")[0]!;
-  const shell = step.split("run: |\n")[1]!.split("\n")
-    .map((line) => line.replace(/^ {10}/, "")).join("\n").trim();
+const stepNamed = (name: string) => workflow.split(`- name: ${name}\n`)[1]?.split("\n      - ")[0] ?? "";
+const shippedShell = (step: string) => step.split("run: |\n")[1]!.split("\n")
+  .map((line) => line.replace(/^ {10}/, "")).join("\n").trim();
 
+describe("the workflow reports unsuccessful runs", () => {
+  // Execute the actual pipeline and verifier; replace only the browser walk.
+  const shell = shippedShell(stepNamed("Walk them"));
+  const clean = { version: 1, selected: ["pen"], complete: true, active: null, failing: 0,
+    results: [{ name: "pen", ok: true, cleanupComplete: true }] };
+  const failed = { ...clean, failing: 1, results: [{ name: "pen", ok: false, cleanupComplete: true }] };
   it.each([
-    ["success", "console.log('1/1 journeys walked')", "no", 0],
-    ["failed journey", "console.log('FAIL  pen'); process.exit(1)", "yes", 1],
-    ["startup crash", "throw new Error('browser failed to boot')", "yes", 1],
-    ["invalid selection", "console.error('unknown journey'); process.exit(2)", "yes", 2],
-    ["teardown crash", "console.log('  ok  pen'); throw new Error('close failed')", "yes", 1],
-    ["failure text with a broken exit code", "console.log('FAIL  pen')", "yes", 0],
-  ])("reports %s", (_name, source, verdict, status) => {
+    { name: "success", source: "console.log('1/1 journeys walked')", checkpoint: clean, runnerStatus: 0, verdict: "no" },
+    { name: "failed journey", source: "console.log('FAIL  pen'); process.exit(1)", checkpoint: failed, runnerStatus: 1, verdict: "yes" },
+    { name: "startup crash", source: "throw new Error('browser failed to boot')", runnerStatus: 1, verdict: "yes" },
+    { name: "invalid selection", source: "console.error('unknown journey'); process.exit(2)", runnerStatus: 2, verdict: "yes" },
+    { name: "teardown crash", source: "console.log('  ok  pen'); throw new Error('close failed')", checkpoint: { ...clean, complete: false }, runnerStatus: 1, verdict: "yes" },
+    { name: "nonzero without FAIL", source: "process.exit(3)", checkpoint: clean, runnerStatus: 3, verdict: "yes" },
+    { name: "failure text with a broken exit code", source: "console.log('FAIL  pen')", checkpoint: clean, runnerStatus: 0, verdict: "yes" },
+    { name: "missing checkpoint despite exit zero", source: "console.log('1/1 journeys walked')", runnerStatus: 0, verdict: "yes" },
+    { name: "incomplete checkpoint despite exit zero", source: "", checkpoint: { ...clean, complete: false }, runnerStatus: 0, verdict: "yes" },
+    { name: "lost log from a failed tee", source: "console.log('1/1 journeys walked')", checkpoint: clean, runnerStatus: 0, verdict: "yes", brokenTee: true },
+  ])("reports $name", ({ source, checkpoint, runnerStatus, verdict, ...options }) => {
     const dir = mkdtempSync(path.join(tmpdir(), "isocan-journey-report-"));
     try {
-      mkdirSync(path.join(dir, "scripts"));
-      writeFileSync(path.join(dir, "scripts/journeys.mjs"), String(source));
+      mkdirSync(path.join(dir, "scripts/lib"), { recursive: true });
+      mkdirSync(path.join(dir, "bin"));
+      writeFileSync(path.join(dir, "scripts/lib/journey-progress.mjs"), read("../scripts/lib/journey-progress.mjs"));
+      const save = checkpoint ? `import { writeFileSync } from 'node:fs'; writeFileSync(process.argv[process.argv.indexOf('--checkpoint') + 1], ${JSON.stringify(JSON.stringify(checkpoint))});\n` : "";
+      writeFileSync(path.join(dir, "scripts/journeys.mjs"), save + source);
+      if ("brokenTee" in options && options.brokenTee) {
+        const tee = path.join(dir, "bin/tee");
+        writeFileSync(tee, "#!/bin/bash\ncat >/dev/null\nexit 7\n"); chmodSync(tee, 0o755);
+      }
       const output = path.join(dir, "outputs");
-      execFileSync("bash", ["-e", "-o", "pipefail", "-c", shell], {
+      const done = spawnSync("bash", ["-e", "-o", "pipefail", "-c", shell], {
         cwd: dir, encoding: "utf8", timeout: 10_000,
-        env: { ...process.env, JOURNEY_ONLY: "", RUNNER_TEMP: dir, GITHUB_OUTPUT: output },
+        env: { ...process.env, PATH: `${dir}/bin:${process.env.PATH}`, JOURNEY_ONLY: "", RUNNER_TEMP: dir, GITHUB_OUTPUT: output },
       });
+      expect(done.error).toBeUndefined();
+      expect(done.status, done.stdout + done.stderr).toBe(verdict === "yes" ? 1 : 0);
       expect(readFileSync(output, "utf8")).toBe(`failing=${verdict}\n`);
-      expect(readFileSync(path.join(dir, "journeys.txt"), "utf8"))
-        .toContain(`Runner exit status: ${status}`);
-    } finally {
-      rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-    }
+      expect(readFileSync(path.join(dir, "journeys.txt"), "utf8")).toContain(`Runner exit status: ${runnerStatus}`);
+      if ("brokenTee" in options && options.brokenTee) expect(readFileSync(path.join(dir, "journeys.txt"), "utf8")).toContain("Log exit status: 7");
+    } finally { rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
   });
 });
 
-describe("a failing journey fails the run", () => {
-  /**
-   * `text-tool` failed on 9, 10 and 11 Sep 2026 and the workflow finished
-   * green each night, with the failure in a commit comment nobody opened. A
-   * scheduled run gates nothing, so red costs nobody a merge — it only stops
-   * the run list saying "fine" about a walk that said otherwise.
-   */
-  const step = workflow.split("- name: A failing journey fails the run")[1] ?? "";
-
-  it("is the last step, and runs only when the walk said so", () => {
-    expect(step, "the step is missing from journeys.yml").not.toBe("");
-    // Last, so the comment is always written before the run goes red.
-    expect(step).not.toMatch(/- name:/);
-    expect(workflow.indexOf("- name: Say so")).toBeLessThan(workflow.indexOf("- name: A failing journey fails the run"));
-    expect(step).toContain("if: steps.walk.outputs.failing == 'yes'");
-    expect(step).not.toContain("continue-on-error");
+describe("failure is recorded before optional network reporting", () => {
+  it.each([false, true])("a hung walk retains partial evidence and fails (ignores TERM: %s)", (ignoreTerm) => {
+    const dir = mkdtempSync(path.join(tmpdir(), "isocan-journey-hang-"));
+    try {
+      mkdirSync(path.join(dir, "scripts/lib"), { recursive: true });
+      writeFileSync(path.join(dir, "scripts/lib/journey-progress.mjs"), read("../scripts/lib/journey-progress.mjs"));
+      const helper = new URL("../scripts/lib/journey-progress.mjs", import.meta.url).href;
+      writeFileSync(path.join(dir, "scripts/journeys.mjs"), `
+import { walkJourneys } from ${JSON.stringify(helper)};
+${ignoreTerm ? "process.on('SIGTERM', () => {});" : ""}
+// Fixture-only backstop: removing the production deadline must fail this test
+// without leaving a parked process behind.
+setTimeout(() => process.exit(0), 3000);
+await walkJourneys([
+  { name: 'one', run: async () => { throw new Error('known failure'); } },
+  { name: 'two', run: async () => { console.log('WALK two'); await new Promise(() => setInterval(() => {}, 1000)); } },
+], { checkpoint: process.argv[process.argv.indexOf('--checkpoint') + 1],
+  rig: async () => ({ close: async () => {} }),
+  report: ({ stage, result }) => { if (stage === 'result') console.log('FAIL ' + result.name); },
+});`);
+      // Exercise the real shell and timeout command with only its clock scaled.
+      const shell = shippedShell(stepNamed("Walk them"))
+        .replace("--kill-after=10s 25m", "--kill-after=0.2s 1s");
+      const done = spawnSync("bash", ["-e", "-o", "pipefail", "-c", shell], {
+        cwd: dir, encoding: "utf8", timeout: 5000,
+        env: { ...process.env, JOURNEY_ONLY: "", RUNNER_TEMP: dir, GITHUB_OUTPUT: path.join(dir, "outputs") },
+      });
+      expect(done.error).toBeUndefined();
+      expect(done.status, done.stdout + done.stderr).toBe(1);
+      expect(readFileSync(path.join(dir, "outputs"), "utf8")).toBe("failing=yes\n");
+      const log = readFileSync(path.join(dir, "journeys.txt"), "utf8");
+      expect(log).toContain("FAIL one");
+      expect(log).toContain("WALK two");
+      // GNU timeout returns 137 when its own group requires KILL; BSD returns 124.
+      expect(log).toMatch(/Runner exit status: (124|137)/);
+      expect(log).toContain("Evidence exit status: 1");
+      expect(JSON.parse(readFileSync(path.join(dir, "journeys.json"), "utf8"))).toMatchObject({
+        complete: false, failing: 1, active: { name: "two", stage: "walk" },
+        results: [{ name: "one", ok: false }],
+      });
+    } finally { rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
   });
 
-  it("actually exits non-zero", () => {
-    // Run the shipped shell rather than grepping for `exit 1`: a step that
-    // prints the failure and succeeds is the bug this replaces.
-    const shell = step.split("run: |\n")[1]!.split("\n")
-      .map((line) => line.replace(/^ {10}/, "")).join("\n").trim();
-    const dir = mkdtempSync(path.join(tmpdir(), "isocan-journey-red-"));
+  it("bounds a hung comment and retains its bounded report", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "isocan-journey-comment-hang-"));
     try {
-      writeFileSync(path.join(dir, "journeys.txt"), "FAIL  text-tool\nRunner exit status: 1\n");
-      expect(() =>
-        execFileSync("bash", ["-e", "-o", "pipefail", "-c", shell], {
-          cwd: dir, encoding: "utf8", timeout: 10_000, stdio: "pipe",
-          env: { ...process.env, RUNNER_TEMP: dir },
-        }),
-      ).toThrow();
-    } finally {
-      rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-    }
+      writeFileSync(path.join(dir, "journeys.txt"), "x".repeat(100_000) + "\nFAIL pen\n");
+      writeFileSync(path.join(dir, "gh"), `#!${process.execPath}\nprocess.on('SIGTERM', () => {}); setTimeout(() => process.exit(0), 3000);\n`);
+      chmodSync(path.join(dir, "gh"), 0o755);
+      const shell = shippedShell(stepNamed("Say so, on the commit it walked"))
+        .replace("--kill-after=5s 45s", "--kill-after=0.2s 1s");
+      const done = spawnSync("bash", ["-e", "-o", "pipefail", "-c", shell], {
+        cwd: dir, encoding: "utf8", timeout: 5000,
+        env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, RUNNER_TEMP: dir, GITHUB_REPOSITORY: "acme/canvas", GITHUB_SHA: "test", GITHUB_RUN_ID: "123" },
+      });
+      expect(done.error).toBeUndefined();
+      // A shell may exec its final timeout command; KILL then reaches the
+      // shell PID too. Either representation is an unsuccessful report step.
+      expect(done.status === 124 || done.status === 137 || done.signal === "SIGKILL").toBe(true);
+      const report = readFileSync(path.join(dir, "journeys-comment.md"), "utf8");
+      expect(report).toContain("FAIL pen");
+      expect(Buffer.byteLength(report)).toBeLessThan(46_000);
+      expect(readFileSync(path.join(dir, "journeys.txt"), "utf8").length).toBeGreaterThan(100_000);
+    } finally { rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
+  });
+
+  it("fails the walk itself, then uploads partial evidence and bounds the failure-aware comment", () => {
+    const walk = stepNamed("Walk them"), upload = stepNamed("Preserve the walk's evidence"), comment = stepNamed("Say so, on the commit it walked");
+    expect(workflow).not.toContain("continue-on-error");
+    expect(walk).toContain("exit 1");
+    expect(workflow.indexOf("- name: Walk them")).toBeLessThan(workflow.indexOf("- name: Say so"));
+    expect(upload).toContain("if: always()");
+    expect(upload).toContain("timeout-minutes: 2");
+    expect(upload).toContain("journeys.json"); expect(upload).toContain("journeys.txt");
+    expect(comment).toContain("always() && (steps.walk.outcome == 'failure' || steps.walk.outcome == 'cancelled')");
+    expect(comment).toContain("timeout-minutes: 1");
+  });
+
+  it("reserves reporting headroom inside the job even when every step uses its cap", () => {
+    const limits = [...workflow.matchAll(/timeout-minutes: (\d+)/g)].map((match) => Number(match[1]));
+    expect(limits[0]).toBe(45);
+    expect(limits.slice(1).reduce((sum, n) => sum + n, 0)).toBeLessThan(limits[0]!);
+    expect(stepNamed("Walk them")).toContain("timeout-minutes: 26");
+  });
+
+  it("a failed comment remains a failed reporting step, never a substitute for the verdict", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "isocan-journey-comment-"));
+    try {
+      writeFileSync(path.join(dir, "journeys.txt"), "FAIL  pen\n");
+      writeFileSync(path.join(dir, "gh"), "#!/bin/bash\nexit 9\n"); chmodSync(path.join(dir, "gh"), 0o755);
+      const done = spawnSync("bash", ["-e", "-o", "pipefail", "-c", shippedShell(stepNamed("Say so, on the commit it walked"))], {
+        cwd: dir, encoding: "utf8", timeout: 2000,
+        env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, RUNNER_TEMP: dir, GITHUB_REPOSITORY: "acme/canvas", GITHUB_SHA: "test", GITHUB_RUN_ID: "123" },
+      });
+      expect(done.status).toBe(9);
+      expect(readFileSync(path.join(dir, "journeys-comment.md"), "utf8")).toContain("FAIL  pen");
+    } finally { rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
   });
 });
 
@@ -163,14 +238,21 @@ describe("the journeys runner", () => {
     expect(code).toMatch(/reapOnExit\(b\.pid\)/);
   });
 
-  it("gives every journey a rig of its own", () => {
-    /* One shared rig let a journey change what the next one walked into: a
-       CLI name claimed in the shared home, the door's host-scoped cookie
-       replaced by another daemon's, `identity.json` rewritten. Eighteen
-       journeys failed in a full run and passed alone (14 Oct 2026). A rig per
-       journey makes the full run what `--only` already was. */
-    expect(runner).toMatch(/for \(const journey of list\) \{[\s\S]{0,400}?r = await rig\(\);[\s\S]{0,1200}?await r\.close\(\);/);
-    expect(runner).not.toMatch(/const r = await rig\(\);\s*const results/);
+  it("gives every journey a rig of its own and closes it before starting the next", async () => {
+    // Keep the entry point wired to the same orchestration tested here. A
+    // process-wide rig leaks state into subsequent journeys that pass alone.
+    expect(runner).toMatch(/await walkJourneys\(list, \{\s*rig, checkpoint/);
+    // @ts-expect-error — the shared runner is a plain .mjs module.
+    const { walkJourneys } = await import("../scripts/lib/journey-progress.mjs");
+    const events: string[] = [];
+    let next = 0;
+    await walkJourneys(["one", "two"].map((name) => ({ name, what: name,
+      run: async (rig: { id: number }) => { events.push(`run ${name} ${rig.id}`); },
+    })), { rig: async () => {
+      const id = ++next; events.push(`start ${id}`);
+      return { id, close: async () => { events.push(`close ${id}`); } };
+    } });
+    expect(events).toEqual(["start 1", "run one 1", "close 1", "start 2", "run two 2", "close 2"]);
   });
 
   it("presses where a person would, and checks the browser agrees", () => {

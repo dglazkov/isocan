@@ -1,8 +1,8 @@
 # The journeys — the app, opened and used.
 #
 # **Nightly, not on every push, and that is a cost decision made on purpose.**
-# This boots a daemon and drives a headless browser through the real app: about
-# ninety seconds, against a suite that answers in one. The value is not in
+# This boots a daemon and drives a headless browser through the real app: the November 2 walk alone took
+# 24m06s. The value is not in
 # catching a regression the minute it lands — `review.yml` does that for
 # everything mechanical — it is in catching the class of bug the whole suite is
 # blind to, which does not need to be caught within the minute.
@@ -22,7 +22,7 @@
 # delivers on its own. The alternative — a goal for the journeys persona, so a
 # failure became a finding in the review queue — is refused by
 # `test/journeys.test.ts`, because `ratchet.mjs` measures every goal on every
-# push, and a ninety-second walk per commit is the cost this file exists to
+# push, and a twenty-minute walk per commit is the cost this file exists to
 # avoid.
 name: journeys
 
@@ -53,69 +53,92 @@ permissions:
 jobs:
   walk:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # The Nov 2 walk took 24m06s under a 25-minute WHOLE-JOB cap and lost
+    # reporting. These step caps total 44 minutes, leaving one minute spare:
+    # setup <=15, walk <=26, diagnostics <=2, comment <=1. No assertion changes.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
+        timeout-minutes: 2
       - uses: actions/setup-node@v4
+        timeout-minutes: 2
         with:
           node-version-file: .nvmrc
       # --ignore-scripts: the root `prepare` would build the web app here, and
       # the step below builds it again where it can be seen (DC-5, 27 Sep 2026;
       # the Dockerfile's reason, and test/workflows.test.ts holds it).
       - run: npm ci --ignore-scripts
+        timeout-minutes: 4
       # The journeys drive the BUILT app, which is the only version anybody
       # ever uses. Walking a dev server would be walking something else.
       - run: npm run build
+        timeout-minutes: 5
 
       # Proves the runner can report a failure before believing it when it
       # reports none — the shape of every silent-zero this repo has had.
       - name: The runner can fail
+        timeout-minutes: 2
         run: node scripts/journeys.mjs --selftest
 
       - name: Walk them
         id: walk
+        timeout-minutes: 26
         env:
           JOURNEY_ONLY: ${{ inputs.only }}
         run: |
-          args=()
+          rm -f "$RUNNER_TEMP/journeys.json"
+          args=(--checkpoint "$RUNNER_TEMP/journeys.json")
           if [ -n "$JOURNEY_ONLY" ]; then args+=(--only "$JOURNEY_ONLY"); fi
-          # Keep the exit status: boot/teardown errors need not print FAIL.
-          # The walk stays advisory, but a broken runner must still be reported.
-          status=0
-          OUT=$(node scripts/journeys.mjs "${args[@]}" 2>&1) || status=$?
-          echo "$OUT"
-          printf '%s\nRunner exit status: %s\n' "$OUT" "$status" > "$RUNNER_TEMP/journeys.txt"
-          if [ "$status" -ne 0 ] || grep -q "^FAIL" <<< "$OUT"; then
+          # Stream to disk while running: cancellation must not erase 24 minutes
+          # of observations. Preserve BOTH statuses; a failed tee is lost evidence.
+          set +e
+          # Finish inside the step cap so the shell can record timeout status.
+          # KILL follows TERM if a hung child ignores graceful shutdown.
+          timeout --kill-after=10s 25m node scripts/journeys.mjs "${args[@]}" 2>&1 | tee "$RUNNER_TEMP/journeys.txt"
+          statuses=("${PIPESTATUS[@]}")
+          set -e
+          evidence=0
+          node scripts/lib/journey-progress.mjs --check "$RUNNER_TEMP/journeys.json" || evidence=$?
+          printf '\nRunner exit status: %s\nLog exit status: %s\nEvidence exit status: %s\n' "${statuses[0]}" "${statuses[1]}" "$evidence" >> "$RUNNER_TEMP/journeys.txt" || evidence=1
+          failure_text=0
+          grep -q '^FAIL' "$RUNNER_TEMP/journeys.txt" || failure_text=$?
+          if [ "${statuses[0]}" -ne 0 ] || [ "${statuses[1]}" -ne 0 ] || [ "$evidence" -ne 0 ] || [ "$failure_text" -ne 1 ]; then
             echo "failing=yes" >> "$GITHUB_OUTPUT"
-          else
-            echo "failing=no" >> "$GITHUB_OUTPUT"
+            echo "::error title=journeys::a journey failed, the runner failed, or its evidence is incomplete"
+            exit 1
           fi
+          echo "failing=no" >> "$GITHUB_OUTPUT"
 
+      - name: Preserve the walk's evidence
+        if: always()
+        timeout-minutes: 2
+        uses: actions/upload-artifact@v4
+        with:
+          name: journey-diagnostics
+          path: |
+            ${{ runner.temp }}/journeys.txt
+            ${{ runner.temp }}/journeys.json
+          if-no-files-found: warn
+
+      # The walk has ALREADY failed. A slow/failed comment cannot erase that
+      # verdict, and always() lets the reporting run after the failed step.
       - name: Say so, on the commit it walked
-        if: steps.walk.outputs.failing == 'yes'
+        if: ${{ always() && (steps.walk.outcome == 'failure' || steps.walk.outcome == 'cancelled') }}
+        timeout-minutes: 1
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           {
             echo "**The journey run needs attention.**"
             echo
+            echo "Log tail; full log and checkpoint are in the [run diagnostics](https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})."
             echo '```'
-            cat "$RUNNER_TEMP/journeys.txt"
+            tail -c 45000 "$RUNNER_TEMP/journeys.txt" || echo "No log was written before interruption."
             echo '```'
             echo
-            echo "---"
             echo "Reproduce with \`node scripts/journeys.mjs --only <name>\`. Before reporting a bug, check whether the harness caused it: a headless page throttles rAF and timers, and synthetic pointer events are untrusted — see the rule in \`.agents/personas/journeys.md\`."
             echo
             echo "Nothing is blocked: \`release.yml\` is the gate, this is the notice."
-          } > /tmp/comment.md
-          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" \
-            -f body="$(cat /tmp/comment.md)"
-
-      # Last, so the comment above is always written first. A failing journey
-      # is a red run, not a green one with a note attached — see the header.
-      - name: A failing journey fails the run
-        if: steps.walk.outputs.failing == 'yes'
-        run: |
-          cat "$RUNNER_TEMP/journeys.txt"
-          echo "::error title=journeys::a journey failed — the walk above says which, and the commit comment says how to reproduce it"
-          exit 1
+          } > "$RUNNER_TEMP/journeys-comment.md"
+          timeout --kill-after=5s 45s gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" \
+            -F body=@"$RUNNER_TEMP/journeys-comment.md"

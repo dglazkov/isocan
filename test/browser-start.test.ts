@@ -65,7 +65,7 @@ function fakeChrome(name: string, port?: number): { pidfile: string } {
 /** A port nothing listens on: bound by the kernel's choice, then released. */
 async function closedPort(): Promise<number> {
   const server = net.createServer();
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  await new Promise<void>((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", resolve); });
   const { port } = server.address() as net.AddressInfo;
   await new Promise<void>((resolve) => server.close(() => resolve()));
   return port;
@@ -108,6 +108,21 @@ describe("browser() when it cannot start", () => {
     expect(done.status, done.stderr).not.toBe(0);
     expect(done.stderr).toMatch(/Cannot find (package|module) '.*ws/);
     expect(await leftRunning(pidfile), "a Chrome was started and left running").toBe(false);
+  });
+
+  it("takes Chrome with it when a connected DevTools peer never finishes the websocket handshake", async () => {
+    const sockets = new Set<net.Socket>();
+    const server = net.createServer((socket) => { sockets.add(socket); socket.on("close", () => sockets.delete(socket)); });
+    await new Promise<void>((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", resolve); });
+    const { pidfile } = fakeChrome("chrome-hung-handshake", (server.address() as net.AddressInfo).port);
+    try {
+      const { browser } = await import(pathToFileURL(path.join(repo, "scripts/lib/browser.mjs")).href);
+      await expect(browser({ timeoutMs: 100 })).rejects.toThrow("browser CDP timed out waiting for socket opening");
+      expect(await leftRunning(pidfile), "a Chrome was started and left running").toBe(false);
+    } finally {
+      for (const socket of sockets) socket.destroy();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 
   it("takes Chrome with it when the DevTools socket will not open", async () => {

@@ -12,7 +12,7 @@ open to anyone with the address. It is this page, published by
 that opted in with `.isocan/roadmap.json`; a publish that fails never fails a
 commit or a build, and says so in `.isocan/roadmap.log`.
 
-**53 built · 69 still open** — of which 55 partly
+**54 built · 69 still open** — of which 55 partly
 built, 14 designed, 0 blocked, and
 **0 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
@@ -137,7 +137,7 @@ whoever built the thing for somebody who knows nothing about it.
 | **project** | [watched-files](projects/watched-files/journey.md) | 2026-09-11 | registration seed — extends docs/research/2026-08-26-attaching-a-directory.md (#141) with daemon-held file watching, change operations in the oplog, and canvas collections; P1 deferred/backlog, not implemented · see workbench, modules, multiuser, embed |
 | **project** | [webmcp-cobrowsing](projects/webmcp-cobrowsing/journey.md) | 2026-09-11 | roadmap defined — the WebMCP surface is designed against the verified API and the existing @isocan/mcp vocabulary; design and phases follow the census-informed design · see iso-api, embed |
 
-## Built <sub>53</sub>
+## Built <sub>54</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
@@ -160,6 +160,7 @@ whoever built the thing for somebody who knows nothing about it.
 | **project** | [harnesses](projects/harnesses/journey.md) | 2026-09-04 | built 4 Sep 2026 — pi, codex and antigravity (on a Gemini API key; the server fetched from Google on first use) join claude-code as a harness the rc can run without config; an agent that named no harness runs on the machine's default, which the rc finds by scanning what is installed and asks for once when there is a real choice; `isocan harness` prints the scan. · see harnesses, on-demand, standing-agents |
 | **project** | [inbox](projects/inbox/design.md) | 2026-09-13 | all four phases built and independently verified 13 Sep. CLI, home panel and in-app notification read each canvas through its authoritative home, including refusals and unavailable homes. Visible polls never write seen-marks; accepted visits advance only their captured boundary · see switcher, roles, multiuser · [#147](https://github.com/dglazkov/isocan/issues/147) |
 | **project** | [iso-api](projects/iso-api/journey.md) | 2026-08-31 | #78 — the third isomorphic surface, all four phases closed 31 Aug 2026, every journey played for real: the board is one process on `@isocan/api`, the watcher resumes where it stopped, a stranger machine installed from the release branch and landed an op at dev as its own actor, and a Scene-6 agent found the API through --agent-help alone. · see multiuser, on-demand |
+| **project** | [journey-guardrails](projects/journey-guardrails/design.md) | 2026-11-05 | Three phases: bounded browser readiness and CDP, durable interrupted-run evidence, and measured timing assertions. Phases 1–3 CLOSED with local proofs on a draft branch; hosted observations and strict CI remain explicit follow-up. |
 | research | [JSON Canvas: what adopting it would mean](research/json-canvas.md) | 2026-08-30 | export built 30 Aug (`isocan export --jsoncanvas`), and the edge question answered by the mind map's `mapParent`; residue — import is declined on purpose (the format has no room for history), and the recommended `json-canvas` skill import was never taken up and waits on somebody asking · [#154](https://github.com/dglazkov/isocan/issues/154) |
 | **project** | [keys](projects/keys/design.md) | 2026-10-02 | Model keys in one place on your machine: ~/.isocan/keys.json (0600), set from a Model keys settings area or `isocan keys`, read per call by everything that spends a key — the judge, the text model, voice, the rc's agents — with env as an override. Write-only in the UI, machine-local routes only, owner-only spend by default. Phase 0 closes a hole the survey found: the voice harness's loopback door had no Origin or Host check. · see copy-edit, voice-agent, judge |
 | research | [Live mode: voice on an isomorphic canvas](research/2026-08-24-voice.md) | 2026-09-16 | Built as `@isocan/voice-agent` (the standing harness) and `@isocan/talk` (the browser Live module, 16 Sep), sharing one provider contract (`live.ts`) and 47 function declarations planned into ordinary operations by `planForCall` — zero new op types, zero server routes. · see voice-agent, modules · [#139](https://github.com/dglazkov/isocan/issues/139) |
