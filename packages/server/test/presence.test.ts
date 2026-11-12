@@ -437,6 +437,76 @@ describe("presence over the daemon", () => {
     }
     expect(roster.map((s) => s.kind)).toEqual(["cli"]);
   });
+
+  it("drops stale out-of-order presence-relay frames after a newer relay completes", async () => {
+    const ws = new WebSocket(currentSocketUrl(`${base.replace("http", "ws")}/ws?canvasId=prj_1`), {
+      headers: badge.headers,
+    });
+    const messages: ServerMessage[] = [];
+    ws.on("message", (data) => messages.push(JSON.parse(String(data))));
+    await new Promise((resolve, reject) => (ws.on("open", resolve), ws.on("error", reject)));
+    await until(() => messages.some((m) => m.type === "snapshot"));
+
+    const originalRequireActor = daemon.engine.requireActor.bind(daemon.engine);
+    let releaseFirst!: () => void;
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const slowActor = { id: "usr_slow_acme", name: "Slow" };
+    const fastActor = { id: "usr_fast_acme", name: "Fast" };
+    daemon.engine.requireActor = async (badgeId, actorId) => {
+      if (actorId === slowActor.id) {
+        await firstGate;
+        return;
+      }
+      if (actorId === fastActor.id) return;
+      return originalRequireActor(badgeId, actorId);
+    };
+
+    try {
+      const makeSession = (sessionId: string, actor: { id: string; name: string }, x: number): PresenceSession => ({
+        sessionId,
+        actor,
+        kind: "cli",
+        harness: null,
+        label: null,
+        cursor: { x, y: 10 },
+        selection: [],
+        status: null,
+        statusSource: null,
+        activity: null,
+        onThread: null,
+        lastSeen: new Date().toISOString(),
+      });
+
+      // Frame 1 stalls waiting on `requireActor(slowActor)`.
+      ws.send(
+        JSON.stringify({
+          type: "presence-relay",
+          sessions: [makeSession("ses_old", slowActor, 100)],
+        }),
+      );
+      await new Promise((r) => setTimeout(r, 20));
+
+      // Frame 2 supersedes Frame 1 and resolves immediately.
+      ws.send(
+        JSON.stringify({
+          type: "presence-relay",
+          sessions: [makeSession("ses_new", fastActor, 900)],
+        }),
+      );
+      await until(() => daemon.presence.roster("prj_1").some((s) => s.sessionId === "ses_new"));
+
+      // Release Frame 1: because revision 1 < revision 2, it must NOT overwrite `ses_new`.
+      releaseFirst();
+      await new Promise((r) => setTimeout(r, 40));
+      const ids = daemon.presence.roster("prj_1").map((s) => s.sessionId);
+      expect(ids).toEqual(["ses_new"]);
+    } finally {
+      daemon.engine.requireActor = originalRequireActor;
+      ws.close();
+    }
+  });
 });
 
 /**

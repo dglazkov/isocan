@@ -1040,9 +1040,10 @@ async function room(
       (e) => e.envelope.op.type === "thread.create" || e.envelope.op.type === "thread.reply",
     );
     // Where the summons points, so the face lands somewhere rather than
-    // floating unplaced: the summoning thread, or (a routed change) the
-    // first changed item. `working` is re-asserted on every beat below —
-    // it is what animates the cursor, and each applied op retires it.
+    // floating unplaced: the summoning thread (or its target item), or a
+    // routed change's first item. Tool beats referencing an item move both
+    // `activity` and `cursor` together; thought beats update status in place
+    // so they never snap back over newer work from a spawned CLI command.
     const threadId = firstComment ? (firstComment.envelope.op as { threadId: string }).threadId : null;
     const changedItemId = (flagged[0]?.envelope.op as { itemId?: string }).itemId ?? null;
     const snapshot = await routes.snapshot(p.id).catch(() => null);
@@ -1194,8 +1195,8 @@ async function room(
       let cancelled = false;
       // The event stream the adapter is already sending, spent on the face:
       // thoughts and tool calls become inferred statuses (so they never
-      // displace anything the agent said with `--say`), re-assert `working`,
-      // and follow any canvas item a tool touches.
+      // displace anything the agent said with `--say`), and follow any canvas
+      // item a tool touches (moving `activity` and `cursor` together).
       let lastStatusBeat = 0;
       let lastStatusText = "";
       let thoughtBuffer = "";
@@ -1223,7 +1224,6 @@ async function room(
                 beat({
                   status,
                   statusSource: "inferred",
-                  ...(working ? { activity: working } : {}),
                 });
               }
             }
@@ -1244,8 +1244,9 @@ async function room(
               beat({
                 status: parsed.status,
                 statusSource: "inferred",
-                ...(working ? { activity: working } : {}),
-                ...(itemChanged && nextItem ? { cursor: itemCenter(nextItem) } : {}),
+                ...(nextItem
+                  ? { activity: { kind: "working", itemId: nextItem.id }, cursor: itemCenter(nextItem) }
+                  : {}),
               });
             }
           }

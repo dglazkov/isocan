@@ -1688,6 +1688,17 @@ describe("a budgeted agent's run", () => {
     expect(updates.map((u) => u.status)).toContain("💭 Checking the yellow banner copy and contrast…");
     expect(updates.map((u) => u.status)).toContain("checking canvas guide…");
     expect(updates.map((u) => u.status)).toContain('updating "Acme Yellow Banner"…');
+    // Thought and non-item tool beats update status without re-asserting stale `activity`
+    // over newer work, while item-targeted tool beats move `activity` and `cursor` together.
+    const thoughtBeat = updates.find((u) => u.status === "💭 Checking the yellow banner copy and contrast…");
+    expect(thoughtBeat?.activity).toBeUndefined();
+    const guideBeat = updates.find((u) => u.status === "checking canvas guide…");
+    expect(guideBeat?.activity).toBeUndefined();
+    const editBeat = updates.find((u) => u.status === 'updating "Acme Yellow Banner"…');
+    expect(editBeat).toMatchObject({
+      activity: { kind: "working", itemId: "itm_yellow" },
+      cursor: { x: 650, y: 136 },
+    });
 
     await room.stop();
     await room.done;

@@ -25,40 +25,25 @@ import { useActorMarks } from "../lib/marks.ts";
 import { isAgentActor, useActorKinds } from "../lib/actorkinds.ts";
 import { sessionName, useActorNames } from "../lib/names.ts";
 import {
-  nextWorkingWaypoint,
+  type CursorAnim,
   otherTabSessionIds,
   quietFor,
   sessionWorkingBounds,
+  sessionWorkingKey,
   spreadOverlaps,
   statusLine,
+  stepCursorAnim,
 } from "../lib/presence.ts";
 import { groundCursors, realMove } from "../lib/groundcursors.ts";
-
-const LERP_HUMAN = 0.22; // real cursors track tightly
-const LERP_AGENT = 0.11; // CLI hops glide slower so they read as deliberate motion
-const WANDER_LERP = 0.07; // slower, deliberate drift while "working"
-const SNAP_DISTANCE = 1600; // world units — teleport instead of gliding across the map
-
-interface Anim {
-  x: number;
-  y: number;
-  tx: number;
-  ty: number;
-  /** Next waypoint decision, ms timestamp (wander only). */
-  nextAt: number;
-  /** The last real position a living ground was given while working. */
-  fx?: number;
-  fy?: number;
-}
 
 /**
  * Remote cursors, Figma-style: pointer + name chip + optional status line,
  * screen-space, eased client-side toward each session's latest position.
  *
  * Sessions with a "working" activity get simulated motion rendered entirely
- * here: the cursor wanders the item's bounds with human-ish waypoints,
- * thinking pauses, and micro-stutter. The daemon only stores the fact of
- * working — every client animates it locally at 60fps with zero traffic.
+ * here: the cursor glides smoothly across the item's interior with calm
+ * waypoints and arrival pauses. The daemon only stores the fact of working —
+ * every client animates it locally with zero traffic.
  */
 export function CursorLayer({ actor = null }: { actor?: Actor | null } = {}) {
   const colors = useActorColors();
@@ -72,7 +57,7 @@ export function CursorLayer({ actor = null }: { actor?: Actor | null } = {}) {
   // cursor move, and reading `canvas` here would re-render on every op.
   const cursorPath = useCanvasCursor();
   const viewport = useUiStore((s) => s.viewport);
-  const animated = useRef(new Map<string, Anim>());
+  const animated = useRef(new Map<string, CursorAnim>());
   const [, force] = useState(0);
 
   const visible = sessions.filter(
@@ -83,8 +68,11 @@ export function CursorLayer({ actor = null }: { actor?: Actor | null } = {}) {
   useEffect(() => {
     if (visible.length === 0) return;
     let raf = 0;
+    let lastNow = 0;
     const step = () => {
       const now = performance.now();
+      const dtMs = lastNow > 0 ? Math.min(100, Math.max(0, now - lastNow)) : 1000 / 60;
+      lastNow = now;
       const { sessions: current, canvas } = useCanvasStore.getState();
       const live = new Set<string>();
       let moving = false;
@@ -108,49 +96,32 @@ export function CursorLayer({ actor = null }: { actor?: Actor | null } = {}) {
         if (!session.cursor && !workingBounds) continue;
         live.add(session.sessionId);
 
-        const home = spread.get(session.sessionId) ??
-          session.cursor ?? {
-            x: workingBounds!.x + workingBounds!.width / 2,
-            y: workingBounds!.y + workingBounds!.height / 2,
-          };
-        let rec = animated.current.get(session.sessionId);
-        if (!rec || Math.hypot(home.x - rec.x, home.y - rec.y) > SNAP_DISTANCE) {
-          rec = { x: home.x, y: home.y, tx: home.x, ty: home.y, nextAt: 0 };
-          animated.current.set(session.sessionId, rec);
-        }
-
-        if (workingBounds) {
-          if (now >= rec.nextAt) {
-            const next = nextWorkingWaypoint(workingBounds, rec);
-            rec.tx = next.tx;
-            rec.ty = next.ty;
-            rec.nextAt = now + next.dwellMs;
-          }
-        } else {
-          rec.tx = home.x;
-          rec.ty = home.y;
-        }
+        // Anchor working cursors to `workingBounds` center (matching `sessionLocus`)
+        // so a stale `session.cursor` far away can never trigger a snap loop.
+        const home = workingBounds
+          ? {
+              x: workingBounds.x + workingBounds.width / 2,
+              y: workingBounds.y + workingBounds.height / 2,
+            }
+          : spread.get(session.sessionId) ?? session.cursor!;
+        const { rec, moved } = stepCursorAnim(animated.current.get(session.sessionId), {
+          home,
+          workingBounds,
+          workingKey: sessionWorkingKey(session.activity),
+          kind: session.kind,
+          nowMs: now,
+          dtMs,
+        });
+        animated.current.set(session.sessionId, rec);
 
         const real = workingBounds && groundCursors.feed && realMove(rec, session.cursor);
         if (real) groundCursors.feed!(session.sessionId, real);
 
-        const rate = workingBounds ? WANDER_LERP : session.kind === "web" ? LERP_HUMAN : LERP_AGENT;
-        const dx = rec.tx - rec.x;
-        const dy = rec.ty - rec.y;
-        if (Math.hypot(dx, dy) > 0.5) {
-          rec.x += dx * rate;
-          rec.y += dy * rate;
-          // micro-stutter while working — a hand, not a tween
-          if (workingBounds) {
-            rec.x += (Math.random() - 0.5) * 0.9;
-            rec.y += (Math.random() - 0.5) * 0.9;
-          }
+        if (moved) {
           // A living ground feels the cursor you see — but not the wander,
           // which nobody sent (living grounds phase 2, groundcursors.ts).
           if (!workingBounds) groundCursors.feed?.(session.sessionId, rec);
           moving = true;
-        } else if (workingBounds) {
-          moving = true; // keep the loop alive through pauses
         }
       }
 

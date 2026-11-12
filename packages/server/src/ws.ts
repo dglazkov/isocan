@@ -841,6 +841,8 @@ export function attachWebSockets(
     // presence message and torn down with the socket.
     let sessionId: string | null = null;
     let presenceRevision = 0;
+    let relayRevision = 0;
+    let rcRelayRevision = 0;
 
     let room = rooms.get(canvasId);
     if (!room) {
@@ -931,6 +933,7 @@ export function attachWebSockets(
        */
       if (message.type === "presence-relay") {
         if (!bearer || !Array.isArray(message.sessions)) return;
+        const revision = ++relayRevision;
         void (async () => {
           const allowed: PresenceSession[] = [];
           for (const session of message.sessions) {
@@ -945,6 +948,7 @@ export function attachWebSockets(
             }
             allowed.push(session);
           }
+          if (revision !== relayRevision || ws.readyState !== WebSocket.OPEN) return;
           presence.mirror(canvasId!, relayOrigin, allowed);
         })();
         return;
@@ -959,6 +963,7 @@ export function attachWebSockets(
        */
       if (message.type === "rc-relay") {
         if (!bearer || !rc) return;
+        const revision = ++rcRelayRevision;
         const parked = message.parked === true;
         const ids = Array.isArray(message.actorIds)
           ? message.actorIds.filter((id): id is string => typeof id === "string")
@@ -999,6 +1004,7 @@ export function attachWebSockets(
             const made = rcPoliciesOf({ [actorId]: policy }, allowed, owner);
             if (made?.[actorId]) policies[actorId] = made[actorId];
           }
+          if (revision !== rcRelayRevision || ws.readyState !== WebSocket.OPEN) return;
           rc.mirror(relayOrigin, canvasId!, {
             parked,
             actorIds: allowed,
