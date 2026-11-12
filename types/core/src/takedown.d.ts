@@ -1,25 +1,17 @@
 /**
- * **Taking down is not deleting** — the shared half of
- * `docs/projects/operator/design.md`, "Take a canvas down" (operator phase 2).
+ * Copyright 2026 Google LLC
  *
- * A delete is the owner's: an op, into the log, broadcast as `canvas-deleted`,
- * erasing the copy on every linked daemon and every tab. A takedown is the
- * home's: it stops serving the canvas, **leaves every replica's copy where it
- * is**, and can be lifted. That is the innkeeper line — sovereignty by replica
- * means the operator cannot reach a laptop, and a takedown that erased Priya's
- * copy would be the operator reaching one.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * So the two must not be spellable as one another anywhere, on any surface,
- * and that is what this file is for: one close reason, one refusal code, one
- * row shape and one sentence, so a daemon, a tab and a terminal cannot each
- * invent their own reading of what happened. Everything here is data and pure
- * functions; the acting lives in `packages/server`, where the desk is.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * **What is deliberately NOT here:** the note. `CanvasTakedown` carries it
- * because the DESK's row does, and the desk's row is innkeeper-private — but
- * {@link takedownSentence} never reads it, and the shape a surface is handed
- * (`TakedownNotice`) has no field for it. The reason category is shown; the
- * operator's note is his (design, "Words", and Dimitri's open question 5).
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 import type { OperatorReach } from "./operator.js";
 import type { PurgeCounts } from "./purge.js";

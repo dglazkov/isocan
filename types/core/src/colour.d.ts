@@ -1,34 +1,17 @@
 /**
- * **The colours a person says out loud, and when the canvas is allowed to
- * claim one.**
+ * Copyright 2026 Google LLC
  *
- * "Move the red one next to the blue one" is the sentence
- * `docs/research/2026-09-19-move-the-red-one.md` is named for, and it is
- * unanswerable today for a reason that is data, not modelling: **`Item` has no
- * colour field.** Colour exists in exactly two honest places — a stroke's
- * `Stroke.color`, which is a hex string, and a paper/tint property, which is
- * already a word — plus one dishonest one, a card's rendered face, which is
- * pixels and nothing else.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * So this file does two separable jobs and refuses a third:
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * 1. **A hex becomes a spoken word** (`spokenColour`), over a CLOSED set.
- * 2. **An item answers for itself** (`itemColour`), and answers `null`
- *    whenever the data does not actually say — which is most items.
- * 3. It does **not** look at pixels. A dominant colour derived from a
- *    screenshot needs a decoder the standing harness does not have and the
- *    browser does, and a colour that exists on one surface and not the other
- *    forks the one wording `canvasSnapshotText` exists to keep. Half of "red"
- *    is worse than none.
- *
- * ## Why the set is closed
- *
- * The same argument `EXTENSION_ICONS` makes about icons, applied to words.
- * CSS has 148 named colours and one of them is `darkslategrey`, which nobody
- * has ever said to another person. A spoken referent is drawn from a handful
- * of words, and a closed set is the only one a test can enumerate and a model
- * can be told the whole of. Eleven words: the English basic colour terms
- * minus the ones this canvas has no way to distinguish.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 import type { InkStroke } from "./drawing.js";
 /**

@@ -5627,8 +5627,7 @@ async function room(deps, life, announce, onLeave) {
                 lastStatusText = status;
                 beat({
                   status,
-                  statusSource: "inferred",
-                  ...working ? { activity: working } : {}
+                  statusSource: "inferred"
                 });
               }
             }
@@ -5647,8 +5646,7 @@ async function room(deps, life, announce, onLeave) {
               beat({
                 status: parsed.status,
                 statusSource: "inferred",
-                ...working ? { activity: working } : {},
-                ...itemChanged && nextItem ? { cursor: itemCenter(nextItem) } : {}
+                ...nextItem ? { activity: { kind: "working", itemId: nextItem.id }, cursor: itemCenter(nextItem) } : {}
               });
             }
           }

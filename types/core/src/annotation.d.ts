@@ -1,15 +1,17 @@
 /**
- * An annotation: ink that is ABOUT something.
+ * Copyright 2026 Google LLC
  *
- * The Pen already makes drawings. What makes one an annotation is that it
- * belongs to an item — the way an anchored comment belongs to one — so it can
- * be pointed at, acted on, and cleared when the thing it asked for is done.
- * Ink on bare canvas stays a drawing: nobody asked for anything, so there is
- * nothing to clear.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * Deliberately NOT a new op or a new kind: an annotation is an ordinary
- * drawing item wearing two properties, so undo, versions, GC, `isocan ls`, and
- * every older client keep working without knowing the word.
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 import type { CanvasContents, Item } from "./model.js";
 /** The item this ink is about. */
