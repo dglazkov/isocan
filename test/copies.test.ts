@@ -76,7 +76,7 @@ describe("the declared copies are all held here", () => {
       .filter((f) => /\.(tsx?|mjs|js)$/.test(f));
     const declared: string[] = [];
     for (const file of tracked) {
-      const head = read(file).slice(0, 600);
+      const head = read(file).slice(0, 1200);
       const m = /COPY of (\S+?\.[a-z]+)\b/.exec(head);
       if (m) declared.push(`${m[1]} -> ${file}`);
     }
@@ -87,15 +87,27 @@ describe("the declared copies are all held here", () => {
 describe("the talk module's copy of the live provider face", () => {
   const { owner: OWNER, copy: COPY } = DECLARED[0];
 
-  /** The copy's licence to differ: one block, at the top, saying it is a copy.
-   *  Everything after it must match the owner byte for byte. */
+  /** The copy's licence to differ: one block, at the top (after any licence
+   *  header), saying it is a copy. Everything else must match the owner byte
+   *  for byte. */
   function withoutCopyHeader(copy: string): string {
-    const open = copy.indexOf("/**");
-    const close = copy.indexOf("*/", open);
+    let open = copy.indexOf("/**");
+    let close = copy.indexOf("*/", open);
     expect(open, `${COPY} should open with a block comment`).toBe(0);
-    const header = copy.slice(open, close + 2);
+    let header = copy.slice(open, close + 2);
+    if (!header.includes(`COPY of ${OWNER}`)) {
+      expect(header, `${COPY} leading comment should be a licence or COPY header`).toContain(
+        "Licensed under the Apache License",
+      );
+      const nextOpen = copy.indexOf("/**", close + 2);
+      expect(nextOpen, `${COPY} should carry a COPY header block after its licence comment`).toBeGreaterThan(close);
+      expect(copy.slice(close + 2, nextOpen), `${COPY} should put no code before its COPY header`).toMatch(/^\s*$/);
+      open = nextOpen;
+      close = copy.indexOf("*/", open);
+      header = copy.slice(open, close + 2);
+    }
     expect(header).toContain(`COPY of ${OWNER}`);
-    return copy.slice(close + 2).replace(/^\n+/, "");
+    return copy.slice(0, open) + copy.slice(close + 2).replace(/^\n+/, "");
   }
 
   it("is the harness's file exactly, apart from the header that says it is a copy", () => {
