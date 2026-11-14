@@ -47,6 +47,12 @@ second week.
   see the component's state at each frame, and leave a comment at a moment —
   opening the comment takes the strip back there. **Inspect** shows a
   screen's accessibility tree, layout, performance and logs.
+- **Tests as storyboards.** Each test in an Exact app shows as a row of
+  frames, one per step. Press **Run** to run it on the web, iPhone and Mac
+  from the canvas: green steps, or the failing step in red with Exact's
+  reason, its frame and its tree. **Record** in Drive mode turns your taps
+  and typing into a proposed test, with `expect` lines from what changed;
+  it is written to your app only when you keep it.
 
 ## 13 November 2026
 

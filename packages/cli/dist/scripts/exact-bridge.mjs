@@ -15,7 +15,7 @@ var flag = (name) => {
   return i >= 0 ? argv[i + 1] : void 0;
 };
 var flags = (name) => argv.flatMap((a, i) => a === name && argv[i + 1] !== void 0 ? [argv[i + 1]] : []);
-if (!["doctor", "read", "capture", "inputs", "diagnose", "check", "compare", "drive", "film", "facts"].includes(verb ?? "") || !flag("--app") || !flag("--report")) {
+if (!["doctor", "read", "capture", "inputs", "diagnose", "check", "compare", "drive", "film", "facts", "run", "record", "verify"].includes(verb ?? "") || !flag("--app") || !flag("--report")) {
   console.error("usage: exact-bridge.mjs doctor|read|capture|inputs|diagnose|check --app <dir> --report <file.json> [--hosts web,ios] [--jobs <jobs.json>] [--dir <out> --size <w>x<h> --url <path>\u2026]");
   process.exit(2);
 }
@@ -203,7 +203,9 @@ async function read() {
     sources[file] = readFileSync(at, "utf8");
   }
   const tests = [];
+  const testSources = {};
   for (const name of readdirSync(app).filter((f) => f.endsWith(".test.contract")).sort()) {
+    testSources[name] = readFileSync(path.join(app, name), "utf8");
     const run = exact(["contract", "test", name], { allowFail: true });
     try {
       tests.push({ file: name, tests: JSON.parse(run.stdout).tests ?? [] });
@@ -225,6 +227,7 @@ async function read() {
     symbols: parsed,
     sources,
     tests,
+    testSources,
     grants: grantsLine ? grantsLine[2] : null,
     design: designReading,
     inputs,
@@ -517,6 +520,202 @@ function factsJob(job) {
     ...ok ? {} : { error: (run.stderr || run.stdout).trim().split("\n").filter((l) => !l.startsWith("{")).slice(-4).join("\n") || `agent ${host} exited ${run.code}` }
   };
 }
+var TEST_FILE = /^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,80}\.test\.contract$/;
+var LAUNCH_STEPS = /* @__PURE__ */ new Set(["at", "size", "seed", "locale", "time-zone", "epoch", "format-locale", "before-data", "fresh", "prefer", "fail-fetch"]);
+function runJob(out, job) {
+  const host = job.host ?? "web";
+  if (!HOSTS.includes(host)) fail(`a test runs on ${HOSTS.join(", ")}, not ${JSON.stringify(host)}`);
+  if (typeof job.file !== "string" || !TEST_FILE.test(job.file) || !existsSync(path.join(app, job.file))) fail(`a storyboard runs one of the app's own *.test.contract files, not ${JSON.stringify(job.file)}`);
+  if (typeof job.test !== "string" || !job.test) fail("a run names its test");
+  const sim = host === "ios" ? simulator([{ host }]) : null;
+  const started = Date.now();
+  const text = readFileSync(path.join(app, job.file), "utf8");
+  const lines = text.split("\n");
+  const compiled = exact(["contract", "test", job.file], { allowFail: true });
+  let tests;
+  try {
+    tests = JSON.parse(compiled.stdout).tests;
+  } catch {
+    fail(`\`contract test ${job.file}\` did not compile:
+${(compiled.stderr || compiled.stdout).trim().split("\n").slice(-4).join("\n")}`);
+  }
+  const t = tests.find((x) => x.name === job.test);
+  if (!t) fail(`${job.file} has no test named ${JSON.stringify(job.test)}`);
+  const seen = /* @__PURE__ */ new Set();
+  for (const st of t.steps) {
+    if (seen.has(st.line)) fail(`line ${st.line} of ${job.file} holds more than one step; a storyboard draws a test one line a step`);
+    seen.add(st.line);
+  }
+  let lead = 0;
+  while (lead < t.steps.length && LAUNCH_STEPS.has(t.steps[lead].op)) lead++;
+  const shot = (i) => path.join(out, `f-${i}.png`);
+  const copy = [`test ${JSON.stringify(t.name)}`];
+  const lineOf = /* @__PURE__ */ new Map();
+  for (let k = 0; k < lead; k++) {
+    copy.push(`  ${(lines[t.steps[k].line - 1] ?? "").trim()}`);
+    lineOf.set(copy.length, k);
+  }
+  copy.push(`  screenshot ${JSON.stringify(shot(0))}`);
+  for (let k = lead; k < t.steps.length; k++) {
+    copy.push(`  ${(lines[t.steps[k].line - 1] ?? "").trim()}`);
+    lineOf.set(copy.length, k);
+    copy.push(`  screenshot ${JSON.stringify(shot(k - lead + 1))}`);
+  }
+  const file = path.join(out, "storyboard.test.contract");
+  writeFileSync(file, `${copy.join("\n")}
+`);
+  const env = host === "ios" ? { EXACT_SIM: sim, EXACT_SHOW_SIMULATOR: "0" } : {};
+  const ran = exact(["test", host, ...sim ? ["--sim", sim] : [], file], { allowFail: true, env, timeoutMs: host === "web" ? 6e5 : 18e5 });
+  const all = `${ran.stdout}
+${ran.stderr}`.split("\n");
+  const head = all.find((l) => l.startsWith(`test ${JSON.stringify(t.name)}:`) || l.startsWith(`test "${t.name}":`)) ?? null;
+  const verdict = !head ? "error" : / ok$/.test(head) ? "ok" : /: FAIL$/.test(head) ? "fail" : /skipped/.test(head) ? "skipped" : "error";
+  const prefix = `  ${t.name}: `;
+  const failures = all.filter((l) => l.startsWith(prefix)).map((l) => l.slice(prefix.length));
+  const fileLine = (n) => {
+    const k = lineOf.get(n);
+    return k === void 0 ? null : t.steps[k].line;
+  };
+  const said = [head, ...all.filter((l) => l.startsWith(prefix) || l.startsWith("  note: "))].filter(Boolean).map((l) => l.trim().replace(/: line (\d+): /, (m, n) => fileLine(Number(n)) ? `: ${job.file}:${fileLine(Number(n))}: ` : m));
+  const frameOf = (i) => {
+    const f = shot(i);
+    if (!existsSync(f)) return null;
+    return { sha256: sha256(readFileSync(f)), file: f };
+  };
+  const failing = /* @__PURE__ */ new Map();
+  let first = null;
+  for (const msg of failures) {
+    const m = /^line (\d+): ([\s\S]*)$/.exec(msg);
+    const k = m ? lineOf.get(Number(m[1])) : void 0;
+    if (k === void 0) {
+      first ??= { k: null, reason: msg };
+      continue;
+    }
+    if (!failing.has(k)) failing.set(k, m[2]);
+    first ??= { k, reason: m[2] };
+  }
+  const steps = t.steps.map((st, k) => {
+    const frame = k < lead ? null : frameOf(k - lead);
+    const after = k < lead ? verdict === "ok" || existsSync(shot(0)) : existsSync(shot(k - lead + 1));
+    return { line: st.line, state: failing.has(k) ? "fail" : verdict === "ok" || after ? "ok" : "unreached", frame };
+  });
+  let failed = null;
+  if (verdict !== "ok" && verdict !== "skipped") {
+    const k = first?.k ?? null;
+    const replay = k === null ? null : treeAt(host, t.steps, lead, k, frameOf(0), sim);
+    failed = {
+      line: k === null ? null : t.steps[k].line,
+      reason: first?.reason ?? (verdict === "error" ? (ran.stderr || ran.stdout).trim().split("\n").filter((l) => !l.startsWith("{")).slice(-3).join("\n") || `exact.mjs test exited ${ran.code}` : "the test failed"),
+      frame: k === null ? null : k < lead ? null : frameOf(k - lead),
+      tree: replay?.tree ?? null,
+      reply: replay?.reply ?? (replay?.note ? { note: replay.note } : null)
+    };
+  }
+  return {
+    ok: verdict !== "error",
+    host,
+    file: job.file,
+    test: t.name,
+    verdict,
+    said,
+    steps,
+    failed,
+    end: verdict === "ok" ? frameOf(t.steps.length - lead) : null,
+    ms: Date.now() - started,
+    ...verdict === "error" ? { error: failed?.reason ?? "the test did not run" } : {}
+  };
+}
+function stepOp(st) {
+  const q = (v) => /^[A-Za-z0-9_.:-]+$/.test(String(v)) ? String(v) : JSON.stringify(String(v));
+  if (st.op === "tap" && (st.form ?? "press") === "press" && st.target) return `tap ${q(st.target)}`;
+  if (st.op === "type" && st.target && typeof st.text === "string" && !st.append) return `type ${q(st.target)} ${JSON.stringify(st.text)}`;
+  if (st.op === "clock" && typeof st.arg === "string") return `clock ${st.arg}`;
+  if (st.op === "back") return "back";
+  if (st.op.startsWith("expect-")) return null;
+  return void 0;
+}
+function treeAt(host, steps, lead, k, frame0, sim) {
+  const at = steps.slice(0, lead).find((s) => s.op === "at");
+  const url = typeof at?.value === "string" ? at.value : "/";
+  if (steps.slice(0, lead).some((s) => s.op !== "at")) return { note: "the tree is read by a replay, which takes a test whose only launch line is at" };
+  const ops = [];
+  for (const st of steps.slice(lead, k)) {
+    const op = stepOp(st);
+    if (op === void 0) return { note: `the tree is read by a replay of tap, type, clock and back; line ${st.line} is ${st.op}` };
+    if (op) ops.push(op);
+  }
+  const failing = k >= lead ? stepOp(steps[k]) : null;
+  const size = (() => {
+    if (!frame0?.file) return "390x844";
+    const p = pngSize(readFileSync(frame0.file));
+    return p ? `${p.width}x${p.height}` : "390x844";
+  })();
+  const tail = ["tree", ...failing ? [failing] : []];
+  let args;
+  if (host === "web") args = ["agent", "web", "--json", "--size", size, ...url !== "/" ? ["--url", url] : [], "clock data", ...ops, ...tail];
+  else {
+    const root = rootOf();
+    if (url !== "/" && !root) return { note: `a native replay opens ${url} by typing it into the node that carries navigate=, and app.contract names none` };
+    args = ["agent", host, "--json", "clock data", ...url !== "/" ? [`type ${root} ${url}`, "clock settle"] : [], ...ops, ...tail];
+  }
+  const run = exact(args, { allowFail: true, env: host === "ios" ? { EXACT_SIM: sim, EXACT_SHOW_SIMULATOR: "0" } : {}, timeoutMs: host === "web" ? 6e5 : 18e5 });
+  const replies = jsonReplies(run.stdout);
+  const tree = replies.find((r) => Array.isArray(r.nodes) && !r.env) ?? null;
+  const last = replies.at(-1) ?? null;
+  const stopped = (run.stderr || "").trim().split("\n").filter((l) => l && !l.startsWith("{")).slice(-2).join(" ");
+  const reply = !failing ? null : last && last !== tree ? last : { error: stopped || `agent ${host} exited ${run.code}` };
+  const shown = tree ? tree.nodes.filter((n) => !n.hidden && !n.inactive) : [];
+  const rows = tree ? (shown.length ? shown : tree.nodes).slice(0, 240).map((n) => ({
+    depth: n.depth ?? 0,
+    type: n.type,
+    ...n.props?.testId ? { testId: n.props.testId } : {},
+    ...typeof n.props?.text === "string" ? { text: n.props.text.slice(0, 80) } : {},
+    ...typeof n.props?.accessibilityLabel === "string" ? { label: n.props.accessibilityLabel.slice(0, 80) } : typeof n.props?.["aria-label"] === "string" ? { label: n.props["aria-label"].slice(0, 80) } : {},
+    ...n.hidden ? { hidden: true } : {},
+    ...n.inactive ? { inactive: true } : {}
+  })) : null;
+  return { tree: rows, reply, ...rows ? {} : { note: (run.stderr || run.stdout).trim().split("\n").filter((l) => !l.startsWith("{")).slice(-2).join(" ") || "the replay printed no tree" } };
+}
+function recordJob(job) {
+  const { host, url, shots, size, scheme, sim } = startOf(job);
+  const ok = (list) => Array.isArray(list) && list.length <= 40 && list.every((op) => typeof op === "string" && DRIVE_OP.test(op));
+  if (!ok(job.before ?? []) || !ok(job.ops) || job.ops.length === 0) fail('a recording is tap <testId>, type <testId> "<text>" and back \u2014 nothing else, at most 40, and at least one');
+  const press = (list) => list.flatMap((op) => [op, "clock settle"]);
+  const started = Date.now();
+  const run = drive(host, url, shots, [`prefer color-scheme ${scheme}`, "clock settle", ...press(job.before ?? []), "state", ...press(job.ops), "clock settle", "state"], { size, sim, allowFail: true });
+  const states = jsonReplies(run.stdout).filter((r) => r.slots && typeof r.slots === "object");
+  if (run.code !== 0 || states.length < 2) return { ok: false, ms: Date.now() - started, error: (run.stderr || run.stdout).trim().split("\n").filter((l) => !l.startsWith("{")).slice(-4).join("\n") || `agent ${host} exited ${run.code}` };
+  const pick = (s) => ({ slots: s.slots ?? null, derives: s.derives ?? null });
+  return { ok: true, host, url, before: pick(states[0]), after: pick(states.at(-1)), ms: Date.now() - started };
+}
+function verifyJob() {
+  const host = flag("--host") ?? "web";
+  if (!["web", "ios"].includes(host)) fail(`verify has legs for the web and iOS on this machine, not ${JSON.stringify(host)} (Exact: macOS "verify has no leg for it")`);
+  const sim = host === "ios" ? simulator([{ host }]) : null;
+  const started = Date.now();
+  const run = exact(["verify", host, "--json", ...sim ? ["--sim", sim] : []], { allowFail: true, env: sim ? { EXACT_SIM: sim, EXACT_SHOW_SIMULATOR: "0" } : {}, timeoutMs: 18e5 });
+  let report2 = null;
+  try {
+    report2 = JSON.parse(run.stdout.trim().split("\n").filter((l) => l.startsWith("{")).at(-1) ?? "null");
+  } catch {
+  }
+  if (!report2) return { ok: false, host, exit: run.code, ms: Date.now() - started, error: (run.stderr || run.stdout).trim().split("\n").slice(-4).join("\n") || `verify exited ${run.code}` };
+  const shots = [];
+  for (const c of report2.checks ?? []) {
+    if (typeof c.shot !== "string" || !existsSync(c.shot) || shots.some((s) => s.file === c.shot)) continue;
+    const bytes = readFileSync(c.shot);
+    shots.push({ file: c.shot, sha256: sha256(bytes), screen: c.screen, size: c.size, scheme: c.scheme, png: pngSize(bytes) });
+  }
+  return {
+    ok: true,
+    host,
+    exit: run.code,
+    problems: report2.problems ?? null,
+    tests: report2.tests ? { passed: report2.tests.passed ?? 0, failed: report2.tests.failed ?? 0, failing: (report2.tests.results ?? []).filter((t) => t.failures?.length).map((t) => ({ name: t.name, file: t.file, failures: t.failures })) } : null,
+    shots,
+    ms: Date.now() - started
+  };
+}
 var fileText = /* @__PURE__ */ new Map();
 function pointsOf(tree, layout, ax = null) {
   if (!tree || !layout) return null;
@@ -654,5 +853,5 @@ ${(run.stderr || run.stdout).trim().split("\n").slice(-4).join("\n")}`);
   }
   return { checks: out };
 }
-var result = verb === "film" ? filmJob(path.resolve(flag("--dir") ?? fail("film needs --dir")), JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("film needs --job")), "utf8"))) : verb === "facts" ? factsJob(JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("facts needs --job")), "utf8"))) : verb === "drive" ? driveJob(path.resolve(flag("--dir") ?? fail("drive needs --dir")), JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("drive needs --job")), "utf8"))) : verb === "compare" ? compare(path.resolve(flag("--dir") ?? fail("compare needs --dir")), JSON.parse(readFileSync(path.resolve(flag("--jobs") ?? fail("compare needs --jobs")), "utf8"))) : verb === "diagnose" ? diagnose() : verb === "check" ? check() : verb === "doctor" ? await doctor() : verb === "read" ? await read() : verb === "inputs" ? { inputs: inputsDigest(checkout().dir) } : capture();
+var result = verb === "run" ? runJob(path.resolve(flag("--dir") ?? fail("run needs --dir")), JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("run needs --job")), "utf8"))) : verb === "record" ? recordJob(JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("record needs --job")), "utf8"))) : verb === "verify" ? verifyJob() : verb === "film" ? filmJob(path.resolve(flag("--dir") ?? fail("film needs --dir")), JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("film needs --job")), "utf8"))) : verb === "facts" ? factsJob(JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("facts needs --job")), "utf8"))) : verb === "drive" ? driveJob(path.resolve(flag("--dir") ?? fail("drive needs --dir")), JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("drive needs --job")), "utf8"))) : verb === "compare" ? compare(path.resolve(flag("--dir") ?? fail("compare needs --dir")), JSON.parse(readFileSync(path.resolve(flag("--jobs") ?? fail("compare needs --jobs")), "utf8"))) : verb === "diagnose" ? diagnose() : verb === "check" ? check() : verb === "doctor" ? await doctor() : verb === "read" ? await read() : verb === "inputs" ? { inputs: inputsDigest(checkout().dir) } : capture();
 writeFileSync(report, JSON.stringify(result, null, 2));
