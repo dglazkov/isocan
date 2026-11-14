@@ -60,7 +60,8 @@ export function buildIndex(readings: Readings): ExactIndex {
  * `exact.key`. Equal parts, equal picture: the capture is skipped.
  */
 export function captureKeyParts(index: ExactIndex, route: string, device: Device, scheme: Scheme, shots: string): string {
-  return JSON.stringify([index.inputs, route, device, scheme, "web", core.CAPTURE_AT, DEVICES[device], shots]);
+  // "points": a capture carries its nodes' boxes since exact phase 2, so an older capture is taken again once.
+  return JSON.stringify([index.inputs, route, device, scheme, "web", core.CAPTURE_AT, DEVICES[device], shots, "points"]);
 }
 
 /**

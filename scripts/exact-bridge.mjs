@@ -8,6 +8,8 @@
  *   node scripts/exact-bridge.mjs capture --app <dir> --report <file.json> --jobs <jobs.json>
  *   node scripts/exact-bridge.mjs capture --app <dir> --report <file.json> --dir <out> --size <w>x<h> --url <path>…
  *   node scripts/exact-bridge.mjs inputs  --app <dir> --report <file.json>
+ *   node scripts/exact-bridge.mjs diagnose --app <dir> --report <file.json>
+ *   node scripts/exact-bridge.mjs check   --app <dir> --report <file.json> --url <path>…
  *
  * isocan runs no compute of its own and a module may not spawn, so the
  * `exact` verbs run this, as `motion render` runs its script: through
@@ -39,8 +41,8 @@ const flag = (name) => {
 };
 const flags = (name) => argv.flatMap((a, i) => (a === name && argv[i + 1] !== undefined ? [argv[i + 1]] : []));
 
-if (!["doctor", "read", "capture", "inputs"].includes(verb ?? "") || !flag("--app") || !flag("--report")) {
-  console.error("usage: exact-bridge.mjs doctor|read|capture|inputs --app <dir> --report <file.json> [--hosts web,ios] [--jobs <jobs.json>] [--dir <out> --size <w>x<h> --url <path>…]");
+if (!["doctor", "read", "capture", "inputs", "diagnose", "check"].includes(verb ?? "") || !flag("--app") || !flag("--report")) {
+  console.error("usage: exact-bridge.mjs doctor|read|capture|inputs|diagnose|check --app <dir> --report <file.json> [--hosts web,ios] [--jobs <jobs.json>] [--dir <out> --size <w>x<h> --url <path>…]");
   process.exit(2);
 }
 
@@ -316,18 +318,57 @@ function captureJobs(out, jobs) {
     for (const [i, shot] of job.shots.entries()) {
       const file = path.join(out, `job-${j}-${i}.png`);
       files.push(file);
-      ops.push(`resize ${shot.size}`, `prefer color-scheme ${shot.scheme}`, "clock settle", `screenshot ${file}`);
+      // `tree` (what is hidden) and `layout` (each node's box, joined to source) right after the picture: what pointing on
+      // a capture reads, with live frames off (exact phase 2).
+      ops.push(`resize ${shot.size}`, `prefer color-scheme ${shot.scheme}`, "clock settle", `screenshot ${file}`, "tree", "layout");
     }
     const run = exact([
-      "agent", "web", "--size", first.size, "--seed", "1", "--locale", "en-US", "--time-zone", "UTC", "--epoch", "2026-01-01",
+      "agent", "web", "--json", "--size", first.size, "--seed", "1", "--locale", "en-US", "--time-zone", "UTC", "--epoch", "2026-01-01",
       "--url", job.url, ...ops,
     ]);
+    const replies = run.stdout.split("\n").flatMap((line) => { if (!line.startsWith("{")) return []; try { return [JSON.parse(line)]; } catch { return []; } });
+    const trees = replies.filter((r) => Array.isArray(r.nodes) && !r.env);
+    const layouts = replies.filter((r) => Array.isArray(r.nodes) && r.env);
     for (const [i, file] of files.entries()) {
       if (!existsSync(file)) fail(`agent web wrote no screenshot for ${job.url} at ${job.shots[i].size} ${job.shots[i].scheme}:\n${run.stdout.trim().split("\n").slice(-4).join("\n")}`);
-      shots.push({ job: j, index: i, url: job.url, size: job.shots[i].size, scheme: job.shots[i].scheme, file, sha256: sha256(readFileSync(file)), ms: Math.round(run.ms / files.length) });
+      shots.push({ job: j, index: i, url: job.url, size: job.shots[i].size, scheme: job.shots[i].scheme, file, sha256: sha256(readFileSync(file)), ms: Math.round(run.ms / files.length), points: pointsOf(trees[i], layouts[i]) });
     }
   }
   return { shots };
+}
+
+/**
+ * **Where each visible node of a capture is, and which line drew it** (exact
+ * phase 2; design §5: with live frames off, pointing still works on
+ * captures). The driver's `layout` gives every node's box joined to the
+ * source map; `tree` says which are hidden (a stack's covered screen keeps
+ * its boxes). Each style a node is named with (`class=Price`) is read off
+ * the line the map points at. Files are named relative to the app, with
+ * their digest, so a comment made on a capture carries `exact.source`.
+ */
+const fileText = new Map();
+function pointsOf(tree, layout) {
+  if (!tree || !layout) return null;
+  const hidden = new Set(tree.nodes.filter((n) => n.hidden || n.inactive).map((n) => n.id));
+  const rel = (file) => (typeof file === "string" && file.startsWith(app + path.sep) ? path.relative(app, file) : null);
+  const files = {};
+  const nodes = [];
+  for (const n of layout.nodes) {
+    const m = n.sourceMap;
+    const file = rel(m?.file);
+    if (hidden.has(n.id) || !file || !(n.w > 0 && n.h > 0) || m.status !== "compatible") continue;
+    if (!fileText.has(file)) fileText.set(file, readFileSync(path.join(app, file), "utf8"));
+    files[file] ??= sha256(fileText.get(file));
+    const lineText = fileText.get(file).split("\n")[m.line - 1] ?? "";
+    const cls = /\bclass=\(([^)]*)\)/.exec(lineText)?.[1]?.match(/\b[A-Z][A-Za-z0-9_]*\b/g) ?? (/\bclass=([A-Za-z_][A-Za-z0-9_]*)/.exec(lineText) ? [/\bclass=([A-Za-z_][A-Za-z0-9_]*)/.exec(lineText)[1]] : []);
+    nodes.push({
+      x: Math.round(n.x), y: Math.round(n.y), w: Math.round(n.w), h: Math.round(n.h), type: n.type, ...(n.testId ? { testId: n.testId } : {}),
+      file, line: m.line, col: m.col, component: m.component ?? null,
+      chain: (m.chain ?? []).map((c) => ({ file: rel(c.file) ?? c.file, line: c.line, col: c.col, component: c.component ?? null })),
+      ...(cls.length ? { classes: cls } : {}),
+    });
+  }
+  return { files, nodes };
 }
 
 /**
@@ -354,8 +395,62 @@ function capture() {
   return { size, shots };
 }
 
+/**
+ * **What the compiler says, and where** (exact phase 2; design §6): `contract
+ * build --json` (each diagnostic with its id, file and range; `app.ts`'s type
+ * errors appended), and `contract symbols` — which still answers when the
+ * build does not — with the Contract sources and each file's digest, so the
+ * CLI can say which screens a broken line draws and pin the comment there.
+ */
+function diagnose() {
+  const build = exact(["contract", "build", "app.contract", "--json"], { allowFail: true });
+  let diagnostics;
+  try {
+    diagnostics = JSON.parse(build.stdout.trim().split("\n").filter((l) => l.startsWith("[")).at(-1) ?? "null");
+  } catch { diagnostics = null; }
+  if (!Array.isArray(diagnostics)) fail(`\`contract build --json\` printed no diagnostics list (exit ${build.code}):\n${(build.stderr || build.stdout).trim().split("\n").slice(-4).join("\n")}`);
+  const sym = exact(["contract", "symbols", "app.contract"], { allowFail: true });
+  let symbols = null;
+  try { symbols = JSON.parse(sym.stdout); } catch { /* a file that does not parse names nothing */ }
+  const sources = {};
+  const digests = {};
+  const files = new Set(["app.contract", ...diagnostics.map((d) => d.file), ...(symbols?.definitions ?? []).map((d) => d.file)]);
+  for (const file of files) {
+    if (typeof file !== "string" || file.includes(":")) continue;
+    const at = path.resolve(app, file);
+    if (!at.startsWith(app + path.sep) || !existsSync(at)) continue;
+    const bytes = readFileSync(at);
+    digests[file] = sha256(bytes);
+    if (file.endsWith(".contract")) sources[file] = bytes.toString("utf8");
+  }
+  return { diagnostics, symbols, sources, digests, ms: build.ms + sym.ms };
+}
+
+/**
+ * **`agent check both` per route** (exact phase 2; design §6): clipping,
+ * overlap, contrast and small targets, light and dark, at the phone size,
+ * from a cold driver at the capture's fixed seed — one per path asked.
+ */
+function check() {
+  const out = [];
+  for (const url of flags("--url")) {
+    checkJob({ url, ops: [], shots: [] });
+    const run = exact(["agent", "web", "--json", "--size", "390x844", "--seed", "1", "--locale", "en-US", "--time-zone", "UTC", "--epoch", "2026-01-01", "--url", url, "clock data", "clock settle", "check both"], { allowFail: true });
+    let found = null;
+    for (const line of run.stdout.split("\n")) {
+      if (!line.startsWith("{")) continue;
+      try { const v = JSON.parse(line); if (Array.isArray(v.check)) found = v.check; } catch { /* not a reply */ }
+    }
+    if (!found) fail(`agent check on ${url} answered nothing (exit ${run.code}):\n${(run.stderr || run.stdout).trim().split("\n").slice(-4).join("\n")}`);
+    out.push({ url, check: found, ms: run.ms });
+  }
+  return { checks: out };
+}
+
 const result =
-  verb === "doctor" ? await doctor()
+  verb === "diagnose" ? diagnose()
+  : verb === "check" ? check()
+  : verb === "doctor" ? await doctor()
   : verb === "read" ? await read()
   : verb === "inputs" ? { inputs: inputsDigest(checkout().dir) }
   : capture();

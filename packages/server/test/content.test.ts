@@ -211,6 +211,14 @@ describe("invariant 1: the app origin after the extraction is the app origin bef
     expect(CONTENT_CSP).toContain("connect-src 'none'");
   });
 
+  it("the app CSP is exactly what it was before the local-tool door (exact phase 2): no connect-src, no loopback added", async () => {
+    // Exact's live frames reach a bridge on 127.0.0.1 from the app document. They need nothing new here — `frame-src`
+    // already allows http:, and the app document sets no connect-src — so the door changed no policy, and a hosted
+    // home (whose door stays shut) serves the same header it always has. A change to this string is a review.
+    const page = await fetch(`${base}/`, { headers: badge.headers });
+    expect(page.headers.get("content-security-policy")).toBe(`frame-src 'self' ${daemon.contentBase} https: http: blob: data:`);
+  });
+
   it("the content origin serves bytes badge-less, with its own policy", async () => {
     const up = await fetch(`${base}/api/projects/prj_1/blobs`, {
       method: "POST",

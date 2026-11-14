@@ -85,6 +85,8 @@ export const RELEASE_SCRIPTS = {
   // `isocan exact doctor|open` (exact phase 0): the person's own Exact, run on
   // the app directory they named.
   "scripts/exact-bridge.mjs": "exact-bridge",
+  // `isocan exact live` (exact phase 2): the dev loop, the frames proxy and the paired bridge a canvas page talks to on loopback.
+  "scripts/exact-live.mjs": "exact-live",
 };
 
 /** Where their bundles land, under CLI_BUNDLE_DIR — a directory of their own, because they are a build of their own (see buildCliBundle). */

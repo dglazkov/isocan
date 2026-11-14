@@ -632,6 +632,8 @@ export function IdentityMenu({
                     disabled={refused}
                     onChange={(e) => {
                       setExperiment(entry.id, e.target.checked);
+                      // A refinement that is the default once its parent is asked for comes on with it (exact phase 2).
+                      if (e.target.checked) for (const child of EXPERIMENTS) if (child.under === entry.id && child.withParent) setExperiment(child.id, true);
                       void loadExperiments();
                     }}
                   />

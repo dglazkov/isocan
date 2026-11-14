@@ -56,10 +56,21 @@ function register(host: CliHost): void {
 
   capture(exact
     .command("live <app>")
-    .description("Open the map, then keep it true: re-index on every save, recapture only what the save could change, post a version only where pixels moved"))
+    .description("Open the map, then keep it true: re-index on every save, recapture only what the save could change, post a version only where pixels moved; compile errors and agent check findings become comments; and serve live frames to a paired browser on this machine"))
     .option("--max-passes <n>", "stop after this many passes after the first (default: run until ctrl-c)")
     .option("--quiet-ms <ms>", "how long the files must be still before a pass", "400")
-    .action(host.run(async (app: string, opts: { param?: string[]; devices?: string; schemes?: string; force?: boolean; maxPasses?: string; quietMs?: string }, cmd: Command) => (await run()).live(host, app, opts, cmd)));
+    .option("--no-frames", "no dev loop and no bridge: captures, comments and versions only — nothing a browser can connect to")
+    .option("--no-checks", "skip agent check both on recaptured routes (compile errors are still comments)")
+    .option("--bridge-port <port>", "the bridge's loopback port, the first number of the pairing code (default: a free one)")
+    .option("--design-port <port>", "Exact Design's port, for Open in Exact Design", "5173")
+    .action(host.run(async (app: string, opts: import("./cli-run.ts").LiveOptions, cmd: Command) => (await run()).live(host, app, opts, cmd)));
+
+  exact
+    .command("check <app>")
+    .description("The compiler's diagnostics and agent check both, as comments on the screens they concern (each with exact.source), resolved when gone; says moved where a comment's file changed")
+    .option("--canvas <canvas>")
+    .option("--no-checks", "only the compiler's diagnostics")
+    .action(host.run(async (app: string, opts: { checks?: boolean }, cmd: Command) => (await run()).check(host, app, opts, cmd)));
 }
 
 export const exactCli: CliModule = {

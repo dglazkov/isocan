@@ -68,6 +68,12 @@ interface Experiment {
    * (`TEXT_PICTURES_ROUTE`); elsewhere the row says why, and stays off.
    */
   needsPictures?: true;
+  /**
+   * Ticked along with the experiment it is `under`, the moment that one is
+   * ticked — a refinement that is the default once you asked for its parent,
+   * and stays a switch you can untick (exact phase 2: Live frames).
+   */
+  withParent?: true;
 }
 
 /** Every experiment this build offers, in the order Settings lists them. */
@@ -115,7 +121,14 @@ export const EXPERIMENTS: readonly Experiment[] = [
   {
     id: "exact",
     name: "Exact",
-    what: "Exact apps on the canvas: `isocan exact open <app>` indexes an Exact app's routes and posts a web screenshot of each, captured with your own Exact on your machine. The flow map, live frames, other hosts, proposals and shipping are not built yet.",
+    what: "Exact apps on the canvas: `isocan exact open <app>` lays an Exact app out as a flow map of captured screens, and `isocan exact live` keeps it true as you save — with live frames, Alt-click to the line, and compile errors as comments. Other hosts, proposals and shipping are not built yet.",
+  },
+  {
+    id: "exact.local",
+    name: "Live frames",
+    what: "Exact screens can run your app's dev page live, through a bridge on this machine you pair with once. Off, this browser opens no connection to your machine at all: every screen is a capture refreshed on each save, and Alt-click still points at its line from the capture.",
+    under: "exact",
+    withParent: true,
   },
   {
     id: "presentation.transitions",

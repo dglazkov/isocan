@@ -72,7 +72,116 @@ export const EXACT_PROPS = {
   tamber: "exact.tamber",
   /** On the index: counts for `isocan context`, which cannot read the index's bytes. */
   summary: "exact.summary",
+  /** On a screen: `on` — the canvas's intent that it starts live, where a viewer's live frames are on (exact phase 2). Each viewer's own Live / Still wins. */
+  live: "exact.live",
+  /** On a captured screen: each visible node's box at the capture size, joined to source — what pointing reads on a capture (exact phase 2). */
+  points: "exact.points",
 } as const;
+
+/** One visible node of a capture: its box in the capture's CSS pixels, the line that drew it, and the styles that line names. */
+export interface CapturePoint {
+  x: number; y: number; w: number; h: number;
+  type: string;
+  testId?: string;
+  file: string; line: number; col: number;
+  component: string | null;
+  chain: Array<{ file: string; line: number; col: number; component: string | null }>;
+  classes?: string[];
+}
+
+/** `exact.points`: the nodes, and each file's digest when it was captured. */
+export interface CapturePoints {
+  files: Record<string, string>;
+  nodes: CapturePoint[];
+}
+
+export function parsePoints(text: string | undefined): CapturePoints | null {
+  if (!text) return null;
+  try {
+    const v = JSON.parse(text) as CapturePoints;
+    return v && Array.isArray(v.nodes) && v.files && typeof v.files === "object" ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * **What a press at (x, y) on a capture lands on** (exact phase 2) — the
+ * smallest box under it, as a page's own hit test lands on the innermost
+ * node. In the capture's CSS pixels.
+ */
+export function pointAt(points: CapturePoints, x: number, y: number): CapturePoint | null {
+  let best: CapturePoint | null = null;
+  for (const n of points.nodes) {
+    if (x < n.x || y < n.y || x > n.x + n.w || y > n.y + n.h) continue;
+    if (!best || n.w * n.h <= best.w * best.h) best = n;
+  }
+  return best;
+}
+
+// ---------------------------------------------------------------- comments on lines (exact phase 2)
+
+/**
+ * **Where a comment points in the source** (design §6): the file relative to
+ * the app, the 1-based line and column, and the SHA-256 of the file's bytes
+ * when the comment was made. Comments carry no properties, so it rides in the
+ * body as one line an agent and both surfaces read:
+ *
+ *     exact.source = {"file":"app.contract","line":110,"col":5,"sha256":"…"}
+ *
+ * The digest is how a comment knows it has *moved*: when the file's bytes no
+ * longer hash to it, the line may be another line, and the comment says so
+ * rather than re-anchoring itself.
+ */
+export interface ExactSource {
+  file: string;
+  line: number;
+  col: number;
+  sha256: string;
+}
+
+const SOURCE_LINE = /^exact\.source = (\{.*\})\s*$/m;
+const DIAGNOSTIC_LINE = /^exact\.diagnostic = (\S+)\s*$/m;
+const MOVED_LINE = /^exact\.moved = ([0-9a-f]{64})\s*$/m;
+
+export function sourceLine(src: ExactSource): string {
+  return `exact.source = ${JSON.stringify({ file: src.file, line: src.line, col: src.col, sha256: src.sha256 })}`;
+}
+
+/** The `exact.source` a comment's body carries, or null. A file outside the app (absolute, or climbing out) is not one. */
+export function parseSource(body: string): ExactSource | null {
+  const m = SOURCE_LINE.exec(body);
+  if (!m) return null;
+  try {
+    const v = JSON.parse(m[1]!) as Partial<ExactSource>;
+    if (typeof v.file !== "string" || v.file.startsWith("/") || v.file.split(/[\\/]/).includes("..")) return null;
+    if (!Number.isInteger(v.line) || !Number.isInteger(v.col) || typeof v.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(v.sha256)) return null;
+    return { file: v.file, line: v.line!, col: v.col!, sha256: v.sha256 };
+  } catch {
+    return null;
+  }
+}
+
+/** The key of a finding the bridge posted (`build:…` a compile diagnostic, `check:…` an `agent check` finding), or null. */
+export function diagnosticKey(body: string): string | null {
+  return DIAGNOSTIC_LINE.exec(body)?.[1] ?? null;
+}
+
+/** The digest a *moved* reply was written against, or null. */
+export function movedDigest(body: string): string | null {
+  return MOVED_LINE.exec(body)?.[1] ?? null;
+}
+
+/** `app.contract:110:5`, as an editor and a person read a place. */
+export function sourcePlace(src: Pick<ExactSource, "file" | "line" | "col">): string {
+  return `${src.file}:${src.line}:${src.col}`;
+}
+
+/** The one-line summary of a selection the canvas shows: place, component, and each style that set a row (`class Price`). */
+export function selectionSummary(sel: { source: { file: string; line: number; col: number; component?: string | null }; rows?: Array<{ origin?: string | null }>; type?: string }): string {
+  const classes = [...new Set((sel.rows ?? []).map((r) => r.origin ?? "").filter((o) => o.startsWith("class:")).map((o) => `class ${o.slice(6)}`))];
+  return [sourcePlace(sel.source), sel.source.component ? `in ${sel.source.component}` : null, ...classes].filter(Boolean).join(" · ");
+}
 
 /** The driver's defaults, said explicitly so a capture never depends on an unsaid default moving. */
 export const CAPTURE_AT = { seed: 1, locale: "en-US", zone: "UTC", epoch: "2026-01-01" } as const;

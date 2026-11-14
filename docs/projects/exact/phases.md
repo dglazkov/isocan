@@ -26,13 +26,14 @@ is scratch. Nothing is sent until Phase 10.
 
 **Phase citations name their project**: `exact phase 2`.
 
-**Where we are, 13 Nov 2026:** phases 0–1 CLOSED. `isocan exact open` lays
-an Exact app out as a flow map — every route on phone, tablet and desktop,
-light and dark, labelled router arrows, `app.tamber` as the design system,
-an anatomy card per file — and `isocan exact live` re-captures on save,
-versioning only screens whose pixels moved. Live frames need a product change
-(phase 0: a bridge proxy drawn by the shell). Next: **exact phase 2**, live
-and pointing at lines. Nothing waits on a person.
+**Where we are, 14 Nov 2026:** phases 0–2 CLOSED. An Exact app is a flow
+map on the canvas (`isocan exact open`), kept true on save (`isocan exact
+live`), and on a loopback home its screens can go **Live** — the running dev
+page, framed through the bridge after a one-time pairing — with Alt-click
+naming the Contract line in live frames and in captures alike, compiler and
+`agent check` findings as comments, and a *Live frames* switch that, off,
+leaves the browser never contacting the bridge. Next: **exact phase 3**,
+every host and Drive mode. Nothing waits on a person.
 ---
 
 ## Phase 0 — The bridge, the index, and the three doors
@@ -116,7 +117,11 @@ and no others; version-diff's slider walks a screen's history.
 
 ## Phase 2 — Live, and pointing at lines
 
-**Status: NOT STARTED.** Depends on phase 0's door.
+**Status: CLOSED, 14 Nov 2026.** On a scratch home an edit reached three live
+frames in ~0.7 s; with the switch off the browser made 0 requests to the
+bridge and Alt-click on captures named the same lines; a typo became a
+comment and left when fixed; a fresh agent fixed a comment from its
+`exact.source` alone.
 
 - Live frames on the chosen door, paired once per machine (design §5).
   If no door works, this phase ships Drive mode (phase 3's) as the live
@@ -138,6 +143,15 @@ other scene of phases 1–2 still works on captures; an Alt-click names the righ
 components (one through a `class`); a typo becomes a comment on the right
 screen and leaves when fixed; an agent given only a comment's
 `exact.source` makes the fix without being told the file.
+
+### Trajectory
+
+- **2026-11-14** — The local-tool door needed no CSP change: the app document's `frame-src` already allows `http:` and it sets no `connect-src`. The door is gated in the shell instead — loopback home only, `exact` + `exact.local` (*Live frames*) ticked — and a test pins the app CSP string.
+- **2026-11-14** — `runPackageScript` blocks, so the long-running bridge is its own release script, `scripts/exact-live.mjs` (dev loop, frames proxy rewriting framing and Origin, token-gated loopback API); it respawns the CLI with `--no-frames` as its capture loop.
+- **2026-11-14** — Pointing with live frames off works on captures: each capture records the driver's `layout` (boxes joined to the source map) and `tree` (what is hidden) as `exact.points`, and Alt-click resolves in the browser. Design §5's "nothing else is lost" needed this; the first build pointed in live frames only.
+- **2026-11-14** — Findings that disappear are `thread.delete`d (soft; `thread.restore` brings one back) — isocan has no resolve op. A source comment is told *Moved* once per move, not once per save.
+- **2026-11-14** — Open: nothing on the canvas names the app's directory (design §2's `exact.app = {id, path}`, relative to a bound root, is unbuilt); the fresh agent found the file by its digest. Waits on a phase that binds canvases to a repo root — exact phase 8 at the latest.
+- **2026-11-14** — Open: `outline` across several live frames of one route is built but unproven — the walk had one live frame per route. Waits on exact phase 3's device wall.
 
 ## Phase 3 — Every host, and Drive mode
 

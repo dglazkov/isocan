@@ -167,6 +167,14 @@ rewrites Origin as well. So the live frame is drawn by the shell's paired
 local-tool door below, never inside an item's content sandbox, and the proxy
 rewrites both the framing header and Origin.
 
+**Built 14 Nov 2026 (exact phase 2):** the door needed no CSP change on a
+loopback home (the app document already allows `http:` frames and sets no
+`connect-src`), so the shell gates it: open only when the home is loopback
+and *Live frames* is ticked. Pairing is a one-use, two-minute code the bridge
+prints; the token stays in that browser. Pointing on captures reads
+`exact.points`, recorded beside each screenshot from the driver's `layout`
+and `tree`, so live frames off loses no pointing.
+
 **Getting the frame's address to the web.** A module may not add a server
 route, and a grant must not sit in a replicated property. So the web module
 talks to the bridge **directly on loopback**, paired once — the bridge

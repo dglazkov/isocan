@@ -26,6 +26,7 @@ import { core } from "./core-ref.ts";
 export { bindCore } from "./core-ref.ts";
 import { buildIndex, captureKeyParts, designItemProperties, designMarkdown } from "./build.ts";
 import { DEVICES, LAYOUT, SCHEMES, mapLayout, parseShots, rowOffset, rowSize, shotsText, type Device, type Scheme } from "./map.ts";
+import { buildFindings, checkFindings, movedBody, movedComments, planFindings, type CheckReport, type DiagnoseReport, type Finding } from "./findings.ts";
 
 /**
  * **`isocan exact`'s verbs, run** — loaded by `cli.ts` only when a verb runs,
@@ -58,7 +59,7 @@ interface DoctorReport {
 }
 
 interface JobsReport {
-  shots: Array<{ job: number; index: number; url: string; size: string; scheme: Scheme; file: string; sha256: string; ms: number }>;
+  shots: Array<{ job: number; index: number; url: string; size: string; scheme: Scheme; file: string; sha256: string; ms: number; points?: unknown }>;
 }
 
 /** The commit and protocol this module was proven against (design §14): newer is warned, then tried. */
@@ -296,6 +297,8 @@ async function sync(host: CliHost, ctx: Ctx, canvasId: string, app: string, opts
       }
       const shot = shots.shots.find((s) => s.job === jobIndex && s.index === jobs[jobIndex]!.wants.indexOf(w))!;
       const label = primary ? w.route.name : `${w.route.name} · ${w.device} ${w.scheme}`;
+      // Where each node is on this picture, and which line drew it: pointing on a capture (exact phase 2).
+      if (shot.points) props[core.EXACT_PROPS.points] = JSON.stringify(shot.points);
       const posted = await upsert(
         host, ctx, canvasId, snapshot, w.existing,
         { bytes: await fs.readFile(shot.file), mime: "image/png", filename: `${w.route.name}-${w.device}-${w.scheme}.png` },
@@ -362,26 +365,135 @@ export async function open(host: CliHost, given: string, opts: { param?: string[
 /** Files whose change is not the app's: what builds and Exact write, and an editor's (or `sed -i`'s) scratch copies. */
 const IGNORED = /(^|\/)(target|\.exact|node_modules|\.git|dist[^/]*)(\/|$)|(^|\/)\.!|\.d\.ts$|\.DS_Store$|~$|\.swp$/;
 
+/** The app's id and name, from its manifest — what the findings need when the build is broken and there is no index. */
+async function appOf(app: string): Promise<{ id: string; name: string }> {
+  const manifest = JSON.parse(await fs.readFile(path.join(app, "app.json"), "utf8")) as { id?: string; name?: string; app?: { id?: string; name?: string } };
+  return { id: manifest.app?.id ?? manifest.id ?? path.basename(app), name: manifest.app?.name ?? manifest.name ?? path.basename(app) };
+}
+
+interface FindingsResult { errors: number; created: number; updated: number; removed: number; moved: number; checked: string[]; findings: Finding[] }
+
+/**
+ * **What the compiler and `agent check` say, as comments** (exact phase 2;
+ * design §6), and the *moved* replies. `diag` is this pass's `diagnose`;
+ * `checkRoutes` the routes to run `agent check both` on (only those whose
+ * screens were recaptured: a skipped screen's findings cannot have changed),
+ * or none. Every write is an ordinary comment op, in one group.
+ */
+async function postFindings(host: CliHost, ctx: Ctx, canvasId: string, app: string, diag: DiagnoseReport, checkRoutes: Array<{ route: string; url: string }>): Promise<FindingsResult> {
+  const info = await appOf(app);
+  const routes = diag.symbols ? core.contractRoutes(diag.symbols, diag.sources).routes : [];
+  const findings = buildFindings(diag, routes);
+  const errors = findings.length;
+  let checked: string[] = [];
+  if (errors === 0 && checkRoutes.length > 0) {
+    const report = await bridge<CheckReport>(host, "check", ["--app", app, ...checkRoutes.flatMap((r) => ["--url", r.url])], "agent check", true);
+    findings.push(...checkFindings(report, diag, checkRoutes));
+    checked = checkRoutes.map((r) => r.route);
+  }
+  const snapshot = await ctx.client.snapshot(canvasId);
+  const inScope = (key: string) => key.startsWith("build:") || (errors === 0 && checked.some((r) => key.startsWith(`check:${r}:`)));
+  const plan = planFindings(snapshot.canvas, { app: info }, findings, inScope);
+  const group = id("exact-findings");
+  for (const c of plan.create) {
+    await host.sendOp(ctx, canvasId, { type: "thread.create", threadId: id("thr"), x: c.x, y: c.y, anchorItemId: c.item.id, comment: { id: id("cmt"), body: c.finding.body, record: true } }, group);
+  }
+  for (const u of plan.update) {
+    await host.sendOp(ctx, canvasId, { type: "comment.update", threadId: u.thread.id, commentId: u.thread.comments[0]!.id, body: u.body }, group);
+  }
+  for (const r of plan.remove) await host.sendOp(ctx, canvasId, { type: "thread.delete", threadId: r.thread.id }, group);
+  const moved = movedComments(snapshot.canvas, info.id, diag.digests);
+  for (const m of moved) {
+    await host.sendOp(ctx, canvasId, { type: "thread.reply", threadId: m.thread.id, comment: { id: id("cmt"), body: movedBody(m.source, m.now), record: true } }, group);
+  }
+  return { errors, created: plan.create.length, updated: plan.update.length, removed: plan.remove.length, moved: moved.length, checked, findings };
+}
+
+function findingsTally(f: FindingsResult): string {
+  const parts = [
+    f.errors > 0 ? `${f.errors} compile error${f.errors === 1 ? "" : "s"}` : "builds",
+    f.checked.length > 0 ? `checked ${f.checked.join(", ")}` : null,
+    f.created || f.updated || f.removed ? `comments: ${f.created} new, ${f.updated} rewritten, ${f.removed} resolved` : null,
+    f.moved ? `${f.moved} moved` : null,
+  ];
+  return parts.filter(Boolean).join("; ");
+}
+
+/**
+ * **`isocan exact check`** (exact phase 2; design §6): the compiler's
+ * diagnostics and `agent check both` on every route's phone screen, as
+ * comments on the screens they concern — each with `exact.source` — the
+ * ones no longer found taken away, and *moved* said where a comment's file
+ * changed under it. What `live` does on every save, once.
+ */
+export async function check(host: CliHost, given: string, opts: { checks?: boolean }, cmd: Command): Promise<void> {
+  const ctx = await host.ctxOf(cmd);
+  const app = appDir(given);
+  const canvas = await host.resolveCanvas(ctx);
+  const diag = await bridge<DiagnoseReport>(host, "diagnose", ["--app", app], "the compiler's check", true);
+  const info = await appOf(app);
+  const snapshot = await ctx.client.snapshot(canvas.id);
+  const routes = diag.symbols ? core.contractRoutes(diag.symbols, diag.sources).routes : [];
+  const urls = routes.flatMap((r) => {
+    const screen = core.screenItemOf(snapshot.canvas, info.id, r.name);
+    return screen ? [{ route: r.name, url: screen.properties?.[core.EXACT_PROPS.url] ?? core.routeLocation(r) }] : [];
+  });
+  const r = await postFindings(host, ctx, canvas.id, app, diag, opts.checks === false ? [] : urls);
+  if (ctx.json) return host.printJson({ errors: r.errors, created: r.created, updated: r.updated, resolved: r.removed, moved: r.moved, checked: r.checked, findings: r.findings.map((f) => ({ key: f.key, routes: f.routes, body: f.body })) });
+  for (const f of r.findings) console.log(`${f.key}\n  ${f.body.split("\n")[0]}`);
+  console.log(findingsTally(r));
+}
+
 /**
  * **`isocan exact live`** (design §2, §4): one pass, then a pass on every
  * save — the index rebuilt, captures skipped where their inputs did not
  * move, and a version posted only where the pixels did. Runs until ctrl-c,
  * or `--max-passes` passes after the first.
  */
-export async function live(host: CliHost, given: string, opts: { param?: string[]; devices?: string; schemes?: string; force?: boolean; maxPasses?: string; quietMs?: string }, cmd: Command): Promise<void> {
+export interface LiveOptions { param?: string[]; devices?: string; schemes?: string; force?: boolean; maxPasses?: string; quietMs?: string; frames?: boolean; checks?: boolean; bridgePort?: string; designPort?: string }
+
+export async function live(host: CliHost, given: string, opts: LiveOptions, cmd: Command): Promise<void> {
   const ctx = await host.ctxOf(cmd);
   const app = appDir(given);
   const canvas = await host.resolveCanvas(ctx);
+  if (opts.frames !== false) {
+    // Live frames (exact phase 2; design §5): the bridge script owns the dev loop, the frames proxy and the paired
+    // door a canvas page talks to, and runs this very verb again with --no-frames as its capture loop. A module may
+    // not spawn, and a script run for it blocks until it ends — so the long-running half is the script's.
+    if (!host.runPackageScript) throw new Error("this isocan cannot run a script for a module — upgrade it (module API 0.2.11), or pass --no-frames");
+    const child = [process.execPath, process.argv[1]!, ...process.argv.slice(2), "--no-frames"];
+    if (!child.includes("--canvas")) child.push("--canvas", canvas.id);
+    host.runPackageScript("scripts/exact-live.mjs", [
+      "--app", app, "--child", JSON.stringify(child),
+      ...(opts.bridgePort ? ["--bridge-port", opts.bridgePort] : []),
+      ...(opts.designPort ? ["--design-port", opts.designPort] : []),
+      ...(ctx.json ? ["--json"] : []),
+    ], { what: "the live bridge" });
+    return;
+  }
   const options = syncOptions(opts);
   const max = opts.maxPasses === undefined ? Number.POSITIVE_INFINITY : Number(opts.maxPasses);
   if (!(max >= 0)) throw new Error(`--max-passes takes a number, not ${opts.maxPasses}`);
   const quiet = opts.quietMs === undefined ? 400 : Number(opts.quietMs);
-  const say = (r: SyncResult, why: string) => {
-    if (ctx.json) console.log(JSON.stringify({ why, ...syncJson(r) }));
-    else console.log(`${new Date().toISOString().slice(11, 19)}  ${why}: ${tally(r)}`);
+  const say = (r: SyncResult | null, f: FindingsResult, why: string) => {
+    if (ctx.json) console.log(JSON.stringify({ why, ...(r ? syncJson(r) : { screens: [] }), findings: { errors: f.errors, created: f.created, updated: f.updated, resolved: f.removed, moved: f.moved, checked: f.checked } }));
+    else console.log(`${new Date().toISOString().slice(11, 19)}  ${why}: ${r ? tally(r) : "screens wait for a build"}; ${findingsTally(f)}`);
+  };
+  /**
+   * One pass: what the compiler says first — a save that does not build is
+   * comments on the screens it breaks, and the captures wait — then the map,
+   * then `agent check` on the routes whose screens were recaptured.
+   */
+  const onePass = async (force: boolean): Promise<{ r: SyncResult | null; f: FindingsResult }> => {
+    const diag = await bridge<DiagnoseReport>(host, "diagnose", ["--app", app], "the compiler's check", true);
+    const broken = diag.diagnostics.some((d) => !d.severity || d.severity === "error");
+    const r = broken ? null : await sync(host, ctx, canvas.id, app, { ...options, force });
+    const recaptured = (r?.screens ?? []).filter((x) => x.device === "phone" && x.scheme === "light" && x.status !== "skipped").map((x) => ({ route: x.route, url: x.url }));
+    const f = await postFindings(host, ctx, canvas.id, app, diag, opts.checks === false ? [] : recaptured);
+    return { r, f };
   };
   if (!ctx.json) console.error(`live on ${app}, on this machine — a pass now, then one per save (ctrl-c stops)`);
-  say(await sync(host, ctx, canvas.id, app, options), "opened");
+  { const first = await onePass(options.force); say(first.r, first.f, "opened"); }
   let passes = 0;
   if (passes >= max) return;
   const changed = new Set<string>();
@@ -403,7 +515,8 @@ export async function live(host: CliHost, given: string, opts: { param?: string[
       const files = [...changed].sort();
       changed.clear();
       try {
-        say(await sync(host, ctx, canvas.id, app, { ...options, force: false }), `saved ${files.join(", ")}`);
+        const next = await onePass(false);
+        say(next.r, next.f, `saved ${files.join(", ")}`);
         passes++;
         if (passes >= max) stop();
       } catch (err) {

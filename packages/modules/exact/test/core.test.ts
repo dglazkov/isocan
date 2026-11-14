@@ -144,7 +144,7 @@ describe("screens", () => {
 
 describe("the module never spawns", () => {
   it("leaves running Exact to the package script, as motion does", () => {
-    for (const file of ["core.ts", "build.ts", "map.ts", "cli.ts", "cli-run.ts", "web.tsx"]) {
+    for (const file of ["core.ts", "build.ts", "map.ts", "findings.ts", "cli.ts", "cli-run.ts", "web.tsx", "live.tsx"]) {
       const src = readFileSync(new URL(`../src/${file}`, import.meta.url), "utf8");
       expect(src, file).not.toMatch(/node:child_process|node:worker_threads|node:vm|\beval\(/);
     }
