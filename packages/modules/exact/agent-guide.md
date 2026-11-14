@@ -96,6 +96,29 @@ From nothing to the map, in order:
    every route's phone screen, as comments, the gone ones resolved, and
    *moved* replies (below). Use it after you edit an Exact app.
 
+6. **Time and state.** `isocan exact film <app> <route>` (`--do "tap
+   add-to-cart"`, `--over 600`, `--every 16`, `--watch <testId>`, `--out
+   <file.apng>`) — the route's screen reached as its shots say, the interaction done (`--do`,
+   repeatable: `tap <testId>`, `type <testId> "<text>"`, `back`), then filmed
+   on Exact's virtual clock (`screenshot <file>.apng over <ms> every <ms>`):
+   an animated PNG beside the map, with `exact.film` (`{from, every, steps,
+   at, …}`: frame i drawn `at[i]` ms after the interaction) and
+   `exact.frames` (the component's `state` at every frame — the first whole,
+   then what each frame changed — and `--watch`'s node's translate, scale,
+   opacity). The same source films the same bytes; filmed again unchanged,
+   no version. People scrub it on the canvas; a comment made while scrubbed
+   carries `at` (seconds, as on a motion), and opening it scrubs back there —
+   `isocan exact moment <film> <ms> <words…>` comments at a moment yourself.
+   A PERSON can film from a screen's **Film** button too: through a paired
+   bridge, or, with live frames off, written on the screen (`exact.filmAsk`)
+   and answered by `isocan exact live` (`exact.filmed`) — do not write either.
+   `isocan exact inspect <app> <route> [--host ios --sim <udid>] [--json]`
+   — the screen as the driver sees it, from a cold driver at its shots:
+   `tree --ax`, `layout`, `perf` and `logs`, and the `bun exact.mjs agent …`
+   line that prints the same tree. People see it in the canvas's inspector
+   panel; with live frames off it is asked on the screen (`exact.inspect`)
+   and `isocan exact live` answers (`exact.inspected`) — do not write either.
+
 **Comments that point at a line.** A comment made on a pointed-at node,
 and every finding, carries one line in its body:
 

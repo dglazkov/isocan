@@ -253,6 +253,70 @@ function driveOnce(job) {
     }
   });
 }
+function facts(job) {
+  const run = driving.then(() => new Promise((resolve) => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "isocan-exact-facts-"));
+    const done = (answer) => {
+      rmSync(dir, { recursive: true, force: true });
+      resolve(answer);
+    };
+    try {
+      writeFileSync(path.join(dir, "job.json"), JSON.stringify(job));
+      const bridgeScript = path.join(path.dirname(fileURLToPath(import.meta.url)), "exact-bridge.mjs");
+      const child = spawn(process.execPath, [bridgeScript, "facts", "--app", app, "--report", path.join(dir, "report.json"), "--job", path.join(dir, "job.json"), ...sim ? ["--sim", sim] : []], { stdio: ["ignore", "ignore", "pipe"] });
+      let err = "";
+      child.stderr.on("data", (d) => {
+        err = (err + d).slice(-4e3);
+      });
+      child.on("close", () => {
+        try {
+          done(JSON.parse(readFileSync(path.join(dir, "report.json"), "utf8")));
+        } catch {
+          done({ ok: false, ms: 0, error: err.trim().split("\n").slice(-3).join("\n") || "the inspection did not answer" });
+        }
+      });
+    } catch (e) {
+      done({ ok: false, ms: 0, error: e.message });
+    }
+  }));
+  driving = run.catch(() => {
+  });
+  return run;
+}
+function filmOnce(job) {
+  const run = driving.then(() => new Promise((resolve) => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "isocan-exact-film-"));
+    const done = (answer) => {
+      rmSync(dir, { recursive: true, force: true });
+      resolve(answer);
+    };
+    try {
+      writeFileSync(path.join(dir, "job.json"), JSON.stringify(job));
+      const bridgeScript = path.join(path.dirname(fileURLToPath(import.meta.url)), "exact-bridge.mjs");
+      const child = spawn(process.execPath, [bridgeScript, "film", "--app", app, "--report", path.join(dir, "report.json"), "--dir", dir, "--job", path.join(dir, "job.json"), ...sim ? ["--sim", sim] : []], { stdio: ["ignore", "ignore", "pipe"] });
+      let err = "";
+      child.stderr.on("data", (d) => {
+        err = (err + d).slice(-4e3);
+      });
+      child.on("close", () => {
+        let r;
+        try {
+          r = JSON.parse(readFileSync(path.join(dir, "report.json"), "utf8"));
+        } catch {
+          return done({ ok: false, error: err.trim().split("\n").slice(-3).join("\n") || "the film did not answer" });
+        }
+        const apng = r.ok && r.file ? readFileSync(r.file).toString("base64") : null;
+        const { file: _file, ...rest } = r;
+        done({ ...rest, apng });
+      });
+    } catch (e) {
+      done({ ok: false, error: e.message });
+    }
+  }));
+  driving = run.catch(() => {
+  });
+  return run;
+}
 function designLink(route) {
   const q = new URLSearchParams({ connect: loopBase, name: appInfo.name, viewports: "Core" });
   if (route) q.set("show", route);
@@ -385,6 +449,36 @@ var api = http.createServer(async (req, res) => {
     say(`drive on ${host}: ${ops.at(-1) ?? "the screen as captured"}`);
     const r = await drive({ host, size, scheme, shots: String(body.shots), ops });
     say(`drive on ${host}: ${r.ok ? `a fresh screenshot in ${r.ms} ms` : r.error}`);
+    return answer(r.ok ? 200 : 422, r);
+  }
+  if (url.pathname === "/film" && req.method === "POST") {
+    const body = await readBody(req);
+    const host = body?.host;
+    if (!driveHosts.includes(host)) return answer(400, { error: `this bridge films ${driveHosts.join(", ")} \u2014 \`isocan exact live --hosts \u2026\` names the hosts` });
+    if (host === "ios" && !sim) return answer(400, { error: "this bridge has no simulator of its own to film iOS on: `isocan exact live --hosts \u2026,ios --sim <udid>`" });
+    if (!driveShots(body.shots)) return answer(400, { error: `a film starts where the screen's exact.shots say: one at "<path>" first` });
+    const ops = Array.isArray(body.ops) ? body.ops : [];
+    if (ops.length > 40 || ops.some((op) => typeof op !== "string" || !DRIVE_OP.test(op))) return answer(400, { error: `a film's press is tap <testId>, type <testId> "<text>" or back \u2014 nothing else, and at most 40` });
+    const size = /^\d{2,4}x\d{2,4}$/.test(body.size ?? "") ? body.size : "390x844";
+    const scheme = body.scheme === "dark" ? "dark" : "light";
+    const over = Number(body.over ?? 600), every = Number(body.every ?? 16);
+    const watch = typeof body.watch === "string" && body.watch ? body.watch : null;
+    say(`film on ${host}: ${ops.join(", ") || "the screen"}, ${over} ms every ${every}`);
+    const r = await filmOnce({ host, size, scheme, shots: String(body.shots), ops, over, every, watch });
+    say(`film on ${host}: ${r.ok ? `sha256 ${r.sha256}` : r.error}`);
+    return answer(r.ok ? 200 : 422, r);
+  }
+  if (url.pathname === "/facts" && req.method === "POST") {
+    const body = await readBody(req);
+    const host = body?.host;
+    if (!driveHosts.includes(host)) return answer(400, { error: `this bridge inspects ${driveHosts.join(", ")} \u2014 \`isocan exact live --hosts \u2026\` names the hosts` });
+    if (host === "ios" && !sim) return answer(400, { error: "this bridge has no simulator of its own to inspect iOS on: `isocan exact live --hosts \u2026,ios --sim <udid>`" });
+    if (!driveShots(body.shots)) return answer(400, { error: `an inspection starts where the screen's exact.shots say: one at "<path>", then tap, type, clock, back, fail fetch, pass fetch or prefer` });
+    const size = /^\d{2,4}x\d{2,4}$/.test(body.size ?? "") ? body.size : "390x844";
+    const scheme = body.scheme === "dark" ? "dark" : "light";
+    say(`inspect on ${host}`);
+    const r = await facts({ host, size, scheme, shots: String(body.shots) });
+    say(`inspect on ${host}: ${r.ok ? `tree --ax, layout, perf and logs in ${r.ms} ms` : r.error}`);
     return answer(r.ok ? 200 : 422, r);
   }
   if (url.pathname === "/design" && req.method === "GET") {

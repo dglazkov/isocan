@@ -57,3 +57,29 @@
 .exact-wall-cell { display: grid; grid-template-rows: auto 1fr; gap: 4px; height: 100%; min-height: 0; }
 .exact-wall-cell > span { font-size: 11px; color: var(--ink-soft); }
 .exact-wall-frame { position: relative; height: 100%; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+/* A film (exact phase 4): the frame at the scrubbed moment, the track with a mark per comment at a moment, and the
+   state at that frame under it. */
+.exact-film { display: grid; grid-template-rows: minmax(0, 1fr) auto; height: 100%; background: var(--card); color: var(--ink); font-size: 12px; }
+.exact-film-stage { min-height: 0; display: flex; justify-content: center; }
+.exact-film-stage > .img-view { height: 100%; width: auto; max-width: 100%; object-fit: contain; display: block; }
+.exact-film-foot { display: grid; gap: 4px; padding: 6px 8px 8px; pointer-events: auto; border-top: 1px solid var(--line); }
+.exact-film-scrub { display: flex; gap: 6px; align-items: center; }
+.exact-film-track { position: relative; flex: 1; display: flex; align-items: center; }
+.exact-film-track input { width: 100%; margin: 0; }
+.exact-film-mark { position: absolute; top: -6px; width: 10px; height: 10px; margin-left: -5px; padding: 0; border-radius: 50%; border: 2px solid var(--card); background: var(--ink); cursor: pointer; }
+.exact-film-time strong { color: var(--ink); }
+.exact-film-state { display: grid; gap: 2px; max-height: 150px; overflow: auto; }
+.exact-film-watch { margin: 0; color: var(--ink); }
+.exact-film-moved span, .exact-film-moved code { color: var(--ink); font-weight: 600; }
+.exact-film .exact-comment { grid-template-columns: 1fr auto; align-items: start; }
+/* The inspector panel (exact phase 4). */
+.exact-inspector { max-height: 70vh; grid-template-rows: auto auto auto auto minmax(0, 1fr) auto; }
+.exact-tabs { display: flex; gap: 4px; }
+.exact-inspector-body { overflow: auto; min-height: 0; max-height: 50vh; }
+.exact-ax { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; font-size: 12px; color: var(--ink-soft); }
+.exact-ax span { color: var(--ink); }
+.exact-ax-press span { font-weight: 600; }
+/* Film the interaction (exact phase 4): the press, the clock and the node to follow, over the screen. */
+.exact-film-ask { top: 28px; overflow: auto; font-size: min(12px, 6cqw); }
+.exact-film-ask textarea, .exact-film-ask select { font: inherit; }
+.exact-film-ask-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
