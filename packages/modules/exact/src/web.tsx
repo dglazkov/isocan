@@ -19,6 +19,8 @@ import { useEffect, useState, type ComponentType } from "react";
 import type { OverlayFacts, RendererFacts, UnderlayFacts, WebModule } from "@isocan/core";
 import { ExactScreen, PointPanel, commentRows } from "./live.tsx";
 import { WallCard } from "./wall.tsx";
+import { FilmStrip } from "./film.tsx";
+import { InspectorPanel, SelectionWatch } from "./inspector.tsx";
 import { EXACT_ANATOMY_MIME, EXACT_INDEX_MIME, EXACT_PROPS, EXACT_WALL_MIME, exactModule, mapEdges, parseAnatomy, parseIndex, type AnatomyCard as AnatomyCardData, type ExactIndex, type MapEdge } from "./core.ts";
 
 /**
@@ -175,18 +177,25 @@ function FlowArrows({ canvas }: UnderlayFacts) {
 
 export const exactWeb: WebModule<ComponentType<UnderlayFacts>, ComponentType<RendererFacts>, never, never, ComponentType<OverlayFacts>> = {
   core: exactModule,
-  underlays: [FlowArrows],
+  // The arrows; and, drawing nothing, the selection the inspector panel follows (exact phase 4).
+  underlays: [FlowArrows, SelectionWatch],
   renderers: [
     { mimes: [EXACT_INDEX_MIME], component: IndexCard },
     { mimes: [EXACT_ANATOMY_MIME], component: AnatomyCard },
     // One route on every host and device (exact phase 3, `wall.tsx`).
     { mimes: [EXACT_WALL_MIME], component: WallCard },
+    // A film is an ordinary animated PNG (exact phase 4, `film.tsx`): the ones that carry `exact.film` are drawn as a scrubber.
+    { mimes: ["image/png"], property: EXACT_PROPS.film, component: FilmStrip },
     // A screen is an ordinary PNG: only the ones this module captured (they carry `exact.route`) are drawn here —
     // the capture, or the live page where this viewer asked for it (exact phase 2, `live.tsx`).
     { mimes: ["image/png"], property: EXACT_PROPS.route, component: ExactScreen },
   ],
   // The selection a pointed-at line makes, with Open in editor, Comment on this line and Open in Exact Design.
-  overlays: [{ region: "right", label: "Exact", component: PointPanel }],
+  overlays: [
+    { region: "right", label: "Exact", component: PointPanel },
+    // The selected screen as the driver sees it: tree --ax, layout, perf and logs (exact phase 4).
+    { region: "right", label: "Exact inspector", component: InspectorPanel },
+  ],
   comments: commentRows,
 };
 

@@ -85,6 +85,22 @@ export const EXACT_PROPS = {
   drive: "exact.drive",
   /** On a screen: the answer to its latest `exact.drive` — `{seq, ok, blobHash, points, results, ms, error?}`, the fresh picture a blob of the canvas. */
   driven: "exact.driven",
+  /**
+   * On a film (exact phase 4; design §8): an animated PNG of an interaction filmed against the virtual clock —
+   * `{from, every, steps, over, at, key, route, host, device, scheme, shots, ops, watch, screen}`; frame i was drawn at
+   * `from + i·every` ms after the interaction ended.
+   */
+  film: "exact.film",
+  /** On a film: the component's state at each frame — the first frame's whole, then what each later one changed (`film.ts`). */
+  frames: "exact.frames",
+  /** On a screen: a film asked for on the canvas — `{seq, by, host, size, scheme, shots, ops, over, every, watch}`; `isocan exact live` films it (exact phase 4). */
+  filmAsk: "exact.filmAsk",
+  /** On a screen: the answer to its latest `exact.filmAsk` — `{seq, ok, itemId, sha256, ms, error?}`, the strip an item beside the map. */
+  filmed: "exact.filmed",
+  /** On a screen: an inspection asked for on the canvas — `{seq, by, host, size, scheme, shots}`; `isocan exact live` answers it (exact phase 4). */
+  inspect: "exact.inspect",
+  /** On a screen: the answer to its latest `exact.inspect` — `{seq, ok, blobHash, ms, error?}`, the driver's `tree --ax`, `layout`, `perf` and `logs` a JSON blob of the canvas. */
+  inspected: "exact.inspected",
 } as const;
 
 /** One visible node of a capture: its box in the capture's CSS pixels, the line that drew it, and the styles that line names. */

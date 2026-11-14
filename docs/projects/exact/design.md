@@ -284,6 +284,16 @@ drive cold (~10 s on iOS): Exact has no resident session a tool can hold.
   module contributes. Read-only; a fact the CLI can print is a panel the web
   can show.
 
+**Built 14 Nov 2026 (exact phase 4):** `isocan exact film`, or **Film** on a
+screen, runs `screenshot … apng over 600 every 16` after the press; the
+strip is an `.apng` image item with `exact.film`, split into stills in the
+browser for a scrubber in milliseconds. A second cold driver reads `state`
+between `clock +16` steps into `exact.frames`. Comments at a moment use
+core's `Comment.at` (motion's shape). There is no resident session, so the
+inspector reads a cold driver at the screen's shots. Native films are not
+yet byte-identical (iOS composites near its tab bar outside the clock), so
+films are web-only.
+
 ## 9. Tests as storyboards
 
 - A `test` block renders as a row of steps, each under the frame it acted on.

@@ -41,6 +41,12 @@ second week.
   out differently, a comment says so at the line. Press **Drive** on any
   screen to tap and type into the app from the canvas — with *Live frames*
   off too, a picture behind instead of live.
+- **Film an interaction, frame by frame.** Press **Film** on an Exact screen
+  (or run `isocan exact film`) and the app plays the press on its own clock;
+  a filmstrip lands beside the screen. Drag across it to scrub the motion,
+  see the component's state at each frame, and leave a comment at a moment —
+  opening the comment takes the strip back there. **Inspect** shows a
+  screen's accessibility tree, layout, performance and logs.
 
 ## 13 November 2026
 

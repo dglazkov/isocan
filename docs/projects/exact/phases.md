@@ -26,14 +26,15 @@ is scratch. Nothing is sent until Phase 10.
 
 **Phase citations name their project**: `exact phase 2`.
 
-**Where we are, 14 Nov 2026:** phases 0–3 CLOSED. An Exact app is a flow
+**Where we are, 14 Nov 2026:** phases 0–4 CLOSED. An Exact app is a flow
 map on the canvas (`isocan exact open`), kept true on save (`isocan exact
 live`), captured on the web, a dedicated iOS simulator and macOS, with a
-device wall per route and host differences as comments. On a loopback home
-its screens can go **Live** through a paired bridge, with Alt-click naming
-the Contract line; any screen on any host can be **driven** from the canvas,
-through the bridge or, with *Live frames* off, through the canvas itself.
-Next: **exact phase 4**, time and state. Nothing waits on a person.
+device wall per route and host differences as comments. Screens go **Live**
+on a loopback home, Alt-click names the Contract line, and any screen can be
+**driven**, **filmed** against Exact's clock (a scrubbable strip, state per
+frame, comments at a moment) and **inspected** — through the bridge, or with
+*Live frames* off through the canvas itself. Next: **exact phase 5**, tests
+as storyboards. Nothing waits on a person.
 ---
 
 ## Phase 0 — The bridge, the index, and the three doors
@@ -186,7 +187,10 @@ a deliberate layout difference between hosts is found and named.
 
 ## Phase 4 — Time and state
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 14 Nov 2026.** The cart sheet's spring filmed at 16 ms
+twice gave byte-identical strips (from the CLI and from the canvas with
+*Live frames* off); a comment at 180 ms scrubbed the strip back to the frame
+drawn at 176; the inspector's `tree --ax` deep-equals the driver's.
 
 - **Film the interaction**: an APNG or contact sheet against the virtual
   clock, with a scrubber, and comments at a moment.
@@ -197,6 +201,15 @@ a deliberate layout difference between hosts is found and named.
 **Proof:** the cart sheet's spring filmed at 16 ms twice, byte-identical;
 a comment at 180 ms scrubs the strip back to 180 ms; the panel's tree and the
 driver's printed tree agree.
+
+### Trajectory
+
+- **2026-11-14** — State per frame comes from a second cold driver stepping `clock +16` with `state` and `layout <watch>`: the clock only moves forward, so a film cannot be followed by reading its frames' state. Both drivers are deterministic, so the instants agree. It is kept as the property `exact.frames` (first frame whole, then changes), out of gc's reach.
+- **2026-11-14** — A module is never told a thread is open; the scrub-to-moment rides the shell's `WebModule.comments` call, with a comment shown again after 1.5 s idle counted as reopened. A core "thread opened" hook would replace the heuristic.
+- **2026-11-14** — Film, inspect and drive share one shape on both doors: the bridge when paired, otherwise a request property on the screen (`exact.filmAsk`, `exact.inspect`, `exact.drive`) answered by `isocan exact live`. The inspector panel is fresh from a cold driver, never the stored `exact.points`.
+- **2026-11-14** — Open: native films are not byte-identical — on iOS, frames 0–3 differ in rows near UIKit's tab bar, composited outside Exact's clock — and iOS `layout` carries no `translate`. Films are web-only for now. Waits on Exact.
+- **2026-11-14** — Open: comments at one moment stack their pins on the strip; the 1.5 s reopen heuristic can snap a strip back on a later re-render while a thread stays open. Waits on the core hook above.
+- **2026-11-14** — Open: the paired bridge's `/film` is built and typechecks but no walk drove it; the canvas door's film and both inspector doors were walked. Phase 5's storyboards will drive the bridge path.
 
 ## Phase 5 — Tests are storyboards
 

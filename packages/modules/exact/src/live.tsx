@@ -18,6 +18,8 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { newCommentId, newThreadId, type LocalToolDoor, type ModuleCommentFacts, type ModuleMenuRow, type OverlayFacts, type RendererFacts } from "@isocan/core";
 import { EXACT_PROPS, appIdOf, parsePoints, parseSource, pointAt, selectionSummary, sourceLine, sourcePlace, type ExactSource } from "./core.ts";
 import { Driver } from "./drive.tsx";
+import { filmCommentRows } from "./scrub.ts";
+import { FilmForm } from "./filmask.tsx";
 
 /**
  * **Live frames and pointing** (exact phase 2; design §5, §6), the browser
@@ -73,13 +75,20 @@ const state = {
   /** Exact screens mounted: Alt points at captures too, live frames or not. */
   screens: 0,
   /** The canvas as the overlay last saw it, and its host's `send` and viewer — Drive's canvas door when the local one is shut (exact phase 3). */
-  canvas: null as { id: string; contents: OverlayFacts["canvas"]; send: OverlayFacts["host"]["send"]; viewer: string | null } | null,
+  canvas: null as { id: string; contents: OverlayFacts["canvas"]; send: OverlayFacts["host"]["send"]; putBlob: OverlayFacts["host"]["putBlob"]; groupMode: OverlayFacts["groupMode"]; viewer: string | null } | null,
   version: 0,
 };
 const listeners = new Set<() => void>();
 const changed = () => { state.version++; for (const l of listeners) l(); };
 const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l); }; };
 const useExact = () => useSyncExternalStore(subscribe, () => state.version);
+
+/** The module's shared store, for the other halves of the web module (film, inspector; exact phase 4). */
+export const useExactStore = useExact;
+export const exactCanvas = () => state.canvas;
+export const exactChanged = changed;
+/** The paired bridge serving this app through an open door, or null. */
+export const exactBridge = (door: LocalToolDoor, appId: string) => bridgeFor(door, appId);
 
 /** Ask a bridge who it is, at most every 20 s — never while the door is shut. */
 async function hello(door: LocalToolDoor, port: number, fresh = false): Promise<Hello | null> {
@@ -222,6 +231,18 @@ const DEVICE_SIZE: Record<string, { width: number; height: number }> = {
   desktop: { width: 1280, height: 800 },
 };
 
+/** Where a drive, a film or an inspection of a screen starts: its host, size, scheme and the shots its capture ran. */
+export function screenStart(item: { properties?: Record<string, string> } | undefined): { host: string; size: string; scheme: "light" | "dark"; shots: string } {
+  const p = item?.properties ?? {};
+  const d = DEVICE_SIZE[p[EXACT_PROPS.device] ?? "phone"] ?? DEVICE_SIZE.phone!;
+  return {
+    host: p[EXACT_PROPS.host] ?? "web",
+    size: `${d.width}x${d.height}`,
+    scheme: p[EXACT_PROPS.scheme] === "dark" ? "dark" : "light",
+    shots: p[EXACT_PROPS.reached] ?? p[EXACT_PROPS.shots] ?? `at "${p[EXACT_PROPS.url] ?? "/"}"`,
+  };
+}
+
 /** `exact-copy-<n>`: Exact keeps a framed page's build id under its frame's name, so three frames in one tab are three builds. */
 const names = new Set<number>();
 function frameName(): number {
@@ -281,6 +302,7 @@ export function ExactScreen(facts: RendererFacts) {
   const [asking, setAsking] = useState(false);
   const [driving, setDriving] = useState(false);
   const [driveNote, setDriveNote] = useState<string | null>(null);
+  const [filming, setFilming] = useState(false);
   const open = !!door && !door.shut;
   const host = item?.properties?.[EXACT_PROPS.host] ?? "web";
 
@@ -326,8 +348,7 @@ export function ExactScreen(facts: RendererFacts) {
     changed();
   };
 
-  const driveSize = `${(DEVICE_SIZE[device] ?? DEVICE_SIZE.phone!).width}x${(DEVICE_SIZE[device] ?? DEVICE_SIZE.phone!).height}`;
-  const reached = item?.properties?.[EXACT_PROPS.reached] ?? item?.properties?.[EXACT_PROPS.shots] ?? `at "${path}"`;
+  const { size: driveSize, shots: reached } = screenStart(item);
   const pressDrive = () => {
     // Off is a whole answer (design §5): with the door shut nothing reaches this machine — the drive is asked for on the
     // canvas instead, and `isocan exact live` answers it, a capture behind.
@@ -360,12 +381,17 @@ export function ExactScreen(facts: RendererFacts) {
               {live ? "Live" : "Still"}
             </button>
           )}
+          {/* Film the interaction (exact phase 4): a press, then the strip on Exact's clock, beside the map. */}
+          <button type="button" className={`exact-chip${filming ? " exact-chip-on" : ""}`} aria-pressed={filming} title="Film the interaction: a press on this screen, then frames on Exact's virtual clock, as a strip beside the map" onClick={() => setFilming(!filming)}>
+            Film
+          </button>
           <button type="button" className={`exact-chip${driving ? " exact-chip-on" : ""}${open ? "" : " exact-chip-off"}`} aria-pressed={driving} title={open ? `Drive this ${host} screen: presses and typing sent to the driver on your machine` : door.shut ?? ""} onClick={pressDrive}>
             Drive
           </button>
           {open && (live || asking) && !bridge && <button type="button" className="exact-chip" onClick={() => setAsking(!asking)}>Pair…</button>}
         </div>
       )}
+      {filming && item && appId && <FilmForm item={item} appId={appId} canvasId={canvasId} door={open ? door : null} bridge={bridge} points={points} onClose={() => setFilming(false)} />}
       {driveNote && <p className="exact-drive-note" role="status" onPointerDown={(e) => e.stopPropagation()} onClick={() => setDriveNote(null)}>{driveNote}</p>}
       {open && !bridge && asking && <PairForm door={door!} onPaired={() => { setAsking(false); state.hellos.clear(); changed(); }} />}
     </div>
@@ -469,13 +495,13 @@ function parseDriven(text: string | undefined) {
   try { const v = JSON.parse(text) as { seq?: unknown }; return Number.isFinite(v?.seq) ? (v as NonNullable<import("./drive.tsx").CanvasDrive["answer"]>) : null; } catch { return null; }
 }
 
-export function PointPanel({ canvasId, canvas, host }: OverlayFacts) {
+export function PointPanel({ canvasId, canvas, host, groupMode }: OverlayFacts) {
   useExact();
   // The canvas, for every screen's Drive: the overlay is the one place the shell hands the canvas and its `send`.
   useEffect(() => {
-    state.canvas = { id: canvasId, contents: canvas, send: host.send, viewer: host.viewer?.name ?? null };
+    state.canvas = { id: canvasId, contents: canvas, send: host.send, putBlob: host.putBlob, groupMode, viewer: host.viewer?.name ?? null };
     changed();
-  }, [canvasId, canvas, host]);
+  }, [canvasId, canvas, host, groupMode]);
   const door = host.localTool?.("exact") ?? state.door;
   const [text, setText] = useState("");
   const [said, setSaid] = useState<string | null>(null);
@@ -544,7 +570,11 @@ export function PointPanel({ canvasId, canvas, host }: OverlayFacts) {
 // ---------------------------------------------------------------- under a comment
 
 /** "Open app.contract:110 in editor", under a comment that carries `exact.source` — only while the door is open and this browser has a bridge for its app. */
-export function commentRows({ canvas, thread, comment }: ModuleCommentFacts): readonly ModuleMenuRow[] {
+export function commentRows(facts: ModuleCommentFacts): readonly ModuleMenuRow[] {
+  return [...filmCommentRows(facts), ...sourceRows(facts)];
+}
+
+function sourceRows({ canvas, thread, comment }: ModuleCommentFacts): readonly ModuleMenuRow[] {
   const src = parseSource(comment.body);
   const door = state.door;
   if (!src || !door || door.shut || !thread.anchorItemId) return [];

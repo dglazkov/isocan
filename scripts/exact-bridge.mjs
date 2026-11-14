@@ -12,6 +12,8 @@
  *   node scripts/exact-bridge.mjs check   --app <dir> --report <file.json> --url <path>…
  *   node scripts/exact-bridge.mjs compare --app <dir> --report <file.json> --dir <captures> --jobs <compare.json>
  *   node scripts/exact-bridge.mjs drive   --app <dir> --report <file.json> --dir <out> --job <drive.json> [--sim <udid>]
+ *   node scripts/exact-bridge.mjs film    --app <dir> --report <file.json> --dir <out> --job <film.json> [--sim <udid>]
+ *   node scripts/exact-bridge.mjs facts   --app <dir> --report <file.json> --job <facts.json> [--sim <udid>]
  *
  * A capture job names its host (`web`, `ios`, `macos`; exact phase 3); an
  * iOS one runs on the simulator `--sim <udid>` names, and on no other.
@@ -46,7 +48,7 @@ const flag = (name) => {
 };
 const flags = (name) => argv.flatMap((a, i) => (a === name && argv[i + 1] !== undefined ? [argv[i + 1]] : []));
 
-if (!["doctor", "read", "capture", "inputs", "diagnose", "check", "compare", "drive"].includes(verb ?? "") || !flag("--app") || !flag("--report")) {
+if (!["doctor", "read", "capture", "inputs", "diagnose", "check", "compare", "drive", "film", "facts"].includes(verb ?? "") || !flag("--app") || !flag("--report")) {
   console.error("usage: exact-bridge.mjs doctor|read|capture|inputs|diagnose|check --app <dir> --report <file.json> [--hosts web,ios] [--jobs <jobs.json>] [--dir <out> --size <w>x<h> --url <path>…]");
   process.exit(2);
 }
@@ -427,6 +429,13 @@ function rootOf() {
  * address bar); then `before` (the screen's own shots), then `after`.
  */
 function drive(host, url, before, after, { size, sim, allowFail = false }) {
+  const args = driveArgs(host, url, before, after, size);
+  const env = host === "ios" ? { EXACT_SIM: sim, EXACT_SHOW_SIMULATOR: "0" } : {};
+  return exact(args, { env, allowFail, timeoutMs: host === "web" ? 600_000 : 1_800_000 });
+}
+
+/** The `exact.mjs` arguments of one cold drive — what `drive` runs, and what the inspector says an agent can run to print the same. */
+function driveArgs(host, url, before, after, size) {
   const fixed = ["--json", "--seed", "1", "--locale", "en-US", "--time-zone", "UTC", "--epoch", "2026-01-01"];
   let args;
   if (host === "web") args = ["agent", "web", ...fixed, "--size", size, "--url", url, "clock data", ...before, ...after];
@@ -439,8 +448,7 @@ function drive(host, url, before, after, { size, sim, allowFail = false }) {
     const joined = dev && /^http:\/\/127\.0\.0\.1:\d+\/?$/.test(dev) ? ["--url", dev] : [];
     args = ["agent", host, ...fixed, ...joined, ...(host === "macos" ? ["--size", size] : []), "clock data", ...(url !== "/" ? [`type ${root} ${url}`, "clock settle"] : []), ...before, ...after];
   }
-  const env = host === "ios" ? { EXACT_SIM: sim, EXACT_SHOW_SIMULATOR: "0" } : {};
-  return exact(args, { env, allowFail, timeoutMs: host === "web" ? 600_000 : 1_800_000 });
+  return args;
 }
 
 /**
@@ -493,6 +501,146 @@ function driveJob(out, job) {
     results: ops.map((op, i) => ({ op, reply: replies[before + i * 2] ?? null })),
     ms: Date.now() - started,
     ...(run.code === 0 && bytes ? {} : { error: said || `agent ${host} exited ${run.code}` }),
+  };
+}
+
+/**
+ * **Where a film or an inspection starts** (exact phase 4): a screen's shots
+ * (`at "<path>"` first, then the closed list `exact.shots` may carry), the
+ * host, its size and scheme — checked as a capture's and a drive's are.
+ */
+function startOf(job) {
+  const host = job.host ?? "web";
+  if (!HOSTS.includes(host)) fail(`this runs on ${HOSTS.join(", ")}, not ${JSON.stringify(host)}`);
+  let url = null;
+  const shots = [];
+  for (const raw of String(job.shots ?? "").split("\n")) {
+    const line = raw.trim();
+    if (!line || line.startsWith("//")) continue;
+    const at = /^at\s+"([^"]*)"$/.exec(line);
+    if (at && url === null) { url = at[1]; continue; }
+    shots.push(line);
+  }
+  if (!url) fail("it starts where the screen's shots say: one at \"<path>\" first");
+  checkJob({ host, url, ops: shots, shots: [] });
+  const size = /^\d{2,4}x\d{2,4}$/.test(job.size ?? "") ? job.size : "390x844";
+  const scheme = job.scheme === "dark" ? "dark" : "light";
+  const sim = host === "ios" ? simulator([{ host }]) : null;
+  // The web driver serves the last web build and refuses one older than its sources: build first, as `read` does.
+  if (host === "web") exact(["web-build"]);
+  return { host, url, shots, size, scheme, sim };
+}
+
+/**
+ * **Film an interaction against the virtual clock** (exact phase 4; design
+ * §8). Two cold drivers at the capture's fixed seed, each reaching the screen
+ * as its shots say and doing the same interaction (the closed list Drive mode
+ * sends), with the clock still at the moment it ended:
+ *
+ * 1. the film itself — Exact's own `screenshot <file>.apng over <ms> every
+ *    <ms>`: a frame, `clock +every`, a frame … through `over`, written as an
+ *    animated PNG (each frame also kept beside it, at full size);
+ * 2. the state at each of those moments — `state` (and `layout <watch>`, the
+ *    node whose motion is filmed, when one is named) between `clock +every`
+ *    steps, so frame i and state i are the same instant on the same clock.
+ *
+ * Two drivers because the clock only moves forward: one cannot film and then
+ * go back to read. Both are deterministic, so their instants agree.
+ */
+function filmJob(out, job) {
+  const { host, url, shots, size, scheme, sim } = startOf(job);
+  const ops = Array.isArray(job.ops) ? job.ops : [];
+  if (ops.length > 40 || ops.some((op) => typeof op !== "string" || !DRIVE_OP.test(op))) fail("a film's interaction is tap <testId>, type <testId> \"<text>\" and back — nothing else, and at most 40");
+  const over = Number(job.over), every = Number(job.every);
+  if (!(Number.isInteger(over) && over >= 0 && over <= 10_000 && Number.isInteger(every) && every >= 1 && every <= 1000)) fail("a film is over 0–10000 ms, every 1–1000 ms, whole milliseconds");
+  const steps = Math.floor(over / every) + 1;
+  if (steps > 240) fail(`over ${over} every ${every} is ${steps} frames; Exact films at most 240`);
+  const watch = job.watch === undefined || job.watch === null ? null : String(job.watch);
+  if (watch !== null && !/^[A-Za-z0-9_.:-]{1,80}$/.test(watch)) fail(`--watch names a node by its testId, not ${JSON.stringify(watch)}`);
+  const file = path.join(out, "film.apng");
+  // Each op's own `clock settle` would move the clock past the motion the op starts: the interaction's last op is
+  // followed by nothing, so the film's first frame is the instant it ended.
+  const interaction = ops.flatMap((op, i) => (i < ops.length - 1 ? [op, "clock settle"] : [op]));
+  const lead = [`prefer color-scheme ${scheme}`, "clock settle", ...interaction];
+  const started = Date.now();
+  const filmed = drive(host, url, shots, [...lead, `screenshot ${file} over ${over} every ${every}`], { size, sim, allowFail: true });
+  const filmMs = Date.now() - started;
+  const replies = jsonReplies(filmed.stdout);
+  const told = replies.find((r) => r.form === "animated" || r.frames !== undefined && r.screenshot === file) ?? null;
+  const bytes = existsSync(file) ? readFileSync(file) : null;
+  const said = (run) => (run.stderr || run.stdout).trim().split("\n").filter((l) => !l.startsWith("{")).slice(-4).join("\n");
+  if (!bytes || filmed.code !== 0) return { ok: false, error: said(filmed) || `agent ${host} exited ${filmed.code}`, ms: filmMs };
+  // The state at each frame's instant: state (and the watched node's layout), then the clock, frame by frame.
+  const reads = [];
+  for (let i = 0; i < steps; i++) {
+    if (i) reads.push(`clock +${every}`);
+    reads.push("state");
+    if (watch) reads.push(`layout ${watch}`);
+  }
+  const stateStarted = Date.now();
+  const stated = drive(host, url, shots, [...lead, ...reads], { size, sim, allowFail: true });
+  const stateReplies = jsonReplies(stated.stdout);
+  const states = stateReplies.filter((r) => r.slots && typeof r.slots === "object");
+  const layouts = stateReplies.filter((r) => r.node && r.viewport);
+  const clocks = stateReplies.filter((r) => Object.keys(r).length <= 3 && Number.isFinite(r.clock));
+  const frames = [];
+  for (let i = 0; i < steps; i++) {
+    const st = states[i];
+    const node = layouts[i]?.node ?? null;
+    frames.push({
+      at: told?.at?.[i] ?? null,
+      slots: st?.slots ?? null,
+      derives: st?.derives ?? null,
+      ...(watch ? { watch: node ? watchedOf(node) : null } : {}),
+    });
+  }
+  return {
+    ok: true,
+    file, sha256: sha256(bytes), bytes: bytes.length, png: pngSize(bytes),
+    host, url, size, scheme, ops, over, every, steps,
+    frames: told?.frames ?? null, at: told?.at ?? null, form: told?.form ?? null,
+    clock: clocks.length ? clocks.at(-1).clock : null,
+    states: frames,
+    ...(states.length === steps ? {} : { stateError: `state answered ${states.length} of ${steps} frames: ${said(stated)}` }),
+    ms: { film: filmMs, state: Date.now() - stateStarted },
+  };
+}
+
+/** What a filmed node's `layout` says about its motion: where it is, and the values that animate. */
+function watchedOf(node) {
+  const style = {};
+  for (const key of ["translate", "scale", "rotate", "opacity"]) {
+    const v = node.style?.[key]?.computed;
+    if (v !== undefined) style[key] = v;
+  }
+  const box = node.space?.viewport ?? null;
+  return { testId: node.testId ?? node.props?.testId ?? null, box: box ? { x: box.x, y: box.y, w: box.w, h: box.h } : null, style, visible: node.visible ? { inViewport: node.visible.inViewport, clipped: node.visible.clipped, hidden: node.visible.hidden } : null };
+}
+
+/**
+ * **The inspector's facts for one screen** (exact phase 4; design §8): a
+ * cold driver at the capture's fixed seed, the screen reached as its shots
+ * say, then `tree --ax`, `layout`, `perf` and `logs` — printed by the driver,
+ * passed on unchanged. Exact holds no resident session a tool can keep
+ * (phase 3), so every inspection is its own cold run.
+ */
+function factsJob(job) {
+  const { host, url, shots, size, scheme, sim } = startOf(job);
+  const started = Date.now();
+  const run = drive(host, url, shots, [`prefer color-scheme ${scheme}`, "clock settle", "tree --ax", "layout", "perf", "logs"], { size, sim, allowFail: true });
+  const replies = jsonReplies(run.stdout);
+  const ax = replies.find((r) => r.ax) ?? null;
+  const layout = replies.find((r) => Array.isArray(r.nodes) && r.env) ?? null;
+  const perf = replies.find((r) => Array.isArray(r.sites)) ?? null;
+  const logs = replies.find((r) => Array.isArray(r.lines)) ?? null;
+  const ok = run.code === 0 && !!ax;
+  return {
+    ok, host, url, size, scheme, shots,
+    // The command an agent runs to print the same tree: the proof compares the two.
+    command: driveArgs(host, url, shots, [`prefer color-scheme ${scheme}`, "clock settle", "tree --ax"], size),
+    ax, layout, perf, logs,
+    ms: Date.now() - started,
+    ...(ok ? {} : { error: (run.stderr || run.stdout).trim().split("\n").filter((l) => !l.startsWith("{")).slice(-4).join("\n") || `agent ${host} exited ${run.code}` }),
   };
 }
 
@@ -638,7 +786,9 @@ function check() {
 }
 
 const result =
-  verb === "drive" ? driveJob(path.resolve(flag("--dir") ?? fail("drive needs --dir")), JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("drive needs --job")), "utf8")))
+  verb === "film" ? filmJob(path.resolve(flag("--dir") ?? fail("film needs --dir")), JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("film needs --job")), "utf8")))
+  : verb === "facts" ? factsJob(JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("facts needs --job")), "utf8")))
+  : verb === "drive" ? driveJob(path.resolve(flag("--dir") ?? fail("drive needs --dir")), JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("drive needs --job")), "utf8")))
   : verb === "compare" ? compare(path.resolve(flag("--dir") ?? fail("compare needs --dir")), JSON.parse(readFileSync(path.resolve(flag("--jobs") ?? fail("compare needs --jobs")), "utf8")))
   : verb === "diagnose" ? diagnose()
   : verb === "check" ? check()

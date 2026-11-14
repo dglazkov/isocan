@@ -74,6 +74,34 @@ function register(host: CliHost): void {
     .option("--scheme <scheme>", "light or dark", "light")
     .action(host.run(async (app: string, route: string, opts: { scheme?: string }, cmd: Command) => (await run()).wall(host, app, route, opts, cmd)));
 
+  const where = (c: Command) => c
+    .option("--canvas <canvas>")
+    .option("--host <host>", "web, ios or macos", "web")
+    .option("--device <device>", "phone, tablet or desktop (the web's)", "phone")
+    .option("--scheme <scheme>", "light or dark", "light")
+    .option("--sim <udid>", "for iOS: a simulator you made for this, by UDID");
+
+  where(exact
+    .command("film <app> <route>")
+    .description("Film an interaction on a route's screen against Exact's virtual clock: an animated PNG beside the map, scrubbable, with the component's state at every frame"))
+    .option("--do <op>", "the interaction before the film: tap <testId>, type <testId> \"<text>\" or back (repeatable, in order)", (v: string, all: string[] = []) => [...all, v])
+    .option("--over <ms>", "how long to film", "600")
+    .option("--every <ms>", "the clock step between frames", "16")
+    .option("--watch <testId>", "a node whose layout (translate, scale, opacity) is read at every frame too")
+    .option("--out <file>", "also write the APNG here")
+    .action(host.run(async (app: string, route: string, opts: import("./cli-run.ts").FilmOptions, cmd: Command) => (await run()).film(host, app, route, opts, cmd)));
+
+  where(exact
+    .command("inspect <app> <route>")
+    .description("A route's screen as the driver sees it, from a cold driver at its shots: tree --ax, layout, perf and logs (what the canvas's inspector panel shows)"))
+    .action(host.run(async (app: string, route: string, opts: { host?: string }, cmd: Command) => (await run()).inspect(host, app, route, opts, cmd)));
+
+  exact
+    .command("moment <film> <ms> <words...>")
+    .description("Comment on a film at a moment, in ms: the comment carries it (as on a motion), and opening it on the canvas scrubs the strip there")
+    .option("--canvas <canvas>")
+    .action(host.run(async (film: string, ms: string, words: string[], _opts: unknown, cmd: Command) => (await run()).moment(host, film, ms, words, cmd)));
+
   exact
     .command("check <app>")
     .description("The compiler's diagnostics and agent check both, as comments on the screens they concern (each with exact.source), resolved when gone; says moved where a comment's file changed")

@@ -27,7 +27,8 @@ export { bindCore } from "./core-ref.ts";
 import { buildIndex, captureKeyParts, designItemProperties, designMarkdown } from "./build.ts";
 import { DEVICES, LAYOUT, SCHEMES, mapLayout, parseShots, rowOffset, rowSize, shotsText, type Device, type Scheme } from "./map.ts";
 import { buildFindings, checkFindings, movedBody, movedComments, planFindings, type CheckReport, type DiagnoseReport, type Finding } from "./findings.ts";
-import { pendingDrives, type DriveAnswer, type DriveRequest } from "./drives.ts";
+import { pendingDrives, pendingFilms, pendingInspects, type DriveAnswer, type DriveRequest } from "./drives.ts";
+import { filmKeyText, filmTitle, landFilm, parseFilm, type FilmAnswer, type FilmAsk, type FilmFacts, type FilmJob, type FilmReport, type InspectAnswer, type InspectRequest, type ScreenFacts } from "./film.ts";
 import { HOST_NAMES, NATIVE_DEVICE, UDID, compareFindings, jobSize, nativeCellWidth, nativeOffset, nativeSize, parseHosts, wallCells, wallSize, wallText, wallsOf, type CompareReport, type Host, type Wall } from "./hosts.ts";
 
 /**
@@ -670,6 +671,22 @@ async function serveDrives(host: CliHost, ctx: Ctx, canvasId: string, app: strin
       say(`drive on ${request.host}: ${answer.ok ? `a fresh screenshot in ${answer.ms} ms` : answer.error}`);
       await host.sendOp(ctx, canvasId, { type: "item.update", itemId: item.id, patch: { properties: { [core.EXACT_PROPS.driven]: JSON.stringify(answer) } } }, id("exact-drive"));
     }
+    // Films asked for the same way (exact phase 4): the strip lands beside the map, as `isocan exact film` lands it.
+    for (const { item, request } of pendingFilms(entries, snapshot.canvas, appId)) {
+      if (signal.aborted) return;
+      say(`film on ${request.host} (${item.title}): ${request.ops.join(", ") || "the screen"}, ${request.over} ms every ${request.every}${request.by ? `, for ${request.by}` : ""}`);
+      const answer = await answerFilm(host, ctx, canvasId, app, options, item, request);
+      say(`film on ${request.host}: ${answer.ok ? `${answer.itemId}, sha256 ${answer.sha256}, in ${answer.ms} ms` : answer.error}`);
+      await host.sendOp(ctx, canvasId, { type: "item.update", itemId: item.id, patch: { properties: { [core.EXACT_PROPS.filmed]: JSON.stringify(answer) } } }, id("exact-film"));
+    }
+    // Inspections asked for the same way (exact phase 4): the driver's facts for one screen, as a JSON blob.
+    for (const { item, request } of pendingInspects(entries, snapshot.canvas, appId)) {
+      if (signal.aborted) return;
+      say(`inspect on ${request.host} (${item.title})${request.by ? `, for ${request.by}` : ""}`);
+      const answer = await answerInspect(host, ctx, canvasId, app, options, request);
+      say(`inspect on ${request.host}: ${answer.ok ? `tree --ax, layout, perf and logs in ${answer.ms} ms` : answer.error}`);
+      await host.sendOp(ctx, canvasId, { type: "item.update", itemId: item.id, patch: { properties: { [core.EXACT_PROPS.inspected]: JSON.stringify(answer) } } }, id("exact-inspect"));
+    }
   }
 }
 
@@ -694,4 +711,188 @@ async function answerDrive(host: CliHost, ctx: Ctx, canvasId: string, app: strin
   } finally {
     await fs.rm(dir, { recursive: true, force: true });
   }
+}
+
+
+/** One screen's facts from a cold driver (exact phase 4): `tree --ax`, `layout`, `perf` and `logs`, through the capture bridge. */
+async function screenFacts(host: CliHost, app: string, start: { host: string; size: string; scheme: string; shots: string }, sim: string | null): Promise<ScreenFacts> {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-exact-facts-"));
+  try {
+    const job = path.join(dir, "job.json");
+    await fs.writeFile(job, JSON.stringify(start));
+    const loop = process.env.ISOCAN_EXACT_LOOP;
+    const joined = loop && /^http:\/\/127\.0\.0\.1:\d+$/.test(loop) && start.host !== "web" ? ["--dev-url", loop] : [];
+    return await bridge<ScreenFacts>(host, "facts", ["--app", app, "--job", job, ...(sim ? ["--sim", sim] : []), ...joined], "the inspection", true);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+}
+
+async function answerInspect(host: CliHost, ctx: Ctx, canvasId: string, app: string, options: SyncOptions, request: InspectRequest): Promise<InspectAnswer> {
+  const refused = (error: string): InspectAnswer => ({ seq: request.seq, ok: false, blobHash: null, ms: 0, error });
+  if (!(options.hosts as readonly string[]).includes(request.host)) return refused(`this \`isocan exact live\` inspects ${options.hosts.join(", ")} — start it with --hosts …,${request.host}`);
+  if (request.host === "ios" && !options.sim) return refused("this `isocan exact live` has no simulator of its own to inspect iOS on: --sim <udid>");
+  let facts: ScreenFacts;
+  try {
+    facts = await screenFacts(host, app, { host: request.host, size: request.size, scheme: request.scheme, shots: request.shots }, options.sim);
+  } catch (err) {
+    return refused((err as Error).message);
+  }
+  const blobHash = (await ctx.client.uploadBlob(canvasId, Buffer.from(JSON.stringify(facts), "utf8"), "application/json", "inspect.json")).blobHash;
+  return { seq: request.seq, ok: facts.ok, blobHash, ms: facts.ms, ...(facts.error ? { error: facts.error } : {}) };
+}
+
+/** The screen a film or an inspection starts from, and how it is reached: its shots, else the route's phone screen's, else its capture's. */
+function startScreen(snapshot: CanvasSnapshotResponse, appId: string, route: string, where: { host: Host; device: Device; scheme: Scheme }): { screen: Item; shots: string } {
+  const screen = core.screenItemOf(snapshot.canvas, appId, route, where.device, where.scheme, where.host);
+  const primary = core.screenItemOf(snapshot.canvas, appId, route);
+  const found = screen ?? primary;
+  if (!found) throw new Error(`no screen of ${route} for ${appId} on this canvas — \`isocan exact open <app>\` lays the routes out first (\`--hosts ${where.host}\` for ${where.host})`);
+  const text = screen?.properties?.[core.EXACT_PROPS.shots] ?? screen?.properties?.[core.EXACT_PROPS.reached] ?? primary?.properties?.[core.EXACT_PROPS.shots] ?? primary?.properties?.[core.EXACT_PROPS.reached] ?? `at "${found.properties?.[core.EXACT_PROPS.url] ?? "/"}"`;
+  const shots = shotsText(parseShots(text));
+  return { screen: found, shots };
+}
+
+interface WhereOptions { canvas?: string; host?: string; device?: string; scheme?: string; sim?: string }
+
+function whereOf(opts: WhereOptions): { host: Host; device: Device; scheme: Scheme; sim: string | null } {
+  const [on] = parseHosts(opts.host ?? "web");
+  const host = on ?? "web";
+  if (opts.host && opts.host.includes(",")) throw new Error("--host takes one host");
+  const device = host === "web" ? listOf(opts.device ?? "phone", DEVICE_NAMES, "device")[0]! : NATIVE_DEVICE[host];
+  const scheme = listOf(opts.scheme ?? "light", SCHEMES, "scheme")[0]!;
+  const sim = opts.sim ?? null;
+  if (sim !== null && !UDID.test(sim)) throw new Error(`--sim takes a simulator's UDID, not ${JSON.stringify(sim)}`);
+  if (host === "ios" && !sim) throw new Error("iOS runs on a simulator of your own, by UDID: --sim <udid> (never a booted one somebody else may own)");
+  return { host, device, scheme, sim };
+}
+
+export interface FilmOptions extends WhereOptions { do?: string[]; over?: string; every?: string; watch?: string; out?: string }
+
+/**
+ * **`isocan exact film`** (exact phase 4; design §8): one route's screen
+ * reached as its shots say, the interaction done (`--do`, Drive mode's closed
+ * list), then filmed against the virtual clock — Exact's `screenshot
+ * <file>.apng over <ms> every <ms>` — with the state read at each frame's
+ * instant on a second cold driver. The strip lands as an image item beside
+ * the map with `exact.film` and `exact.frames`; filmed again with the same
+ * everything, it is the same bytes and posts no version.
+ */
+export async function film(host: CliHost, given: string, route: string, opts: FilmOptions, cmd: Command): Promise<void> {
+  const ctx = await host.ctxOf(cmd);
+  const app = appDir(given);
+  const canvas = await host.resolveCanvas(ctx);
+  const where = whereOf(opts);
+  const over = Number(opts.over ?? 600), every = Number(opts.every ?? 16);
+  if (!Number.isInteger(over) || !Number.isInteger(every) || over < 0 || every < 1) throw new Error("--over and --every take whole milliseconds (every ≥ 1)");
+  const ops = opts.do ?? [];
+  const appInfo = await appOf(app);
+  const snapshot = await ctx.client.snapshot(canvas.id);
+  const { screen, shots } = startScreen(snapshot, appInfo.id, route, where);
+  const size = where.host === "ios" ? "390x844" : jobSize(where.device);
+  const watch = opts.watch ?? null;
+  if (!ctx.json) console.error(`filming ${route} on ${where.host} after ${ops.join(", ") || "nothing"}: ${over} ms every ${every} ms, on the virtual clock…`);
+  const made = await makeFilm(host, ctx, canvas.id, app, appInfo, screen, { route, device: where.device }, { host: where.host, size, scheme: where.scheme, shots, ops, over, every, watch }, where.sim, opts.out);
+  const { r, facts, posted } = made;
+  const out = { itemId: posted.itemId, status: posted.status, title: filmTitle(facts), sha256: r.sha256, bytes: r.bytes, frames: facts.steps, at: facts.at, every, over, route, host: where.host, ops, watch, states: r.states.length, ...(r.stateError ? { stateError: r.stateError } : {}), ms: r.ms, ...(opts.out ? { out: path.resolve(opts.out) } : {}) };
+  if (ctx.json) return host.printJson(out);
+  console.log(`${out.title}: ${posted.status} (${posted.itemId})`);
+  console.log(`  ${facts.steps} frames at ${facts.at.slice(0, 3).join(", ")}${facts.steps > 3 ? ` … ${facts.at.at(-1)}` : ""} ms · sha256 ${r.sha256}${opts.out ? ` · written to ${out.out}` : ""}`);
+  console.log(`  state at every frame${watch ? ` and ${watch}'s layout` : ""} in exact.frames${r.stateError ? ` — but ${r.stateError}` : ""}; film ${r.ms.film} ms, state ${r.ms.state} ms`);
+}
+
+/**
+ * **One film, made and landed** — the CLI's `film` and `isocan exact live`'s
+ * answer to a film asked for on the canvas run this: the bridge's `film`,
+ * then the strip posted beside the map (`landFilm`), a version only when its
+ * bytes changed.
+ */
+async function makeFilm(host: CliHost, ctx: Ctx, canvasId: string, app: string, appInfo: { id: string }, screen: Item, where: { route: string; device: string }, job: FilmJob, sim: string | null, outFile?: string): Promise<{ r: FilmReport; facts: FilmFacts; posted: { itemId: string; status: Upsert } }> {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-exact-film-"));
+  try {
+    const jobFile = path.join(dir, "job.json");
+    await fs.writeFile(jobFile, JSON.stringify(job));
+    const loop = process.env.ISOCAN_EXACT_LOOP;
+    const joined = loop && /^http:\/\/127\.0\.0\.1:\d+$/.test(loop) && job.host !== "web" ? ["--dev-url", loop] : [];
+    const r = await bridge<FilmReport>(host, "film", ["--app", app, "--dir", dir, "--job", jobFile, ...(sim ? ["--sim", sim] : []), ...joined], "the film", true);
+    if (!r.ok || !r.file) throw new Error(`the film did not finish: ${r.error ?? "no file"}`);
+    const bytes = await fs.readFile(r.file);
+    if (outFile) await fs.writeFile(path.resolve(outFile), bytes);
+    const key = sha256(filmKeyText({ app: appInfo.id, route: where.route, host: job.host, device: where.device, scheme: job.scheme, shots: job.shots, ops: job.ops, over: job.over, every: job.every, watch: job.watch }));
+    const snapshot = await ctx.client.snapshot(canvasId);
+    const land = landFilm(Object.values(snapshot.canvas.items), { app: core.EXACT_PROPS.app, film: core.EXACT_PROPS.film, frames: core.EXACT_PROPS.frames }, appInfo, screen, where, job, r, key);
+    const existing = land.existing ? snapshot.canvas.items[land.existing.id] ?? null : null;
+    const posted = await upsert(host, ctx, canvasId, snapshot, existing, { bytes, mime: "image/png", filename: `${where.route}-film.apng` }, { title: land.title, width: land.width, height: land.height, at: land.at, properties: land.properties }, id("exact-film"));
+    return { r, facts: land.facts, posted };
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+}
+
+/** A film asked for on the canvas, answered (exact phase 4): the screen's route and device, the strip landed beside the map. */
+async function answerFilm(host: CliHost, ctx: Ctx, canvasId: string, app: string, options: SyncOptions, item: Item, request: FilmAsk): Promise<FilmAnswer> {
+  const refused = (error: string): FilmAnswer => ({ seq: request.seq, ok: false, itemId: null, sha256: null, ms: 0, error });
+  if (!(options.hosts as readonly string[]).includes(request.host)) return refused(`this \`isocan exact live\` films ${options.hosts.join(", ")} — start it with --hosts …,${request.host}`);
+  if (request.host === "ios" && !options.sim) return refused("this `isocan exact live` has no simulator of its own to film iOS on: --sim <udid>");
+  const route = item.properties?.[core.EXACT_PROPS.route];
+  if (!route) return refused("only an Exact screen can be filmed");
+  const started = Date.now();
+  try {
+    const { seq: _seq, by: _by, ...job } = request;
+    const made = await makeFilm(host, ctx, canvasId, app, (await appOf(app)), item, { route, device: item.properties?.[core.EXACT_PROPS.device] ?? "phone" }, job, options.sim);
+    return { seq: request.seq, ok: true, itemId: made.posted.itemId, sha256: made.r.sha256, ms: Date.now() - started };
+  } catch (err) {
+    return refused((err as Error).message);
+  }
+}
+
+/**
+ * **`isocan exact inspect`** (exact phase 4): what the inspector panel shows
+ * for a screen — the driver's `tree --ax`, `layout`, `perf` and `logs` from a
+ * cold driver at the screen's shots — printed for an agent.
+ */
+export async function inspect(host: CliHost, given: string, route: string, opts: WhereOptions, cmd: Command): Promise<void> {
+  const ctx = await host.ctxOf(cmd);
+  const app = appDir(given);
+  const canvas = await host.resolveCanvas(ctx);
+  const where = whereOf(opts);
+  const appInfo = await appOf(app);
+  const snapshot = await ctx.client.snapshot(canvas.id);
+  const { screen, shots } = startScreen(snapshot, appInfo.id, route, where);
+  const size = where.host === "ios" ? "390x844" : jobSize(where.device);
+  const facts = await screenFacts(host, app, { host: where.host, size, scheme: where.scheme, shots }, where.sim);
+  if (ctx.json) return host.printJson({ screen: screen.id, ...facts });
+  if (!facts.ok) throw new Error(`the inspection did not finish: ${facts.error ?? "no tree"}`);
+  const elements = facts.ax?.ax?.elements ?? [];
+  console.log(`${screen.title} on ${where.host} (${shots.split("\n").join("; ")}), ${facts.ms} ms`);
+  console.log(`  tree --ax  ${elements.length} elements (${facts.ax?.ax?.source ?? "?"}); interactive: ${elements.filter((e) => e.interactive).map((e) => e.testId ?? e.name).filter(Boolean).join(", ") || "none"}`);
+  console.log(`  layout     ${facts.layout?.nodes?.length ?? 0} nodes`);
+  console.log(`  perf       ${facts.perf?.walked ?? "?"} walked; resources ${(facts.perf?.resources ?? []).map((x) => `${x.name}×${x.asked}`).join(", ") || "none"}`);
+  console.log(`  logs       ${(facts.logs?.lines ?? []).length} lines${(facts.logs?.lines ?? []).length ? `, last: ${facts.logs!.lines!.at(-1)}` : ""}`);
+  console.log(`  the same tree: bun exact.mjs ${facts.command.map((a) => (/\s/.test(a) ? JSON.stringify(a) : a)).join(" ")}`);
+}
+
+/**
+ * **A comment at a moment of a film** (exact phase 4): what a person does by
+ * scrubbing and commenting, for an agent — a thread on the film whose comment
+ * carries core's `at` (seconds, motion's shape), pinned under the moment on
+ * the strip. Opening it on the canvas scrubs the strip there.
+ */
+export async function moment(host: CliHost, ref: string, ms: string, words: string[], cmd: Command): Promise<void> {
+  const ctx = await host.ctxOf(cmd);
+  const canvas = await host.resolveCanvas(ctx);
+  const snapshot = await ctx.client.snapshot(canvas.id);
+  const item = host.resolveItem(snapshot, ref);
+  const facts = parseFilm(item.properties?.[core.EXACT_PROPS.film]);
+  if (!facts) throw new Error(`${item.title} is not an Exact film — \`isocan exact film <app> <route>\` makes one`);
+  const at = Number(ms);
+  const min = facts.at[0] ?? facts.from, max = facts.at.at(-1) ?? min;
+  if (!Number.isFinite(at) || at < min || at > max) throw new Error(`the film runs ${min}–${max} ms; ${ms} is not on it`);
+  const body = words.join(" ").trim();
+  if (!body) throw new Error("say something: isocan exact moment <film> <ms> <words…>");
+  const threadId = id("thr");
+  const x = Math.round(((at - min) / Math.max(1, max - min)) * (item.width - 24)) + 12;
+  await host.sendOp(ctx, canvas.id, { type: "thread.create", threadId, x, y: Math.round(item.height - 24), anchorItemId: item.id, comment: { id: id("cmt"), body, at: Math.round(at) / 1000 } } as Operation, id("exact-moment"));
+  if (ctx.json) return host.printJson({ threadId, itemId: item.id, at: Math.round(at) / 1000, ms: Math.round(at) });
+  console.log(`commented on ${item.title} at ${Math.round(at)} ms (${threadId})`);
 }

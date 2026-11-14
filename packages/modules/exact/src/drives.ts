@@ -16,6 +16,7 @@
 
 import type { CanvasContents, Item, LogEntry } from "@isocan/core";
 import { core } from "./core-ref.ts";
+import { parseFilmAnswer, parseFilmAsk, parseInspectAnswer, parseInspectRequest, type FilmAsk, type InspectRequest } from "./film.ts";
 
 /**
  * **Drive mode over the canvas** (exact phase 3; design §5, §7) — the pure
@@ -90,6 +91,46 @@ export function pendingDrives(entries: readonly LogEntry[], canvas: CanvasConten
     if (!item || core.appIdOf(item) !== appId) continue;
     const request = parseDriveRequest(item.properties?.[core.EXACT_PROPS.drive]);
     const answered = parseDriveAnswer(item.properties?.[core.EXACT_PROPS.driven]);
+    if (request && (!answered || answered.seq < request.seq)) out.push({ item, request });
+  }
+  return out;
+}
+
+/**
+ * **Inspections waiting for an answer** (exact phase 4), read off the op log
+ * the same way: each `item.update` that wrote `exact.inspect` on one of this
+ * app's screens, still unanswered by its `exact.inspected`.
+ */
+export function pendingInspects(entries: readonly LogEntry[], canvas: CanvasContents, appId: string): Array<{ item: Item; request: InspectRequest }> {
+  const touched = new Set<string>();
+  for (const e of entries) {
+    const op = e.envelope.op as { type: string; itemId?: string; patch?: { properties?: Record<string, unknown> } };
+    if (op.type === "item.update" && op.itemId && op.patch?.properties && core.EXACT_PROPS.inspect in op.patch.properties) touched.add(op.itemId);
+  }
+  const out: Array<{ item: Item; request: InspectRequest }> = [];
+  for (const id of touched) {
+    const item = canvas.items[id];
+    if (!item || core.appIdOf(item) !== appId) continue;
+    const request = parseInspectRequest(item.properties?.[core.EXACT_PROPS.inspect]);
+    const answered = parseInspectAnswer(item.properties?.[core.EXACT_PROPS.inspected]);
+    if (request && (!answered || answered.seq < request.seq)) out.push({ item, request });
+  }
+  return out;
+}
+
+/** **Films waiting for an answer** (exact phase 4): `exact.filmAsk` written on one of this app's screens, unanswered by its `exact.filmed`. */
+export function pendingFilms(entries: readonly LogEntry[], canvas: CanvasContents, appId: string): Array<{ item: Item; request: FilmAsk }> {
+  const touched = new Set<string>();
+  for (const e of entries) {
+    const op = e.envelope.op as { type: string; itemId?: string; patch?: { properties?: Record<string, unknown> } };
+    if (op.type === "item.update" && op.itemId && op.patch?.properties && core.EXACT_PROPS.filmAsk in op.patch.properties) touched.add(op.itemId);
+  }
+  const out: Array<{ item: Item; request: FilmAsk }> = [];
+  for (const id of touched) {
+    const item = canvas.items[id];
+    if (!item || core.appIdOf(item) !== appId) continue;
+    const request = parseFilmAsk(item.properties?.[core.EXACT_PROPS.filmAsk]);
+    const answered = parseFilmAnswer(item.properties?.[core.EXACT_PROPS.filmed]);
     if (request && (!answered || answered.seq < request.seq)) out.push({ item, request });
   }
   return out;
