@@ -24,9 +24,10 @@ import { InspectorPanel, SelectionWatch } from "./inspector.tsx";
 import { StoryboardCard } from "./storyboard.tsx";
 import { ProposalCard } from "./proposalcard.tsx";
 import { TokenPanel } from "./tokens.tsx";
+import { LaneCard, ReleaseCard } from "./lane.tsx";
 import { exactCanvas, useExactStore } from "./live.tsx";
 import { parseVerifyAnswer, parseVerifyAsk } from "./story.ts";
-import { EXACT_ANATOMY_MIME, EXACT_INDEX_MIME, EXACT_PROPS, EXACT_STORY_MIME, EXACT_WALL_MIME, appIdOf, exactModule, mapEdges, parseAnatomy, parseIndex, type AnatomyCard as AnatomyCardData, type ExactIndex, type MapEdge } from "./core.ts";
+import { EXACT_ANATOMY_MIME, EXACT_INDEX_MIME, EXACT_LANE_MIME, EXACT_PROPS, EXACT_STORY_MIME, EXACT_WALL_MIME, appIdOf, exactModule, mapEdges, parseAnatomy, parseIndex, type AnatomyCard as AnatomyCardData, type ExactIndex, type MapEdge } from "./core.ts";
 
 /**
  * **The web half** (exact phases 0 and 1): the index and the anatomy cards
@@ -229,6 +230,10 @@ export const exactWeb: WebModule<ComponentType<UnderlayFacts>, ComponentType<Ren
     { mimes: [EXACT_WALL_MIME], component: WallCard },
     // A test as a storyboard (exact phase 5, `storyboard.tsx`): its steps, each run's frames, Run on a host or all.
     { mimes: [EXACT_STORY_MIME], component: StoryboardCard },
+    // The release lane and its cards (exact phase 7, `lane.tsx`): channels as rows; a card is Markdown with the record on it.
+    { mimes: [EXACT_LANE_MIME], component: LaneCard },
+    { mimes: ["text/markdown"], property: EXACT_PROPS.release, component: ReleaseCard },
+    { mimes: ["text/markdown"], property: EXACT_PROPS.classification, component: ReleaseCard },
     // A proposal is core's, and an ordinary PNG (exact phase 6, `proposalcard.tsx`): before and after on every device and scheme.
     { mimes: ["image/png"], property: EXACT_PROPS.proposal, component: ProposalCard },
     // A film is an ordinary animated PNG (exact phase 4, `film.tsx`): the ones that carry `exact.film` are drawn as a scrubber.

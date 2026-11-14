@@ -61,6 +61,12 @@ second week.
   radius) on the design system and every live frame, web and iPhone, moves
   with it until you let go. `isocan exact branch` shows a branch's screens
   beside the current ones.
+- **Ship from the board.** An Exact app's release lane shows its channels
+  and releases. Prepare (an agent may) says what would go over the air and
+  what needs a new binary, uploading nothing. Ship, Promote and Roll back
+  are yours alone: you confirm the channel and changes, and Exact signs with
+  the keys on your machine. A running app picks the update up at its next
+  check.
 
 ## 13 November 2026
 

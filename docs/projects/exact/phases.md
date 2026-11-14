@@ -35,8 +35,13 @@ scope only: `isocan exact propose` holds a Tamber proposal, pictured before
 and after on every device, scheme and iOS as a proposal item; a person's
 Keep is the only accept. Design-competition bouts on an Exact screen take
 proposals as entries; a token chip scrubs web and iOS live frames together;
-`isocan exact branch` captures a branch beside the current screens. Next:
-**exact phase 7**, ship. Nothing waits on a person.
+`isocan exact branch` captures a branch beside the current screens. A
+release lane from `app.json`'s `deploy`: Prepare (agents may) posts Exact's
+dry-run classification as a card; Ship, Promote and Roll back are a
+person's, confirmed, signed with the keys on the machine. Next: **exact
+phase 8**, teams and hosted canvases. Waiting on a person: the real-iPhone
+walk of phase 7, and a yes to AppDrop (a hosted service and an Apple ID)
+for install QRs.
 ---
 
 ## Phase 0 — The bridge, the index, and the three doors
@@ -270,7 +275,13 @@ scrubbed radius moves web and iOS frames together.
 
 ## Phase 7 — Ship
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 14 Nov 2026.** An agent prepared a release to a directory
+origin (its hash unchanged) and a person shipped it; Acme Market, running on
+the iOS Simulator, showed the new text in the same process 6.3 s after the
+head was written (check interval 10 s), and a roll back reverted it within
+4 s; an agent's ship and roll back were refused with a sentence, origin
+unchanged; a grant change was named *needs a binary* by Prepare before
+anything was uploaded.
 
 - The release lane from `app.json`'s `deploy`.
 - **Prepare**: the dry run's classification as a card — OTA, or *needs a
@@ -284,6 +295,17 @@ an agent and shipped by a person, picked up by Acme Market running on the
 iOS Simulator within its check interval; an agent's attempt to ship refused
 with a sentence; a change that needs a binary named as one before anything
 is uploaded. A person's walk on a real iPhone is owed separately.
+
+### Trajectory
+
+- **2026-11-14** — Exact's deploy counts git-ignored files (the app's own `.exact/`, a vendored crate's `target/`) as uncommitted, so a worked-on app never ships clean. Prepare and Ship refuse tracked or untracked changes, pass `--dirty`, and isocan pins the confirmed commit itself.
+- **2026-11-14** — A channel in `app.json` is the URL clients bake in; Exact writes only to a directory. The person names the directory that host serves (`ISOCAN_EXACT_ORIGIN`); a channel naming a bare path fails on iOS.
+- **2026-11-14** — Exact can report one change both over the air and *needs a binary* (installed binary inputs differ, compatibility id unchanged). The card shows both rows in Exact's words rather than choosing.
+- **2026-11-14** — An agent's lane ask arrives as `group.change` on a canvas with groups; the earlier asks (run, verify, drive) read `item.update` only and would miss such asks too.
+- **2026-11-14** — Open: the real-iPhone walk. Waits on a person with a device.
+- **2026-11-14** — Open: AppDrop install QRs are not built; `share.mjs` uploads to appdrop.app (a hosted service) and needs a device build. Waits on a yes for the service and an Apple ID.
+- **2026-11-14** — Open: phased rollout. `deploy.phased` and `deploy.release` are schema only in Exact's publisher; Promote says so, and every device takes the release at its next check. Waits on Exact.
+- **2026-11-14** — Open: isocan's gate holds inside isocan only; an agent with a terminal can run Exact's `deploy.mjs` itself. The real boundary is where the signing keys live.
 
 ## Phase 8 — Teams and hosted canvases
 

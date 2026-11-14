@@ -143,6 +143,17 @@ function register(host: CliHost): void {
     .option("--schemes <list>", "", "light")
     .action(host.run(async (app: string, ref: string, opts: import("./branch.ts").BranchOptions, cmd: Command) => (await run()).branch(host, app, ref, opts, cmd)));
 
+  // Ship (exact phase 7): the dry run as a card; a person's ship, promote and roll back (`ship.ts`).
+  exact.command("prepare <app>").description("Exact's dry run as a release card")
+    .option("--canvas <canvas>").option("--channel <name>").option("--platform <p>")
+    .action(host.run(async (app: string, opts: import("./ship.ts").PrepareOptions, cmd: Command) => (await run()).prepare(host, app, opts, cmd)));
+  for (const [verb, says] of [["ship", "Ship to a channel (a person's)"], ["promote", "Promote to production (a person's)"], ["rollback", "Re-publish the previous release (a person's)"]] as const) {
+    const c = exact.command(`${verb} <app>`).description(says).option("--canvas <canvas>").option("--yes");
+    if (verb === "promote") c.option("--from <channel>", "", "internal").option("--to <channel>", "", "production");
+    else c.option("--channel <name>");
+    c.action(host.run(async (app: string, opts: import("./ship.ts").ShipOptions, cmd: Command) => (await run()).ship(host, verb, app, opts, cmd)));
+  }
+
   exact
     .command("check <app>")
     .description("Compiler diagnostics and agent check findings as comments on their screens, resolved when gone")

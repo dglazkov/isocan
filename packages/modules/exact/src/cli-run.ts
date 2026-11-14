@@ -732,6 +732,23 @@ async function serveDrives(host: CliHost, ctx: Ctx, canvasId: string, app: strin
     }
     const settledSnapshot = await ctx.client.snapshot(canvasId);
     await settleKept(kit, host, ctx, canvasId, app, appId, entries, settledSnapshot, say);
+    // Ship (exact phase 7): a prepare asked for on the lane, and a ship, promote or roll back — refused when an agent wrote it.
+    try {
+      const { pendingLaneAsks, answerPrepare, answerShip } = await import("./ship.ts");
+      const lane = pendingLaneAsks(entries, settledSnapshot, appId);
+      for (const { item } of lane.prepares) {
+        if (signal.aborted) return;
+        const answer = await answerPrepare(kit, host, ctx, canvasId, app, item, say);
+        if (answer) await host.sendOp(ctx, canvasId, { type: "item.update", itemId: item.id, patch: { properties: { [core.EXACT_PROPS.prepared]: JSON.stringify(answer) } } }, id("exact-prepare"));
+      }
+      for (const { item, actor } of lane.ships) {
+        if (signal.aborted) return;
+        const answer = await answerShip(kit, host, ctx, canvasId, app, item, actor, say);
+        if (answer) await host.sendOp(ctx, canvasId, { type: "item.update", itemId: item.id, patch: { properties: { [core.EXACT_PROPS.shipped]: JSON.stringify(answer) } } }, id("exact-ship"));
+      }
+    } catch (err) {
+      say(`the release lane: ${(err as Error).message}`);
+    }
     // Inspections asked for the same way (exact phase 4): the driver's facts for one screen, as a JSON blob.
     for (const { item, request } of pendingInspects(entries, snapshot.canvas, appId)) {
       if (signal.aborted) return;
@@ -1023,4 +1040,16 @@ export async function propose(host: CliHost, ref: string, opts: ProposeOptions, 
 export async function branch(host: CliHost, given: string, ref: string, opts: import("./branch.ts").BranchOptions, cmd: Command): Promise<void> {
   const { branchVerb } = await import("./branch.ts");
   return branchVerb(kit, host, given, ref, opts, cmd);
+}
+
+/** `isocan exact prepare <app>` (exact phase 7): Exact's dry run as a card in the release lane. Agents may. */
+export async function prepare(host: CliHost, given: string, opts: import("./ship.ts").PrepareOptions, cmd: Command): Promise<void> {
+  const { prepareVerb } = await import("./ship.ts");
+  return prepareVerb(kit, host, given, opts, cmd, appDir(given));
+}
+
+/** `isocan exact ship|promote|rollback <app>` (exact phase 7): a person's, confirmed; Exact signs with the keys here. */
+export async function ship(host: CliHost, kind: "ship" | "promote" | "rollback", given: string, opts: import("./ship.ts").ShipOptions, cmd: Command): Promise<void> {
+  const { shipVerb } = await import("./ship.ts");
+  return shipVerb(kit, host, kind, given, opts, cmd, appDir(given));
 }

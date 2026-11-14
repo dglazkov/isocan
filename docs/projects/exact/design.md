@@ -391,6 +391,16 @@ All of delivery is Exact's; the module shows it and gates it.
   therefore *re-publish the previous release's content at a new sequence
   number*, and says so.
 
+**Built 14 Nov 2026 (exact phase 7):** an `exact-lane` item from `app.json`'s
+`deploy`; `isocan exact prepare` (agents may) runs the dry run, hashes the
+origin directory either side, and posts the classification as a card.
+`isocan exact ship`, `promote` and `rollback` refuse an enrolled agent, on
+the CLI and on the canvas door, print what will ship and take `--yes`; the
+lane's buttons open a confirm step. Ship runs `deploy.mjs --yes` pinned to
+the prepared commit; roll back re-publishes from a worktree at the earlier
+commit. Install QRs and phased rollout wait (phases.md, phase 7's Open
+entries).
+
 ## 12. Teammates, phones and hosted canvases
 
 - **Without a checkout**, a teammate sees every captured screen, film,

@@ -119,3 +119,17 @@
 .exact-token-chip { cursor: ew-resize; touch-action: none; user-select: none; justify-self: start; }
 .exact-token-propose { display: flex; gap: 4px; align-items: center; }
 .exact-native > .img-view { width: 100%; height: 100%; object-fit: contain; }
+
+/* The release lane and its cards (exact phase 7). */
+.exact-lane { display: flex; flex-direction: column; gap: 10px; padding: 12px; background: var(--card); color: var(--ink); font-size: 12px; height: 100%; box-sizing: border-box; overflow: auto; pointer-events: auto; }
+.exact-lane h3 { margin: 0; font-size: 15px; }
+.exact-lane-row { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; }
+.exact-lane-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.exact-lane-confirm { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 2px solid var(--ink); border-radius: 8px; }
+.exact-lane-confirm p, .exact-lane-confirm ul { margin: 0; font-size: 12px; }
+.exact-release { display: flex; flex-direction: column; gap: 8px; padding: 10px; background: var(--card); color: var(--ink); height: 100%; box-sizing: border-box; overflow: auto; }
+.exact-release-text { margin: 0; white-space: pre-wrap; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.exact-release-screens { display: flex; flex-wrap: wrap; gap: 8px; }
+.exact-release-screens figure { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; max-width: 240px; }
+.exact-release-screens figcaption { grid-column: 1 / -1; font-size: 11px; }
+.exact-release-screens img { width: 100%; height: auto; }

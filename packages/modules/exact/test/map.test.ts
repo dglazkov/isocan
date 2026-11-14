@@ -291,7 +291,7 @@ describe("the map on the canvas", () => {
     const read = parseIndex(JSON.stringify({ ...old, format: 1 }));
     expect(read.edges).toEqual([]);
     expect(read.anatomy).toEqual([]);
-    expect(exactModule.kinds?.map((k) => k.mimes[0])).toEqual([EXACT_INDEX_MIME, EXACT_ANATOMY_MIME, record.EXACT_WALL_MIME, record.EXACT_STORY_MIME]);
+    expect(exactModule.kinds?.map((k) => k.mimes[0])).toEqual([EXACT_INDEX_MIME, EXACT_ANATOMY_MIME, record.EXACT_WALL_MIME, record.EXACT_STORY_MIME, record.EXACT_LANE_MIME]);
     expect(Object.keys(DEVICES)).toEqual(["phone", "tablet", "desktop"]);
   });
 });

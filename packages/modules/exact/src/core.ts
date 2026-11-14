@@ -46,6 +46,9 @@ export const EXACT_WALL_MIME = "application/vnd.isocan.exact-wall+json";
 /** A test as a storyboard (exact phase 5): its steps, and the last run on each host, frames inside. */
 export const EXACT_STORY_MIME = "application/vnd.isocan.exact-storyboard+json";
 
+/** The release lane (exact phase 7). */
+export const EXACT_LANE_MIME = "application/vnd.isocan.exact-lane+json";
+
 /** The index's own format number — not Exact's, which moves daily. 2: the map (exact phase 1). */
 export const EXACT_INDEX_FORMAT = 2;
 
@@ -131,6 +134,13 @@ export const EXACT_PROPS = {
   accepted: "exact.accepted",
   /** On a screen captured from a branch: `{ref, commit, route, host, device, scheme, beside}` (`branch.ts`). */
   branch: "exact.branch",
+  /** Exact phase 7 (`release.ts`). */
+  prepare: "exact.prepare",
+  prepared: "exact.prepared",
+  ship: "exact.ship",
+  shipped: "exact.shipped",
+  classification: "exact.classification",
+  release: "exact.release",
 } as const;
 
 /** One visible node of a capture: its box in the capture's CSS pixels, the line that drew it, and the styles that line names. */
@@ -659,6 +669,12 @@ export const exactModule: CoreModule = {
       mimes: [EXACT_STORY_MIME],
       label: "Exact storyboards",
       noun: "Exact storyboard",
+    },
+    {
+      id: "exact-lane",
+      mimes: [EXACT_LANE_MIME],
+      label: "Exact release lanes",
+      noun: "Exact release lane",
     },
   ],
   contextPieces: exactContext,
