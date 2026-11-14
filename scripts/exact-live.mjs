@@ -37,6 +37,17 @@
  *   the capture bridge's own `run` (Exact's `test <host>`, a frame per step)
  *   and answers the report with each frame's bytes; the paired browser keeps
  *   it as the storyboard's next version.
+ * - **token scrubbing** (exact phase 6; design §10) — `/scrub` sends a
+ *   paired page's drag of a design token as Tamber's own scrub, through the
+ *   loop's local token: every build registered on the loop's live table (the
+ *   live frames, and an iOS app joined to the loop) shows it with no reload,
+ *   and no file is written; `/scrub-cancel`, on release, gives every build the
+ *   committed design back. The scrub is never released here: a file changes
+ *   only by a person's Keep of a proposal.
+ * - **a native live frame** (exact phase 6) — `/native` keeps the app running
+ *   on this session's own simulator, joined to the loop (`agent ios --url`),
+ *   at one screen; `/native/shot` answers what the simulator shows now. A
+ *   native window cannot be framed (design §7), so the canvas polls it.
  * - **the capture loop** — `--child` is the CLI's own `isocan exact live
  *   --no-frames`, which keeps the map's captures, versions and compile
  *   errors true on every save; its output is passed through.
@@ -392,6 +403,96 @@ function runOnce(job) {
   return run;
 }
 
+// ---------------------------------------------------------------- token scrubbing (exact phase 6)
+
+let scrubbing = null; // { id, files, ops }
+
+/** Open the scrub, or move it: each update is the whole gesture's edit, on the files as the scrub opened on them. */
+async function scrubTo(ops) {
+  if (!tamberToken) return { status: 503, answer: { error: "this app's dev loop mounts no Tamber wire (no app.tamber)" } };
+  if (!scrubbing) {
+    const h = await tamber({ method: "hello" });
+    if (!h.answer?.ok) return h;
+    scrubbing = { id: null, files: h.answer.ok.files, ops };
+  }
+  scrubbing.ops = ops;
+  const r = await tamber({ method: "scrub", client: CLIENT, ops, files: scrubbing.files, ...(scrubbing.id ? { scrub: scrubbing.id } : {}) });
+  if (r.answer?.ok?.scrub) scrubbing.id = r.answer.ok.scrub;
+  else if (!r.answer?.ok?.superseded) scrubbing = null;
+  // Nothing here keeps a scrub open: a held drag re-sends its value, and a page that went away leaves Tamber's 30 s
+  // idle end to give every build the committed design back.
+  if (scrubbing) say(`scrub: ${ops.map((o) => `${o.name}=${o.value}`).join(", ")} on every build of the loop`);
+  return { status: r.status, answer: { ...(r.answer ?? {}), builds: await buildCount() } };
+}
+
+async function scrubEnd() {
+  if (!scrubbing?.id) { scrubbing = null; return { status: 200, answer: { ok: { cancelled: null } } }; }
+  const r = await tamber({ method: "scrub-cancel", client: CLIENT, scrub: scrubbing.id });
+  say("scrub let go: every build back on the committed design, nothing written");
+  scrubbing = null;
+  return r;
+}
+
+async function buildCount() {
+  const h = await tamber({ method: "hello" });
+  return (h.answer?.ok?.builds ?? []).map((b) => ({ id: b.id, host: b.host ?? b.target ?? null }));
+}
+
+// ---------------------------------------------------------------- a native live frame (exact phase 6)
+
+let native = null; // { key, child, dir, said, ready, ended }
+
+/** Keep the app running on this session's simulator, joined to the loop, at one screen and scheme. */
+function nativeFrame(shots, scheme) {
+  const key = JSON.stringify([shots.url, shots.ops, scheme]);
+  if (native && native.key === key && !native.ended) return { state: native.ready ? "ready" : "starting" };
+  nativeStop();
+  const dir = mkdtempSync(path.join(os.tmpdir(), "isocan-exact-native-"));
+  const root = (() => {
+    const text = existsSync(path.join(app, "app.contract")) ? readFileSync(path.join(app, "app.contract"), "utf8") : "";
+    const lines = text.split("\n");
+    const at = lines.findIndex((l) => /\bnavigate=/.test(l));
+    return /\btestId="([A-Za-z0-9_-]+)"/.exec(at >= 0 ? lines.slice(at, at + 3).join(" ") : "")?.[1] ?? null;
+  })();
+  const fixed = ["--json", "--seed", "1", "--locale", "en-US", "--time-zone", "UTC", "--epoch", "2026-01-01"];
+  const ops = ["clock data", ...(shots.url !== "/" && root ? [`type ${root} ${shots.url}`, "clock settle"] : []), ...shots.ops, `prefer color-scheme ${scheme}`, "clock settle", `clock +1800000 real until ${path.join(dir, "stop")}`];
+  const child = spawn("/bin/sh", [launcher, "agent", "ios", ...fixed, "--url", loopBase, ...ops], { cwd: app, detached: true, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, EXACT_SIM: sim, EXACT_SHOW_SIMULATOR: "0" } });
+  const state = { key, child, dir, said: "", replies: 0, ready: false, ended: false };
+  const need = ops.length - 1;
+  child.stdout.on("data", (d) => {
+    state.said = (state.said + d).slice(-4000);
+    state.replies += String(d).split("\n").filter((l) => l.startsWith("{")).length;
+    if (!state.ready && state.replies >= need) { state.ready = true; say(`native frame: iOS at ${shots.url} (${scheme}), joined to the loop`); }
+  });
+  child.stderr.on("data", (d) => { state.said = (state.said + d).slice(-4000); });
+  child.on("exit", () => { state.ended = true; });
+  children.push(child);
+  native = state;
+  return { state: "starting" };
+}
+
+function nativeStop() {
+  if (!native) return;
+  try { writeFileSync(path.join(native.dir, "stop"), ""); } catch { /* gone */ }
+  const old = native;
+  setTimeout(() => { try { process.kill(-old.child.pid, "SIGTERM"); } catch { /* gone */ } rmSync(old.dir, { recursive: true, force: true }); }, 3000);
+  native = null;
+}
+
+/** What the simulator shows now: the native frame's picture. */
+function nativeShot() {
+  if (!native) return Promise.resolve({ ok: false, error: "no native frame is running — ask for one first" });
+  if (native.ended) return Promise.resolve({ ok: false, error: `the native frame ended: ${native.said.trim().split("\n").filter((l) => !l.startsWith("{")).slice(-2).join(" | ")}` });
+  if (!native.ready) return Promise.resolve({ ok: false, starting: true, error: "the app is starting on the simulator" });
+  return new Promise((resolve) => {
+    const file = path.join(native.dir, `shot-${Date.now()}.png`);
+    const c = spawn("xcrun", ["simctl", "io", sim, "screenshot", "--type=png", file], { stdio: "ignore" });
+    c.on("close", () => {
+      try { const png = readFileSync(file).toString("base64"); rmSync(file, { force: true }); resolve({ ok: true, png, at: Date.now() }); } catch { resolve({ ok: false, error: "the simulator gave no picture" }); }
+    });
+  });
+}
+
 // ---------------------------------------------------------------- the bridge API
 
 function designLink(route) {
@@ -453,7 +554,34 @@ const api = http.createServer(async (req, res) => {
   if (!auth || !tokens.has(auth)) return answer(401, { error: "not paired with this bridge (a bridge that restarted forgets its pairings)" });
 
   if (url.pathname === "/hello" && req.method === "GET") {
-    return answer(200, { app: appInfo, dir: app, frames: framesPort, loop: loopBase, tamber: !!tamberToken, design: { port: designPort, up: await designUp() }, drive: { hosts: driveHosts.filter((h) => h !== "ios" || sim) }, seq });
+    return answer(200, { app: appInfo, dir: app, frames: framesPort, loop: loopBase, tamber: !!tamberToken, design: { port: designPort, up: await designUp() }, drive: { hosts: driveHosts.filter((h) => h !== "ios" || sim) }, scrub: !!tamberToken, native: driveHosts.includes("ios") && sim ? ["ios"] : [], seq });
+  }
+  if (url.pathname === "/scrub" && req.method === "POST") {
+    const body = await readBody(req);
+    const ops = Array.isArray(body?.ops) ? body.ops : [];
+    if (ops.length === 0 || ops.length > 8 || ops.some((o) => o?.op !== "set-token" || typeof o.name !== "string" || !/^[A-Za-z_][A-Za-z0-9_.-]{0,80}$/.test(o.name) || typeof o.value !== "string" || !/^[^\n\r\0]{1,120}$/.test(o.value))) return answer(400, { error: "a scrub is one to eight set-token operations" });
+    const r = await scrubTo(ops);
+    return answer(r.status, r.answer);
+  }
+  if (url.pathname === "/scrub-cancel" && req.method === "POST") {
+    const r = await scrubEnd();
+    return answer(r.status, r.answer);
+  }
+  if (url.pathname === "/native" && req.method === "POST") {
+    const body = await readBody(req);
+    if (body?.host !== "ios" || !sim || !driveHosts.includes("ios")) return answer(400, { error: "this bridge keeps a native frame on iOS only, on its own simulator: `isocan exact live --hosts …,ios --sim <udid>`" });
+    const shots = driveShots(body.shots);
+    if (!shots) return answer(400, { error: "a native frame starts where the screen's exact.shots say: one at \"<path>\" first" });
+    const scheme = body.scheme === "dark" ? "dark" : "light";
+    return answer(200, nativeFrame(shots, scheme));
+  }
+  if (url.pathname === "/native/shot" && req.method === "GET") {
+    const r = await nativeShot();
+    return answer(r.ok ? 200 : 409, r);
+  }
+  if (url.pathname === "/native/stop" && req.method === "POST") {
+    nativeStop();
+    return answer(200, { stopped: true });
   }
   if (url.pathname === "/events" && req.method === "GET") {
     const after = Number(url.searchParams.get("after") ?? 0);

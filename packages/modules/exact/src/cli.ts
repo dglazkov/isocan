@@ -34,11 +34,11 @@ const run = async () => {
 function register(host: CliHost): void {
   const exact = host.program
     .command("exact")
-    .description("Exact apps on the canvas: check this machine's Exact, lay an app out as a flow map, and keep it true as you save (runs your Exact here)");
+    .description("Exact apps on the canvas: a flow map kept true as you save (runs your Exact here)");
 
   exact
     .command("doctor [app]")
-    .description("This machine's Exact for an app: the checkout and its commit, Bun against Exact's pin, setup --check, and Tamber's protocol")
+    .description("This machine's Exact for an app: checkout, commit, Bun, setup --check, Tamber's protocol")
     .option("--hosts <list>", "the hosts to check setup for, comma-separated", "web")
     .action(host.run(async (app: string | undefined, opts: { hosts?: string }, cmd: Command) => (await run()).doctor(host, app, opts, cmd)));
 
@@ -46,30 +46,30 @@ function register(host: CliHost): void {
     .option("--canvas <canvas>")
     .option("--devices <list>", "the device row to capture: phone, tablet, desktop", "phone,tablet,desktop")
     .option("--schemes <list>", "light, dark", "light,dark")
-    .option("--param <name=value>", "a route parameter's value for a screen with no exact.shots yet (repeatable); unnamed ones are 1", (v: string, all: string[] = []) => [...all, v])
+    .option("--param <name=value>", "a route parameter for a screen with no exact.shots (repeatable; default 1)", (v: string, all: string[] = []) => [...all, v])
     .option("--force", "capture every screen even where nothing it depends on moved")
-    .option("--hosts <list>", "where to capture: web, ios, macos (the web draws every device; iOS a simulator's phone, macOS a window)", "web")
-    .option("--sim <udid>", "the iOS simulator to capture and drive on — one you made for this (`xcrun simctl create`), never a booted one somebody else may own");
+    .option("--hosts <list>", "where to capture: web, ios, macos", "web")
+    .option("--sim <udid>", "an iOS simulator you made for this (`xcrun simctl create`), never a booted one");
 
   capture(exact
     .command("open <app>")
-    .description("Lay an Exact app out as a flow map: its index, a screen per route at phone, tablet and desktop in light and dark, the arrows its router can take, its design system and an anatomy card per Contract file"))
+    .description("Lay an Exact app out as a flow map: index, screens per route and device, arrows, design system, anatomy"))
     .action(host.run(async (app: string, opts: import("./cli-run.ts").CaptureOptions, cmd: Command) => (await run()).open(host, app, opts, cmd)));
 
   capture(exact
     .command("live <app>")
-    .description("Open the map, then keep it true: re-index on every save, recapture only what the save could change, post a version only where pixels moved; compile errors and agent check findings become comments; and serve live frames to a paired browser on this machine"))
+    .description("Open the map, then keep it true on every save; findings as comments; live frames, drives and proposals for a paired browser"))
     .option("--max-passes <n>", "stop after this many passes after the first (default: run until ctrl-c)")
     .option("--quiet-ms <ms>", "how long the files must be still before a pass", "400")
-    .option("--no-frames", "no dev loop and no bridge: captures, comments and versions only — nothing a browser can connect to")
-    .option("--no-checks", "skip agent check both on recaptured routes (compile errors are still comments)")
-    .option("--bridge-port <port>", "the bridge's loopback port, the first number of the pairing code (default: a free one)")
+    .option("--no-frames", "no dev loop and no bridge: nothing a browser can connect to")
+    .option("--no-checks", "skip agent check (compile errors are still comments)")
+    .option("--bridge-port <port>", "the bridge's loopback port (default: a free one)")
     .option("--design-port <port>", "Exact Design's port, for Open in Exact Design", "5173")
     .action(host.run(async (app: string, opts: import("./cli-run.ts").LiveOptions, cmd: Command) => (await run()).live(host, app, opts, cmd)));
 
   exact
     .command("wall <app> <route>")
-    .description("A device wall: one route's screens on every host and device on this canvas, side by side, kept up to date by open and live")
+    .description("A device wall: one route on every host and device, side by side")
     .option("--canvas <canvas>")
     .option("--scheme <scheme>", "light or dark", "light")
     .action(host.run(async (app: string, route: string, opts: { scheme?: string }, cmd: Command) => (await run()).wall(host, app, route, opts, cmd)));
@@ -83,28 +83,28 @@ function register(host: CliHost): void {
 
   where(exact
     .command("film <app> <route>")
-    .description("Film an interaction on a route's screen against Exact's virtual clock: an animated PNG beside the map, scrubbable, with the component's state at every frame"))
-    .option("--do <op>", "the interaction before the film: tap <testId>, type <testId> \"<text>\" or back (repeatable, in order)", (v: string, all: string[] = []) => [...all, v])
+    .description("Film an interaction against Exact's virtual clock: a scrubbable APNG with the state at every frame"))
+    .option("--do <op>", "the interaction first: tap <testId>, type <testId> \"<text>\" or back (repeatable)", (v: string, all: string[] = []) => [...all, v])
     .option("--over <ms>", "how long to film", "600")
     .option("--every <ms>", "the clock step between frames", "16")
-    .option("--watch <testId>", "a node whose layout (translate, scale, opacity) is read at every frame too")
+    .option("--watch <testId>", "a node whose layout is read at every frame")
     .option("--out <file>", "also write the APNG here")
     .action(host.run(async (app: string, route: string, opts: import("./cli-run.ts").FilmOptions, cmd: Command) => (await run()).film(host, app, route, opts, cmd)));
 
   where(exact
     .command("inspect <app> <route>")
-    .description("A route's screen as the driver sees it, from a cold driver at its shots: tree --ax, layout, perf and logs (what the canvas's inspector panel shows)"))
+    .description("A route's screen as a cold driver sees it: tree --ax, layout, perf and logs"))
     .action(host.run(async (app: string, route: string, opts: { host?: string }, cmd: Command) => (await run()).inspect(host, app, route, opts, cmd)));
 
   exact
     .command("moment <film> <ms> <words...>")
-    .description("Comment on a film at a moment, in ms: the comment carries it (as on a motion), and opening it on the canvas scrubs the strip there")
+    .description("Comment on a film at a moment, in ms; opening it scrubs the strip there")
     .option("--canvas <canvas>")
     .action(host.run(async (film: string, ms: string, words: string[], _opts: unknown, cmd: Command) => (await run()).moment(host, film, ms, words, cmd)));
 
   exact
     .command("run <app> <test>")
-    .description("Run a test's storyboard with Exact's own test runner, a frame per step, on each host named; each run is a version, a failure red at its step with the driver's tree")
+    .description("Run a test's storyboard with Exact's test runner on each host, a frame per step, each run a version")
     .option("--canvas <canvas>")
     .option("--hosts <list>", "web, ios, macos", "web")
     .option("--sim <udid>", "for iOS: a simulator you made for this")
@@ -113,15 +113,39 @@ function register(host: CliHost): void {
 
   exact
     .command("verify <app>")
-    .description("Exact's verify on each host named (web, ios), its screenshots posted as versions of the screens they show")
+    .description("Exact's verify on web and iOS, its screenshots as versions of their screens")
     .option("--canvas <canvas>")
     .option("--hosts <list>", "web, ios", "web")
     .option("--sim <udid>", "for iOS: a simulator you made for this")
     .action(host.run(async (app: string, opts: { hosts?: string; sim?: string }, cmd: Command) => (await run()).verifyApp(host, app, opts, cmd)));
 
+  const repeat = (v: string, all: string[] = []) => [...all, v];
+  exact
+    .command("propose <screen>")
+    .description("Propose a look change to a screen; only a person's Keep writes it")
+    .option("--token <name=value>", "set a token (repeatable)", repeat)
+    .option("--row <Style.row=value>", "set a style's row (repeatable)", repeat)
+    .option("--op <json>", "a Tamber set-token, set-row or set-state (repeatable)", repeat)
+    .option("--why <words>", "why, two sentences at most")
+    .option("--cites <kind:ref>", "what prompted it (repeatable)", repeat)
+    .option("--in <area>", "hang it in this area (a competition lane)")
+    .option("--wait <seconds>", "wait for the pictures (0: no)", "540")
+    .option("--canvas <canvas>")
+    .action(host.run(async (screen: string, opts: import("./proposals.ts").ProposeOptions, cmd: Command) => (await run()).propose(host, screen, opts, cmd)));
+
+  exact
+    .command("branch <app> <ref>")
+    .description("Capture a git ref or worktree's screens in a staging copy, beside the current ones")
+    .option("--canvas <canvas>")
+    .option("--hosts <list>", "web, ios", "web")
+    .option("--sim <udid>")
+    .option("--devices <list>", "", "phone")
+    .option("--schemes <list>", "", "light")
+    .action(host.run(async (app: string, ref: string, opts: import("./branch.ts").BranchOptions, cmd: Command) => (await run()).branch(host, app, ref, opts, cmd)));
+
   exact
     .command("check <app>")
-    .description("The compiler's diagnostics and agent check both, as comments on the screens they concern (each with exact.source), resolved when gone; says moved where a comment's file changed")
+    .description("Compiler diagnostics and agent check findings as comments on their screens, resolved when gone")
     .option("--canvas <canvas>")
     .option("--no-checks", "only the compiler's diagnostics")
     .action(host.run(async (app: string, opts: { checks?: boolean }, cmd: Command) => (await run()).check(host, app, opts, cmd)));

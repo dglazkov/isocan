@@ -53,6 +53,14 @@ second week.
   reason, its frame and its tree. **Record** in Drive mode turns your taps
   and typing into a proposed test, with `expect` lines from what changed;
   it is written to your app only when you keep it.
+- **Agents propose; you keep.** Ask an agent to change an Exact app and its
+  ideas arrive as proposal cards under the screen, pictured before and
+  after on phone, tablet, desktop and iPhone, light and dark — nothing
+  changes in your files until you press Keep. Ask for directions with a
+  design competition and vote between them. Drag a token chip (say, corner
+  radius) on the design system and every live frame, web and iPhone, moves
+  with it until you let go. `isocan exact branch` shows a branch's screens
+  beside the current ones.
 
 ## 13 November 2026
 

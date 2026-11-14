@@ -26,18 +26,17 @@ is scratch. Nothing is sent until Phase 10.
 
 **Phase citations name their project**: `exact phase 2`.
 
-**Where we are, 14 Nov 2026:** phases 0–5 CLOSED. An Exact app is a flow
+**Where we are, 14 Nov 2026:** phases 0–6 CLOSED. An Exact app is a flow
 map on the canvas (`isocan exact open`), kept true on save (`isocan exact
-live`), captured on the web, a dedicated iOS simulator and macOS, with a
-device wall per route and host differences as comments. Screens go **Live**
-on a loopback home, Alt-click names the Contract line, and any screen can be
-**driven**, **filmed** against Exact's clock and **inspected**. Each `test`
-is a storyboard that **runs** on every host from the canvas, its results
-kept as versions; **Verify** posts its first-screen shots onto their
-screens; **Record** in Drive mode proposes a test that reaches disk only on
-the person's Keep — all through the bridge, or with *Live frames* off
-through the canvas itself. Next: **exact phase 6**, agents propose. Nothing
-waits on a person.
+live`), captured on the web, a dedicated iOS simulator and macOS. Screens go
+**Live**, can be driven, filmed and inspected; each `test` is a storyboard
+that runs on every host; Record proposes a test. Agents pair at `propose`
+scope only: `isocan exact propose` holds a Tamber proposal, pictured before
+and after on every device, scheme and iOS as a proposal item; a person's
+Keep is the only accept. Design-competition bouts on an Exact screen take
+proposals as entries; a token chip scrubs web and iOS live frames together;
+`isocan exact branch` captures a branch beside the current screens. Next:
+**exact phase 7**, ship. Nothing waits on a person.
 ---
 
 ## Phase 0 — The bridge, the index, and the three doors
@@ -240,7 +239,12 @@ accepted, passes on all three without an edit.
 
 ## Phase 6 — Agents propose
 
-**Status: NOT STARTED.** Depends on phase 0's proposal fact.
+**Status: CLOSED, 14 Nov 2026.** A real turn asked to "make the product
+page feel more premium" held proposals and changed no app file (its accept
+refused, 403); three fighters of a design-competition bout proposed, the
+room ranked them behind the curtain, and Keep on the winner changed
+`app.tamber` and `app.contract` alone; a radius drag moved web and iOS live
+frames together and release restored both.
 
 - Pairing scopes from isocan's roles (design §10); agents get `propose`.
 - Held proposals as proactive proposal items, before and after on every
@@ -254,6 +258,15 @@ accepted, passes on all three without an edit.
 premium" produces proposals and writes nothing; three directions rendered on
 web and iOS, voted, one accepted, the files changed by the accept alone; a
 scrubbed radius moves web and iOS frames together.
+
+### Trajectory
+
+- **2026-11-14** — Fact 3, extended: on iOS a scheme change drops an open scrub, so each scheme is scrubbed alone; a held `propose` carries no rendered text, so the plan is asked again unheld; Tamber refuses a cloned target, so rebuild-class previews build in a staging directory of their own (~2 min once, ~4.7 GB kept).
+- **2026-11-14** — A `web-build` in the app directory leaves the dev loop's web pages ignoring Tamber; captures now build into their own `EXACT_WEB_DIST`, byte-identical either way. Likely the cause of phase 3's Open entry on `inspect`; not yet re-walked.
+- **2026-11-14** — Directions are design-competition bouts: on a screen carrying `exact.route`, fighters are told to `isocan exact propose … --in <lane>` and hand the proposal in, and competition's **Take it** refuses in favour of Keep, so a winner never lands as a picture without its accept.
+- **2026-11-14** — A bare `rc turn` gives the agent no canvas framing; the first one wandered out of its directory. An agent's working directory needs a standing note that it is on an isocan canvas.
+- **2026-11-14** — Open: proposal items are posted by the bridge's actor (the person running `live`), with the agent named in the item; the five-proposal cap counts against the bridge, not the agent. Waits on module items authored on an agent's behalf.
+- **2026-11-14** — Open: Exact's `set-row` rewraps the whole `app.contract`, so an accepted style edit diffs ~200 lines. Waits on Exact; noted in the diary.
 
 ## Phase 7 — Ship
 

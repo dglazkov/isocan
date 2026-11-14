@@ -32,6 +32,7 @@ import {
   MEDALS,
   MISS,
   TROPHY,
+  takeRefusal,
   arenaOrigin,
   arenaPlan,
   bellPlan,
@@ -425,7 +426,7 @@ function BoutTray({ canvas, host }: OverlayFacts) {
   const take = () => {
     const winner = tally?.decided;
     const target = bout.target ? canvas.items[bout.target] : undefined;
-    if (!winner || !target) return;
+    if (!winner || !target || takeRefusal(canvas, bout)) return;
     const v = winner.versions.find((x) => x.id === winner.currentVersionId) ?? winner.versions[0]!;
     return host.send([{ type: "item.addVersion", itemId: target.id, version: { id: newVersionId(), blobHash: v.blobHash, size: v.size, mimeType: v.mimeType, filename: v.filename, ...(v.visual ? { visual: v.visual } : {}) } }]);
   };
@@ -550,7 +551,8 @@ function BoutTray({ canvas, host }: OverlayFacts) {
                   <span>
                     {TROPHY} <b>{laneName(tally.decided.properties["competition.fighter"])}</b> wins — the Decider's call.
                   </span>
-                  {bout.target && canvas.items[bout.target] && (
+                  {bout.target && canvas.items[bout.target] && takeRefusal(canvas, bout) && <span className="dc-note">{takeRefusal(canvas, bout)}</span>}
+                  {bout.target && canvas.items[bout.target] && !takeRefusal(canvas, bout) && (
                     // Taken already when the screen's current bytes ARE the
                     // winner's — a second press would stack an identical version.
                     currentHash(canvas.items[bout.target]!) === currentHash(tally.decided) ? (

@@ -124,6 +124,13 @@ export const EXACT_PROPS = {
   verified: "exact.verified",
   /** On a test file: what the person's Keep of a recording wrote — `{version, ok, sha256, test, at, error?}`. */
   written: "exact.written",
+  /** Exact phase 6 (`proposal.ts`): an ask on a screen, its answer, a proposal item's record, and what a Keep did. */
+  propose: "exact.propose",
+  proposed: "exact.proposed",
+  proposal: "exact.proposal",
+  accepted: "exact.accepted",
+  /** On a screen captured from a branch: `{ref, commit, route, host, device, scheme, beside}` (`branch.ts`). */
+  branch: "exact.branch",
 } as const;
 
 /** One visible node of a capture: its box in the capture's CSS pixels, the line that drew it, and the styles that line names. */

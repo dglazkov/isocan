@@ -14,6 +14,10 @@
  *   node scripts/exact-bridge.mjs drive   --app <dir> --report <file.json> --dir <out> --job <drive.json> [--sim <udid>]
  *   node scripts/exact-bridge.mjs film    --app <dir> --report <file.json> --dir <out> --job <film.json> [--sim <udid>]
  *   node scripts/exact-bridge.mjs facts   --app <dir> --report <file.json> --job <facts.json> [--sim <udid>]
+ *   node scripts/exact-bridge.mjs propose --app <dir> --report <file.json> --dir <out> --job <propose.json> --dev-url <loop> [--sim <udid>]
+ *   node scripts/exact-bridge.mjs accept  --app <dir> --report <file.json> --job <accept.json> --dev-url <loop>
+ *   node scripts/exact-bridge.mjs drop    --app <dir> --report <file.json> --job <drop.json> --dev-url <loop>
+ *   node scripts/exact-bridge.mjs stage-branch --app <dir> --report <file.json> --ref <git ref | directory>
  *   node scripts/exact-bridge.mjs run     --app <dir> --report <file.json> --dir <out> --job <run.json> [--sim <udid>]
  *   node scripts/exact-bridge.mjs record  --app <dir> --report <file.json> --job <record.json> [--sim <udid>]
  *   node scripts/exact-bridge.mjs verify  --app <dir> --report <file.json> --host web|ios [--sim <udid>]
@@ -39,7 +43,7 @@
  */
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, accessSync, constants } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync, accessSync, constants } from "node:fs";
 import { createServer } from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -51,13 +55,23 @@ const flag = (name) => {
 };
 const flags = (name) => argv.flatMap((a, i) => (a === name && argv[i + 1] !== undefined ? [argv[i + 1]] : []));
 
-if (!["doctor", "read", "capture", "inputs", "diagnose", "check", "compare", "drive", "film", "facts", "run", "record", "verify"].includes(verb ?? "") || !flag("--app") || !flag("--report")) {
+if (!["doctor", "read", "capture", "inputs", "diagnose", "check", "compare", "drive", "film", "facts", "run", "record", "verify", "propose", "accept", "drop", "stage-branch"].includes(verb ?? "") || !flag("--app") || !flag("--report")) {
   console.error("usage: exact-bridge.mjs doctor|read|capture|inputs|diagnose|check --app <dir> --report <file.json> [--hosts web,ios] [--jobs <jobs.json>] [--dir <out> --size <w>x<h> --url <path>…]");
   process.exit(2);
 }
 
 const app = path.resolve(flag("--app"));
 const report = path.resolve(flag("--report"));
+/**
+ * **The web build this bridge drives, kept apart from the dev loop's** (exact
+ * phase 6). A `web-build` into the app's own web dist leaves the running dev
+ * loop's pages deaf to Tamber — measured 14 Nov 2026 (Exact cbe553f6): after
+ * one, a scrub reached the iOS app joined to the loop and not one web page,
+ * and phase 3 saw `inspect` break the same way. Exact's `EXACT_WEB_DIST` names
+ * another dist for `web-build` and the web driver alike, so every capture,
+ * drive, film and inspection builds and serves one of its own, per app.
+ */
+if (!process.env.EXACT_WEB_DIST) process.env.EXACT_WEB_DIST = path.join(os.tmpdir(), "isocan-exact-web", createHash("sha256").update(app).digest("hex").slice(0, 12));
 const launcher = path.join(app, "exact.mjs");
 if (!existsSync(launcher)) fail(`${app} has no exact.mjs — is it an Exact app? (\`bun <exact>/scripts/exact.mjs new <dir>\` makes one)`);
 
@@ -246,7 +260,7 @@ async function read() {
   const { dir } = checkout();
   const inputs = inputsDigest(dir);
   const build = exact(["web-build"]);
-  const dist = path.join(app, "target", "web-dist");
+  const dist = process.env.EXACT_WEB_DIST;
   const routesFile = path.join(dist, "routes.json");
   if (!existsSync(routesFile)) fail(`web-build wrote no ${routesFile} — Exact changed where its routes go`);
   const symbols = exact(["contract", "symbols", "app.contract"]);
@@ -979,8 +993,369 @@ function check() {
   return { checks: out };
 }
 
+// ---------------------------------------------------------------- proposals (exact phase 6; design §10)
+
+/**
+ * **The operations a proposal may carry** — a closed list of Tamber's own
+ * (`docs/tamber-protocol.md`, Operations): a token's value, a row of a style
+ * or at a place, a state part's row. Anything else is refused before the wire
+ * sees it: these come off a canvas, from whoever asked.
+ */
+const PROPOSAL_OPS = new Set(["set-token", "set-row", "set-state"]);
+function checkProposalOps(ops) {
+  if (!Array.isArray(ops) || ops.length === 0 || ops.length > 32) fail("a proposal carries one to 32 operations");
+  for (const op of ops) {
+    if (!op || typeof op !== "object" || !PROPOSAL_OPS.has(op.op)) fail(`a proposal's operation is one of ${[...PROPOSAL_OPS].join(", ")}, not ${JSON.stringify(op?.op)}`);
+    for (const [k, v] of Object.entries(op)) {
+      if (!["op", "name", "value", "when", "style", "row", "state", "file", "at", "sha256", "comment"].includes(k)) fail(`a proposal's ${op.op} carries no field ${JSON.stringify(k)}`);
+      if (typeof v === "string" && (v.length > 400 || /[\n\r\0]/.test(v))) fail(`a proposal's ${op.op}.${k} is one short line`);
+    }
+    if (op.file !== undefined && (typeof op.file !== "string" || op.file.startsWith("/") || op.file.includes(".."))) fail(`a proposal names a file of the app, not ${JSON.stringify(op.file)}`);
+  }
+}
+
+/** The dev loop's Tamber wire, through its local token (loopback only): the person's own bridge, `write`. */
+async function wireOf() {
+  const dev = flag("--dev-url");
+  if (!dev || !/^http:\/\/127\.0\.0\.1:\d+\/?$/.test(dev)) fail("a proposal is held by the dev loop's Tamber wire, and this `isocan exact live` runs no dev loop — start it without --no-frames");
+  const base = dev.replace(/\/$/, "");
+  let token = null;
+  try { const r = await fetch(`${base}/__tamber/token`, { redirect: "error" }); if (r.ok) token = (await r.json()).token; } catch { /* no wire */ }
+  if (!token) fail(`the dev loop at ${base} mounts no Tamber wire (an app with no app.tamber has none)`);
+  const ask = async (body, tok = token) => {
+    const r = await fetch(`${base}/__tamber`, { method: "POST", headers: { "content-type": "application/json", "x-exact-tamber-token": tok }, body: JSON.stringify(body) });
+    return { status: r.status, answer: await r.json().catch(() => null) };
+  };
+  return { base, token, ask };
+}
+
+/** The wire's refusal in words: its message, and the checker's first diagnostics (which row, and why). */
+const wireError = (r) => {
+  const e = r.answer?.error;
+  if (!e) return `the wire answered ${r.status}`;
+  const diags = Array.isArray(e.diagnostics) ? e.diagnostics.slice(0, 3).map((d) => `${d.file}:${d.line}:${d.col} ${d.message}`) : [];
+  return [e.message ?? JSON.stringify(e).slice(0, 300), ...diags].join(" — ");
+};
+
+/** Wait, in a script that has nothing else to do meanwhile. */
+function idle(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
+/** `{url, ops}` from a screen's shots, checked as a capture's are. */
+function whereOf(shotsText) {
+  let url = null;
+  const ops = [];
+  for (const raw of String(shotsText ?? "").split("\n")) {
+    const line = raw.trim();
+    if (!line || line.startsWith("//")) continue;
+    const at = /^at\s+"([^"]*)"$/.exec(line);
+    if (at && url === null) { url = at[1]; continue; }
+    ops.push(line);
+  }
+  if (!url) fail("a preview starts where the screen's shots say: one at \"<path>\" first");
+  checkJob({ host: "web", url, ops, shots: [] });
+  return { url, ops };
+}
+
+/**
+ * **A live-class proposal, previewed as a scrub** (exact phase 0, fact 3: a
+ * held proposal does not render; a scrub does, writing nothing). One session
+ * per host, each joined to the dev loop — the web page at the loop's address,
+ * the iOS app with `--url <loop>` — so both are builds on the loop's live
+ * table. Each scheme in turn: every device pictured, then the scrub opened
+ * with the proposal's operations and every device pictured again, then
+ * `scrub-cancel` and every device pictured a third time. The sessions wait on
+ * `clock +N real until <file>`, Exact's own harness signal, between the three.
+ *
+ * Measured 14 Nov 2026 (Exact cbe553f6): on iOS a `prefer color-scheme` while
+ * a scrub is open drops the scrub's frame, so each scheme opens its own scrub.
+ */
+async function scrubPreview(wire, out, job, files, sim) {
+  const where = whereOf(job.shots);
+  const devices = (job.devices ?? []).filter((d) => /^\d{2,4}x\d{2,4}$/.test(d.size ?? ""));
+  const schemes = (job.schemes ?? ["light", "dark"]).filter((s) => s === "light" || s === "dark");
+  const hosts = ["web", ...(job.ios && sim ? ["ios"] : [])];
+  const client = "isocan-preview";
+  const presence = new AbortController();
+  fetch(`${wire.base}/__tamber/subscribe`, { method: "POST", headers: { "content-type": "application/json", "x-exact-tamber-token": wire.token }, body: JSON.stringify({ client }), signal: presence.signal }).catch(() => {});
+  const signal = (s, which) => path.join(out, `go-${s}-${which}`);
+  const shot = (host, device, s, phase) => path.join(out, `${host}-${device}-${s}-${phase}.png`);
+  const iosDevice = "phone";
+  const phaseOps = (host, s, phase) => host === "web"
+    ? devices.flatMap((d) => [`resize ${d.size}`, "clock settle", `screenshot ${shot("web", d.device, s, phase)}`])
+    : ["clock settle", `screenshot ${shot("ios", iosDevice, s, phase)}`];
+  const tail = (host) => schemes.flatMap((s) => [
+    `prefer color-scheme ${s}`,
+    ...phaseOps(host, s, "before"), `clock +600000 real until ${signal(s, "on")}`,
+    ...phaseOps(host, s, "during"), `clock +600000 real until ${signal(s, "off")}`,
+    ...phaseOps(host, s, "after"),
+  ]);
+  const fixed = ["--json", "--seed", "1", "--locale", "en-US", "--time-zone", "UTC", "--epoch", "2026-01-01"];
+  const kids = {};
+  const start = (host, args, env) => {
+    const child = spawn("/bin/sh", [launcher, "agent", host, ...args], { cwd: app, env: { ...process.env, ...env }, stdio: ["ignore", "pipe", "pipe"], detached: true });
+    let said = "";
+    child.stdout.on("data", (d) => { said = (said + d).slice(-6000); });
+    child.stderr.on("data", (d) => { said = (said + d).slice(-6000); });
+    const done = new Promise((r) => child.on("close", (code) => r(code)));
+    kids[host] = { child, said: () => said, done };
+  };
+  const errors = [];
+  let scrubId = null;
+  try {
+    const first = devices[0]?.size ?? "390x844";
+    start("web", [...fixed, "--size", first, "--url", `${wire.base}${where.url}`, "clock data", ...where.ops, ...tail("web")], {});
+    if (hosts.includes("ios")) {
+      const root = rootOf();
+      if (where.url !== "/" && !root) fail("an iOS preview opens the screen by typing its path into the node that carries navigate=, and app.contract names none with a testId");
+      start("ios", [...fixed, "--url", wire.base, "clock data", ...(where.url !== "/" ? [`type ${root} ${where.url}`, "clock settle"] : []), ...where.ops, ...tail("ios")], { EXACT_SIM: sim, EXACT_SHOW_SIMULATOR: "0" });
+    }
+    const files_ = (s, phase) => hosts.flatMap((h) => (h === "web" ? devices.map((d) => shot("web", d.device, s, phase)) : [shot("ios", iosDevice, s, phase)]));
+    const until = async (paths, what, ms) => {
+      const t0 = Date.now();
+      let kept = Date.now();
+      while (!paths.every((p) => existsSync(p))) {
+        for (const h of hosts) if (kids[h].child.exitCode !== null) throw new Error(`the ${h} preview ended before ${what}: ${kids[h].said().trim().split("\n").filter((l) => !l.startsWith("{")).slice(-3).join(" | ")}`);
+        if (Date.now() - t0 > ms) throw new Error(`no ${what} after ${Math.round(ms / 1000)} s`);
+        // A scrub with no update for 30 s ends itself: the same frame again keeps it open while the pictures are taken.
+        if (scrubId && Date.now() - kept > 10_000) { kept = Date.now(); await wire.ask({ method: "scrub", client, ops: job.ops, files, scrub: scrubId }); }
+        await idle(250);
+      }
+      await idle(400); // the file is written; let the driver close it
+    };
+    for (const s of schemes) {
+      await until(files_(s, "before"), `the ${s} pictures before`, 900_000);
+      const opened = await wire.ask({ method: "scrub", client, ops: job.ops, files });
+      if (!opened.answer?.ok) throw new Error(`the scrub was refused: ${wireError(opened)}`);
+      scrubId = opened.answer.ok.scrub;
+      await idle(2500);
+      writeFileSync(signal(s, "on"), "");
+      await until(files_(s, "during"), `the ${s} pictures with the proposal`, 300_000);
+      const cancelled = await wire.ask({ method: "scrub-cancel", client, scrub: scrubId });
+      scrubId = null;
+      if (!cancelled.answer?.ok) errors.push(`scrub-cancel answered ${cancelled.status}: ${wireError(cancelled)}`);
+      await idle(2500);
+      writeFileSync(signal(s, "off"), "");
+      await until(files_(s, "after"), `the ${s} pictures after the scrub`, 300_000);
+    }
+    for (const h of hosts) await Promise.race([kids[h].done, idle(30_000)]);
+  } catch (err) {
+    errors.push(err.message);
+  } finally {
+    if (scrubId) await wire.ask({ method: "scrub-cancel", client, scrub: scrubId }).catch(() => {});
+    presence.abort();
+    for (const k of Object.values(kids)) { try { process.kill(-k.child.pid, "SIGTERM"); } catch { /* gone */ } }
+  }
+  const previews = [];
+  for (const h of hosts) for (const s of schemes) for (const d of h === "web" ? devices.map((x) => x.device) : [iosDevice]) {
+    const before = shot(h, d, s, "before"), after = shot(h, d, s, "during"), restored = shot(h, d, s, "after");
+    if (!existsSync(before) || !existsSync(after)) continue;
+    const b = readFileSync(before), a = readFileSync(after);
+    previews.push({ host: h, device: d, scheme: s, before, after, beforeSha256: sha256(b), afterSha256: sha256(a), png: pngSize(a), restored: existsSync(restored) ? sha256(readFileSync(restored)) === sha256(b) : null });
+  }
+  return { how: "scrub", previews, errors };
+}
+
+/**
+ * **A rebuild-class proposal, previewed in a staged copy** (Exact Design's
+ * fallback; design §10). The app's own files are only read: a staging
+ * directory of this bridge's own — one per app, kept between previews so its
+ * native build is reused (a cloned `target` is refused by Exact: a build knows
+ * the directory it was made in) — is made the app's sources as they are now
+ * and pictured cold, as `open` pictures a screen; then the proposal's texts —
+ * what `propose` with `texts` said it would write — are written into it,
+ * compiled with `--json --errors-only`, and pictured again. The first iOS
+ * picture there builds the app once (about two minutes, measured 14 Nov 2026);
+ * later ones re-bake the plan.
+ */
+async function stagedPreview(out, job, texts, sim) {
+  const where = whereOf(job.shots);
+  const devices = (job.devices ?? []).filter((d) => /^\d{2,4}x\d{2,4}$/.test(d.size ?? ""));
+  const schemes = (job.schemes ?? ["light", "dark"]).filter((s) => s === "light" || s === "dark");
+  const self = new URL(import.meta.url).pathname;
+  const errors = [];
+  const staging = path.join(os.tmpdir(), "isocan-exact-staging", sha256(app).slice(0, 12));
+  mkdirSync(staging, { recursive: true });
+  // The app's sources as they are now; the staging directory's own build state (target, .exact) is left as it is.
+  const sync = spawnSync("rsync", ["-a", "--delete", "--exclude", "/target", "--exclude", "/.exact", "--exclude", "/node_modules", `${app}/`, `${staging}/`], { encoding: "utf8" });
+  if (sync.status !== 0) fail(`could not stage the app's sources: ${(sync.stderr || "").trim()}`);
+  const jobs = [{ host: "web", url: where.url, ops: where.ops, shots: devices.flatMap((d) => schemes.map((s) => ({ size: d.size, scheme: s }))) }];
+  if (job.ios && sim) jobs.push({ host: "ios", url: where.url, ops: where.ops, shots: schemes.map((s) => ({ size: "402x874", scheme: s })) });
+  const launcherIn = path.join(staging, "exact.mjs");
+  // The staging copy's own web dist, apart from the app's captures'.
+  const stagedEnv = { ...process.env, EXACT_WEB_DIST: `${staging}-web` };
+  const pictures = {};
+  for (const side of ["before", "after"]) {
+    if (side === "after") {
+      for (const [rel, text] of Object.entries(texts ?? {})) {
+        if (rel.startsWith("/") || rel.split(/[\\/]/).includes("..")) fail(`the wire named a file outside the app: ${rel}`);
+        writeFileSync(path.join(staging, rel), text);
+      }
+      if (existsSync(path.join(staging, "app.contract"))) {
+        const built = spawnSync("/bin/sh", [launcherIn, "contract", "build", "app.contract", "--json", "--errors-only"], { cwd: staging, encoding: "utf8", maxBuffer: 64 << 20 });
+        let diags = [];
+        try { diags = JSON.parse((built.stdout || "[]").trim().split("\n").filter((l) => l.startsWith("[")).at(-1) ?? "[]"); } catch { /* none read */ }
+        const bad = diags.filter((d) => !d.severity || d.severity === "error");
+        if (built.status !== 0 || bad.length) return { how: "staged", previews: [], errors: [`the proposed text does not build: ${bad[0] ? `${bad[0].file}:${bad[0].line}:${bad[0].col} ${bad[0].message}` : (built.stderr || "").trim().split("\n").at(-1)}`] };
+      }
+    }
+    // The web driver serves the last web build of the directory it runs in.
+    const wb = spawnSync("/bin/sh", [launcherIn, "web-build"], { cwd: staging, encoding: "utf8", maxBuffer: 64 << 20, timeout: 600_000, env: stagedEnv });
+    if (wb.status !== 0) { errors.push(`web-build in the staged copy (${side}) failed: ${(wb.stderr || wb.stdout || "").trim().split("\n").at(-1)}`); continue; }
+    const jobsFile = path.join(out, `jobs-${side}.json`), rep = path.join(out, `capture-${side}.json`), shots = path.join(out, side);
+    writeFileSync(jobsFile, JSON.stringify(jobs));
+    const run = spawnSync(process.execPath, [self, "capture", "--app", staging, "--report", rep, "--dir", shots, "--jobs", jobsFile, ...(sim ? ["--sim", sim] : [])], { encoding: "utf8", maxBuffer: 64 << 20, timeout: 1_800_000, env: stagedEnv });
+    if (run.status !== 0 || !existsSync(rep)) { errors.push(`the staged copy's capture (${side}) failed: ${(run.stderr || "").trim().split("\n").slice(-2).join(" | ")}`); continue; }
+    pictures[side] = JSON.parse(readFileSync(rep, "utf8")).shots;
+  }
+  const previews = [];
+  for (const a of pictures.after ?? []) {
+    const b = (pictures.before ?? []).find((x) => x.job === a.job && x.index === a.index);
+    if (!b) continue;
+    const device = a.host === "web" ? (devices.find((d) => d.size === a.size)?.device ?? a.size) : "phone";
+    previews.push({ host: a.host, device, scheme: a.scheme, before: b.file, after: a.file, beforeSha256: b.sha256, afterSha256: a.sha256, png: a.png, restored: null });
+  }
+  return { how: "staged", previews, errors };
+}
+
+/**
+ * **A proposal, held and pictured** (exact phase 6; design §10). The asker's
+ * scope is the CLI's to say — `propose` for an agent, `write` for a person who
+ * may edit the canvas — and the wire enforces it: an agent's proposal is sent
+ * with a token of its own, paired at `propose` scope, which the wire refuses
+ * an `accept` (asked once here, and the 403 recorded). Then the preview, by
+ * the class the wire gave it: a scrub, or staged copies. Nothing is written
+ * to the app: only a person's Keep, through `accept`, does that.
+ */
+async function proposeJob(out, job) {
+  mkdirSync(out, { recursive: true });
+  checkProposalOps(job.ops);
+  if (!["propose", "write"].includes(job.scope)) fail(`a proposal's scope is propose or write, not ${JSON.stringify(job.scope)}`);
+  const name = String(job.name ?? "someone").replace(/[^A-Za-z0-9_.-]+/g, "-").slice(0, 40) || "someone";
+  const started = Date.now();
+  const wire = await wireOf();
+  const hello = await wire.ask({ method: "hello" });
+  if (!hello.answer?.ok) return { ok: false, error: `hello: ${wireError(hello)}` };
+  const files = hello.answer.ok.files;
+  let token = wire.token, client = `person:${name}`, scopeCheck = null;
+  if (job.scope === "propose") {
+    // Tamber's own pairing, minted by the local token: a client of its own, at `propose` scope, never `write`.
+    const code = await wire.ask({ method: "pair-code", scope: "propose", name: `isocan-${name}` });
+    if (!code.answer?.ok?.code) return { ok: false, error: `pair-code: ${wireError(code)}` };
+    const pr = await fetch(`${wire.base}/__tamber/pair`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code: code.answer.ok.code, name: `isocan-${name}` }) });
+    const paired = await pr.json().catch(() => null);
+    if (!paired?.ok?.token && !paired?.token) return { ok: false, error: `pair: ${pr.status} ${JSON.stringify(paired).slice(0, 200)}` };
+    const p = paired.ok ?? paired;
+    token = p.token;
+    client = p.client;
+    if (p.scope !== "propose") return { ok: false, error: `the wire paired this agent at ${p.scope}, not propose` };
+  }
+  const held = await wire.ask({ method: "propose", ops: job.ops, files, hold: true, client, texts: true }, token);
+  if (!held.answer?.ok) return { ok: false, scope: job.scope, client, error: `the wire refused the proposal: ${wireError(held)}`, diagnostics: held.answer?.error?.diagnostics ?? null };
+  const plan = held.answer.ok;
+  if (job.scope === "propose") {
+    const tried = await wire.ask({ method: "accept", proposal: plan.proposal, client }, token);
+    scopeCheck = { status: tried.status, scope: tried.answer?.error?.scope ?? null, needs: tried.answer?.error?.needs ?? null, message: wireError(tried) };
+  }
+  const sim = job.ios ? (flag("--sim") && /^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/i.test(flag("--sim")) ? simulator([{ host: "ios" }]) : null) : null;
+  let texts = plan.texts ?? null;
+  if (plan.class !== "live" && !texts) {
+    // A held proposal's reply carries no texts (Exact cbe553f6): the same plan asked again, unheld, says what it writes.
+    const again = await wire.ask({ method: "propose", ops: job.ops, files, client, texts: true }, token);
+    texts = again.answer?.ok?.texts ?? null;
+    if (!texts) return { ok: false, proposal: plan.proposal, client, scope: job.scope, class: plan.class, error: `the wire would not say what the proposal writes: ${wireError(again)}` };
+  }
+  const preview = plan.class === "live" ? await scrubPreview(wire, out, job, files, sim) : await stagedPreview(out, job, texts, sim);
+  return {
+    ok: preview.previews.length > 0 && preview.errors.length === 0,
+    proposal: plan.proposal, client, scope: job.scope, class: plan.class, changed: plan.changed ?? [], diff: plan.diff ?? null,
+    files: plan.files ?? files, expires: plan.expires ?? null, ops: plan.ops ?? null, scopeCheck,
+    how: preview.how, previews: preview.previews, ms: Date.now() - started,
+    ...(preview.errors.length ? { error: preview.errors.join("; ") } : {}),
+  };
+}
+
+/**
+ * **A person's Keep, written** — Tamber's `accept` of the held proposal, with
+ * the local token (`write`: the person who started this bridge, whose Keep
+ * the canvas recorded). A held proposal lives 15 minutes and dies with the
+ * loop; one gone is held again from the operations and digests it was made
+ * against, and accepted — the wire's digests still refuse a file that moved.
+ */
+async function acceptJob(job) {
+  checkProposalOps(job.ops);
+  const wire = await wireOf();
+  const client = `person:${String(job.name ?? "someone").replace(/[^A-Za-z0-9_.-]+/g, "-").slice(0, 40)}`;
+  let r = job.proposal ? await wire.ask({ method: "accept", proposal: job.proposal, client }) : { status: 404, answer: null };
+  let again = null;
+  if (r.status === 404) {
+    const held = await wire.ask({ method: "propose", ops: job.ops, files: job.files, hold: true, client });
+    if (!held.answer?.ok) return { ok: false, error: `the proposal had gone from the wire, and holding it again was refused: ${wireError(held)}` };
+    again = held.answer.ok.proposal;
+    r = await wire.ask({ method: "accept", proposal: again, client });
+  }
+  const ok = r.answer?.ok;
+  if (!ok) return { ok: false, heldAgain: again, error: `accept: ${wireError(r)}`, stale: r.answer?.error?.stale ?? null };
+  if (ok.recomputed) return { ok: false, heldAgain: again, error: "a file moved since the proposal was made, so the wire put it up again rather than write it — ask for the proposal again" };
+  return { ok: true, heldAgain: again, written: ok.written ?? [], before: ok.before ?? null, files: ok.files ?? null, class: ok.class ?? null };
+}
+
+/** A proposal taken away without a Keep: forgotten on the wire (already gone is the same answer). */
+async function dropJob(job) {
+  const wire = await wireOf();
+  if (!job.proposal) return { ok: true, dropped: null };
+  const r = await wire.ask({ method: "drop", proposal: job.proposal, client: "isocan" });
+  return { ok: !!r.answer?.ok || r.status === 404, dropped: r.answer?.ok?.dropped ?? null, status: r.status };
+}
+
+/**
+ * **A branch, staged beside the app** (exact phase 6; design §10's structural
+ * edits): the tree of a git ref of the app's repository (`git archive`, which
+ * writes nothing to the repository or the working tree), or a directory the
+ * person named (a worktree of their own), copied into a staging directory of
+ * this bridge's own — never the person's checkout. The CLI reads and captures
+ * it there, as it does the app.
+ */
+function stageBranch() {
+  const ref = flag("--ref");
+  if (!ref || ref.startsWith("-") || /[\0\n]/.test(ref)) fail("a branch is a git ref of the app's repository, or a directory");
+  const staging = path.join(os.tmpdir(), "isocan-exact-branch", sha256(app).slice(0, 12));
+  mkdirSync(staging, { recursive: true });
+  const keep = ["--exclude", "/target", "--exclude", "/.exact", "--exclude", "/node_modules", "--exclude", "/.git"];
+  const asDir = path.resolve(ref);
+  let commit = null, from = null;
+  if (existsSync(path.join(asDir, "exact.mjs"))) {
+    if (asDir === app) fail("that directory is the app itself; name a branch or another worktree");
+    from = asDir;
+    const r = spawnSync("rsync", ["-a", "--delete", ...keep, `${asDir}/`, `${staging}/`], { encoding: "utf8" });
+    if (r.status !== 0) fail(`could not stage ${asDir}: ${(r.stderr || "").trim()}`);
+  } else {
+    if (!/^[A-Za-z0-9._/@^~-]{1,200}$/.test(ref)) fail(`${JSON.stringify(ref)} is neither a directory with an exact.mjs nor a git ref`);
+    commit = git(app, ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`]);
+    if (!commit) fail(`${ref} is not a commit of the repository ${app} is in (and not a directory with an exact.mjs)`);
+    const prefix = git(app, ["rev-parse", "--show-prefix"]) ?? "";
+    const tar = spawnSync("git", ["-C", app, "archive", "--format=tar", `${commit}:${prefix}`], { maxBuffer: 1 << 30 });
+    if (tar.status !== 0) fail(`git archive ${ref} failed: ${String(tar.stderr).trim()}`);
+    const tmp = mkdtempSync(path.join(os.tmpdir(), "isocan-exact-branch-tree-"));
+    try {
+      const x = spawnSync("tar", ["-x", "-C", tmp], { input: tar.stdout });
+      if (x.status !== 0) fail(`could not unpack ${ref}: ${String(x.stderr).trim()}`);
+      const r = spawnSync("rsync", ["-a", "--delete", ...keep, `${tmp}/`, `${staging}/`], { encoding: "utf8" });
+      if (r.status !== 0) fail(`could not stage ${ref}: ${(r.stderr || "").trim()}`);
+    } finally {
+      spawnSync("rm", ["-rf", tmp]);
+    }
+    // The launcher names the Exact checkout relative to where `exact new` ran; a staged tree keeps the app's own.
+    if (!existsSync(path.join(staging, "exact.mjs"))) writeFileSync(path.join(staging, "exact.mjs"), readFileSync(launcher));
+  }
+  return { staging, ref, commit, from };
+}
+
 const result =
-  verb === "run" ? runJob(path.resolve(flag("--dir") ?? fail("run needs --dir")), JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("run needs --job")), "utf8")))
+  verb === "stage-branch" ? stageBranch()
+  : verb === "propose" ? await proposeJob(path.resolve(flag("--dir") ?? fail("propose needs --dir")), JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("propose needs --job")), "utf8")))
+  : verb === "accept" ? await acceptJob(JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("accept needs --job")), "utf8")))
+  : verb === "drop" ? await dropJob(JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("drop needs --job")), "utf8")))
+  : verb === "run" ? runJob(path.resolve(flag("--dir") ?? fail("run needs --dir")), JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("run needs --job")), "utf8")))
   : verb === "record" ? recordJob(JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("record needs --job")), "utf8")))
   : verb === "verify" ? verifyJob()
   : verb === "film" ? filmJob(path.resolve(flag("--dir") ?? fail("film needs --dir")), JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("film needs --job")), "utf8")))

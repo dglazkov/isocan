@@ -31,6 +31,7 @@ import { pendingDrives, pendingFilms, pendingInspects, type DriveAnswer, type Dr
 import { filmKeyText, filmTitle, landFilm, parseFilm, type FilmAnswer, type FilmAsk, type FilmFacts, type FilmJob, type FilmReport, type InspectAnswer, type InspectRequest, type ScreenFacts } from "./film.ts";
 import { answerRecord, answerRun, pendingAsks, pendingRecords, runLine, runOnHost, storyItemOf, syncStories, verifyOnHost, writeKept, type Kit, type RunOptions } from "./stories.ts";
 import { parseVerifyAsk, type RunReport, type VerifyAnswer } from "./story.ts";
+import { answerPropose, pendingProposes, proposeVerb, settleKept, type ProposeOptions } from "./proposals.ts";
 import { HOST_NAMES, NATIVE_DEVICE, UDID, compareFindings, jobSize, nativeCellWidth, nativeOffset, nativeSize, parseHosts, wallCells, wallSize, wallText, wallsOf, type CompareReport, type Host, type Wall } from "./hosts.ts";
 
 /**
@@ -720,6 +721,17 @@ async function serveDrives(host: CliHost, ctx: Ctx, canvasId: string, app: strin
       await host.sendOp(ctx, canvasId, { type: "item.update", itemId: item.id, patch: { properties: { [core.EXACT_PROPS.recorded]: JSON.stringify(answer) } } }, id("exact-record"));
     }
     await writeKept(host, ctx, canvasId, app, appId, entries, snapshot, say);
+    // Agents propose (exact phase 6): asks held on the wire at the asker's scope and pictured; a person's Keep accepted.
+    for (const pending of pendingProposes(entries, snapshot, appId)) {
+      if (signal.aborted) return;
+      const words = pending.ask.ops.map((o) => (o.op === "set-token" ? `${o.name}=${o.value}` : `${o.op} ${"style" in o && o.style ? `${o.style}.` : ""}${o.row}=${o.value}`)).join(", ");
+      say(`proposal from ${pending.actor.name} on ${pending.item.title}: ${words}`);
+      const answer = await answerPropose(kit, host, ctx, canvasId, app, { hosts: options.hosts, sim: options.sim }, pending);
+      say(`proposal: ${answer.ok ? `${answer.itemId} (${answer.class}, ${answer.previews} pictures, ${answer.client} at ${answer.scope}${answer.scopeCheck ? `; its accept refused ${answer.scopeCheck.status} needs ${answer.scopeCheck.needs}` : ""}) in ${answer.ms} ms` : answer.error}`);
+      await host.sendOp(ctx, canvasId, { type: "item.update", itemId: pending.item.id, patch: { properties: { [core.EXACT_PROPS.proposed]: JSON.stringify(answer) } } }, id("exact-propose"));
+    }
+    const settledSnapshot = await ctx.client.snapshot(canvasId);
+    await settleKept(kit, host, ctx, canvasId, app, appId, entries, settledSnapshot, say);
     // Inspections asked for the same way (exact phase 4): the driver's facts for one screen, as a JSON blob.
     for (const { item, request } of pendingInspects(entries, snapshot.canvas, appId)) {
       if (signal.aborted) return;
@@ -1000,4 +1012,15 @@ export async function verifyApp(host: CliHost, given: string, opts: { hosts?: st
     for (const p of h.posted) console.log(`  ${p.itemId}  ${p.shot} (${p.status})`);
     for (const u of h.unmatched) console.log(`  not placed: ${u.shot} — ${u.why}`);
   }
+}
+
+/** `isocan exact propose <screen>` (exact phase 6): an ask on the screen; `isocan exact live` holds and pictures it. */
+export async function propose(host: CliHost, ref: string, opts: ProposeOptions, cmd: Command): Promise<void> {
+  return proposeVerb(host, ref, opts, cmd);
+}
+
+/** `isocan exact branch <app> <ref|dir>` (exact phase 6): a branch's screens captured in a staging copy, beside the current. */
+export async function branch(host: CliHost, given: string, ref: string, opts: import("./branch.ts").BranchOptions, cmd: Command): Promise<void> {
+  const { branchVerb } = await import("./branch.ts");
+  return branchVerb(kit, host, given, ref, opts, cmd);
 }

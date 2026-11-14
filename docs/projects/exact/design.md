@@ -344,6 +344,18 @@ proposals that a `write` client may `accept`, `drop`, `edit-held` or
   and the shared vote curtain decide between them; **Accept** is Tamber's
   `accept`, after which every live frame updates and the proposal item
   becomes the version that recorded it.
+
+**Built 14 Nov 2026 (exact phase 6):** an enrolled agent pairs at `propose`,
+anyone else the canvas lets write at `write`. `isocan exact propose
+<screen>` writes `exact.propose`; `isocan exact live` holds it on the wire,
+pictures it (scrub then `scrub-cancel` for live-class, a staging copy for
+rebuild-class) on web phone, tablet and desktop in both schemes and on iOS,
+and posts a proposal item whose versions are the pictures. Keep is core's
+choose, which `live` turns into Tamber's `accept`. Design-competition bouts
+on an Exact screen take proposals as entries. The design-system item's
+token chips scrub every live frame, web and the iOS simulator's. `isocan
+exact branch` captures a git ref in a staging copy beside the current
+screens.
 - **Token scrubbing** — dragging a token on the design-system item is a
   Tamber scrub session: every registered build updates with no reload (the
   live table), on every host, until release, then `commit` or `cancel`.

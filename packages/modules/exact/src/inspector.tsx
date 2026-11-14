@@ -44,6 +44,17 @@ const seen = { selection: [] as readonly string[], readText: null as ((hash: str
 const listeners = new Set<() => void>();
 const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l); }; };
 
+/** This viewer's selection, re-rendering when it moves (the token panel, exact phase 6, reads it too). */
+export function useSelection(): readonly string[] {
+  useSyncExternalStore(subscribe, () => seen.version);
+  return seen.selection;
+}
+
+/** Read one of the canvas's files by its hash, through the reader the underlay was handed; null when this view has none. */
+export function readBlob(hash: string): Promise<string> | null {
+  return seen.readText ? seen.readText(hash) : null;
+}
+
 /** The underlay that hands the panel this viewer's selection. Draws nothing. */
 export function SelectionWatch({ selection, readText }: UnderlayFacts) {
   const ids = selection ?? [];

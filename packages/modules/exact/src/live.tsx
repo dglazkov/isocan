@@ -44,7 +44,7 @@ import { parseRecordAnswer } from "./story.ts";
 
 // ---------------------------------------------------------------- shared state
 
-interface Hello { app: { id: string; name: string }; dir: string; frames: number | null; loop: string; tamber: boolean; design: { port: number; up: boolean }; drive?: { hosts: string[] }; seq: number }
+interface Hello { app: { id: string; name: string }; dir: string; frames: number | null; loop: string; tamber: boolean; design: { port: number; up: boolean }; drive?: { hosts: string[] }; scrub?: boolean; native?: string[]; seq: number }
 
 interface Selection {
   /** The bridge it came from, or null: pointed at on a capture, from the screen's own `exact.points`, with no bridge asked. */
@@ -322,8 +322,11 @@ export function ExactScreen(facts: RendererFacts) {
   const device = item?.properties?.[EXACT_PROPS.device] ?? "phone";
   const scheme = item?.properties?.[EXACT_PROPS.scheme] === "dark" ? "dark" : "light";
   const path = item?.properties?.[EXACT_PROPS.url] ?? "/";
-  // A native window cannot be framed (design §7): only a web screen goes Live; every host drives.
+  // A native window cannot be framed (design §7): a web screen goes Live as the dev page; an iOS screen as the app on the
+  // bridge's own simulator, joined to the loop and pictured as it runs (exact phase 6). Every host drives.
   const showFrame = host === "web" && open && live && near && bridge?.hello.frames && !driving;
+  const nativeLive = host === "ios" && !!bridge?.hello.native?.includes("ios");
+  const showNative = nativeLive && open && live && near && !driving;
   const drives = !!bridge?.hello.drive?.hosts.includes(host);
   useEffect(() => { state.screens++; installKeys(); return () => { state.screens--; }; }, []);
   const points = parsePoints(item?.properties?.[EXACT_PROPS.points]);
@@ -366,18 +369,20 @@ export function ExactScreen(facts: RendererFacts) {
   };
 
   return (
-    <div ref={ref} className="exact-screen" data-exact-screen={driving ? "drive" : live && open && host === "web" ? "live" : "still"} data-exact-host={host}>
+    <div ref={ref} className="exact-screen" data-exact-screen={driving ? "drive" : live && open && (host === "web" || nativeLive) ? "live" : "still"} data-exact-host={host}>
       {driving && (bridge || !open)
         ? <Driver start={{ ...(open && bridge ? { door: door!, port: bridge.port } : {}), ...(state.canvas && item ? { canvas: { send: state.canvas.send, itemId: item.id, by: state.canvas.viewer, answer: parseDriven(state.canvas.contents.items[item.id]?.properties?.[EXACT_PROPS.driven]), urlOf: (hash: string) => (url.includes(facts.blobHash) ? url.replace(facts.blobHash, hash) : url), testFiles: testFilesOf(state.canvas.contents, appId), recorded: parseRecordAnswer(state.canvas.contents.items[item.id]?.properties?.[EXACT_PROPS.recorded]) } } : {}), host, size: driveSize, scheme, shots: reached, points, route: item?.properties?.[EXACT_PROPS.route], width: capW, height: points?.size?.height ?? (DEVICE_SIZE[device] ?? DEVICE_SIZE.phone!).height }} url={url} alt={filename} onStop={() => setDriving(false)} />
         : showFrame
           ? <LiveFrame door={door!} port={bridge!.port} framesPort={bridge!.hello.frames!} path={path} device={device} scheme={scheme} entered={entered} record={{ itemId, canvasId, port: bridge!.port, appId: appId! }} title={filename} />
-          : <img className="img-view" src={url} alt={filename} draggable={false} />}
+          : showNative
+            ? <NativeFrame door={door!} port={bridge!.port} shots={reached} scheme={scheme} fallback={url} title={filename} />
+            : <img className="img-view" src={url} alt={filename} draggable={false} />}
       {!showFrame && !driving && state.pointing && points && (
         <div className="exact-point-catcher" title="Point at this line" onPointerDown={(e) => e.stopPropagation()} onClick={pointOnCapture} />
       )}
       {door && appId && !driving && (
         <div className="exact-screen-bar" onPointerDown={(e) => e.stopPropagation()}>
-          {open && host === "web" && !driving && (
+          {open && (host === "web" || nativeLive) && !driving && (
             <button type="button" className={`exact-chip${live ? " exact-chip-on" : ""}`} aria-pressed={live} title={live ? "Show the capture" : "Run this screen live, from your machine"} onClick={() => setLive(!live)}>
               {live ? "Live" : "Still"}
             </button>
@@ -448,6 +453,43 @@ function LiveFrame({ door, port, framesPort, path, device, scheme, entered, reco
       {/* Over the page, so the card drags and selects; down while entered, and while Alt is held (pointing). A card that is not
           entered is inert (`.item-content.inert`), so the frame asks for the pointer back itself while it is wanted. */}
       <div className="exact-live-shield" style={{ pointerEvents: entered || state.pointing ? "none" : "auto" }} />
+    </div>
+  );
+}
+
+/**
+ * **A native live frame** (exact phase 6): the app running on the bridge's
+ * own simulator, joined to the dev loop, pictured as it runs — so a token
+ * scrubbed on the design system moves this frame with the web's, on the loop's
+ * live table. A window cannot be framed (design §7), so this asks for the
+ * simulator's picture about twice a second while it is on screen.
+ */
+function NativeFrame({ door, port, shots, scheme, fallback, title }: { door: LocalToolDoor; port: number; shots: string; scheme: string; fallback: string; title: string }) {
+  const [shot, setShot] = useState<{ src: string; at: number } | null>(null);
+  const [said, setSaid] = useState<string>("starting the app on the simulator…");
+  useEffect(() => {
+    let alive = true;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const tick = async () => {
+      try {
+        const r = await door.fetch(port, "/native/shot");
+        const body = (await r.json()) as { ok: boolean; png?: string; at?: number; error?: string; starting?: boolean };
+        if (!alive) return;
+        if (body.ok && body.png) { setShot({ src: `data:image/png;base64,${body.png}`, at: body.at ?? Date.now() }); setSaid(""); }
+        else setSaid(body.error ?? "no picture");
+      } catch (err) {
+        if (alive) setSaid(err instanceof Error ? err.message : String(err));
+      }
+      if (alive) timer = setTimeout(() => void tick(), 600);
+    };
+    void door.fetch(port, "/native", { method: "POST", body: JSON.stringify({ host: "ios", shots, scheme }) }).then(() => { if (alive) void tick(); }, (err: unknown) => setSaid(err instanceof Error ? err.message : String(err)));
+    return () => { alive = false; if (timer) clearTimeout(timer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [port, shots, scheme]);
+  return (
+    <div className="exact-live exact-native" data-exact-native={shot ? "running" : "starting"} data-exact-native-at={shot?.at ?? 0}>
+      <img className="img-view" src={shot?.src ?? fallback} alt={`${title} — live on the simulator`} draggable={false} />
+      {said && <p className="exact-drive-note" role="status">{said}</p>}
     </div>
   );
 }

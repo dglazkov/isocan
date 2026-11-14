@@ -17,21 +17,15 @@ From nothing to the map, in order:
    - an **Exact index** item (`application/vnd.isocan.exact-index+json`):
      the routes read from Contract and checked against the build's
      `routes.json`, every arrow the router can take, the anatomy, the design;
-   - a **screen per route** (PNG), laid out as the router reaches them —
-     tabs in a row, each pushed route under the one it is declared under —
-     with the **device row** beside each: phone, tablet and desktop, light
-     and dark (`--devices phone,tablet --schemes light` for fewer);
-   - **arrows** between the phone screens for every `push`, `replace` and
-     link to a route, `back` from each pushed route, and `select` between
-     tabs, each labelled with the action that takes it. They are drawn from
-     the screens' `exact.edges` and exported as JSON Canvas edges;
-   - the **design system**: `app.tamber` as the canvas's DESIGN.md (role
-     `design-system`), each token with its light and dark value and where the
-     app uses it (`tamber uses`) — `isocan style` and `design check` read it;
-   - an **anatomy card** per Contract file
-     (`application/vnd.isocan.exact-anatomy+json`): components with their
-     props, state and actions (and what each writes), shapes, data sources,
-     grants, routes and tests. `isocan get <card>` prints it as JSON.
+   - a **screen per route** (PNG), tabs in a row and pushed routes under
+     their parent, each with its **device row** (phone, tablet, desktop ×
+     light, dark; `--devices`, `--schemes` for fewer);
+   - **arrows** for every `push`, `replace`, link, `back` and tab `select`,
+     from the screens' `exact.edges`;
+   - the **design system**: `app.tamber` as a DESIGN.md, each token's light
+     and dark value and its uses;
+   - an **anatomy card** per Contract file: components, props, state,
+     actions, shapes, sources, grants, routes, tests (`isocan get <card>`).
    Captures run a cold `agent web` per route at seed 1, en-US, UTC and the
    2026-01-01 epoch, so the same source is the same picture on any machine.
    Opened again, a screen whose inputs (the app's files, the Exact commit,
@@ -50,28 +44,20 @@ From nothing to the map, in order:
    screen was recaptured, its findings (contrast, clipping, overlap, small
    targets) pinned where they are on that screen. A finding no longer
    found is taken away (`thread.delete`) on the next pass.
-   **Live frames**: unless `--no-frames`, `live` also starts the app's dev
-   loop and a bridge on this machine and prints a pairing code
-   (`<port>-XXXXX-XXXXX`, one use, two minutes) for a PERSON to type on a
-   screen's **Live** button; the browser then frames the running page and
-   Alt-click points at a line. With live frames off, Alt-click points on
-   the capture instead: every capture records each visible node's box and
-   source line in the screen's `exact.points` property (JSON: `files` with
-   each file's digest, `nodes` with x, y, w, h at the capture size, file,
-   line, col, component, classes) — read it to find which line draws what
-   is at a place on a screen. You cannot click; point at lines by reading
-   comments and `exact.points`. `--no-checks` skips agent check.
+   **Live frames**: unless `--no-frames`, `live` also runs the app's dev
+   loop and a bridge, and prints a pairing code for a PERSON to type on a
+   screen's **Live** button. Every capture records each visible node's box
+   and source line in `exact.points` (`files` with digests; `nodes` with x,
+   y, w, h, file, line, col, component, classes): read it to find which line
+   draws what. You cannot click. `--no-checks` skips agent check.
 4. **Other hosts** (`--hosts web,ios,macos` on `open` and `live`): the
-   same route captured through Exact's driver on the iOS Simulator (a
-   phone, at the simulator's own size, UIKit's bars and all) and as the
-   macOS build (a window at the desktop size), light and dark, each a
-   screen with `exact.host` = `ios` or `macos`, in a column right of the
-   web's device row. iOS runs ONLY on a simulator made for it, named by
-   UDID: `xcrun simctl create "isocan-exact" com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro <runtime>`,
-   then `--sim <udid>`. Never pass a simulator you did not make; a booted
-   one may be somebody's own. The first native capture builds the app
-   (minutes); later ones re-bake the plan (~15 s a route). `live` with
-   `--hosts` recaptures the native screens on every save.
+   route through Exact's driver on the iOS Simulator (its own size, UIKit's
+   bars and all) and as the macOS build (a desktop-sized window), light and
+   dark, each a screen with `exact.host` = `ios` or `macos`, right of the
+   web's row. iOS runs ONLY on a simulator made for it (`xcrun simctl create
+   "isocan-exact" <device type> <runtime>`), passed as `--sim <udid>`; never
+   one you did not make. The first native capture builds the app (minutes),
+   later ones re-bake the plan (~15 s a route).
    **Differences between hosts**: each native capture is set beside the
    web drawn at its size (Exact's `screenshot … compare`); where the app's
    own layout differs — two nodes with a `testId` in one order on the web
@@ -119,17 +105,23 @@ From nothing to the map, in order:
    panel; with live frames off it is asked on the screen (`exact.inspect`)
    and `isocan exact live` answers (`exact.inspected`) — do not write either.
 
-7. **Tests are storyboards.** `open` posts each `*.test.contract` as a text
-   item and each `test` block as a storyboard (a row of steps; each host's
-   last run, a frame per step). `isocan exact run <app> "<test>" [--hosts
-   web,ios,macos --sim <udid>] [--json]` runs it with Exact's own `test
-   <host>`; each run is the storyboard's next version, a failure red at its
-   step with Exact's reason and the driver's tree. `isocan exact verify <app> [--hosts web,ios]`
-   runs Exact's `verify`; its first-screen shots become
-   versions of those screens. A PERSON records a test in Drive mode
-   (**Record**): it arrives as a proposal under the test file, and only their
-   Keep writes the file. Do not write `exact.run`, `exact.record`,
+7. **Tests are storyboards.** `open` posts each `test` block as a storyboard
+   (steps, and each host's last run, a frame per step).
+   `isocan exact run <app> "<test>" [--hosts web,ios,macos --sim <udid>]`
+   runs Exact's `test <host>`, each run a version, a failure red at its step.
+   `isocan exact verify <app> [--hosts web,ios]` posts verify's first-screen
+   shots as versions. A PERSON's Drive-mode **Record** arrives as a proposal
+   under the test file. Don't write `exact.run`, `exact.record`,
    `exact.verify` or their answers; write tests in the file yourself.
+
+8. **A look change is a proposal.** `isocan exact propose <screen> --token
+   radius.card=12px --row Price.color=brand.ink --why "…"` (`--op '<json>'`:
+   a Tamber set-token/set-row/set-state; tokens are on the design system,
+   styles in `exact.points`). It is held at your scope (an agent's:
+   `propose`) and pictured on every device; it waits up to 540 s. Only a
+   person's Keep writes it. One proposal per direction; a competition fighter
+   adds `--in "<lane>"`. A route or component is a branch:
+   `isocan exact branch <app> <ref|dir>` captures it beside the current.
 
 **Comments that point at a line.** A comment made on a pointed-at node,
 and every finding, carries one line in its body:
@@ -172,4 +164,4 @@ Rules:
   Live frames work only on a canvas whose home is this machine.
 - A screen's `exact.reached` is the shots its capture ran (read-only); edit
   `exact.shots` on the route's phone screen instead.
-- A connected iPhone, Linux, Android and agents' proposals are not built yet.
+- A connected iPhone, Linux and Android are not built yet.

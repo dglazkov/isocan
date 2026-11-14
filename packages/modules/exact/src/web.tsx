@@ -22,6 +22,8 @@ import { WallCard } from "./wall.tsx";
 import { FilmStrip } from "./film.tsx";
 import { InspectorPanel, SelectionWatch } from "./inspector.tsx";
 import { StoryboardCard } from "./storyboard.tsx";
+import { ProposalCard } from "./proposalcard.tsx";
+import { TokenPanel } from "./tokens.tsx";
 import { exactCanvas, useExactStore } from "./live.tsx";
 import { parseVerifyAnswer, parseVerifyAsk } from "./story.ts";
 import { EXACT_ANATOMY_MIME, EXACT_INDEX_MIME, EXACT_PROPS, EXACT_STORY_MIME, EXACT_WALL_MIME, appIdOf, exactModule, mapEdges, parseAnatomy, parseIndex, type AnatomyCard as AnatomyCardData, type ExactIndex, type MapEdge } from "./core.ts";
@@ -227,6 +229,8 @@ export const exactWeb: WebModule<ComponentType<UnderlayFacts>, ComponentType<Ren
     { mimes: [EXACT_WALL_MIME], component: WallCard },
     // A test as a storyboard (exact phase 5, `storyboard.tsx`): its steps, each run's frames, Run on a host or all.
     { mimes: [EXACT_STORY_MIME], component: StoryboardCard },
+    // A proposal is core's, and an ordinary PNG (exact phase 6, `proposalcard.tsx`): before and after on every device and scheme.
+    { mimes: ["image/png"], property: EXACT_PROPS.proposal, component: ProposalCard },
     // A film is an ordinary animated PNG (exact phase 4, `film.tsx`): the ones that carry `exact.film` are drawn as a scrubber.
     { mimes: ["image/png"], property: EXACT_PROPS.film, component: FilmStrip },
     // A screen is an ordinary PNG: only the ones this module captured (they carry `exact.route`) are drawn here —
@@ -238,6 +242,8 @@ export const exactWeb: WebModule<ComponentType<UnderlayFacts>, ComponentType<Ren
     { region: "right", label: "Exact", component: PointPanel },
     // The selected screen as the driver sees it: tree --ax, layout, perf and logs (exact phase 4).
     { region: "right", label: "Exact inspector", component: InspectorPanel },
+    // The design system's length tokens as chips: a drag scrubs every live build (exact phase 6, `tokens.tsx`).
+    { region: "right", label: "Exact tokens", component: TokenPanel },
   ],
   comments: commentRows,
 };
