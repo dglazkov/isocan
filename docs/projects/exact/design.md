@@ -60,8 +60,10 @@ isocan exact live <app-dir>     # the bridge: stays up while you work
 - a file watcher, so a save re-indexes and re-captures what changed (§4);
 - a resident agent session (`scripts/agent-session.mjs` `open({host, seed,
   …})`) per host it drives, rather than one cold `agent` process per
-  operation — **open question**: the session API is internal to Exact and
-  undocumented; phase 0 measures whether it holds across rebuilds;
+  operation — the API is internal to Exact and undocumented, but **measured
+  13 Nov 2026 (exact phase 0) it survives a rebuild**: a saved edit showed in
+  about a second, warm screenshots take ~100 ms against ~1.9 s cold. `open`
+  keeps cold captures, which is what makes them deterministic;
 - the actor it posts as: the person who started it, or an agent's session
   when an agent started it — so `isocan activity` says who captured what.
 
@@ -155,6 +157,16 @@ in isocan's real nesting before anything depends on one:
 3. **`EXACT_TOOL_PORT` pointed at isocan's web port** — only if isocan's
    ancestors collapse to one loopback origin, which they do not today.
 
+**Measured 13 Nov 2026 (exact phase 0): door 2, outside the HTML-item
+origin.** Inside an HTML item no door loads — the content origin's
+`default-src 'none'` blocks every frame before `frame-ancestors` is read. In
+the app document, the plain loop and Tamber's gateway each fail their own
+`frame-ancestors` (the gateway names only its own TLS door), and the bridge
+proxy loads, but the page's registration is refused `421` until the proxy
+rewrites Origin as well. So the live frame is drawn by the shell's paired
+local-tool door below, never inside an item's content sandbox, and the proxy
+rewrites both the framing header and Origin.
+
 **Getting the frame's address to the web.** A module may not add a server
 route, and a grant must not sit in a replicated property. So the web module
 talks to the bridge **directly on loopback**, paired once — the bridge
@@ -189,7 +201,8 @@ not have that. So:
 - **With live frames off, nothing else is lost.** Captures still refresh on
   every save, Drive mode (§7) still drives every host from the canvas
   through the driver, pointing at lines still works on captures (the driver's
-  `tree` carries the source map's join), and proposals still render. Live
+  `tree` carries the source map's join), and proposals still render (§10:
+  a scrub, or a staged copy — neither needs a live frame). Live
   adds immediacy — a tenth of a second instead of a capture — never a
   capability only it has.
 
@@ -282,11 +295,13 @@ proposals that a `write` client may `accept`, `drop`, `edit-held` or
 
 - **A held proposal is a proactive proposal item**: dashed, hanging under
   the screen it changes, citing what asked for it. It shows before and after
-  on every device and both schemes. **Open question**: whether a held proposal
-  can be rendered without accepting it (Tamber's `pin`/`preview` force modes
-  on running builds; `propose` with an inline scrub). The fallback is Exact
-  Design's: apply it to a staged copy, compile with `--json --errors-only`,
-  capture there.
+  on every device and both schemes. **Measured 13 Nov 2026 (exact phase 0):
+  a held proposal does not render** — the screenshot after `propose` with
+  hold is pixel-identical to before, and `preview` pins a mode, not a
+  proposal. A Tamber scrub of the same change does render, writing nothing,
+  and `scrub-cancel` restores it exactly. So a live-class proposal is shown
+  as a scrub session; a rebuild-class one uses Exact Design's fallback: apply
+  it to a staged copy, compile with `--json --errors-only`, capture there.
 - **Several directions** are several proposals; design-competition's rounds
   and the shared vote curtain decide between them; **Accept** is Tamber's
   `accept`, after which every live frame updates and the proposal item
@@ -374,7 +389,8 @@ source map, `deploy --json`. That is the part of Exact with the fewest
 outside callers, so it is the part our diary is most worth reading for. So:
 
 - **While building**, every phase's builder keeps the diary in the Acme
-  Market fixture app (synthetic, so nothing in it is private), runs `bun
+  Market fixture app (synthetic, so nothing in it is private; copied into
+  [`diary/`](diary/) with each phase, because the fixture is scratch), runs `bun
   exact.mjs feedback status` at the start, and notes friction the moment it
   happens — a wire method that answered differently from its doc, a door that
   needed a workaround, a version that moved under us. *Needed* lists the tool
@@ -394,12 +410,11 @@ outside callers, so it is the part our diary is most worth reading for. So:
 
 ## 16. Open questions, in one place
 
-1. Live frames through two ancestors: which door (§5).
+1. ~~Live frames through two ancestors: which door~~ — measured: a bridge proxy that rewrites framing and Origin, drawn by the shell, never inside an HTML item (§5).
 2. ~~Web ↔ bridge on loopback~~ — decided: a paired local-tool door the shell owns, with live frames switchable off per machine, per screen and per bridge (§5).
 3. Whether `contract symbols` names a router verb's target route (§3).
-4. Whether a held Tamber proposal renders without being accepted (§10).
-5. Whether Exact's agent session API holds across rebuilds, or each
-   operation must cold-launch (§2).
+4. ~~Whether a held Tamber proposal renders without being accepted~~ — measured: it does not; a scrub does (§10).
+5. ~~Whether Exact's agent session API holds across rebuilds~~ — measured: it does (§2).
 6. Whether the runtime survives an opaque-origin sandbox (`localStorage`
    is wrapped; untested).
 7. Whether this is something to build *with* the Exact team — the Tamber wire

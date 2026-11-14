@@ -113,6 +113,11 @@ export const EXPERIMENTS: readonly Experiment[] = [
     what: "Make SVGs move: `isocan motion new` turns selected SVGs into a motion item that plays on the canvas, from one clock that a movie will be rendered from too. The web's own doors — Animate…, the scrubber, Render movie… — are not built yet.",
   },
   {
+    id: "exact",
+    name: "Exact",
+    what: "Exact apps on the canvas: `isocan exact open <app>` indexes an Exact app's routes and posts a web screenshot of each, captured with your own Exact on your machine. The flow map, live frames, other hosts, proposals and shipping are not built yet.",
+  },
+  {
     id: "presentation.transitions",
     name: "Presentation Transitions",
     what: "Choose how full screen moves between slides — Push, Fade, Zoom, Depth, Cube, Flip, Morph or None — from the bar and the drawer. Off while the motions settle: a deck of screens does not push smoothly yet. Off, a deck of screens dissolves and a deck of pictures pushes, as it always has.",

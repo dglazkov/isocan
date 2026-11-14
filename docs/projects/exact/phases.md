@@ -20,17 +20,26 @@ interface is recorded as a dated fixture stamped with the Exact commit.
 **Every phase keeps Exact's diary** (design §15): the builder runs `bun
 exact.mjs feedback status` in the fixture app first, records friction with
 `feedback note` as it happens, and writes the phase's Rough, Lean in, Needed
-and Checkpoints before the phase closes. Nothing is sent until Phase 10.
+and Checkpoints before the phase closes. The conductor copies the fixture's
+`.exact/diary/` into [`diary/`](diary/) with each phase, since the fixture
+is scratch. Nothing is sent until Phase 10.
 
 **Phase citations name their project**: `exact phase 2`.
 
-**Where we are, 13 Nov 2026:** specified; nothing built.
+**Where we are, 13 Nov 2026:** phase 0 CLOSED — `isocan exact doctor` and
+`isocan exact open` index Acme Market from Contract and post a deterministic
+web screenshot per route, and the three facts are measured (below). Live
+frames need a product change: only a bridge proxy loads, and only outside an
+HTML item's content origin. Next: **exact phase 1**, the map. Nothing waits on
+a person.
 
 ---
 
 ## Phase 0 — The bridge, the index, and the three doors
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 13 Nov 2026.** Two cold captures of Acme Market's four
+routes are pixel-identical; the index's routes, read from Contract, equal
+`routes.json`'s; the three facts were answered by runs (Trajectory).
 
 - `@isocan/exact` with `core`, `web` and `cli`; the `exact` experiment.
 - `isocan exact doctor`: the checkout (through the app's `exact.mjs`), its
@@ -49,6 +58,33 @@ and Checkpoints before the phase closes. Nothing is sent until Phase 10.
 identical; the index's routes equal `routes.json`'s; each of the three
 facts answered by a run, not by reading, with the run's command in the
 trajectory.
+
+**The three facts, measured 13 Nov 2026** (Exact `0104e402`; the probes are
+in [`probes/`](probes/), rerunnable):
+
+1. **The live-frame door is a bridge proxy, drawn outside the HTML-item
+   origin.** In an HTML item, the content origin's `default-src 'none'`
+   blocks all three doors before `frame-ancestors` is consulted. In the app
+   document, the plain loop fails `frame-ancestors 'self'
+   http://127.0.0.1:<tool port>`, Tamber's gateway fails `frame-ancestors
+   https://<its own TLS door>`, and only the proxy loads — where the page's
+   registration is refused `421` (Origin), so the proxy must rewrite Origin
+   too.
+2. **The resident agent session survives a rebuild.** A heading edit saved
+   mid-session showed in 1.0–1.5 s; warm screenshots take ~100–150 ms
+   against ~1.9 s for a cold `agent web`.
+3. **A held proposal does not render; a scrub does.** `propose` with hold
+   answers 200 and the screenshot is pixel-identical to before; `preview`
+   pins a mode, not a proposal (400). A Tamber scrub renders the change with
+   `app.tamber` untouched, and `scrub-cancel` restores the original exactly.
+
+### Trajectory
+
+- **2026-11-13** — Fact 1: only a bridge proxy door loads, and not inside an HTML item (content origin `default-src 'none'`); its registration is refused 421 until Origin is rewritten too. Phase 2 builds the proxy in a shell-owned frame, the product change design §5 already names. `DOORS_MODE=app node docs/projects/exact/probes/fact1.mjs <app> <out> <iso> <canvas>`.
+- **2026-11-13** — The fixture is scratch and its diary would not outlive the session, so it is kept in [`diary/`](diary/), copied with each phase; exact phase 10 gathers from there.
+- **2026-11-13** — Fact 2: Exact's resident session (`scripts/agent-session.mjs`) survives a save; the live loop uses it, `open` keeps cold captures (≈1.9 s each), which are what make captures deterministic. `EXACT=<checkout> bun docs/projects/exact/probes/fact2.mjs <app> <port> <out>`.
+- **2026-11-13** — Fact 3: a held proposal does not render; a scrub does, without writing. Phase 6 previews live-class proposals as a scrub, rebuild-class ones in a staged copy (Exact Design's fallback). `propose` and `scrub` classed one edit differently (rebuild vs live). `EXACT=<checkout> bun docs/projects/exact/probes/fact3.mjs <app> <port> <out>`.
+- **2026-11-13** — The capture verbs run a release script, `scripts/exact-bridge.mjs`, through `runPackageScript` as motion's render does: a module may not spawn. It runs the person's own Exact only on a directory they typed; an `exact.app` path read off a canvas must never launch it unasked.
 
 ## Phase 1 — The map
 

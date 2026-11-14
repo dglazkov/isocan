@@ -82,6 +82,9 @@ export const RELEASE_SCRIPTS = {
   // `isocan motion render` (motion phase 1): the same headless browser, the
   // web app's render page, and the bytes read back.
   "scripts/motion-render.mjs": "motion-render",
+  // `isocan exact doctor|open` (exact phase 0): the person's own Exact, run on
+  // the app directory they named.
+  "scripts/exact-bridge.mjs": "exact-bridge",
 };
 
 /** Where their bundles land, under CLI_BUNDLE_DIR — a directory of their own, because they are a build of their own (see buildCliBundle). */
