@@ -5,7 +5,7 @@ const require = __isocanCreateRequire(import.meta.url);
 // scripts/exact-bridge.mjs
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync, accessSync, constants } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, accessSync, constants } from "node:fs";
 import { createServer } from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -15,8 +15,8 @@ var flag = (name) => {
   return i >= 0 ? argv[i + 1] : void 0;
 };
 var flags = (name) => argv.flatMap((a, i) => a === name && argv[i + 1] !== void 0 ? [argv[i + 1]] : []);
-if (!["doctor", "read", "capture"].includes(verb ?? "") || !flag("--app") || !flag("--report")) {
-  console.error("usage: exact-bridge.mjs doctor|read|capture --app <dir> --report <file.json> [--hosts web,ios] [--dir <out> --size <w>x<h> --url <path>\u2026]");
+if (!["doctor", "read", "capture", "inputs"].includes(verb ?? "") || !flag("--app") || !flag("--report")) {
+  console.error("usage: exact-bridge.mjs doctor|read|capture|inputs --app <dir> --report <file.json> [--hosts web,ios] [--jobs <jobs.json>] [--dir <out> --size <w>x<h> --url <path>\u2026]");
   process.exit(2);
 }
 var app = path.resolve(flag("--app"));
@@ -78,9 +78,9 @@ function freePort() {
     });
   });
 }
-async function tamberHello() {
-  const design = existsSync(path.join(app, "app.tamber"));
-  if (!design) return { protocol: null, note: "no app.tamber: the app has no design, so no Tamber wire is mounted" };
+async function withDesignServer(questions) {
+  const design2 = existsSync(path.join(app, "app.tamber"));
+  if (!design2) return { ok: false, note: "no app.tamber: the app has no design, so no Tamber wire is mounted" };
   const port = await freePort();
   const child = spawn("/bin/sh", [launcher, "tamber", "serve", ".", "--port", String(port)], { cwd: app, stdio: ["ignore", "pipe", "pipe"], detached: true });
   let said = "";
@@ -96,23 +96,65 @@ async function tamberHello() {
     let token = null;
     while (Date.now() < deadline && !token) {
       try {
-        const r2 = await fetch(`${base}/__tamber/token`, { redirect: "error" });
-        if (r2.ok) token = (await r2.json()).token;
+        const r = await fetch(`${base}/__tamber/token`, { redirect: "error" });
+        if (r.ok) token = (await r.json()).token;
       } catch {
       }
-      if (!token) await new Promise((r2) => setTimeout(r2, 250));
+      if (!token) await new Promise((r) => setTimeout(r, 250));
     }
-    if (!token) return { protocol: null, note: `the design server did not answer on ${base}: ${said.trim().split("\n").at(-1) ?? ""}` };
-    const r = await fetch(`${base}/__tamber`, { method: "POST", headers: { "content-type": "application/json", "x-exact-tamber-token": token }, body: JSON.stringify({ method: "hello" }) });
-    const body = await r.json().catch(() => null);
-    if (!body?.ok) return { protocol: null, note: `hello answered ${r.status}: ${body?.error?.message ?? said.trim().split("\n")[0] ?? "nothing"}` };
-    return { protocol: body.ok.protocol ?? null, format: body.ok.format ?? null, note: null };
+    if (!token) return { ok: false, note: `the design server did not answer on ${base}: ${said.trim().split("\n").at(-1) ?? ""}` };
+    const ask = async (body) => {
+      const r = await fetch(`${base}/__tamber`, { method: "POST", headers: { "content-type": "application/json", "x-exact-tamber-token": token }, body: JSON.stringify(body) });
+      const answer = await r.json().catch(() => null);
+      return { status: r.status, answer };
+    };
+    return { ok: true, value: await questions(ask) };
   } finally {
     try {
       process.kill(-child.pid, "SIGTERM");
     } catch {
     }
   }
+}
+async function tamberHello() {
+  const done = await withDesignServer(async (ask) => {
+    const { status, answer } = await ask({ method: "hello" });
+    if (!answer?.ok) return { protocol: null, note: `hello answered ${status}: ${answer?.error?.message ?? "nothing"}` };
+    return { protocol: answer.ok.protocol ?? null, format: answer.ok.format ?? null, note: null };
+  });
+  return done.ok ? done.value : { protocol: null, note: done.note };
+}
+async function design() {
+  if (!existsSync(path.join(app, "app.tamber"))) return null;
+  const ir = JSON.parse(exact(["tamber", "ir", "."]).stdout);
+  const done = await withDesignServer(async (ask) => {
+    const uses = {};
+    for (const t of ir.tokens ?? []) {
+      const { status, answer } = await ask({ method: "uses", token: t.name });
+      uses[t.name] = answer?.ok ? { sites: answer.ok.sites ?? [], aliases: answer.ok.aliases ?? [] } : { error: `uses answered ${status}: ${answer?.error?.message ?? "nothing"}` };
+    }
+    return uses;
+  });
+  if (!done.ok) fail(`could not ask the app's design server where its tokens are used: ${done.note}`);
+  return { ir, uses: done.value };
+}
+function inputsDigest(exactDir) {
+  const skip = /* @__PURE__ */ new Set(["target", ".exact", "node_modules", ".git", ".vscode"]);
+  const files = [];
+  const walk = (dir, rel, depth) => {
+    for (const e of readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      if (skip.has(e.name) || e.name.startsWith("dist") || e.name.endsWith(".d.ts") || e.name === ".DS_Store") continue;
+      const p = path.join(dir, e.name);
+      const r = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) {
+        if (depth < 4) walk(p, r, depth + 1);
+      } else if (e.isFile()) files.push(`${r}\0${sha256(readFileSync(p))}`);
+    }
+  };
+  walk(app, "", 0);
+  const commit = git(exactDir, ["rev-parse", "HEAD"]) ?? "";
+  const dirty = git(exactDir, ["diff", "HEAD", "--stat"]) ?? "";
+  return sha256([`exact\0${commit}\0${sha256(dirty)}`, ...files].join("\n"));
 }
 function setupCheck(dir, bin, hosts) {
   const rows = [];
@@ -146,6 +188,7 @@ async function doctor() {
 }
 async function read() {
   const { dir } = checkout();
+  const inputs = inputsDigest(dir);
   const build = exact(["web-build"]);
   const dist = path.join(app, "target", "web-dist");
   const routesFile = path.join(dist, "routes.json");
@@ -159,8 +202,21 @@ async function read() {
     if (!at.startsWith(app + path.sep)) continue;
     sources[file] = readFileSync(at, "utf8");
   }
+  const tests = [];
+  for (const name of readdirSync(app).filter((f) => f.endsWith(".test.contract")).sort()) {
+    const run = exact(["contract", "test", name], { allowFail: true });
+    try {
+      tests.push({ file: name, tests: JSON.parse(run.stdout).tests ?? [] });
+    } catch {
+      tests.push({ file: name, tests: [], error: (run.stderr || run.stdout).trim().split("\n").slice(-3).join("\n") });
+    }
+  }
+  const appTs = path.join(app, "app.ts");
+  const grantsLine = existsSync(appTs) ? /export\s+const\s+grants\s*(?::[^=]+)?=\s*(['"`])((?:(?!\1)[^\\]|\\.)*)\1/.exec(readFileSync(appTs, "utf8")) : null;
   const manifest = JSON.parse(readFileSync(path.join(app, "app.json"), "utf8"));
   const planFile = path.join(dist, "app.plan");
+  const started = Date.now();
+  const designReading = argv.includes("--no-design") ? null : await design();
   return {
     app: { id: manifest.app?.id ?? manifest.id ?? path.basename(app), name: manifest.app?.name ?? manifest.name ?? path.basename(app) },
     exact: { commit: git(dir, ["rev-parse", "HEAD"]), protocol: null },
@@ -168,11 +224,64 @@ async function read() {
     routesJson: JSON.parse(readFileSync(routesFile, "utf8")),
     symbols: parsed,
     sources,
-    ms: { build: build.ms, symbols: symbols.ms }
+    tests,
+    grants: grantsLine ? grantsLine[2] : null,
+    design: designReading,
+    inputs,
+    ms: { build: build.ms, symbols: symbols.ms, design: Date.now() - started }
   };
+}
+var SHOT_OP = /^(tap|type|clock|back|fail fetch|pass fetch|prefer)\b/;
+function checkJob(job) {
+  if (typeof job.url !== "string" || !job.url.startsWith("/") || job.url.startsWith("//") || job.url.includes("..")) fail(`a capture job's url must be one of the app's own paths, not ${JSON.stringify(job.url)}`);
+  for (const op of job.ops ?? []) {
+    if (typeof op !== "string" || !SHOT_OP.test(op) || /[\n\r\0]/.test(op) || /\bcolor-scheme\b/.test(op)) fail(`a capture job carries an operation this bridge does not run: ${JSON.stringify(op)}`);
+  }
+  for (const shot of job.shots ?? []) {
+    if (!/^\d+x\d+$/.test(shot.size ?? "") || !["light", "dark"].includes(shot.scheme)) fail(`a capture is <w>x<h> in light or dark, not ${JSON.stringify(shot)}`);
+  }
+}
+function captureJobs(out, jobs) {
+  const shots = [];
+  for (const [j, job] of jobs.entries()) {
+    checkJob(job);
+    const first = job.shots[0];
+    const ops = ["clock data", ...job.ops ?? []];
+    const files = [];
+    for (const [i, shot] of job.shots.entries()) {
+      const file = path.join(out, `job-${j}-${i}.png`);
+      files.push(file);
+      ops.push(`resize ${shot.size}`, `prefer color-scheme ${shot.scheme}`, "clock settle", `screenshot ${file}`);
+    }
+    const run = exact([
+      "agent",
+      "web",
+      "--size",
+      first.size,
+      "--seed",
+      "1",
+      "--locale",
+      "en-US",
+      "--time-zone",
+      "UTC",
+      "--epoch",
+      "2026-01-01",
+      "--url",
+      job.url,
+      ...ops
+    ]);
+    for (const [i, file] of files.entries()) {
+      if (!existsSync(file)) fail(`agent web wrote no screenshot for ${job.url} at ${job.shots[i].size} ${job.shots[i].scheme}:
+${run.stdout.trim().split("\n").slice(-4).join("\n")}`);
+      shots.push({ job: j, index: i, url: job.url, size: job.shots[i].size, scheme: job.shots[i].scheme, file, sha256: sha256(readFileSync(file)), ms: Math.round(run.ms / files.length) });
+    }
+  }
+  return { shots };
 }
 function capture() {
   const out = path.resolve(flag("--dir") ?? fail("capture needs --dir"));
+  mkdirSync(out, { recursive: true });
+  if (flag("--jobs")) return captureJobs(out, JSON.parse(readFileSync(path.resolve(flag("--jobs")), "utf8")));
   const size = flag("--size") ?? "390x844";
   if (!/^\d+x\d+$/.test(size)) fail(`--size is <w>x<h>, not ${size}`);
   mkdirSync(out, { recursive: true });
@@ -204,5 +313,5 @@ ${run.stdout.trim().split("\n").slice(-4).join("\n")}`);
   }
   return { size, shots };
 }
-var result = verb === "doctor" ? await doctor() : verb === "read" ? await read() : capture();
+var result = verb === "doctor" ? await doctor() : verb === "read" ? await read() : verb === "inputs" ? { inputs: inputsDigest(checkout().dir) } : capture();
 writeFileSync(report, JSON.stringify(result, null, 2));
