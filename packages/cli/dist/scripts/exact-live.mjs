@@ -19,7 +19,7 @@ var flag = (name) => {
 var json = argv.includes("--json");
 var app = flag("--app") ? path.resolve(flag("--app")) : null;
 if (!app) {
-  console.error("usage: exact-live.mjs --app <dir> [--child '<argv json>'] [--bridge-port <n>] [--frames-port <n>] [--loop-port <n>] [--design-port <n>] [--json]");
+  console.error("usage: exact-live.mjs --app <dir> [--child '<argv json>'] [--bridge-port <n>] [--frames-port <n>] [--loop-port <n>] [--design-port <n>] [--relay <host[:port]> --relay-account <label> [--relay-cert <pem> --relay-key <pem>]] [--json]");
   process.exit(2);
 }
 var launcher = path.join(app, "exact.mjs");
@@ -78,7 +78,8 @@ process.on("SIGINT", () => stop(0));
 process.on("SIGTERM", () => stop(0));
 var loopPort = await freePort(flag("--loop-port") ? Number(flag("--loop-port")) : void 0);
 var loopBase = `http://127.0.0.1:${loopPort}`;
-var loop = spawn("/bin/sh", [launcher, "web", "--port", String(loopPort)], {
+var relayAsked = flag("--relay") ? ["--relay", flag("--relay"), "--relay-account", flag("--relay-account") ?? "", ...flag("--relay-cert") ? ["--relay-cert", flag("--relay-cert"), "--relay-key", flag("--relay-key") ?? ""] : [], "--allow-plugin-origin"] : [];
+var loop = spawn("/bin/sh", [launcher, "web", "--port", String(loopPort), ...relayAsked], {
   cwd: app,
   detached: true,
   stdio: ["ignore", "pipe", "pipe"],
@@ -86,9 +87,23 @@ var loop = spawn("/bin/sh", [launcher, "web", "--port", String(loopPort)], {
 });
 children.push(loop);
 var loopSaid = "";
+var relay = null;
 var keep = (d) => {
   loopSaid = (loopSaid + d).slice(-8e3);
+  const named = /canvas through the relay: (https:\/\/[a-z0-9.-]+), framed by (https:\/\/[a-z0-9.-]+) only/.exec(loopSaid);
+  if (named && !relay) {
+    const pin = /key pin ([A-Za-z0-9+/=]{44})/.exec(loopSaid)?.[1] ?? null;
+    relay = { tool: named[2], canvas: named[1], pin };
+    say(`relay: the loop's wire is ${relay.tool} and its canvas ${relay.canvas}, every client's TLS ending in the loop`, { relay });
+  }
+  if (relayAsked.length) {
+    for (const line of String(d).split("\n")) if (/relay/i.test(line) && !relaySaid.has(line.trim())) {
+      relaySaid.add(line.trim());
+      say(`loop: ${line.trim().slice(0, 300)}`);
+    }
+  }
 };
+var relaySaid = /* @__PURE__ */ new Set();
 loop.stdout.on("data", keep);
 loop.stderr.on("data", keep);
 loop.on("exit", (code2) => {
@@ -120,6 +135,21 @@ async function tamber(body) {
   const r = await fetch(`${loopBase}/__tamber`, { method: "POST", headers: { "content-type": "application/json", "x-exact-tamber-token": tamberToken }, body: JSON.stringify(body) });
   return { status: r.status, answer: await r.json().catch(() => null) };
 }
+var teammate = null;
+async function teammateCode() {
+  if (!relay || !tamberToken || stopping) return;
+  const r = await tamber({ method: "pair-code", scope: "read", name: "teammate" });
+  const ok = r.answer?.ok;
+  if (!ok?.code) {
+    say(`relay: no teammate code \u2014 ${JSON.stringify(r.answer?.error ?? r.status).slice(0, 200)}`);
+    return;
+  }
+  teammate = { code: ok.code, expires: Date.parse(ok.expires) || Date.now() + 12e4 };
+  say(`a teammate pairs through the relay (read: sees this loop live, changes nothing): on an Exact screen press Pair\u2026 and enter  ${relay.tool} ${ok.code}  (one use, until ${new Date(teammate.expires).toISOString().slice(11, 19)})`, { teammate: { tool: relay.tool, code: ok.code, expires: teammate.expires, scope: ok.scope } });
+}
+setInterval(() => {
+  if (relay && tamberToken && (!teammate || teammate.expires < Date.now())) void teammateCode();
+}, 2e3).unref();
 var queue = [];
 var seq = 0;
 var waiting = /* @__PURE__ */ new Set();
@@ -541,7 +571,7 @@ var api = http.createServer(async (req, res) => {
   const auth = /^Bearer (\S+)$/.exec(req.headers.authorization ?? "")?.[1];
   if (!auth || !tokens.has(auth)) return answer(401, { error: "not paired with this bridge (a bridge that restarted forgets its pairings)" });
   if (url.pathname === "/hello" && req.method === "GET") {
-    return answer(200, { app: appInfo, dir: app, frames: framesPort, loop: loopBase, tamber: !!tamberToken, design: { port: designPort, up: await designUp() }, drive: { hosts: driveHosts.filter((h) => h !== "ios" || sim) }, scrub: !!tamberToken, native: driveHosts.includes("ios") && sim ? ["ios"] : [], seq });
+    return answer(200, { app: appInfo, dir: app, frames: framesPort, loop: loopBase, tamber: !!tamberToken, design: { port: designPort, up: await designUp() }, drive: { hosts: driveHosts.filter((h) => h !== "ios" || sim) }, scrub: !!tamberToken, native: driveHosts.includes("ios") && sim ? ["ios"] : [], relay: relay ? { tool: relay.tool, canvas: relay.canvas } : null, seq });
   }
   if (url.pathname === "/scrub" && req.method === "POST") {
     const body = await readBody(req);
@@ -680,6 +710,11 @@ var api = http.createServer(async (req, res) => {
     const r = await prepareOnce(body.channel);
     say(`prepare ${body.channel}: ${r.ok ? "classified" : r.error}`);
     return answer(r.ok ? 200 : 422, r);
+  }
+  if (url.pathname === "/teammate" && req.method === "POST") {
+    if (!relay) return answer(409, { error: "this bridge runs no relay: `isocan exact live` with ISOCAN_EXACT_RELAY and ISOCAN_EXACT_RELAY_ACCOUNT" });
+    await teammateCode();
+    return teammate ? answer(200, { tool: relay.tool, code: teammate.code, expires: teammate.expires, scope: "read" }) : answer(502, { error: "the wire minted no code" });
   }
   if (url.pathname === "/design" && req.method === "GET") {
     return answer(200, { link: designLink(url.searchParams.get("route") ?? ""), up: await designUp(), port: designPort });

@@ -1062,10 +1062,20 @@ async function stagedPreview(out, job, texts, sim) {
   }
   return { how: "staged", previews, errors };
 }
+async function pairedClient(wire, scope, name) {
+  const code = await wire.ask({ method: "pair-code", scope, name });
+  if (!code.answer?.ok?.code) return { error: `pair-code: ${wireError(code)}` };
+  const pr = await fetch(`${wire.base}/__tamber/pair`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code: code.answer.ok.code, name }) });
+  const paired = await pr.json().catch(() => null);
+  const p = paired?.ok ?? paired;
+  if (!p?.token) return { error: `pair: ${pr.status} ${JSON.stringify(paired).slice(0, 200)}` };
+  if (p.scope !== scope) return { error: `the wire paired this client at ${p.scope}, not ${scope}` };
+  return { token: p.token, client: p.client };
+}
 async function proposeJob(out, job) {
   mkdirSync(out, { recursive: true });
   checkProposalOps(job.ops);
-  if (!["propose", "write"].includes(job.scope)) fail(`a proposal's scope is propose or write, not ${JSON.stringify(job.scope)}`);
+  if (!["read", "propose", "write"].includes(job.scope)) fail(`a proposal's scope is read, propose or write, not ${JSON.stringify(job.scope)}`);
   const name = String(job.name ?? "someone").replace(/[^A-Za-z0-9_.-]+/g, "-").slice(0, 40) || "someone";
   const started = Date.now();
   const wire = await wireOf();
@@ -1073,19 +1083,14 @@ async function proposeJob(out, job) {
   if (!hello.answer?.ok) return { ok: false, error: `hello: ${wireError(hello)}` };
   const files = hello.answer.ok.files;
   let token = wire.token, client = `person:${name}`, scopeCheck = null;
-  if (job.scope === "propose") {
-    const code = await wire.ask({ method: "pair-code", scope: "propose", name: `isocan-${name}` });
-    if (!code.answer?.ok?.code) return { ok: false, error: `pair-code: ${wireError(code)}` };
-    const pr = await fetch(`${wire.base}/__tamber/pair`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code: code.answer.ok.code, name: `isocan-${name}` }) });
-    const paired = await pr.json().catch(() => null);
-    if (!paired?.ok?.token && !paired?.token) return { ok: false, error: `pair: ${pr.status} ${JSON.stringify(paired).slice(0, 200)}` };
-    const p = paired.ok ?? paired;
+  if (job.scope !== "write") {
+    const p = await pairedClient(wire, job.scope, `isocan-${name}`);
+    if (p.error) return { ok: false, error: p.error };
     token = p.token;
     client = p.client;
-    if (p.scope !== "propose") return { ok: false, error: `the wire paired this agent at ${p.scope}, not propose` };
   }
   const held = await wire.ask({ method: "propose", ops: job.ops, files, hold: true, client, texts: true }, token);
-  if (!held.answer?.ok) return { ok: false, scope: job.scope, client, error: `the wire refused the proposal: ${wireError(held)}`, diagnostics: held.answer?.error?.diagnostics ?? null };
+  if (!held.answer?.ok) return { ok: false, scope: job.scope, client, scopeCheck: held.status === 403 ? { status: 403, scope: held.answer?.error?.scope ?? null, needs: held.answer?.error?.needs ?? null, message: wireError(held) } : null, error: `the wire refused the proposal: ${wireError(held)}`, diagnostics: held.answer?.error?.diagnostics ?? null };
   const plan = held.answer.ok;
   if (job.scope === "propose") {
     const tried = await wire.ask({ method: "accept", proposal: plan.proposal, client }, token);
@@ -1121,6 +1126,12 @@ async function acceptJob(job) {
   checkProposalOps(job.ops);
   const wire = await wireOf();
   const client = `person:${String(job.name ?? "someone").replace(/[^A-Za-z0-9_.-]+/g, "-").slice(0, 40)}`;
+  if (job.scope === "read") {
+    const p = await pairedClient(wire, "read", `isocan-${client.slice(7)}`);
+    if (p.error) return { ok: false, error: p.error };
+    const r2 = await wire.ask({ method: "accept", proposal: job.proposal, client: p.client }, p.token);
+    return { ok: false, heldAgain: null, written: [], refusal: { status: r2.status, scope: r2.answer?.error?.scope ?? null, needs: r2.answer?.error?.needs ?? null }, error: `the wire refused the keep: ${wireError(r2)}` };
+  }
   let r = job.proposal ? await wire.ask({ method: "accept", proposal: job.proposal, client }) : { status: 404, answer: null };
   let again = null;
   if (r.status === 404) {

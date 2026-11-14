@@ -48,15 +48,23 @@
 .exact-drive-log { margin: 0; padding: 0 0 0 1.4em; max-height: 4.5em; overflow: auto; font-size: 0.85em; }
 .exact-drive-log:empty { display: none; }
 .exact-drive-note { position: absolute; left: 2px; right: 2px; bottom: 2px; margin: 0; padding: 0.4em 0.6em; background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius); font-size: min(11px, 6cqw); pointer-events: auto; }
+.exact-still-note { position: absolute; left: 2px; right: 2px; bottom: 2px; margin: 0; padding: 0.3em 0.5em; background: color-mix(in srgb, var(--card) 88%, transparent); color: var(--ink-soft); border: 1px solid var(--line); border-radius: var(--radius); font-size: min(10px, 5cqw); line-height: 1.3; }
 .exact-screen-bar .exact-chip { font-size: min(11px, 6cqw); }
 .exact-chip-off { opacity: 0.6; }
 /* The device wall (exact phase 3): one route on every host and device, side by side. */
-.exact-wall { display: grid; grid-template-rows: auto 1fr; gap: 8px; height: 100%; box-sizing: border-box; padding: 12px 16px 16px; background: var(--card); color: var(--ink); }
+.exact-wall { container-type: inline-size; display: grid; grid-template-rows: auto 1fr; gap: 8px; height: 100%; box-sizing: border-box; padding: 12px 16px 16px; background: var(--card); color: var(--ink); }
 .exact-wall h3 { margin: 0; font-size: 14px; }
 .exact-wall-row { display: flex; gap: 16px; align-items: flex-start; min-height: 0; }
 .exact-wall-cell { display: grid; grid-template-rows: auto 1fr; gap: 4px; height: 100%; min-height: 0; }
 .exact-wall-cell > span { font-size: 11px; color: var(--ink-soft); }
 .exact-wall-frame { position: relative; height: 100%; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+/* On a phone — the canvas presented at phone width (exact phase 8; design §12) — the wall is two screens a row, each
+   whole, scrolled down; side by side they would crush each other. */
+@container (max-width: 560px) {
+  .exact-wall-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: max-content; align-items: start; gap: 12px; overflow-y: auto; overscroll-behavior: contain; }
+  .exact-wall-cell { height: auto; min-height: auto; grid-template-rows: auto auto; }
+  .exact-wall-frame { height: auto; width: 100%; }
+}
 /* A film (exact phase 4): the frame at the scrubbed moment, the track with a mark per comment at a moment, and the
    state at that frame under it. */
 .exact-film { display: grid; grid-template-rows: minmax(0, 1fr) auto; height: 100%; background: var(--card); color: var(--ink); font-size: 12px; }
