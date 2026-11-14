@@ -329,7 +329,12 @@ proposals that a `write` client may `accept`, `drop`, `edit-held` or
 | --- | --- |
 | a viewer, or an agent asked to look | `read` |
 | an agent asked to change something | `propose` — never `write` |
-| a person who may edit the canvas | `write` |
+| the person whose machine runs the dev loop, or a person they grant | `write` |
+| any other person, even one who may edit the canvas | `read` |
+
+Write is the machine owner's to give, not the canvas's: a `write` client's
+accept rewrites files on that machine, and a ship signs with its keys. Being
+able to edit a canvas is not a reason to touch someone's working tree.
 
 - **A held proposal is a proactive proposal item**: dashed, hanging under
   the screen it changes, citing what asked for it. It shows before and after
