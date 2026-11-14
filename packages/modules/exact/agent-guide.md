@@ -44,6 +44,40 @@ From nothing to the map, in order:
    version posted only where its pixels changed — an edit to one component's
    text versions exactly the screens that show it. Prints one line per pass;
    runs until ctrl-c, or until `--max-passes` passes after the first.
+   Each pass also runs the compiler: **a save that does not build becomes a
+   comment** (a record) on the screen whose route draws the broken line,
+   and the captures wait; **`agent check both`** runs on every route whose
+   screen was recaptured, its findings (contrast, clipping, overlap, small
+   targets) pinned where they are on that screen. A finding no longer
+   found is taken away (`thread.delete`) on the next pass.
+   **Live frames**: unless `--no-frames`, `live` also starts the app's dev
+   loop and a bridge on this machine and prints a pairing code
+   (`<port>-XXXXX-XXXXX`, one use, two minutes) for a PERSON to type on a
+   screen's **Live** button; the browser then frames the running page and
+   Alt-click points at a line. With live frames off, Alt-click points on
+   the capture instead: every capture records each visible node's box and
+   source line in the screen's `exact.points` property (JSON: `files` with
+   each file's digest, `nodes` with x, y, w, h at the capture size, file,
+   line, col, component, classes) — read it to find which line draws what
+   is at a place on a screen. You cannot click; point at lines by reading
+   comments and `exact.points`. `--no-checks` skips agent check.
+4. `isocan exact check <app> [--no-checks] [--json]` — one pass of findings
+   without capturing: the compiler's diagnostics and `agent check both` on
+   every route's phone screen, as comments, the gone ones resolved, and
+   *moved* replies (below). Use it after you edit an Exact app.
+
+**Comments that point at a line.** A comment made on a pointed-at node,
+and every finding, carries one line in its body:
+
+    exact.source = {"file":"app.contract","line":113,"col":7,"sha256":"…"}
+
+That is the file (relative to the app directory), the line and column, and
+the SHA-256 of the file when the comment was made. To act on one: open the
+file at that line; if `shasum -a 256 <file>` no longer matches, the file
+has changed since — find the place by what the comment says, not the number.
+The bridge replies **Moved** on such a thread (`exact.moved = <digest>`).
+`exact.diagnostic = <key>` marks a finding the bridge posted; do not edit or
+delete those yourself — fix the source and the next pass resolves them.
 
 `isocan context` gains a row per Exact app on the canvas: its routes,
 arrows, screens, components, sources, grants, tokens and files.
@@ -67,5 +101,8 @@ Rules:
   Exact app, note friction with `bun exact.mjs feedback note "…"` as its
   `AGENTS.md` says, and respect the project's standing answer
   (`bun exact.mjs feedback status`): never send on your own initiative.
-- Live frames, other hosts, storyboards and proposals are not built yet;
-  screens are captures.
+- A screen starts live for viewers who have live frames on when it carries
+  `exact.live=on` (`isocan set <screen> --prop exact.live=on`); each viewer's
+  own Live / Still wins, and viewers with live frames off see the capture.
+  Live frames work only on a canvas whose home is this machine.
+- Other hosts, storyboards and proposals are not built yet.

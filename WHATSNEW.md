@@ -21,6 +21,20 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 14 November 2026
+
+- **Exact screens can go live (experiment).** Running isocan on your own
+  machine, `isocan exact live <app>` prints a pairing code; press **Live** on
+  a screen, enter it once, and the screen becomes your running app — edits
+  show a moment after you save. Each screen has a Live / Still switch, and
+  *Live frames* under the Exact experiment turns the whole thing off: then
+  your browser never connects to your machine at all.
+- **Alt-click points at the line.** Hold Alt and click anything on an Exact
+  screen, live or not, to see the Contract file and line that drew it, then
+  open it in your editor or leave a comment on that line. Compile errors and
+  `agent check` findings appear as comments on the screens they affect, and
+  go away when fixed.
+
 ## 13 November 2026
 
 - **Exact apps on the canvas, first step (experiment).** Tick *Exact* under

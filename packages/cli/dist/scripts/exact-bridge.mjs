@@ -15,8 +15,8 @@ var flag = (name) => {
   return i >= 0 ? argv[i + 1] : void 0;
 };
 var flags = (name) => argv.flatMap((a, i) => a === name && argv[i + 1] !== void 0 ? [argv[i + 1]] : []);
-if (!["doctor", "read", "capture", "inputs"].includes(verb ?? "") || !flag("--app") || !flag("--report")) {
-  console.error("usage: exact-bridge.mjs doctor|read|capture|inputs --app <dir> --report <file.json> [--hosts web,ios] [--jobs <jobs.json>] [--dir <out> --size <w>x<h> --url <path>\u2026]");
+if (!["doctor", "read", "capture", "inputs", "diagnose", "check"].includes(verb ?? "") || !flag("--app") || !flag("--report")) {
+  console.error("usage: exact-bridge.mjs doctor|read|capture|inputs|diagnose|check --app <dir> --report <file.json> [--hosts web,ios] [--jobs <jobs.json>] [--dir <out> --size <w>x<h> --url <path>\u2026]");
   process.exit(2);
 }
 var app = path.resolve(flag("--app"));
@@ -251,11 +251,12 @@ function captureJobs(out, jobs) {
     for (const [i, shot] of job.shots.entries()) {
       const file = path.join(out, `job-${j}-${i}.png`);
       files.push(file);
-      ops.push(`resize ${shot.size}`, `prefer color-scheme ${shot.scheme}`, "clock settle", `screenshot ${file}`);
+      ops.push(`resize ${shot.size}`, `prefer color-scheme ${shot.scheme}`, "clock settle", `screenshot ${file}`, "tree", "layout");
     }
     const run = exact([
       "agent",
       "web",
+      "--json",
       "--size",
       first.size,
       "--seed",
@@ -270,13 +271,55 @@ function captureJobs(out, jobs) {
       job.url,
       ...ops
     ]);
+    const replies = run.stdout.split("\n").flatMap((line) => {
+      if (!line.startsWith("{")) return [];
+      try {
+        return [JSON.parse(line)];
+      } catch {
+        return [];
+      }
+    });
+    const trees = replies.filter((r) => Array.isArray(r.nodes) && !r.env);
+    const layouts = replies.filter((r) => Array.isArray(r.nodes) && r.env);
     for (const [i, file] of files.entries()) {
       if (!existsSync(file)) fail(`agent web wrote no screenshot for ${job.url} at ${job.shots[i].size} ${job.shots[i].scheme}:
 ${run.stdout.trim().split("\n").slice(-4).join("\n")}`);
-      shots.push({ job: j, index: i, url: job.url, size: job.shots[i].size, scheme: job.shots[i].scheme, file, sha256: sha256(readFileSync(file)), ms: Math.round(run.ms / files.length) });
+      shots.push({ job: j, index: i, url: job.url, size: job.shots[i].size, scheme: job.shots[i].scheme, file, sha256: sha256(readFileSync(file)), ms: Math.round(run.ms / files.length), points: pointsOf(trees[i], layouts[i]) });
     }
   }
   return { shots };
+}
+var fileText = /* @__PURE__ */ new Map();
+function pointsOf(tree, layout) {
+  if (!tree || !layout) return null;
+  const hidden = new Set(tree.nodes.filter((n) => n.hidden || n.inactive).map((n) => n.id));
+  const rel = (file) => typeof file === "string" && file.startsWith(app + path.sep) ? path.relative(app, file) : null;
+  const files = {};
+  const nodes = [];
+  for (const n of layout.nodes) {
+    const m = n.sourceMap;
+    const file = rel(m?.file);
+    if (hidden.has(n.id) || !file || !(n.w > 0 && n.h > 0) || m.status !== "compatible") continue;
+    if (!fileText.has(file)) fileText.set(file, readFileSync(path.join(app, file), "utf8"));
+    files[file] ??= sha256(fileText.get(file));
+    const lineText = fileText.get(file).split("\n")[m.line - 1] ?? "";
+    const cls = /\bclass=\(([^)]*)\)/.exec(lineText)?.[1]?.match(/\b[A-Z][A-Za-z0-9_]*\b/g) ?? (/\bclass=([A-Za-z_][A-Za-z0-9_]*)/.exec(lineText) ? [/\bclass=([A-Za-z_][A-Za-z0-9_]*)/.exec(lineText)[1]] : []);
+    nodes.push({
+      x: Math.round(n.x),
+      y: Math.round(n.y),
+      w: Math.round(n.w),
+      h: Math.round(n.h),
+      type: n.type,
+      ...n.testId ? { testId: n.testId } : {},
+      file,
+      line: m.line,
+      col: m.col,
+      component: m.component ?? null,
+      chain: (m.chain ?? []).map((c) => ({ file: rel(c.file) ?? c.file, line: c.line, col: c.col, component: c.component ?? null })),
+      ...cls.length ? { classes: cls } : {}
+    });
+  }
+  return { files, nodes };
 }
 function capture() {
   const out = path.resolve(flag("--dir") ?? fail("capture needs --dir"));
@@ -313,5 +356,54 @@ ${run.stdout.trim().split("\n").slice(-4).join("\n")}`);
   }
   return { size, shots };
 }
-var result = verb === "doctor" ? await doctor() : verb === "read" ? await read() : verb === "inputs" ? { inputs: inputsDigest(checkout().dir) } : capture();
+function diagnose() {
+  const build = exact(["contract", "build", "app.contract", "--json"], { allowFail: true });
+  let diagnostics;
+  try {
+    diagnostics = JSON.parse(build.stdout.trim().split("\n").filter((l) => l.startsWith("[")).at(-1) ?? "null");
+  } catch {
+    diagnostics = null;
+  }
+  if (!Array.isArray(diagnostics)) fail(`\`contract build --json\` printed no diagnostics list (exit ${build.code}):
+${(build.stderr || build.stdout).trim().split("\n").slice(-4).join("\n")}`);
+  const sym = exact(["contract", "symbols", "app.contract"], { allowFail: true });
+  let symbols = null;
+  try {
+    symbols = JSON.parse(sym.stdout);
+  } catch {
+  }
+  const sources = {};
+  const digests = {};
+  const files = /* @__PURE__ */ new Set(["app.contract", ...diagnostics.map((d) => d.file), ...(symbols?.definitions ?? []).map((d) => d.file)]);
+  for (const file of files) {
+    if (typeof file !== "string" || file.includes(":")) continue;
+    const at = path.resolve(app, file);
+    if (!at.startsWith(app + path.sep) || !existsSync(at)) continue;
+    const bytes = readFileSync(at);
+    digests[file] = sha256(bytes);
+    if (file.endsWith(".contract")) sources[file] = bytes.toString("utf8");
+  }
+  return { diagnostics, symbols, sources, digests, ms: build.ms + sym.ms };
+}
+function check() {
+  const out = [];
+  for (const url of flags("--url")) {
+    checkJob({ url, ops: [], shots: [] });
+    const run = exact(["agent", "web", "--json", "--size", "390x844", "--seed", "1", "--locale", "en-US", "--time-zone", "UTC", "--epoch", "2026-01-01", "--url", url, "clock data", "clock settle", "check both"], { allowFail: true });
+    let found = null;
+    for (const line of run.stdout.split("\n")) {
+      if (!line.startsWith("{")) continue;
+      try {
+        const v = JSON.parse(line);
+        if (Array.isArray(v.check)) found = v.check;
+      } catch {
+      }
+    }
+    if (!found) fail(`agent check on ${url} answered nothing (exit ${run.code}):
+${(run.stderr || run.stdout).trim().split("\n").slice(-4).join("\n")}`);
+    out.push({ url, check: found, ms: run.ms });
+  }
+  return { checks: out };
+}
+var result = verb === "diagnose" ? diagnose() : verb === "check" ? check() : verb === "doctor" ? await doctor() : verb === "read" ? await read() : verb === "inputs" ? { inputs: inputsDigest(checkout().dir) } : capture();
 writeFileSync(report, JSON.stringify(result, null, 2));

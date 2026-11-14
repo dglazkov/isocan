@@ -417,6 +417,8 @@ export interface WebHost {
      * that drifts; this hands over the composer's own.
      */
     commands: () => readonly CommandMetadata[];
+    /** **The local-tool door** (exact phase 2) — the same one `RendererFacts.localTool` is. Absent on an older shell. */
+    localTool?: ((tool: string) => LocalToolDoor) | undefined;
     /**
      * **Run this line the way the composer's send does** (proposed: `host`) —
      * not a second implementation of it. A module command that opens a dialog
@@ -665,7 +667,63 @@ export interface RendererFacts {
     entered: boolean;
     url: string;
     readText: () => Promise<string>;
+    /**
+     * **The local-tool door** (exact phase 2; `docs/projects/exact/design.md`
+     * §5) — how this browser reaches a tool's bridge on this machine, if it
+     * may. Absent on an older shell. See `LocalToolDoor`.
+     */
+    localTool?: ((tool: string) => LocalToolDoor) | undefined;
 }
+/**
+ * **A paired door from this browser to a tool on this machine** (exact phase
+ * 2; design §5). The shell owns it, so a module never spells a loopback
+ * address or keeps a token of its own:
+ *
+ * - **Shut unless the home is itself on this machine** (http on 127.0.0.1,
+ *   localhost or [::1]) — a hosted HTTPS canvas waits for a relay (exact
+ *   phase 8) — and unless the person left the tool's switch on: the
+ *   experiment `<tool>.local` ("Live frames" for `exact`), per browser.
+ *   Shut means nothing is fetched and nothing is framed: `fetch` throws and
+ *   `frameUrl` answers null without touching the network.
+ * - **Paired once** with the code the tool's bridge printed —
+ *   `<port>-XXXXX-XXXXX`, one use, two minutes — and the token it answers
+ *   is kept in this browser for this machine, never in an item, a property
+ *   or an op.
+ * - **Loopback only**: every request goes to `http://127.0.0.1:<port>`, a
+ *   port this browser paired with.
+ *
+ * Generic on purpose — a tool is a name — so the sandbox and motion modules
+ * can ask for it later; only Exact uses it today.
+ */
+export interface LocalToolDoor {
+    /** Why the door is shut in this browser, in words, or null when it is open. */
+    shut: string | null;
+    /** The bridges this browser has paired with for this tool, newest first. */
+    paired: () => readonly number[];
+    /** Pair with a bridge: the code it printed, `<port>-XXXXX-XXXXX`. Resolves with its port. */
+    pair: (code: string) => Promise<{
+        port: number;
+    }>;
+    /** A request to a paired bridge, its token added. `path` starts with `/`. Throws when shut or unpaired. */
+    fetch: (port: number, path: string, init?: {
+        method?: "GET" | "POST";
+        body?: string;
+        signal?: AbortSignal;
+    }) => Promise<Response>;
+    /** The address a frame may load from a paired bridge, or null when the door is shut. */
+    frameUrl: (port: number, path: string) => string | null;
+    /** Forget a pairing (a bridge that restarted answers 401 to its old token). */
+    forget: (port: number) => void;
+    /** Called when pairings or the switch change; returns its cleanup. */
+    watch: (listener: () => void) => () => void;
+}
+/** The pairing code a local tool's bridge prints: its port, then a one-use code (exact phase 2). */
+export declare function parseLocalToolCode(text: string): {
+    port: number;
+    code: string;
+} | null;
+/** Is this page's origin on this machine — the one place a local-tool door may open (exact phase 2)? */
+export declare function loopbackOrigin(href: string): boolean;
 /** How a module draws its own mimes on a card and the stage, ahead of the built-in chain. */
 export interface ModuleRenderer<R> {
     /** The mimes this draws — the same list the module's kind claims. */
