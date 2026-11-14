@@ -21,7 +21,10 @@ import { ExactScreen, PointPanel, commentRows } from "./live.tsx";
 import { WallCard } from "./wall.tsx";
 import { FilmStrip } from "./film.tsx";
 import { InspectorPanel, SelectionWatch } from "./inspector.tsx";
-import { EXACT_ANATOMY_MIME, EXACT_INDEX_MIME, EXACT_PROPS, EXACT_WALL_MIME, exactModule, mapEdges, parseAnatomy, parseIndex, type AnatomyCard as AnatomyCardData, type ExactIndex, type MapEdge } from "./core.ts";
+import { StoryboardCard } from "./storyboard.tsx";
+import { exactCanvas, useExactStore } from "./live.tsx";
+import { parseVerifyAnswer, parseVerifyAsk } from "./story.ts";
+import { EXACT_ANATOMY_MIME, EXACT_INDEX_MIME, EXACT_PROPS, EXACT_STORY_MIME, EXACT_WALL_MIME, appIdOf, exactModule, mapEdges, parseAnatomy, parseIndex, type AnatomyCard as AnatomyCardData, type ExactIndex, type MapEdge } from "./core.ts";
 
 /**
  * **The web half** (exact phases 0 and 1): the index and the anatomy cards
@@ -45,7 +48,44 @@ function useParsed<T>(blobHash: string, readText: () => Promise<string>, parse: 
   return state && state.hash === blobHash ? state : null;
 }
 
-function IndexCard({ blobHash, readText }: RendererFacts) {
+/**
+ * **Verify on all hosts** (exact phase 5; design §9), on the index: Exact's
+ * `verify` on the web and iOS (it has no macOS leg), asked on the canvas —
+ * `exact.verify`, answered by `isocan exact live` with `exact.verified` — and
+ * its screenshots posted as versions of the screens they show.
+ */
+function VerifyRow({ itemId, appId }: { itemId: string; appId: string }) {
+  useExactStore();
+  const canvas = exactCanvas();
+  const [seq, setSeq] = useState<number | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  if (!canvas) return null;
+  const answer = parseVerifyAnswer(canvas.contents.items[itemId]?.properties?.[EXACT_PROPS.verified]);
+  const hosts = (["web", "ios"] as const).filter((h) => Object.values(canvas.contents.items).some((i) => appIdOf(i) === appId && (i.properties?.[EXACT_PROPS.host] ?? "web") === h && i.properties?.[EXACT_PROPS.route]));
+  // Read off the index, not this card's memory: a property change can mount the card afresh while verify runs.
+  const asked = parseVerifyAsk(canvas.contents.items[itemId]?.properties?.[EXACT_PROPS.verify]);
+  const waiting = (seq !== null && (!answer || answer.seq < seq)) || (!!asked && (!answer || answer.seq < asked.seq));
+  const ask = () => {
+    const s = Date.now();
+    setSeq(s);
+    setProblem(null);
+    canvas.send([{ type: "item.update", itemId, patch: { properties: { [EXACT_PROPS.verify]: JSON.stringify({ seq: s, by: canvas.viewer, hosts }) } } }]).catch((err: unknown) => { setSeq(null); setProblem(err instanceof Error ? err.message : String(err)); });
+  };
+  return (
+    <div className="exact-verify" data-exact-verify={waiting ? "waiting" : answer ? (answer.ok ? "done" : "failed") : "idle"} onPointerDown={(e) => e.stopPropagation()}>
+      <button type="button" className="exact-chip" disabled={waiting || hosts.length === 0} onClick={ask} title="Exact's verify — tests, check light and dark at two sizes, the largest text, a relaunch — its screenshots posted as versions of the screens they show">
+        Verify on all hosts{hosts.length ? ` (${hosts.join(", ")})` : ""}
+      </button>
+      {waiting && <p className="exact-note" role="status">asked on the canvas — waiting for `isocan exact live` to verify…</p>}
+      {!waiting && answer && Object.entries(answer.hosts).map(([h, a]) => (
+        <p key={h} className={a.error ? "exact-problem" : "exact-note"}>{h}: {a.error ?? `exit ${a.exit}, ${a.problems ?? "?"} problems, ${a.posted.length} screens versioned${a.unmatched.length ? `; ${a.unmatched.length} shots not placed (${a.unmatched[0]!.why})` : ""}`}</p>
+      ))}
+      {problem && <p className="exact-problem">{problem}</p>}
+    </div>
+  );
+}
+
+function IndexCard({ blobHash, readText, item }: RendererFacts) {
   const state = useParsed<ExactIndex>(blobHash, readText, parseIndex);
   if (!state) return <div className="exact-index exact-note">Reading the index…</div>;
   if (!state.value) return <div className="exact-index exact-problem">{state.problem}</div>;
@@ -67,6 +107,7 @@ function IndexCard({ blobHash, readText }: RendererFacts) {
       <p className={index.routesJson.equal ? "exact-note" : "exact-problem"}>
         {index.routesJson.equal ? "routes.json agrees" : "routes.json disagrees with Contract"}
       </p>
+      {item && <VerifyRow itemId={item.id} appId={index.app.id} />}
       {index.unplaced.length > 0 && (
         <p className="exact-note">
           Not drawn: {index.unplaced.map((u) => `${u.verb}${u.action ? ` in ${u.action}` : ""} (${u.file}:${u.line})`).join("; ")}
@@ -184,6 +225,8 @@ export const exactWeb: WebModule<ComponentType<UnderlayFacts>, ComponentType<Ren
     { mimes: [EXACT_ANATOMY_MIME], component: AnatomyCard },
     // One route on every host and device (exact phase 3, `wall.tsx`).
     { mimes: [EXACT_WALL_MIME], component: WallCard },
+    // A test as a storyboard (exact phase 5, `storyboard.tsx`): its steps, each run's frames, Run on a host or all.
+    { mimes: [EXACT_STORY_MIME], component: StoryboardCard },
     // A film is an ordinary animated PNG (exact phase 4, `film.tsx`): the ones that carry `exact.film` are drawn as a scrubber.
     { mimes: ["image/png"], property: EXACT_PROPS.film, component: FilmStrip },
     // A screen is an ordinary PNG: only the ones this module captured (they carry `exact.route`) are drawn here —

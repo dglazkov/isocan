@@ -26,15 +26,18 @@ is scratch. Nothing is sent until Phase 10.
 
 **Phase citations name their project**: `exact phase 2`.
 
-**Where we are, 14 Nov 2026:** phases 0–4 CLOSED. An Exact app is a flow
+**Where we are, 14 Nov 2026:** phases 0–5 CLOSED. An Exact app is a flow
 map on the canvas (`isocan exact open`), kept true on save (`isocan exact
 live`), captured on the web, a dedicated iOS simulator and macOS, with a
 device wall per route and host differences as comments. Screens go **Live**
 on a loopback home, Alt-click names the Contract line, and any screen can be
-**driven**, **filmed** against Exact's clock (a scrubbable strip, state per
-frame, comments at a moment) and **inspected** — through the bridge, or with
-*Live frames* off through the canvas itself. Next: **exact phase 5**, tests
-as storyboards. Nothing waits on a person.
+**driven**, **filmed** against Exact's clock and **inspected**. Each `test`
+is a storyboard that **runs** on every host from the canvas, its results
+kept as versions; **Verify** posts its first-screen shots onto their
+screens; **Record** in Drive mode proposes a test that reaches disk only on
+the person's Keep — all through the bridge, or with *Live frames* off
+through the canvas itself. Next: **exact phase 6**, agents propose. Nothing
+waits on a person.
 ---
 
 ## Phase 0 — The bridge, the index, and the three doors
@@ -213,7 +216,11 @@ driver's printed tree agree.
 
 ## Phase 5 — Tests are storyboards
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 14 Nov 2026.** Acme's checkout test ran on web, iOS and
+macOS from the canvas with *Live frames* off and on: web and iOS green,
+macOS red at line 12 where a planted Hermes-and-fine-pointer bug renamed
+`place-order`; a test recorded in Drive mode, kept, passed on all three
+unedited.
 
 - Each `test` block as a storyboard; **Run** per host, results as versions.
 - **Verify on all hosts** (`verify`), its screenshots as versions of the
@@ -223,6 +230,13 @@ driver's printed tree agree.
 **Proof:** Acme's checkout test run on web, iOS and macOS from the canvas,
 one host failing at the step a deliberate bug breaks; a recorded test,
 accepted, passes on all three without an edit.
+
+### Trajectory
+
+- **2026-11-14** — Exact's `test` gives no reply per operation (design §9 assumed `--json` would), so Run hands `test <host>` a copy of the test with a `screenshot` after each step: the verdict and its wording stay Exact's; a cold `agent --json` replay to the failing step reads its tree. Frames ride inside the storyboard version, out of gc's reach.
+- **2026-11-14** — Accept reaches disk through core's choose and `isocan exact live` watching the op log: the recorder only posts a proposal item; live writes the file when the kept text is the recorded base plus one test in the recorder's grammar and the disk still matches that base.
+- **2026-11-14** — Open: only Verify's first-screen shots can be tied to a screen — its test-end shots name a test not a route, its desktop size (1280×900) is no canvas device, its relaunch shot names no route, and macOS has no verify leg. The rest are listed with the reason. Waits on Exact.
+- **2026-11-14** — Open: a run version holds its frames (~2.4 MB across three hosts, iOS frames large); runs are invalidated only by a change to the test's steps, not the app's source; undoing a Keep does not un-write the file. Waits on use.
 
 ## Phase 6 — Agents propose
 

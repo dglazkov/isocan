@@ -33,6 +33,10 @@
  * - **films** (exact phase 4) — `/film` films a press on a screen by the
  *   capture bridge's own `film` and answers the strip's bytes and the state at
  *   each frame; the paired browser lands it beside the map.
+ * - **storyboards** (exact phase 5) — `/run` runs one test on one host by
+ *   the capture bridge's own `run` (Exact's `test <host>`, a frame per step)
+ *   and answers the report with each frame's bytes; the paired browser keeps
+ *   it as the storyboard's next version.
  * - **the capture loop** — `--child` is the CLI's own `isocan exact live
  *   --no-frames`, which keeps the map's captures, versions and compile
  *   errors true on every save; its output is passed through.
@@ -358,6 +362,36 @@ function filmOnce(job) {
   return run;
 }
 
+/**
+ * **One storyboard run, by the capture bridge's own `run`** (exact phase 5) —
+ * the code `isocan exact run` and `isocan exact live` run: Exact's `test
+ * <host>` on the one test with a screenshot after each step. Answered with
+ * each frame's bytes in place of its path; the browser keeps the run.
+ */
+function runOnce(job) {
+  const run = driving.then(() => new Promise((resolve) => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "isocan-exact-run-"));
+    const done = (answer) => { rmSync(dir, { recursive: true, force: true }); resolve(answer); };
+    try {
+      writeFileSync(path.join(dir, "job.json"), JSON.stringify(job));
+      const bridgeScript = path.join(path.dirname(fileURLToPath(import.meta.url)), "exact-bridge.mjs");
+      const child = spawn(process.execPath, [bridgeScript, "run", "--app", app, "--report", path.join(dir, "report.json"), "--dir", dir, "--job", path.join(dir, "job.json"), ...(sim ? ["--sim", sim] : [])], { stdio: ["ignore", "ignore", "pipe"] });
+      let err = "";
+      child.stderr.on("data", (d) => { err = (err + d).slice(-4000); });
+      child.on("close", () => {
+        let r;
+        try { r = JSON.parse(readFileSync(path.join(dir, "report.json"), "utf8")); } catch { return done({ ok: false, verdict: "error", error: err.trim().split("\n").slice(-3).join("\n") || "the run did not answer" }); }
+        const inline = (f) => (f?.file && existsSync(f.file) ? { sha256: f.sha256, png: readFileSync(f.file).toString("base64") } : f ? { sha256: f.sha256 } : null);
+        done({ ...r, steps: r.steps.map((s) => ({ ...s, frame: inline(s.frame) })), failed: r.failed ? { ...r.failed, frame: inline(r.failed.frame) } : null, end: inline(r.end) });
+      });
+    } catch (e) {
+      done({ ok: false, verdict: "error", error: e.message });
+    }
+  }));
+  driving = run.catch(() => {});
+  return run;
+}
+
 // ---------------------------------------------------------------- the bridge API
 
 function designLink(route) {
@@ -507,6 +541,18 @@ const api = http.createServer(async (req, res) => {
     say(`inspect on ${host}`);
     const r = await facts({ host, size, scheme, shots: String(body.shots) });
     say(`inspect on ${host}: ${r.ok ? `tree --ax, layout, perf and logs in ${r.ms} ms` : r.error}`);
+    return answer(r.ok ? 200 : 422, r);
+  }
+  if (url.pathname === "/run" && req.method === "POST") {
+    const body = await readBody(req);
+    const host = body?.host;
+    if (!driveHosts.includes(host)) return answer(400, { error: `this bridge runs on ${driveHosts.join(", ")} — \`isocan exact live --hosts …\` names the hosts` });
+    if (host === "ios" && !sim) return answer(400, { error: "this bridge has no simulator of its own to run iOS on: `isocan exact live --hosts …,ios --sim <udid>`" });
+    if (typeof body.file !== "string" || !/^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,80}\.test\.contract$/.test(body.file)) return answer(400, { error: "a run names one of the app's *.test.contract files" });
+    if (typeof body.test !== "string" || !body.test || body.test.length > 200) return answer(400, { error: "a run names its test" });
+    say(`run on ${host}: test "${body.test}" in ${body.file}`);
+    const r = await runOnce({ host, file: body.file, test: body.test });
+    say(`run on ${host}: ${r.verdict === "ok" ? "ok" : r.verdict === "fail" ? `FAIL at ${body.file}:${r.failed?.line ?? "?"}` : r.error ?? r.verdict}`);
     return answer(r.ok ? 200 : 422, r);
   }
   if (url.pathname === "/design" && req.method === "GET") {

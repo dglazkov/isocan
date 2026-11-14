@@ -29,6 +29,8 @@ import { DEVICES, LAYOUT, SCHEMES, mapLayout, parseShots, rowOffset, rowSize, sh
 import { buildFindings, checkFindings, movedBody, movedComments, planFindings, type CheckReport, type DiagnoseReport, type Finding } from "./findings.ts";
 import { pendingDrives, pendingFilms, pendingInspects, type DriveAnswer, type DriveRequest } from "./drives.ts";
 import { filmKeyText, filmTitle, landFilm, parseFilm, type FilmAnswer, type FilmAsk, type FilmFacts, type FilmJob, type FilmReport, type InspectAnswer, type InspectRequest, type ScreenFacts } from "./film.ts";
+import { answerRecord, answerRun, pendingAsks, pendingRecords, runLine, runOnHost, storyItemOf, syncStories, verifyOnHost, writeKept, type Kit, type RunOptions } from "./stories.ts";
+import { parseVerifyAsk, type RunReport, type VerifyAnswer } from "./story.ts";
 import { HOST_NAMES, NATIVE_DEVICE, UDID, compareFindings, jobSize, nativeCellWidth, nativeOffset, nativeSize, parseHosts, wallCells, wallSize, wallText, wallsOf, type CompareReport, type Host, type Wall } from "./hosts.ts";
 
 /**
@@ -198,6 +200,8 @@ interface SyncResult {
   hostFindings: Finding[];
   compared: Array<{ route: string; host: Host }>;
   walls: Array<{ itemId: string; route: string; status: Upsert }>;
+  /** The test files and their storyboards (exact phase 5). */
+  stories: Array<{ file: string; test: string | null; itemId: string; status: Upsert }>;
 }
 
 /**
@@ -347,7 +351,11 @@ async function sync(host: CliHost, ctx: Ctx, canvasId: string, app: string, opts
       const posted = await postWall(host, ctx, canvasId, after, index.app, w.route, w.scheme, w.item);
       walls.push({ itemId: posted.itemId, route: w.route, status: posted.status });
     }
-    return { index, indexItem, design, anatomy, screens, captureMs, hostFindings, compared, walls };
+    // The tests (exact phase 5): each file in the side column under the cards, each test a storyboard under the map.
+    const placed = Object.values(after.canvas.items).filter((i) => core.appIdOf(i) === appId && (i.properties?.[core.EXACT_PROPS.route] !== undefined || i.id === indexItem.itemId));
+    const below = Math.max(sideY, ...placed.map((i) => i.y + i.height)) + 240;
+    const stories = await syncStories(kit, host, ctx, canvasId, readings, index, { sideX: origin.x, mapX, y: below });
+    return { index, indexItem, design, anatomy, screens, captureMs, hostFindings, compared, walls, stories };
   } finally {
     await fs.rm(dir, { recursive: true, force: true });
   }
@@ -412,6 +420,7 @@ function syncJson(r: SyncResult) {
     captureMs: r.captureMs,
     hosts: { compared: r.compared, findings: r.hostFindings.map((f) => ({ key: f.key, routes: f.routes, body: f.body })) },
     walls: r.walls,
+    stories: r.stories,
   };
 }
 
@@ -435,6 +444,7 @@ function printSync(r: SyncResult): void {
   for (const f of r.hostFindings) console.log(`${f.key}\n  ${f.body.split("\n")[0]}`);
   if (r.compared.length) console.log(`compared ${r.compared.map((c) => `${c.route} on ${HOST_NAMES[c.host]}`).join(", ")} with the web: ${r.hostFindings.length} difference${r.hostFindings.length === 1 ? "" : "s"} beyond each platform's own bars`);
   for (const w of r.walls) console.log(`${w.itemId}  device wall of ${w.route} (${w.status})`);
+  for (const t of r.stories) console.log(`${t.itemId}  ${t.test === null ? `test file ${t.file}` : `storyboard of test "${t.test}"`} (${t.status})`);
   console.log(tally(r));
 }
 
@@ -465,7 +475,7 @@ export async function open(host: CliHost, given: string, opts: CaptureOptions, c
 }
 
 /** Files whose change is not the app's: what builds and Exact write, and an editor's (or `sed -i`'s) scratch copies. */
-const IGNORED = /(^|\/)(target|\.exact|node_modules|\.git|dist[^/]*)(\/|$)|(^|\/)\.!|\.d\.ts$|\.DS_Store$|~$|\.swp$/;
+const IGNORED = /(^|\/)(target|\.exact|node_modules|\.git|dist[^/]*)(\/|$)|(^|\/)\.!|\.d\.ts$|\.DS_Store$|~$|\.swp$|\.isocan-\d+$/;
 
 /** The app's id and name, from its manifest — what the findings need when the build is broken and there is no index. */
 async function appOf(app: string): Promise<{ id: string; name: string }> {
@@ -679,6 +689,37 @@ async function serveDrives(host: CliHost, ctx: Ctx, canvasId: string, app: strin
       say(`film on ${request.host}: ${answer.ok ? `${answer.itemId}, sha256 ${answer.sha256}, in ${answer.ms} ms` : answer.error}`);
       await host.sendOp(ctx, canvasId, { type: "item.update", itemId: item.id, patch: { properties: { [core.EXACT_PROPS.filmed]: JSON.stringify(answer) } } }, id("exact-film"));
     }
+    // Storyboards (exact phase 5): runs and verifies asked for on the canvas, recordings proposed, and a kept recording written.
+    const asks = pendingAsks(entries, snapshot, appId);
+    for (const item of asks.runs) {
+      if (signal.aborted) return;
+      const answer = await answerRun(kit, host, ctx, canvasId, app, options.hosts, options.sim, item, say);
+      if (answer) await host.sendOp(ctx, canvasId, { type: "item.update", itemId: item.id, patch: { properties: { [core.EXACT_PROPS.ran]: JSON.stringify(answer) } } }, id("exact-run"));
+    }
+    for (const item of asks.verifies) {
+      if (signal.aborted) return;
+      const ask = parseVerifyAsk(item.properties?.[core.EXACT_PROPS.verify])!;
+      const started = Date.now();
+      const answer: VerifyAnswer = { seq: ask.seq, ok: true, hosts: {}, ms: 0 };
+      for (const on of ask.hosts) {
+        say(`verify on ${on}${ask.by ? `, for ${ask.by}` : ""}`);
+        if (!(options.hosts as readonly string[]).includes(on) || (on === "ios" && !options.sim)) { answer.hosts[on] = { exit: null, problems: null, tests: null, posted: [], unmatched: [], error: `this \`isocan exact live\` runs on ${options.hosts.join(", ")}${on === "ios" ? " (iOS needs --sim <udid>)" : ""}` }; continue; }
+        try { answer.hosts[on] = await verifyOnHost(kit, host, ctx, canvasId, app, on, on === "ios" ? options.sim : null); } catch (err) { answer.hosts[on] = { exit: null, problems: null, tests: null, posted: [], unmatched: [], error: (err as Error).message }; }
+        const h = answer.hosts[on]!;
+        say(`verify on ${on}: ${h.error ?? `exit ${h.exit}, ${h.problems ?? "?"} problems, ${h.posted.length} screens versioned, ${h.unmatched.length} shots not placed`}`);
+      }
+      answer.ms = Date.now() - started;
+      answer.ok = Object.values(answer.hosts).every((h) => !h.error);
+      await host.sendOp(ctx, canvasId, { type: "item.update", itemId: item.id, patch: { properties: { [core.EXACT_PROPS.verified]: JSON.stringify(answer) } } }, id("exact-verify"));
+    }
+    for (const { item, ask, seq } of pendingRecords(entries, snapshot, appId)) {
+      if (signal.aborted) return;
+      say(`recording on ${ask.host} (${item.title}): ${ask.ops.join(", ")}${ask.by ? `, for ${ask.by}` : ""}`);
+      const answer = await answerRecord(kit, host, ctx, canvasId, app, options.hosts, options.sim, item, ask, seq);
+      say(`recording: ${answer.ok ? `proposed ${answer.itemId} with ${answer.expects.length} expect lines (${answer.expects.join("; ")})` : answer.error}`);
+      await host.sendOp(ctx, canvasId, { type: "item.update", itemId: item.id, patch: { properties: { [core.EXACT_PROPS.recorded]: JSON.stringify(answer) } } }, id("exact-record"));
+    }
+    await writeKept(host, ctx, canvasId, app, appId, entries, snapshot, say);
     // Inspections asked for the same way (exact phase 4): the driver's facts for one screen, as a JSON blob.
     for (const { item, request } of pendingInspects(entries, snapshot.canvas, appId)) {
       if (signal.aborted) return;
@@ -895,4 +936,68 @@ export async function moment(host: CliHost, ref: string, ms: string, words: stri
   await host.sendOp(ctx, canvas.id, { type: "thread.create", threadId, x, y: Math.round(item.height - 24), anchorItemId: item.id, comment: { id: id("cmt"), body, at: Math.round(at) / 1000 } } as Operation, id("exact-moment"));
   if (ctx.json) return host.printJson({ threadId, itemId: item.id, at: Math.round(at) / 1000, ms: Math.round(at) });
   console.log(`commented on ${item.title} at ${Math.round(at)} ms (${threadId})`);
+}
+
+/** What `stories.ts` runs Exact and posts with: this file's own bridge and upsert. */
+const kit: Kit = { bridge, upsert, appOf };
+
+/**
+ * **`isocan exact run <app> <test>`** (exact phase 5; design §9): the test's
+ * storyboard run on each host named — Exact's own `test <host>`, a frame per
+ * step — each run kept as the storyboard's next version, the failing step red
+ * with Exact's reason and the driver's tree.
+ */
+export async function runTest(host: CliHost, given: string, test: string, opts: RunOptions, cmd: Command): Promise<void> {
+  const ctx = await host.ctxOf(cmd);
+  const app = appDir(given);
+  const canvas = await host.resolveCanvas(ctx);
+  const hosts = parseHosts(opts.hosts);
+  const sim = opts.sim ?? null;
+  if (sim !== null && !UDID.test(sim)) throw new Error(`--sim takes a simulator's UDID, not ${JSON.stringify(sim)}`);
+  if (hosts.includes("ios") && !sim) throw new Error("iOS runs on a simulator of your own, by UDID: --sim <udid> (never a booted one somebody else may own)");
+  const info = await appOf(app);
+  const snapshot = await ctx.client.snapshot(canvas.id);
+  const stories = Object.values(snapshot.canvas.items).filter((i) => core.appIdOf(i) === info.id && i.properties?.[core.EXACT_PROPS.test] === test && (!opts.file || i.properties?.[core.EXACT_PROPS.testFile] === opts.file));
+  if (stories.length === 0) throw new Error(`no storyboard of a test named "${test}" for ${info.name} on this canvas — \`isocan exact open <app>\` posts one per test`);
+  if (stories.length > 1) throw new Error(`"${test}" is a test in ${stories.map((s) => s.properties?.[core.EXACT_PROPS.testFile]).join(" and ")} — name one with --file`);
+  const item = storyItemOf(snapshot, info.id, stories[0]!.properties![core.EXACT_PROPS.testFile]!, test)!;
+  const out: Array<RunReport & { status: string }> = [];
+  for (const on of hosts) {
+    if (!ctx.json) console.error(`running "${test}" on ${on} with Exact's own test runner…`);
+    const { report, status } = await runOnHost(kit, host, ctx, canvas.id, app, item, on, on === "ios" ? sim : null);
+    out.push({ ...report, status });
+    if (!ctx.json) console.log(runLine(report));
+  }
+  if (ctx.json) return host.printJson({ itemId: item.id, test, file: item.properties?.[core.EXACT_PROPS.testFile], runs: out.map((r) => ({ host: r.host, verdict: r.verdict, said: r.said, failed: r.failed ? { line: r.failed.line, reason: r.failed.reason, tree: r.failed.tree?.length ?? 0, reply: r.failed.reply } : null, steps: r.steps.map((s) => ({ line: s.line, state: s.state })), version: r.status, ms: r.ms })) });
+  console.log(`${item.id}  storyboard of test "${test}": ${out.length} run${out.length === 1 ? "" : "s"} kept as versions`);
+}
+
+/**
+ * **`isocan exact verify <app>`** (exact phase 5; design §9): Exact's
+ * `verify` on each host (the web and iOS: Exact has no macOS leg), its
+ * screenshots posted as versions of the screens they show — the first
+ * screen's, by route, host, device and scheme — and the rest named with why.
+ */
+export async function verifyApp(host: CliHost, given: string, opts: { hosts?: string; sim?: string }, cmd: Command): Promise<void> {
+  const ctx = await host.ctxOf(cmd);
+  const app = appDir(given);
+  const canvas = await host.resolveCanvas(ctx);
+  const hosts = parseHosts(opts.hosts ?? "web");
+  const sim = opts.sim ?? null;
+  if (sim !== null && !UDID.test(sim)) throw new Error(`--sim takes a simulator's UDID, not ${JSON.stringify(sim)}`);
+  if (hosts.includes("ios") && !sim) throw new Error("iOS verifies on a simulator of your own, by UDID: --sim <udid>");
+  const out: Record<string, VerifyAnswer["hosts"][string]> = {};
+  for (const on of hosts) {
+    if (on === "macos") { out[on] = { exit: null, problems: null, tests: null, posted: [], unmatched: [], error: "Exact's verify has no macOS leg (`bun exact.mjs verify macos`: \"verify has no leg for it\"); run the storyboards there instead" }; continue; }
+    if (!ctx.json) console.error(`verify on ${on}, with Exact's own verify…`);
+    out[on] = await verifyOnHost(kit, host, ctx, canvas.id, app, on, on === "ios" ? sim : null);
+  }
+  if (ctx.json) return host.printJson({ hosts: out });
+  for (const [on, h] of Object.entries(out)) {
+    if (h.error) { console.log(`${on.padEnd(6)} ${h.error}`); continue; }
+    console.log(`${on.padEnd(6)} verify exit ${h.exit}, ${h.problems ?? "?"} problems; tests ${h.tests ? `${h.tests.passed} passed, ${h.tests.failed} failed` : "none"}`);
+    for (const f of h.tests?.failing ?? []) console.log(`  failing: ${f}`);
+    for (const p of h.posted) console.log(`  ${p.itemId}  ${p.shot} (${p.status})`);
+    for (const u of h.unmatched) console.log(`  not placed: ${u.shot} — ${u.why}`);
+  }
 }

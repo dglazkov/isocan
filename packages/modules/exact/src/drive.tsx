@@ -18,6 +18,7 @@ import { useEffect, useState } from "react";
 import type { LocalToolDoor, Operation } from "@isocan/core";
 import type { CapturePoint, CapturePoints } from "./core.ts";
 import { driveLine, driveTarget, typesInto, type DriveOp } from "./hosts.ts";
+import { testName, type RecordAnswer } from "./story.ts";
 
 /**
  * **Drive mode, in the browser** (exact phase 3; design §7). A press on the
@@ -46,6 +47,10 @@ export interface CanvasDrive {
   answer: { seq: number; ok: boolean; blobHash: string | null; points: unknown; results: Array<{ op: string; reply: Record<string, unknown> | null }>; ms: number; error?: string } | null;
   /** A blob of this canvas, by hash. */
   urlOf: (blobHash: string) => string;
+  /** The app's test files on the canvas, a recording's possible homes (exact phase 5). */
+  testFiles: string[];
+  /** The screen's `exact.recorded`: the answer to its latest recording. */
+  recorded: RecordAnswer | null;
 }
 
 export interface DriveStart {
@@ -60,6 +65,8 @@ export interface DriveStart {
   scheme: "light" | "dark";
   /** Where the drive starts: the shots the capture ran. */
   shots: string;
+  /** The route driven, for a recording's default name. */
+  route?: string | undefined;
   /** The capture's own nodes and width in points, for the first press. */
   points: CapturePoints | null;
   width: number;
@@ -92,6 +99,10 @@ export function Driver({ start, url, alt, onStop }: { start: DriveStart; url: st
   const [typing, setTyping] = useState<{ node: CapturePoint; text: string } | null>(null);
 
   const [pending, setPending] = useState<{ seq: number; next: string[] } | null>(null);
+  // Record (exact phase 5): the drive's presses from `from` on are the test; on stop, a name and a file, then a proposal.
+  const [recording, setRecording] = useState<{ from: number } | null>(null);
+  const [proposing, setProposing] = useState<{ from: number; name: string; file: string } | null>(null);
+  const [asked, setAsked] = useState<{ seq: number; state: "asking" | "proposed" | "failed"; said: string; itemId?: string } | null>(null);
   const points = shown ? shown.points : start.points;
   const width = shown ? shown.width : start.width;
 
@@ -148,6 +159,38 @@ export function Driver({ start, url, alt, onStop }: { start: DriveStart; url: st
     }
   };
 
+  // A recording's answer arrives on the screen: the proposal item, or why not.
+  const recorded = start.canvas?.recorded ?? null;
+  useEffect(() => {
+    if (!asked || asked.state !== "asking" || !recorded || recorded.seq !== asked.seq) return;
+    setAsked(recorded.ok
+      ? { seq: asked.seq, state: "proposed", itemId: recorded.itemId ?? "", said: `proposed with ${recorded.expects.length} expect line${recorded.expects.length === 1 ? "" : "s"} — Keep it under the test file to write it` }
+      : { seq: asked.seq, state: "failed", said: recorded.error ?? "the recording was not proposed" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recorded?.seq, asked?.seq, asked?.state]);
+
+  const files = start.canvas?.testFiles ?? [];
+  const pressRecord = () => {
+    if (!recording) { setRecording({ from: ops.length }); setAsked(null); return; }
+    if (ops.length === recording.from) { setRecording(null); setProblem("nothing was pressed while recording"); return; }
+    setProposing({ from: recording.from, name: `${start.route ?? "screen"} — recorded`, file: files.includes("app.test.contract") ? "app.test.contract" : files[0] ?? "" });
+    setRecording(null);
+  };
+  const propose = async (p: { from: number; name: string; file: string }) => {
+    if (!start.canvas) { setProblem("a recording is proposed on the canvas, which this view cannot write"); return; }
+    if (!testName(p.name)) { setProblem("a test's name is one line of words, with no quotes"); return; }
+    if (!p.file) { setProblem("the app has no test file on the canvas to put it in"); return; }
+    const seq = Date.now();
+    setProposing(null);
+    setAsked({ seq, state: "asking", said: "asked on the canvas — waiting for `isocan exact live` to read the state and propose the test…" });
+    const request = { seq, by: start.canvas.by, host: start.host, size: start.size, scheme: start.scheme, shots: start.shots, before: ops.slice(0, p.from), ops: ops.slice(p.from), file: p.file, name: p.name.trim() };
+    try {
+      await start.canvas.send([{ type: "item.update", itemId: start.canvas.itemId, patch: { properties: { "exact.record": JSON.stringify(request) } } }]);
+    } catch (err) {
+      setAsked({ seq, state: "failed", said: err instanceof Error ? err.message : String(err) });
+    }
+  };
+
   const push = (op: DriveOp) => {
     let line: string;
     try { line = driveLine(op); } catch (err) { setProblem((err as Error).message); return; }
@@ -188,8 +231,22 @@ export function Driver({ start, url, alt, onStop }: { start: DriveStart; url: st
         <div className="exact-drive-bar">
           <button type="button" className="exact-chip" disabled={busy} onClick={() => push({ op: "back" })}>Back</button>
           <button type="button" className="exact-chip" disabled={busy || ops.length === 0} onClick={() => { const next = ops.slice(0, -1); setLog((l) => l.slice(0, next.length)); if (next.length === 0) { setOps([]); setShown(null); } else void send(next); }}>Undo</button>
+          <button type="button" className={`exact-chip${recording ? " exact-chip-on" : ""}`} aria-pressed={!!recording} disabled={busy || !start.canvas} title={start.canvas ? "Record: every press from now is a step of a test, its expect lines read off the state that changed" : "Recording is proposed on the canvas, which this view cannot write"} onClick={pressRecord}>
+            {recording ? `● Stop recording (${ops.length - recording.from})` : "Record"}
+          </button>
           <button type="button" className="exact-chip" onClick={onStop}>Stop</button>
         </div>
+        {proposing && (
+          <form className="exact-record" data-exact-record="naming" onSubmit={(e) => { e.preventDefault(); void propose(proposing); }}>
+            <input value={proposing.name} onChange={(e) => setProposing({ ...proposing, name: e.target.value })} aria-label="Test name" />
+            <select value={proposing.file} onChange={(e) => setProposing({ ...proposing, file: e.target.value })} aria-label="Test file">
+              {files.map((f) => <option key={f} value={f}>{f}</option>)}
+            </select>
+            <button type="submit" className="exact-chip">Propose test</button>
+            <button type="button" className="exact-chip" onClick={() => setProposing(null)}>Discard</button>
+          </form>
+        )}
+        {asked && <p className={asked.state === "failed" ? "exact-problem" : "exact-note"} role="status" data-exact-record={asked.state} data-exact-proposal={asked.itemId ?? ""}>{asked.said}</p>}
         <ol className="exact-drive-log" aria-label="Driver operations">
           {log.map((s, i) => <li key={i} className={s.ok ? "" : "exact-problem"}><code>{s.op}</code> {s.said}</li>)}
           {busy && <li className="exact-note">{start.door ? `driving on ${start.host}…` : `asked on the canvas — waiting for \`isocan exact live\` to drive ${start.host}…`}</li>}

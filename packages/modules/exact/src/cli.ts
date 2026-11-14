@@ -103,6 +103,23 @@ function register(host: CliHost): void {
     .action(host.run(async (film: string, ms: string, words: string[], _opts: unknown, cmd: Command) => (await run()).moment(host, film, ms, words, cmd)));
 
   exact
+    .command("run <app> <test>")
+    .description("Run a test's storyboard with Exact's own test runner, a frame per step, on each host named; each run is a version, a failure red at its step with the driver's tree")
+    .option("--canvas <canvas>")
+    .option("--hosts <list>", "web, ios, macos", "web")
+    .option("--sim <udid>", "for iOS: a simulator you made for this")
+    .option("--file <file>", "the *.test.contract, when two files have the test")
+    .action(host.run(async (app: string, test: string, opts: import("./stories.ts").RunOptions, cmd: Command) => (await run()).runTest(host, app, test, opts, cmd)));
+
+  exact
+    .command("verify <app>")
+    .description("Exact's verify on each host named (web, ios), its screenshots posted as versions of the screens they show")
+    .option("--canvas <canvas>")
+    .option("--hosts <list>", "web, ios", "web")
+    .option("--sim <udid>", "for iOS: a simulator you made for this")
+    .action(host.run(async (app: string, opts: { hosts?: string; sim?: string }, cmd: Command) => (await run()).verifyApp(host, app, opts, cmd)));
+
+  exact
     .command("check <app>")
     .description("The compiler's diagnostics and agent check both, as comments on the screens they concern (each with exact.source), resolved when gone; says moved where a comment's file changed")
     .option("--canvas <canvas>")

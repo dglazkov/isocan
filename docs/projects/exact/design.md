@@ -309,6 +309,16 @@ films are web-only.
   person to keep or edit. The file is written by the person's accept, never
   by the recorder.
 
+**Built 14 Nov 2026 (exact phase 5):** each `test` is a storyboard item;
+Run (bridge `/run`, or `exact.run` answered by `isocan exact live`, or
+`isocan exact run`) gives Exact's `test <host>` a copy with a `screenshot`
+after every step, since `test` has no per-operation reply, and keeps the
+result as the storyboard's next version, frames inside. `isocan exact
+verify` posts first-screen shots as versions of their screens and lists the
+rest with why. Record proposes `expect` lines from the `state` that changed
+as a core proposal item under the test file; Keep is core's choose, and
+`live` writes the file only then.
+
 ## 10. Agents change things through proposals
 
 Tamber's wire has scopes — `read` < `propose` < `write` — and held

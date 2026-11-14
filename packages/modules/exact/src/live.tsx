@@ -20,6 +20,7 @@ import { EXACT_PROPS, appIdOf, parsePoints, parseSource, pointAt, selectionSumma
 import { Driver } from "./drive.tsx";
 import { filmCommentRows } from "./scrub.ts";
 import { FilmForm } from "./filmask.tsx";
+import { parseRecordAnswer } from "./story.ts";
 
 /**
  * **Live frames and pointing** (exact phase 2; design §5, §6), the browser
@@ -277,7 +278,7 @@ function useNearScreen(ref: React.RefObject<HTMLElement | null>): boolean {
 }
 
 /** A tick for every pairing or switch change. The shell hands a fresh door object each render, so nothing keys on its identity. */
-function useDoor(door: LocalToolDoor | null): number {
+export function useDoor(door: LocalToolDoor | null): number {
   const [tick, setTick] = useState(0);
   const ref = useRef(door);
   ref.current = door;
@@ -367,7 +368,7 @@ export function ExactScreen(facts: RendererFacts) {
   return (
     <div ref={ref} className="exact-screen" data-exact-screen={driving ? "drive" : live && open && host === "web" ? "live" : "still"} data-exact-host={host}>
       {driving && (bridge || !open)
-        ? <Driver start={{ ...(open && bridge ? { door: door!, port: bridge.port } : {}), ...(state.canvas && item ? { canvas: { send: state.canvas.send, itemId: item.id, by: state.canvas.viewer, answer: parseDriven(state.canvas.contents.items[item.id]?.properties?.[EXACT_PROPS.driven]), urlOf: (hash: string) => (url.includes(facts.blobHash) ? url.replace(facts.blobHash, hash) : url) } } : {}), host, size: driveSize, scheme, shots: reached, points, width: capW, height: points?.size?.height ?? (DEVICE_SIZE[device] ?? DEVICE_SIZE.phone!).height }} url={url} alt={filename} onStop={() => setDriving(false)} />
+        ? <Driver start={{ ...(open && bridge ? { door: door!, port: bridge.port } : {}), ...(state.canvas && item ? { canvas: { send: state.canvas.send, itemId: item.id, by: state.canvas.viewer, answer: parseDriven(state.canvas.contents.items[item.id]?.properties?.[EXACT_PROPS.driven]), urlOf: (hash: string) => (url.includes(facts.blobHash) ? url.replace(facts.blobHash, hash) : url), testFiles: testFilesOf(state.canvas.contents, appId), recorded: parseRecordAnswer(state.canvas.contents.items[item.id]?.properties?.[EXACT_PROPS.recorded]) } } : {}), host, size: driveSize, scheme, shots: reached, points, route: item?.properties?.[EXACT_PROPS.route], width: capW, height: points?.size?.height ?? (DEVICE_SIZE[device] ?? DEVICE_SIZE.phone!).height }} url={url} alt={filename} onStop={() => setDriving(false)} />
         : showFrame
           ? <LiveFrame door={door!} port={bridge!.port} framesPort={bridge!.hello.frames!} path={path} device={device} scheme={scheme} entered={entered} record={{ itemId, canvasId, port: bridge!.port, appId: appId! }} title={filename} />
           : <img className="img-view" src={url} alt={filename} draggable={false} />}
@@ -487,6 +488,12 @@ async function openInEditor(door: LocalToolDoor, port: number, src: { file: stri
     return `asked your editor to open ${sourcePlace(src)}`;
   }
   return `opened ${answer?.opened ?? sourcePlace(src)} with ${answer?.with ?? "your editor"}`;
+}
+
+/** The test files of an app on the canvas (exact phase 5): the text items carrying `exact.testFile` that are not storyboards or proposals. */
+function testFilesOf(canvas: OverlayFacts["canvas"], appId: string | null): string[] {
+  const out = Object.values(canvas.items).filter((i) => appId && appIdOf(i) === appId && i.properties?.[EXACT_PROPS.testFile] && !i.properties?.[EXACT_PROPS.test] && !i.properties?.proposal).map((i) => i.properties![EXACT_PROPS.testFile]!);
+  return [...new Set(out)].sort();
 }
 
 /** A screen's `exact.driven`, read leniently. */

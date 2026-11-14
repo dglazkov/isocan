@@ -119,6 +119,18 @@ From nothing to the map, in order:
    panel; with live frames off it is asked on the screen (`exact.inspect`)
    and `isocan exact live` answers (`exact.inspected`) — do not write either.
 
+7. **Tests are storyboards.** `open` posts each `*.test.contract` as a text
+   item and each `test` block as a storyboard (a row of steps; each host's
+   last run, a frame per step). `isocan exact run <app> "<test>" [--hosts
+   web,ios,macos --sim <udid>] [--json]` runs it with Exact's own `test
+   <host>`; each run is the storyboard's next version, a failure red at its
+   step with Exact's reason and the driver's tree. `isocan exact verify <app> [--hosts web,ios]`
+   runs Exact's `verify`; its first-screen shots become
+   versions of those screens. A PERSON records a test in Drive mode
+   (**Record**): it arrives as a proposal under the test file, and only their
+   Keep writes the file. Do not write `exact.run`, `exact.record`,
+   `exact.verify` or their answers; write tests in the file yourself.
+
 **Comments that point at a line.** A comment made on a pointed-at node,
 and every finding, carries one line in its body:
 
@@ -160,5 +172,4 @@ Rules:
   Live frames work only on a canvas whose home is this machine.
 - A screen's `exact.reached` is the shots its capture ran (read-only); edit
   `exact.shots` on the route's phone screen instead.
-- A connected iPhone, Linux, Android, storyboards and proposals are not
-  built yet.
+- A connected iPhone, Linux, Android and agents' proposals are not built yet.

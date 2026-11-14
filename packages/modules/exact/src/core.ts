@@ -43,6 +43,9 @@ export const EXACT_ANATOMY_MIME = "application/vnd.isocan.exact-anatomy+json";
 /** A device wall (exact phase 3): one route on every host and device, side by side. */
 export const EXACT_WALL_MIME = "application/vnd.isocan.exact-wall+json";
 
+/** A test as a storyboard (exact phase 5): its steps, and the last run on each host, frames inside. */
+export const EXACT_STORY_MIME = "application/vnd.isocan.exact-storyboard+json";
+
 /** The index's own format number — not Exact's, which moves daily. 2: the map (exact phase 1). */
 export const EXACT_INDEX_FORMAT = 2;
 
@@ -101,6 +104,26 @@ export const EXACT_PROPS = {
   inspect: "exact.inspect",
   /** On a screen: the answer to its latest `exact.inspect` — `{seq, ok, blobHash, ms, error?}`, the driver's `tree --ax`, `layout`, `perf` and `logs` a JSON blob of the canvas. */
   inspected: "exact.inspected",
+  /** On a test file's text item and each of its storyboards (exact phase 5): the file, relative to the app. */
+  testFile: "exact.testFile",
+  /** On a storyboard: the test's name. */
+  test: "exact.test",
+  /** On a storyboard: a run asked for on the canvas — `{seq, by, hosts}`; `isocan exact live` runs it (`story.ts`). */
+  run: "exact.run",
+  /** On a storyboard: the answer to its latest `exact.run` — each host's verdict; the run itself is the storyboard's new version. */
+  ran: "exact.ran",
+  /** On a screen: a recording asked for when Drive mode's Record stopped — `{seq, by, host, size, scheme, shots, before, ops, file, name}`. */
+  record: "exact.record",
+  /** On a screen: the answer to its latest `exact.record` — `{seq, ok, itemId, test, expects, ms, error?}`, the proposal item's id. */
+  recorded: "exact.recorded",
+  /** On a recorded test's proposal item: `{file, base, test, host, seq}` — the file it appends to and the digest of the text it was written against. */
+  recording: "exact.recording",
+  /** On the index: Exact's `verify` asked for on the canvas — `{seq, by, hosts}`. */
+  verify: "exact.verify",
+  /** On the index: the answer to its latest `exact.verify` — per host, the screens its screenshots versioned and the ones it could not place. */
+  verified: "exact.verified",
+  /** On a test file: what the person's Keep of a recording wrote — `{version, ok, sha256, test, at, error?}`. */
+  written: "exact.written",
 } as const;
 
 /** One visible node of a capture: its box in the capture's CSS pixels, the line that drew it, and the styles that line names. */
@@ -374,6 +397,8 @@ export interface Readings {
   tests?: CompiledTests[];
   /** `app.ts`'s grants line, as written. */
   grants?: string | null;
+  /** Each `*.test.contract`'s text, by file (exact phase 5): what a storyboard's steps read and a recording appends to. */
+  testSources?: Record<string, string>;
   /** `tamber ir` and the wire's `uses` per token. */
   design?: DesignReading | null;
   inputs?: string | null;
@@ -621,6 +646,12 @@ export const exactModule: CoreModule = {
       mimes: [EXACT_WALL_MIME],
       label: "Exact device walls",
       noun: "Exact device wall",
+    },
+    {
+      id: "exact-storyboard",
+      mimes: [EXACT_STORY_MIME],
+      label: "Exact storyboards",
+      noun: "Exact storyboard",
     },
   ],
   contextPieces: exactContext,
