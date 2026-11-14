@@ -18,6 +18,7 @@ screen per day, one row per week, open to anyone with the address.
 | Day | | What happened |
 | --- | --- | --- |
 | **[10 Nov](2026-11-10.md)** | Links out of an item open a new tab; every layer walked in a browser | Content-origin item frames gain `allow-popups allow-popups-to-escape-sandbox` (never top navigation), so a slide's `↗` link opens a new tab (`contentorigin.test.ts`). Landed the 21 October layers session: `scripts/journey-layers.mjs` walks 18 scenes in headless Chrome against four layer invariants, and every defect it caught is fixed — `AddPopover` and `.wb-peek` portalled out of `backdrop-filter` traps, transient menus lifted above full-screen covers, the top scrubber's peek flipped downward, and co-resident bottom/left/right chrome cleared (`layers.test.ts`, `oneadd.test.ts`; lesson 128). Off CI, vitest caps its workers; the rc room test and the canvas board got faster and deterministic. |
+| **[9 Nov](2026-11-09.md)** | *Draft* | Not written up yet: the day's commits, quoted in full. Whoever writes the entry replaces this row. |
 | **[7 Nov](2026-11-07.md)** | *Draft* | Not written up yet: the day's commits, quoted in full. Whoever writes the entry replaces this row. |
 | **[6 Nov](2026-11-06.md)** | *Draft* | Not written up yet: the day's commits, quoted in full. Whoever writes the entry replaces this row. |
 | **[5 Nov](2026-11-05.md)** | *Draft* | Not written up yet: the day's commits, quoted in full. Whoever writes the entry replaces this row. |
