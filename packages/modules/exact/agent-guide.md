@@ -1,7 +1,7 @@
 ## Exact
 
-An **Exact app** (expo/exact: one Contract source, native on the web, iOS,
-macOS, Linux and Android) can be laid out on the canvas as a flow map. The
+An **Exact app** (expo/exact: one Contract source, native everywhere) can be
+laid out on the canvas as a flow map. The
 module runs the person's OWN Exact checkout on THIS machine — the app's
 `exact.mjs` — and posts what it printed as ordinary items. Nothing runs on
 the canvas's home.
@@ -26,24 +26,18 @@ From nothing to the map, in order:
      and dark value and its uses;
    - an **anatomy card** per Contract file: components, props, state,
      actions, shapes, sources, grants, routes, tests (`isocan get <card>`).
-   Captures run a cold `agent web` per route at seed 1, en-US, UTC and the
-   2026-01-01 epoch, so the same source is the same picture on any machine.
-   Opened again, a screen whose inputs (the app's files, the Exact commit,
-   its device, scheme and shots) did not move is **skipped**; one that did is
-   recaptured and gets a new version **only if its pixels changed**.
-   `--force` recaptures everything (still no version without a pixel change).
+   Captures are deterministic (seed 1, en-US, UTC, a fixed epoch). Opened
+   again, a screen whose inputs did not move is skipped; one that did gets a
+   new version only if its pixels changed (`--force` recaptures all).
 3. `isocan exact live <app> [--max-passes <n>] [--json]` — `open`, then a
    pass on every save: the index rebuilt, the arrows and anatomy updated,
    every screen recaptured (the app's files moved, so every input did) and a
    version posted only where its pixels changed — an edit to one component's
    text versions exactly the screens that show it. Prints one line per pass;
    runs until ctrl-c, or until `--max-passes` passes after the first.
-   Each pass also runs the compiler: **a save that does not build becomes a
-   comment** (a record) on the screen whose route draws the broken line,
-   and the captures wait; **`agent check both`** runs on every route whose
-   screen was recaptured, its findings (contrast, clipping, overlap, small
-   targets) pinned where they are on that screen. A finding no longer
-   found is taken away (`thread.delete`) on the next pass.
+   A save that does not build becomes a comment on the screen that draws the
+   broken line; `agent check both` findings (contrast, clipping, overlap,
+   small targets) are pinned on recaptured screens and taken away when gone.
    **Live frames**: unless `--no-frames`, `live` also runs the app's dev
    loop and a bridge, and prints a pairing code for a PERSON to type on a
    screen's **Live** button. Every capture records each visible node's box
@@ -58,13 +52,9 @@ From nothing to the map, in order:
    "isocan-exact" <device type> <runtime>`), passed as `--sim <udid>`; never
    one you did not make. The first native capture builds the app (minutes),
    later ones re-bake the plan (~15 s a route).
-   **Differences between hosts**: each native capture is set beside the
-   web drawn at its size (Exact's `screenshot … compare`); where the app's
-   own layout differs — two nodes with a `testId` in one order on the web
-   and the other natively — that is a comment on the native screen
-   (`exact.diagnostic = compare:<route>:<host>:<testId>`, with
-   `exact.source`), gone when the hosts agree. A platform's own bars are
-   not a difference.
+   Where the app's own layout differs between web and a native host (Exact's
+   `screenshot … compare`), that is a comment on the native screen, gone when
+   the hosts agree.
    **A device wall**: `isocan exact wall <app> <route> [--scheme dark]`
    — one item showing the route on every host and device on the canvas,
    side by side, refreshed by every `open`/`live` pass.
@@ -86,24 +76,18 @@ From nothing to the map, in order:
    add-to-cart"`, `--over 600`, `--every 16`, `--watch <testId>`, `--out
    <file.apng>`) — the route's screen reached as its shots say, the interaction done (`--do`,
    repeatable: `tap <testId>`, `type <testId> "<text>"`, `back`), then filmed
-   on Exact's virtual clock (`screenshot <file>.apng over <ms> every <ms>`):
-   an animated PNG beside the map, with `exact.film` (`{from, every, steps,
-   at, …}`: frame i drawn `at[i]` ms after the interaction) and
-   `exact.frames` (the component's `state` at every frame — the first whole,
-   then what each frame changed — and `--watch`'s node's translate, scale,
-   opacity). The same source films the same bytes; filmed again unchanged,
-   no version. People scrub it on the canvas; a comment made while scrubbed
-   carries `at` (seconds, as on a motion), and opening it scrubs back there —
-   `isocan exact moment <film> <ms> <words…>` comments at a moment yourself.
+   on Exact's virtual clock: an animated PNG beside the map, with
+   `exact.film` (frame i drawn `at[i]` ms after the interaction) and
+   `exact.frames` (the component's `state` at every frame, and `--watch`'s
+   node's transform). `isocan exact moment <film> <ms> <words…>` comments at
+   a moment.
    A PERSON can film from a screen's **Film** button too: through a paired
    bridge, or, with live frames off, written on the screen (`exact.filmAsk`)
    and answered by `isocan exact live` (`exact.filmed`) — do not write either.
    `isocan exact inspect <app> <route> [--host ios --sim <udid>] [--json]`
    — the screen as the driver sees it, from a cold driver at its shots:
    `tree --ax`, `layout`, `perf` and `logs`, and the `bun exact.mjs agent …`
-   line that prints the same tree. People see it in the canvas's inspector
-   panel; with live frames off it is asked on the screen (`exact.inspect`)
-   and `isocan exact live` answers (`exact.inspected`) — do not write either.
+   line that prints the same tree; people see it in the inspector panel.
 
 7. **Tests are storyboards.** `open` posts each `test` block as a storyboard
    (steps, and each host's last run, a frame per step).
@@ -149,6 +133,10 @@ screen. A route's device row follows its phone screen's shots unless a
 screen has its own. Anything else — `screenshot`, a path outside the app,
 `prefer color-scheme` — is refused with a sentence: shots come off a canvas
 and reach your Exact.
+
+Shipping: `isocan exact prepare <app> --channel <c>` posts Exact's dry run
+as a card (over the air, or needs a binary and why). `ship`, `promote` and
+`rollback` refuse an agent: prepare, and tell the person what the card says.
 
 Rules:
 

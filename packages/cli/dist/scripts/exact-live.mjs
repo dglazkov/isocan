@@ -350,6 +350,28 @@ function runOnce(job) {
   });
   return run;
 }
+function prepareOnce(channel) {
+  return new Promise((resolve) => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "isocan-exact-prepare-"));
+    const done = (answer) => {
+      rmSync(dir, { recursive: true, force: true });
+      resolve(answer);
+    };
+    const bridgeScript = path.join(path.dirname(fileURLToPath(import.meta.url)), "exact-bridge.mjs");
+    const child = spawn(process.execPath, [bridgeScript, "prepare", "--app", app, "--report", path.join(dir, "report.json"), "--channel", channel], { stdio: ["ignore", "ignore", "pipe"] });
+    let err = "";
+    child.stderr.on("data", (d) => {
+      err = (err + d).slice(-4e3);
+    });
+    child.on("close", () => {
+      try {
+        done(JSON.parse(readFileSync(path.join(dir, "report.json"), "utf8")));
+      } catch {
+        done({ ok: false, error: err.trim().split("\n").slice(-3).join("\n") || "the dry run did not answer" });
+      }
+    });
+  });
+}
 var scrubbing = null;
 async function scrubTo(ops) {
   if (!tamberToken) return { status: 503, answer: { error: "this app's dev loop mounts no Tamber wire (no app.tamber)" } };
@@ -649,6 +671,14 @@ var api = http.createServer(async (req, res) => {
     say(`run on ${host}: test "${body.test}" in ${body.file}`);
     const r = await runOnce({ host, file: body.file, test: body.test });
     say(`run on ${host}: ${r.verdict === "ok" ? "ok" : r.verdict === "fail" ? `FAIL at ${body.file}:${r.failed?.line ?? "?"}` : r.error ?? r.verdict}`);
+    return answer(r.ok ? 200 : 422, r);
+  }
+  if (url.pathname === "/prepare" && req.method === "POST") {
+    const body = await readBody(req);
+    if (typeof body?.channel !== "string" || !/^[A-Za-z0-9._-]{1,63}$/.test(body.channel)) return answer(400, { error: "a prepare names one of app.json's deploy.channels" });
+    say(`prepare ${body.channel}: Exact's dry run`);
+    const r = await prepareOnce(body.channel);
+    say(`prepare ${body.channel}: ${r.ok ? "classified" : r.error}`);
     return answer(r.ok ? 200 : 422, r);
   }
   if (url.pathname === "/design" && req.method === "GET") {

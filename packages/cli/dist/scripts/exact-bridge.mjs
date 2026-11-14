@@ -15,7 +15,7 @@ var flag = (name) => {
   return i >= 0 ? argv[i + 1] : void 0;
 };
 var flags = (name) => argv.flatMap((a, i) => a === name && argv[i + 1] !== void 0 ? [argv[i + 1]] : []);
-if (!["doctor", "read", "capture", "inputs", "diagnose", "check", "compare", "drive", "film", "facts", "run", "record", "verify", "propose", "accept", "drop", "stage-branch"].includes(verb ?? "") || !flag("--app") || !flag("--report")) {
+if (!["doctor", "read", "capture", "inputs", "diagnose", "check", "compare", "drive", "film", "facts", "run", "record", "verify", "propose", "accept", "drop", "stage-branch", "lane", "prepare", "ship"].includes(verb ?? "") || !flag("--app") || !flag("--report")) {
   console.error("usage: exact-bridge.mjs doctor|read|capture|inputs|diagnose|check --app <dir> --report <file.json> [--hosts web,ios] [--jobs <jobs.json>] [--dir <out> --size <w>x<h> --url <path>\u2026]");
   process.exit(2);
 }
@@ -1173,5 +1173,134 @@ function stageBranch() {
   }
   return { staging, ref, commit, from };
 }
-var result = verb === "stage-branch" ? stageBranch() : verb === "propose" ? await proposeJob(path.resolve(flag("--dir") ?? fail("propose needs --dir")), JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("propose needs --job")), "utf8"))) : verb === "accept" ? await acceptJob(JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("accept needs --job")), "utf8"))) : verb === "drop" ? await dropJob(JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("drop needs --job")), "utf8"))) : verb === "run" ? runJob(path.resolve(flag("--dir") ?? fail("run needs --dir")), JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("run needs --job")), "utf8"))) : verb === "record" ? recordJob(JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("record needs --job")), "utf8"))) : verb === "verify" ? verifyJob() : verb === "film" ? filmJob(path.resolve(flag("--dir") ?? fail("film needs --dir")), JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("film needs --job")), "utf8"))) : verb === "facts" ? factsJob(JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("facts needs --job")), "utf8"))) : verb === "drive" ? driveJob(path.resolve(flag("--dir") ?? fail("drive needs --dir")), JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("drive needs --job")), "utf8"))) : verb === "compare" ? compare(path.resolve(flag("--dir") ?? fail("compare needs --dir")), JSON.parse(readFileSync(path.resolve(flag("--jobs") ?? fail("compare needs --jobs")), "utf8"))) : verb === "diagnose" ? diagnose() : verb === "check" ? check() : verb === "doctor" ? await doctor() : verb === "read" ? await read() : verb === "inputs" ? { inputs: inputsDigest(checkout().dir) } : capture();
+function laneOf() {
+  let manifest;
+  try {
+    manifest = JSON.parse(readFileSync(path.join(app, "app.json"), "utf8"));
+  } catch (e) {
+    fail(`${app}/app.json: ${e.message}`);
+  }
+  const d = manifest.deploy ?? {};
+  const channels = Object.entries(d.channels ?? {}).map(([name, origin]) => ({ name, origin: String(origin), release: d.release?.[name] ?? null, phased: d.phased?.[name] === true }));
+  const store = d.store ?? {};
+  const platform = ["ios", "macos", "linux"].find((p) => store[p] === "A") ?? null;
+  return {
+    format: 1,
+    app: { id: manifest.app?.id ?? manifest.id ?? path.basename(app), name: manifest.app?.name ?? manifest.name ?? path.basename(app) },
+    platform: platform ?? "ios",
+    updating: platform !== null,
+    channels,
+    baked: d.channel ?? (channels.length === 1 ? channels[0].name : null),
+    activate: d.activate ?? null,
+    interval: typeof d.check?.interval === "number" ? d.check.interval : null,
+    signing: d.signing?.key ?? null
+  };
+}
+function originHash(dir) {
+  if (!dir) return null;
+  if (!existsSync(dir)) return sha256("absent");
+  const h = createHash("sha256");
+  const walk = (d, rel) => {
+    for (const e of readdirSync(d, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      const p = path.join(d, e.name), r = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) {
+        h.update(`d ${r}
+`);
+        walk(p, r);
+      } else if (e.isFile()) {
+        h.update(`f ${r} `);
+        h.update(readFileSync(p));
+        h.update("\n");
+      } else h.update(`o ${r}
+`);
+    }
+  };
+  walk(dir, "");
+  return h.digest("hex");
+}
+function deploy(appDir, args) {
+  const { dir, pin } = checkout();
+  const { bin } = bunOf(pin);
+  for (const [what, tree] of [["the app", appDir], ["the Exact checkout", dir]]) {
+    const status = spawnSync("git", ["-C", tree, "status", "--porcelain", "--untracked-files=all", "--", "."], { encoding: "utf8" });
+    if (status.status !== 0) fail(`${tree} is not in a git repository: Exact publishes a commit`);
+    const moved = status.stdout.trim().split("\n").filter(Boolean);
+    if (moved.length) fail(`${what} has uncommitted changes (${moved.slice(0, 4).map((l) => l.slice(3)).join(", ")}${moved.length > 4 ? ", \u2026" : ""}): commit them \u2014 a release is a commit`);
+  }
+  const started = Date.now();
+  const done = spawnSync(bin, [path.join(dir, "scripts/deploy.mjs"), path.basename(appDir), ...args, "--dirty", "--json"], { cwd: appDir, encoding: "utf8", maxBuffer: 256 << 20, timeout: 36e5, env: { ...process.env, EXACT_APP_DIR: appDir } });
+  const ms = Date.now() - started;
+  const lines = (done.stdout ?? "").trim().split("\n");
+  let table = null;
+  for (let i = lines.length - 1; i >= 0 && !table; i--) {
+    try {
+      const v = JSON.parse(lines[i]);
+      if (v && Array.isArray(v.rows)) table = v;
+    } catch {
+    }
+  }
+  const said = (done.stderr ?? "").trim().split("\n");
+  const refusal = said.find((l) => l.startsWith("exact deploy: ")) ?? null;
+  return { exit: done.status, table, ms, error: table && done.status === 0 ? null : (refusal ?? said.slice(-6).join("\n")) || `deploy.mjs exited ${done.status ?? done.signal}` };
+}
+function originDir(row) {
+  const given = flag("--origin") ?? process.env.ISOCAN_EXACT_ORIGIN ?? null;
+  if (given) return path.resolve(given);
+  if (/^[a-z]+:\/\//i.test(row.origin) || row.origin === "appdrop") return null;
+  return path.resolve(app, row.origin);
+}
+function channelArgs() {
+  const channel = flag("--channel");
+  if (!channel || !/^[A-Za-z0-9._-]{1,63}$/.test(channel)) fail("a channel is one of app.json's deploy.channels");
+  const lane = laneOf();
+  const row = lane.channels.find((c) => c.name === channel);
+  if (!row) fail(`app.json names no deploy.channels.${channel} (it names ${lane.channels.map((c) => c.name).join(", ") || "none"})`);
+  const platform = flag("--platform") ?? lane.platform;
+  if (!["ios", "macos", "linux", "web"].includes(platform)) fail(`--platform ${platform}: ios, macos, linux or web`);
+  return { channel, row, platform, lane };
+}
+function prepareJob() {
+  const { channel, row, platform, lane } = channelArgs();
+  const dir = originDir(row);
+  const before = originHash(dir);
+  const r = deploy(app, ["--channel", channel, "--platform", platform, ...dir ? ["--origin", dir] : []]);
+  const after = originHash(dir);
+  return { ok: !!r.table && r.exit === 0, lane, channel, platform, table: r.table, originHash: { before, after }, ms: r.ms, ...r.error && !(r.table && r.exit === 0) ? { error: r.error } : {} };
+}
+function shipJob() {
+  const { channel, row, platform, lane } = channelArgs();
+  const release = flag("--release");
+  if (!release || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,120}$/.test(release)) fail("a release id is letters, digits, . _ - (it names a file)");
+  const expect = flag("--expect");
+  if (expect && !/^[0-9a-f]{40}$/.test(expect)) fail("--expect is the commit the dry run snapshotted");
+  const head = git(app, ["rev-parse", "HEAD"]);
+  if (expect && head !== expect) fail(`the app moved since it was prepared (HEAD is ${head?.slice(0, 12) ?? "?"}, the prepared snapshot is ${expect.slice(0, 12)}): prepare again`);
+  const commit = flag("--commit");
+  if (commit && !/^[0-9a-f]{7,40}$/.test(commit)) fail("--commit is a commit of the app's repository");
+  const dir = originDir(row);
+  if (!dir) fail(`${channel} names ${row.origin}, which Exact cannot write to: set ISOCAN_EXACT_ORIGIN to the directory that host serves`);
+  const before = originHash(dir);
+  let appDir = app, worktree = null;
+  try {
+    if (commit) {
+      const top = git(app, ["rev-parse", "--show-toplevel"]);
+      const prefix = git(app, ["rev-parse", "--show-prefix"]) ?? "";
+      if (!top) fail(`${app} is not in a git repository, so there is no earlier content to re-publish`);
+      worktree = path.join(mkdtempSync(path.join(os.tmpdir(), "isocan-exact-rollback-")), path.basename(top));
+      const add = spawnSync("git", ["-C", top, "worktree", "add", "--detach", worktree, commit], { encoding: "utf8" });
+      if (add.status !== 0) fail(`could not check out ${commit} beside the app: ${(add.stderr || "").trim()}`);
+      appDir = path.join(worktree, prefix);
+    }
+    const r = deploy(appDir, ["--channel", channel, "--platform", platform, "--release", release, "--origin", dir, "--yes"]);
+    const after = originHash(dir);
+    return { ok: !!r.table && r.exit === 0, lane, channel, platform, release, table: r.table, originHash: { before, after }, ms: r.ms, ...r.error && !(r.table && r.exit === 0) ? { error: r.error } : {} };
+  } finally {
+    if (worktree) {
+      const top = git(app, ["rev-parse", "--show-toplevel"]);
+      if (top) spawnSync("git", ["-C", top, "worktree", "remove", "--force", worktree], { encoding: "utf8" });
+      spawnSync("rm", ["-rf", path.dirname(worktree)]);
+    }
+  }
+}
+var result = verb === "stage-branch" ? stageBranch() : verb === "lane" ? laneOf() : verb === "prepare" ? prepareJob() : verb === "ship" ? shipJob() : verb === "propose" ? await proposeJob(path.resolve(flag("--dir") ?? fail("propose needs --dir")), JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("propose needs --job")), "utf8"))) : verb === "accept" ? await acceptJob(JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("accept needs --job")), "utf8"))) : verb === "drop" ? await dropJob(JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("drop needs --job")), "utf8"))) : verb === "run" ? runJob(path.resolve(flag("--dir") ?? fail("run needs --dir")), JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("run needs --job")), "utf8"))) : verb === "record" ? recordJob(JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("record needs --job")), "utf8"))) : verb === "verify" ? verifyJob() : verb === "film" ? filmJob(path.resolve(flag("--dir") ?? fail("film needs --dir")), JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("film needs --job")), "utf8"))) : verb === "facts" ? factsJob(JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("facts needs --job")), "utf8"))) : verb === "drive" ? driveJob(path.resolve(flag("--dir") ?? fail("drive needs --dir")), JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("drive needs --job")), "utf8"))) : verb === "compare" ? compare(path.resolve(flag("--dir") ?? fail("compare needs --dir")), JSON.parse(readFileSync(path.resolve(flag("--jobs") ?? fail("compare needs --jobs")), "utf8"))) : verb === "diagnose" ? diagnose() : verb === "check" ? check() : verb === "doctor" ? await doctor() : verb === "read" ? await read() : verb === "inputs" ? { inputs: inputsDigest(checkout().dir) } : capture();
 writeFileSync(report, JSON.stringify(result, null, 2));
