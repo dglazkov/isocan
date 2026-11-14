@@ -162,14 +162,36 @@ prints a code (Tamber's own pairing shape: one use, two minutes), the
 person enters it on the canvas, and the browser keeps the bridge token for
 that machine. The canvas holds only the stable intent (`exact.live = {
 route, device, host }`); each viewer's browser asks its own bridge for a
-fresh grant. **Decision owed**: no module slot reaches a loopback service
-today — the proposed `host` (`WebHost`) sends ops and puts blobs through the
-home, nothing else — so a browser-to-bridge connection is a product change,
-reviewed as one: a narrow, paired "local tool" door the shell owns, which
-the sandbox and motion modules could use too. It is the one place this
-design reaches past the module API, and it is named so a reviewer can refuse
-it; refused, live frames fall back to Drive mode (§7), which needs nothing
-but items.
+fresh grant. No module slot reaches a loopback service today — the proposed
+`host` (`WebHost`) sends ops and puts blobs through the home, nothing else —
+so the browser-to-bridge connection is a product change, reviewed as one: a
+narrow, paired "local tool" door the shell owns, which the sandbox and motion
+modules could use too. **Decided 13 Nov 2026 (Dion): offer live frames, and
+let them be turned off** (below).
+
+**Live is a choice, and off is a whole answer.** Live frames run your app's
+dev page inside the canvas and open a connection from your browser to a
+process on your machine; some people, some machines and some canvases should
+not have that. So:
+
+- **One switch, per person and per machine**: *Settings → Experiments → Exact
+  → Live frames*, on by default once the experiment is ticked. Off means the
+  browser never pairs with the bridge and never opens the local-tool door —
+  not "paired but hidden".
+- **Per screen**, a **Live / Still** toggle on each screen: Still shows the
+  latest capture and costs nothing; Live runs that one frame. A canvas with
+  forty screens does not run forty dev pages because the switch is on —
+  screens go live when asked, and a live frame scrolled far off-screen drops
+  back to Still until it returns.
+- **On the bridge**, `isocan exact live --no-frames` serves no frame grants
+  at all, for a machine where the person wants captures, Drive mode,
+  storyboards and shipping but no live page.
+- **With live frames off, nothing else is lost.** Captures still refresh on
+  every save, Drive mode (§7) still drives every host from the canvas
+  through the driver, pointing at lines still works on captures (the driver's
+  `tree` carries the source map's join), and proposals still render. Live
+  adds immediacy — a tenth of a second instead of a capture — never a
+  capability only it has.
 
 **Hosted canvases** (isocan.io, HTTPS): a loopback `http://127.0.0.1` frame
 inside an HTTPS page meets Private Network Access and mixed-content rules.
@@ -337,10 +359,43 @@ Exact changes daily and promises nothing. So:
 - the module is an **experiment** behind `exact` in Settings → Experiments,
   removed by unticking it.
 
-## 15. Open questions, in one place
+## 15. A diary back to the Exact team
+
+Exact asks every agent that builds with it to keep a diary
+([`docs/diary.md`](https://github.com/expo/exact/blob/main/docs/diary.md) in
+expo/exact): friction recorded as it happens with `bun exact.mjs feedback
+note "<what happened>"`, and a diary at `.exact/diary/<date>-<topic>.md` —
+*Rough*, *Lean in*, *Needed*, *Checkpoints* — written as you go for a reader
+on the Exact team. Nothing leaves the machine without the person's yes.
+
+This module is an unusual diarist: not an app built on Exact but a **tool
+built on Exact's tool interfaces** — the Tamber wire, the agent session, the
+source map, `deploy --json`. That is the part of Exact with the fewest
+outside callers, so it is the part our diary is most worth reading for. So:
+
+- **While building**, every phase's builder keeps the diary in the Acme
+  Market fixture app (synthetic, so nothing in it is private), runs `bun
+  exact.mjs feedback status` at the start, and notes friction the moment it
+  happens — a wire method that answered differently from its doc, a door that
+  needed a workaround, a version that moved under us. *Needed* lists the tool
+  capabilities a canvas client wanted (a held proposal's preview, a resident
+  driver session, an ancestor list for `frame-ancestors`) as `provided`, `by
+  hand` or `missing`.
+- **Once built**, the conductor gathers the phases' diaries into one, shows
+  Dion exactly what would be sent (`bun exact.mjs feedback` prints it), and
+  sends only on his yes with `feedback send --yes`. The receipt goes in
+  [`phases.md`](phases.md)'s trajectory; `feedback delete <receipt>` takes it
+  back.
+- **For people using the module**, the module's agent guide tells every
+  agent working on an Exact app from the canvas to keep that app's diary as
+  its `AGENTS.md` already asks, and to respect the project's standing answer
+  (`ask`, `local`, `always`, `never`) — never sending on its own initiative
+  under `ask`. The canvas adds no sending of its own.
+
+## 16. Open questions, in one place
 
 1. Live frames through two ancestors: which door (§5).
-2. Web ↔ bridge on loopback: a product change the shell owns, or no live frames (Drive mode only) (§5).
+2. ~~Web ↔ bridge on loopback~~ — decided: a paired local-tool door the shell owns, with live frames switchable off per machine, per screen and per bridge (§5).
 3. Whether `contract symbols` names a router verb's target route (§3).
 4. Whether a held Tamber proposal renders without being accepted (§10).
 5. Whether Exact's agent session API holds across rebuilds, or each

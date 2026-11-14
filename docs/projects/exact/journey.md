@@ -88,6 +88,11 @@ each one a comment pinned to the screen its file draws. Another sits on the
 product page from `agent check both`: *the "Add" button is 38 px tall on
 phone, under the 44 px target.*
 
+Her colleague Sam works on a laptop where nothing should reach into local
+processes, and has *Live frames* off in Settings. Sam sees the same screens as
+captures, refreshed on every save, and can still drive and point at them —
+just a capture behind instead of live.
+
 **The point**: the canvas is the inspector Exact left out — and every finding
 lands where a person and an agent will both see it.
 
@@ -222,3 +227,11 @@ usability study a small team never has time to run.
   Exact's "later".
 - **Agents that ship.** An agent may prepare a release; only a person ships
   one.
+
+## And back to Exact
+
+Exact asks the agents that build with it to keep a diary of what was rough
+and what was good. Building this module, our agents keep one — the view of a
+*tool* built on Exact's tool interfaces, which few others will write — and
+once it is built, it goes back to the Exact core team through Exact's own
+`feedback`, when Dion says yes.

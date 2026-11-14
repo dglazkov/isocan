@@ -17,6 +17,11 @@ Exact's inputs.
 in a scratch directory that no canvas is bound to. Every reading of an Exact
 interface is recorded as a dated fixture stamped with the Exact commit.
 
+**Every phase keeps Exact's diary** (design §15): the builder runs `bun
+exact.mjs feedback status` in the fixture app first, records friction with
+`feedback note` as it happens, and writes the phase's Rough, Lean in, Needed
+and Checkpoints before the phase closes. Nothing is sent until Phase 10.
+
 **Phase citations name their project**: `exact phase 2`.
 
 **Where we are, 13 Nov 2026:** specified; nothing built.
@@ -71,6 +76,9 @@ and no others; version-diff's slider walks a screen's history.
 - Live frames on the chosen door, paired once per machine (design §5).
   If no door works, this phase ships Drive mode (phase 3's) as the live
   view instead, and says so.
+- **Live is switchable off**: the per-machine switch in Settings, the
+  per-screen Live / Still toggle (off-screen frames drop back to Still), and
+  `isocan exact live --no-frames`.
 - Alt-click → `inspect` → the selection with file, range and style origin;
   `outline` across every live frame.
 - Comments carrying `exact.source`, and *moved* when the digest changes.
@@ -79,7 +87,9 @@ and no others; version-diff's slider walks a screen's history.
 - **Open in editor** and **Open in Exact Design**.
 
 **Proof:** in a real browser on a scratch home, an edit in the editor
-reaches three live frames; an Alt-click names the right line in two
+reaches three live frames; with the switch off, the browser makes no
+connection to the bridge at all (its network log shows none) and every
+other scene of phases 1–2 still works on captures; an Alt-click names the right line in two
 components (one through a `class`); a typo becomes a comment on the right
 screen and leaves when fixed; an agent given only a comment's
 `exact.source` makes the fix without being told the file.
@@ -191,6 +201,20 @@ installs the build from the QR.
 pass their generated test on web and iOS; two personas reach a goal and one
 gets stuck where a deliberate dead end is.
 
+## Phase 10 — The diary goes home
+
+**Status: NOT STARTED.** After phase 9, or whenever the build stops.
+
+- Gather every phase's diary from the fixture app into one, for a reader on
+  the Exact team: what a canvas client needed from the Tamber wire, the
+  agent session, the source map and delivery, and how each went.
+- Show Dion what would be sent (`bun exact.mjs feedback`), with two to four
+  quoted lines, as Exact's guide asks.
+- On his yes only, `bun exact.mjs feedback send --yes`.
+
+**Proof:** the receipt, recorded in this file's trajectory — or Dion's no,
+recorded the same way.
+
 ---
 
 ## Trajectory
@@ -198,8 +222,12 @@ gets stuck where a deliberate dead end is.
 - **2026-11-13** — Specified against `expo/exact` at `0ebe9a2c` and
   `diegoag64/exact-design` at its 13 Nov head. Every Exact interface named in
   the design was read in source; none was run. The design leans on three
-  facts it could not settle by reading (design §15), so phase 0 runs them
+  facts it could not settle by reading (design §16), so phase 0 runs them
   first.
-- **2026-11-13** — Open: the browser-to-bridge connection reaches past the
-  module API (design §5). Asked as a product question, with Drive mode as the
-  answer if it is refused.
+- **2026-11-13** — Decided (Dion): offer live frames through a paired
+  local-tool door the shell owns, and let them be turned off — per machine,
+  per screen and per bridge — with every other scene still working on
+  captures and Drive mode (design §5).
+- **2026-11-13** — Added (Dion): once built, an agent diary goes back to the
+  Exact core team through Exact's own `feedback` protocol, on his yes
+  (design §15, phase 10).
