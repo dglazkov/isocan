@@ -11,11 +11,11 @@ import "./chunk-JYOOXWJZ.mjs";
 // scripts/motion-render.mjs
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-var { DaemonClient } = await import("./src-LZKUVMJY.mjs");
+var { DaemonClient } = await import("./src-5FL542QO.mjs");
 var { classifyAutomaticSource } = await import("./context-reader-LR45M34R.mjs");
 var { paths } = await import("./src-C4M52Y3B.mjs");
 var { BADGE_COOKIE, canvasPath, canvasUrl } = await import("./src-BUN5ILY3.mjs");
-var { personalCaptureOwner } = await import("./personal-capture-MOUW7O5O.mjs");
+var { personalCaptureOwner } = await import("./personal-capture-H65LDOYS.mjs");
 var argv = process.argv.slice(2);
 var arg = (name) => {
   const i = argv.indexOf(name);

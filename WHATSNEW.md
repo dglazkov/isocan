@@ -21,6 +21,15 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 13 November 2026
+
+- **Exact apps on the canvas, first step (experiment).** Tick *Exact* under
+  Settings → Experiments, then `isocan exact open <app>` reads an Exact app's
+  routes and posts a phone-size web screenshot of each one, taken with your
+  own Exact on your machine. Run it again and only screens whose pixels
+  changed get a new version. `isocan exact doctor` says which Exact checkout,
+  commit and Bun the app uses, and whether the web host is set up.
+
 ## 11 November 2026
 
 - **Space shows the bar while you present.** In full screen, press Space to

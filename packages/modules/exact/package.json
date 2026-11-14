@@ -1,0 +1,24 @@
+{
+  "name": "@isocan/exact",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Exact on the canvas: an Exact app's routes indexed and captured as screens, through the person's own Exact checkout",
+  "exports": {
+    "./core": "./src/core.ts",
+    "./web": "./src/web.tsx",
+    "./cli": "./src/cli.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "isocan": {
+    "engines": "^0.2.11"
+  },
+  "dependencies": {
+    "@isocan/core": "*"
+  },
+  "peerDependencies": {
+    "react": "^18.3.1"
+  }
+}
