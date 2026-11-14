@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { agentRefusal, originLine, changedScreens, classificationLine, classify, preparedMarkdown, preparedRecord, releaseMarkdown, type DeployTable, type PrepareReport, type ReleaseRecord } from "../src/release.ts";
+import type { CanvasSnapshotResponse, Item } from "@isocan/core";
+import * as record from "../src/core.ts";
+import { bindCore } from "../src/core-ref.ts";
+import { answerShip } from "../src/ship.ts";
+import type { Kit } from "../src/stories.ts";
+import { agentRefusal, grantRefusal, originLine, changedScreens, classificationLine, classify, preparedMarkdown, preparedRecord, releaseMarkdown, type DeployTable, type PrepareReport, type ReleaseRecord } from "../src/release.ts";
 
 /** Exact's dry run for Acme Market (cbe553f6, 14 Nov 2026): a plan change over the air, and a grant that needs a binary. */
 const table = (rows: DeployTable["rows"]): DeployTable => ({
@@ -70,5 +75,31 @@ describe("a release card", () => {
     expect(text).toContain("# Rolled back: Acme Market → internal");
     expect(text).toContain("the content of r-1 re-published at a new sequence number");
     expect(text).toContain("head seq 3");
+  });
+});
+
+bindCore(record);
+
+describe("only the owner, or someone granted, ships from the lane (exact phase 8)", () => {
+  const lane = { id: "itm_lane", title: "lane", properties: { "exact.app": JSON.stringify({ id: "dev.acme.market" }), "exact.ship": JSON.stringify({ seq: 3, by: "Tam", kind: "ship", channel: "internal", changes: 1, prepared: "itm_card", from: null }) }, versions: [] } as unknown as Item;
+  const snapshot = { project: { id: "c" }, canvas: { items: { itm_lane: lane }, threads: {}, trash: [], agents: {} }, lastSeq: 1 } as unknown as CanvasSnapshotResponse;
+  const ctx = { actor: { id: "usr_owner", name: "Maya" }, client: { snapshot: async () => snapshot } } as never;
+
+  it("refuses a ship ask written by a person not granted write, in one sentence, and never calls Exact's deploy", async () => {
+    const prev = process.env.ISOCAN_EXACT_GRANT;
+    delete process.env.ISOCAN_EXACT_GRANT;
+    const calls: string[] = [];
+    const kit = { bridge: async (_h: unknown, verb: string) => { calls.push(verb); return { ok: true }; } } as unknown as Kit;
+    const host = { sendOp: async () => { calls.push("op"); return {}; }, putBlob: async () => { calls.push("blob"); return {}; } } as never;
+    const said: string[] = [];
+    try {
+      const answer = await answerShip(kit, host, ctx, "c", "/app", lane, { id: "usr_tam", name: "Tam" }, (l) => said.push(l));
+      expect(answer).toMatchObject({ ok: false, refused: true, error: grantRefusal("Tam") });
+      expect(calls).toEqual([]);
+      expect(grantRefusal("Tam").match(/[.!?](\s|$)/g)).toHaveLength(1);
+      expect(said.join("\n")).toMatch(/refused a ship to internal written by Tam/);
+    } finally {
+      if (prev === undefined) delete process.env.ISOCAN_EXACT_GRANT; else process.env.ISOCAN_EXACT_GRANT = prev;
+    }
   });
 });

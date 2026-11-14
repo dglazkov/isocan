@@ -24,7 +24,7 @@ import { core } from "./core-ref.ts";
 import { DEVICES, type Device } from "./map.ts";
 import type { Kit } from "./stories.ts";
 import {
-  opsFromFlags, parseAcceptAnswer, parseProposalRecord, parseProposeAnswer, parseProposeAsk, proposalTitle, scopeFor,
+  opsFromFlags, parseAcceptAnswer, parseProposalRecord, parseProposeAnswer, parseProposeAsk, proposalTitle, scopeFor, grantedWrite,
   type AcceptAnswer, type PreviewCell, type ProposalRecord, type ProposeAnswer, type ProposeAsk, type TamberOp,
 } from "./proposal.ts";
 
@@ -35,7 +35,8 @@ import {
  * - `isocan exact propose <screen>` — anybody's ask, written on the screen
  *   (`exact.propose`); an agent's terminal never reaches the app or its wire.
  * - `isocan exact live` answers it: the asker's scope from isocan's roles (an
- *   enrolled agent `propose`, anybody else who may write the canvas `write`),
+ *   enrolled agent `propose`, the machine's owner and the people it granted
+ *   `write`, any other person `read` — exact phase 8 — whose ask the wire refuses),
  *   the proposal held on the dev loop's Tamber wire by a client of that scope,
  *   pictured before and after on every device, scheme and host this session
  *   captures — a scrub for a live-class edit, staged copies for a rebuild-class
@@ -55,7 +56,7 @@ const LOOP = /^http:\/\/127\.0\.0\.1:\d+$/;
 
 interface ProposeReport {
   ok: boolean;
-  proposal?: string; client?: string; scope?: "propose" | "write"; class?: "live" | "rebuild";
+  proposal?: string; client?: string; scope?: "read" | "propose" | "write"; class?: "live" | "rebuild";
   changed?: Array<{ file: string; token: string }>; files?: Record<string, string>;
   scopeCheck?: { status: number; scope: string | null; needs: string | null } | null;
   how?: "scrub" | "staged";
@@ -146,7 +147,7 @@ export async function answerPropose(kit: Kit, host: CliHost, ctx: Ctx, canvasId:
   const started = Date.now();
   let snapshot = await ctx.client.snapshot(canvasId);
   const isAgent = !!snapshot.canvas.agents?.[actor.id];
-  const scope = scopeFor(isAgent);
+  const scope = scopeFor(isAgent, grantedWrite(actor, ctx.actor, process.env.ISOCAN_EXACT_GRANT));
   const refused = (error: string, extra: Partial<ProposeAnswer> = {}): ProposeAnswer => ({ seq: ask.seq, ok: false, itemId: null, proposal: null, class: null, scope, client: null, how: null, previews: 0, scopeCheck: null, ms: Date.now() - started, error, ...extra });
   const loop = process.env.ISOCAN_EXACT_LOOP;
   if (!loop || !LOOP.test(loop)) return refused("a proposal is held by the dev loop's Tamber wire, and this `isocan exact live` runs none (--no-frames): start it without --no-frames");
@@ -168,7 +169,8 @@ export async function answerPropose(kit: Kit, host: CliHost, ctx: Ctx, canvasId:
       return refused((err as Error).message);
     }
     const base = { proposal: r.proposal ?? null, class: r.class ?? null, client: r.client ?? null, how: r.how ?? null, scopeCheck: r.scopeCheck ?? null };
-    if (!r.ok || !r.proposal || !r.previews?.length) {
+    // (a read asker's proposal is refused by the wire before it is held: it never reaches the record below)
+    if (!r.ok || !r.proposal || !r.previews?.length || scope === "read") {
       if (r.proposal) await dropOnWire(kit, host, app, loop, r.proposal);
       return refused(r.error ?? "the proposal was not pictured", base);
     }
@@ -205,7 +207,7 @@ export async function answerPropose(kit: Kit, host: CliHost, ctx: Ctx, canvasId:
     // Last, so it is current: the screen as the proposal draws it — what a Keep folds into the screen.
     await version(own.after, own.afterSha256, `${route}-${host_}-${device}-${scheme}.png`);
     const record: ProposalRecord = {
-      seq: ask.seq, route, asker: { id: actor.id, name: actor.name, kind: isAgent ? "agent" : "person" }, scope, client: r.client!, proposal: r.proposal,
+      seq: ask.seq, route, asker: { id: actor.id, name: actor.name, kind: isAgent ? "agent" : "person" }, scope: scope === "propose" ? "propose" : "write", client: r.client!, proposal: r.proposal,
       class: r.class!, how: r.how!, ops: ask.ops, files: r.files ?? {}, changed: r.changed ?? [], previews: cells, at: new Date().toISOString(),
     };
     snapshot = await ctx.client.snapshot(canvasId);
@@ -303,6 +305,8 @@ export async function settleKept(kit: Kit, host: CliHost, ctx: Ctx, canvasId: st
       const before = screen.versions.filter((v) => v.id !== picture!.id).at(-1);
       if (before && screen.currentVersionId === picture!.id) await host.sendOp(ctx, canvasId, { type: "item.setCurrentVersion", itemId: screen.id, versionId: before.id } as Operation, id("exact-accept"));
     };
+    // A person this machine's owner has not granted write keeps at read (exact phase 8): the wire refuses the accept.
+    const keptAt = grantedWrite(by, ctx.actor, process.env.ISOCAN_EXACT_GRANT) ? "write" : "read";
     if (snapshot.canvas.agents?.[by.id]) {
       await putBack();
       await answer({ ok: false, proposal: record.proposal, heldAgain: null, written: [], error: `${by.name} is an agent: a proposal reaches the files only by a person's Keep` });
@@ -313,7 +317,7 @@ export async function settleKept(kit: Kit, host: CliHost, ctx: Ctx, canvasId: st
     let r: AcceptReport;
     try {
       const job = path.join(dir, "job.json");
-      await fs.writeFile(job, JSON.stringify({ proposal: record.proposal, ops: record.ops, files: record.files, name: by.name }));
+      await fs.writeFile(job, JSON.stringify({ proposal: record.proposal, ops: record.ops, files: record.files, name: by.name, scope: keptAt }));
       r = await kit.bridge<AcceptReport>(host, "accept", ["--app", app, "--job", job, "--dev-url", loop], "the accept", true);
     } catch (err) {
       r = { ok: false, error: (err as Error).message };

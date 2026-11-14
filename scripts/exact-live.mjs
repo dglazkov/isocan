@@ -48,6 +48,17 @@
  *   on this session's own simulator, joined to the loop (`agent ios --url`),
  *   at one screen; `/native/shot` answers what the simulator shows now. A
  *   native window cannot be framed (design §7), so the canvas polls it.
+ * - **a teammate through Exact's relay** (exact phase 8; design §5, §12) —
+ *   with `--relay <host[:port]> --relay-account <label>` the dev loop dials out
+ *   to Exact's relay (`EXACT-RELAY/1`) with Exact's own connector, so its
+ *   Tamber wire and its canvas gateway have HTTPS names a browser on another
+ *   machine can reach, every client's TLS ending in the loop (`--relay-cert`
+ *   and `--relay-key` for names of your own; else Exact gets them by ACME). The
+ *   bridge mints the teammate's code on that wire at `read` — a person this
+ *   machine's owner has not granted write sees the loop live and changes
+ *   nothing, and the wire, not the page, refuses them (`--allow-plugin-origin`
+ *   lets a canvas's sandboxed client call it). The account's token is Exact's:
+ *   `EXACT_RELAY_TOKEN` or `~/.exact/relay/<label>/token`.
  * - **the capture loop** — `--child` is the CLI's own `isocan exact live
  *   --no-frames`, which keeps the map's captures, versions and compile
  *   errors true on every save; its output is passed through.
@@ -74,7 +85,7 @@ const flag = (name) => {
 const json = argv.includes("--json");
 const app = flag("--app") ? path.resolve(flag("--app")) : null;
 if (!app) {
-  console.error("usage: exact-live.mjs --app <dir> [--child '<argv json>'] [--bridge-port <n>] [--frames-port <n>] [--loop-port <n>] [--design-port <n>] [--json]");
+  console.error("usage: exact-live.mjs --app <dir> [--child '<argv json>'] [--bridge-port <n>] [--frames-port <n>] [--loop-port <n>] [--design-port <n>] [--relay <host[:port]> --relay-account <label> [--relay-cert <pem> --relay-key <pem>]] [--json]");
   process.exit(2);
 }
 const launcher = path.join(app, "exact.mjs");
@@ -129,7 +140,8 @@ process.on("SIGTERM", () => stop(0));
 
 const loopPort = await freePort(flag("--loop-port") ? Number(flag("--loop-port")) : undefined);
 const loopBase = `http://127.0.0.1:${loopPort}`;
-const loop = spawn("/bin/sh", [launcher, "web", "--port", String(loopPort)], {
+const relayAsked = flag("--relay") ? ["--relay", flag("--relay"), "--relay-account", flag("--relay-account") ?? "", ...(flag("--relay-cert") ? ["--relay-cert", flag("--relay-cert"), "--relay-key", flag("--relay-key") ?? ""] : []), "--allow-plugin-origin"] : [];
+const loop = spawn("/bin/sh", [launcher, "web", "--port", String(loopPort), ...relayAsked], {
   cwd: app,
   detached: true,
   stdio: ["ignore", "pipe", "pipe"],
@@ -137,7 +149,20 @@ const loop = spawn("/bin/sh", [launcher, "web", "--port", String(loopPort)], {
 });
 children.push(loop);
 let loopSaid = "";
-const keep = (d) => { loopSaid = (loopSaid + d).slice(-8000); };
+/** The relay's names for this loop, as the loop said them (`canvas through the relay: <canvas>, framed by <tool> only`). */
+let relay = null;
+const keep = (d) => {
+  loopSaid = (loopSaid + d).slice(-8000);
+  const named = /canvas through the relay: (https:\/\/[a-z0-9.-]+), framed by (https:\/\/[a-z0-9.-]+) only/.exec(loopSaid);
+  if (named && !relay) {
+    const pin = /key pin ([A-Za-z0-9+/=]{44})/.exec(loopSaid)?.[1] ?? null;
+    relay = { tool: named[2], canvas: named[1], pin };
+    say(`relay: the loop's wire is ${relay.tool} and its canvas ${relay.canvas}, every client's TLS ending in the loop`, { relay });
+  }
+  // What the loop says of the relay (refused, unreachable, CAA, a certificate) is the person's to read: passed on once.
+  if (relayAsked.length) for (const line of String(d).split("\n")) if (/relay/i.test(line) && !relaySaid.has(line.trim())) { relaySaid.add(line.trim()); say(`loop: ${line.trim().slice(0, 300)}`); }
+};
+const relaySaid = new Set();
 loop.stdout.on("data", keep);
 loop.stderr.on("data", keep);
 loop.on("exit", (code) => {
@@ -167,6 +192,23 @@ async function tamber(body) {
   const r = await fetch(`${loopBase}/__tamber`, { method: "POST", headers: { "content-type": "application/json", "x-exact-tamber-token": tamberToken }, body: JSON.stringify(body) });
   return { status: r.status, answer: await r.json().catch(() => null) };
 }
+
+/**
+ * **A teammate's code** (exact phase 8): Tamber's own pairing on the loop's
+ * wire, at `read` — the scope of a person who can see the canvas but whom this
+ * machine's owner has not granted write. Entered on their canvas with the
+ * wire's relay name; one use; minted again when it lapses.
+ */
+let teammate = null;
+async function teammateCode() {
+  if (!relay || !tamberToken || stopping) return;
+  const r = await tamber({ method: "pair-code", scope: "read", name: "teammate" });
+  const ok = r.answer?.ok;
+  if (!ok?.code) { say(`relay: no teammate code — ${JSON.stringify(r.answer?.error ?? r.status).slice(0, 200)}`); return; }
+  teammate = { code: ok.code, expires: Date.parse(ok.expires) || Date.now() + 120_000 };
+  say(`a teammate pairs through the relay (read: sees this loop live, changes nothing): on an Exact screen press Pair… and enter  ${relay.tool} ${ok.code}  (one use, until ${new Date(teammate.expires).toISOString().slice(11, 19)})`, { teammate: { tool: relay.tool, code: ok.code, expires: teammate.expires, scope: ok.scope } });
+}
+setInterval(() => { if (relay && tamberToken && (!teammate || teammate.expires < Date.now())) void teammateCode(); }, 2_000).unref();
 
 /** What the browsers read, in order: selections and inspect mode as they move. */
 const queue = [];
@@ -570,7 +612,7 @@ const api = http.createServer(async (req, res) => {
   if (!auth || !tokens.has(auth)) return answer(401, { error: "not paired with this bridge (a bridge that restarted forgets its pairings)" });
 
   if (url.pathname === "/hello" && req.method === "GET") {
-    return answer(200, { app: appInfo, dir: app, frames: framesPort, loop: loopBase, tamber: !!tamberToken, design: { port: designPort, up: await designUp() }, drive: { hosts: driveHosts.filter((h) => h !== "ios" || sim) }, scrub: !!tamberToken, native: driveHosts.includes("ios") && sim ? ["ios"] : [], seq });
+    return answer(200, { app: appInfo, dir: app, frames: framesPort, loop: loopBase, tamber: !!tamberToken, design: { port: designPort, up: await designUp() }, drive: { hosts: driveHosts.filter((h) => h !== "ios" || sim) }, scrub: !!tamberToken, native: driveHosts.includes("ios") && sim ? ["ios"] : [], relay: relay ? { tool: relay.tool, canvas: relay.canvas } : null, seq });
   }
   if (url.pathname === "/scrub" && req.method === "POST") {
     const body = await readBody(req);
@@ -708,6 +750,12 @@ const api = http.createServer(async (req, res) => {
     const r = await prepareOnce(body.channel);
     say(`prepare ${body.channel}: ${r.ok ? "classified" : r.error}`);
     return answer(r.ok ? 200 : 422, r);
+  }
+  if (url.pathname === "/teammate" && req.method === "POST") {
+    // The owner's paired page asks for a fresh teammate code to hand on (exact phase 8): read, one use.
+    if (!relay) return answer(409, { error: "this bridge runs no relay: `isocan exact live` with ISOCAN_EXACT_RELAY and ISOCAN_EXACT_RELAY_ACCOUNT" });
+    await teammateCode();
+    return teammate ? answer(200, { tool: relay.tool, code: teammate.code, expires: teammate.expires, scope: "read" }) : answer(502, { error: "the wire minted no code" });
   }
   if (url.pathname === "/design" && req.method === "GET") {
     return answer(200, { link: designLink(url.searchParams.get("route") ?? ""), up: await designUp(), port: designPort });

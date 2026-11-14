@@ -415,6 +415,14 @@ entries).
 - **On a phone**, the canvas's mobile presenting mode shows the device wall;
   the AppDrop QR installs the real build.
 
+**Built 14 Nov 2026 (exact phase 8, part):** `isocan exact live` with
+`ISOCAN_EXACT_RELAY` dials Exact's relay and mints a teammate code at
+`read`; **Pair…** takes it, and **Live ↗** opens the relayed page in a tab of
+its own. A person the owner has not granted pairs at `read`, and the wire
+refuses their scrub, proposal, Keep and ship. Without a pairing the frame
+says it is captured only. The wall stacks two to a row on a phone. Hosting
+the relay waits (phases.md, phase 8's Open entries).
+
 ## 13. Exact Design
 
 Exact Design (MIT) is a studio for one person and one app, written in

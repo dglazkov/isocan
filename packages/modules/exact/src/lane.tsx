@@ -157,6 +157,11 @@ export function LaneCard(facts: RendererFacts) {
           </div>
         );
       })}
+      {/* The install slot (exact phase 8): AppDrop's phone link stays unbuilt (exact phase 7's Open), so this says what Exact
+          installs locally, and what a phone waits on. */}
+      <p className="exact-note exact-lane-install" data-exact-install="simulator">
+        Install on a simulator, not a phone: <code>bun exact.mjs ios --run --sim &lt;name&gt;</code> in the app. A phone&rsquo;s install link (AppDrop&rsquo;s QR) waits on a yes to its hosted service and an Apple ID.
+      </p>
       {confirm && <ConfirmStep c={confirm} onCancel={() => setConfirm(null)} onConfirm={() => void send(confirm)} />}
       {status.said && <p className={status.state === "failed" ? "exact-problem" : "exact-note"} role="status" data-exact-said>{status.said}</p>}
     </div>

@@ -21,6 +21,7 @@ import { Driver } from "./drive.tsx";
 import { filmCommentRows } from "./scrub.ts";
 import { FilmForm } from "./filmask.tsx";
 import { parseRecordAnswer } from "./story.ts";
+import { CAPTURED_ONLY, RELAY_NOTE, parseRelayCode, relayOpenLive, relayPair, relayPairing } from "./relay.ts";
 
 /**
  * **Live frames and pointing** (exact phase 2; design §5, §6), the browser
@@ -306,12 +307,17 @@ export function ExactScreen(facts: RendererFacts) {
   const [filming, setFilming] = useState(false);
   const open = !!door && !door.shut;
   const host = item?.properties?.[EXACT_PROPS.host] ?? "web";
+  // Whether this browser asked for its bridge yet: until it has, nothing says "captured only".
+  const [checked, setChecked] = useState(false);
+  // A teammate's pairing with the app's wire through Exact's relay (exact phase 8; relay.ts), behind the same switch.
+  const relay = open && appId ? relayPairing(appId) : null;
+  const [relayNote, setRelayNote] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
     // A bridge is asked for only through an open door: Live needs it, and so does Drive (exact phase 3).
-    if (!open || !appId) { setBridge(null); return; }
-    void bridgeFor(door!, appId).then((b) => { if (alive) setBridge(b); });
+    if (!open || !appId) { setBridge(null); setChecked(false); return; }
+    void bridgeFor(door!, appId).then((b) => { if (alive) { setBridge(b); setChecked(true); } });
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, appId, tick]);
@@ -394,12 +400,22 @@ export function ExactScreen(facts: RendererFacts) {
           <button type="button" className={`exact-chip${driving ? " exact-chip-on" : ""}${open ? "" : " exact-chip-off"}`} aria-pressed={driving} title={open ? `Drive this ${host} screen: presses and typing sent to the driver on your machine` : door.shut ?? ""} onClick={pressDrive}>
             Drive
           </button>
-          {open && (live || asking) && !bridge && <button type="button" className="exact-chip" onClick={() => setAsking(!asking)}>Pair…</button>}
+          {open && checked && !bridge && relay && host === "web" && (
+            <button type="button" className="exact-chip" data-exact-relay={relay.scope} title={`The dev page through ${new URL(relay.tool).host}, at ${relay.scope} scope, in a tab of its own`}
+              onClick={() => { setRelayNote(null); relayOpenLive(appId).then((at) => setRelayNote(`opened live through the relay at ${at}`), (err: unknown) => setRelayNote(err instanceof Error ? err.message : String(err))); }}>
+              Live ↗
+            </button>
+          )}
+          {open && (live || asking) && !bridge && !relay && <button type="button" className="exact-chip" onClick={() => setAsking(!asking)}>Pair…</button>}
         </div>
       )}
       {filming && item && appId && <FilmForm item={item} appId={appId} canvasId={canvasId} door={open ? door : null} bridge={bridge} points={points} onClose={() => setFilming(false)} />}
       {driveNote && <p className="exact-drive-note" role="status" onPointerDown={(e) => e.stopPropagation()} onClick={() => setDriveNote(null)}>{driveNote}</p>}
-      {open && !bridge && asking && <PairForm door={door!} onPaired={() => { setAsking(false); state.hellos.clear(); changed(); }} />}
+      {open && !bridge && asking && <PairForm door={door!} appId={appId} onPaired={() => { setAsking(false); state.hellos.clear(); changed(); }} />}
+      {/* Without a pairing, captures only — said on the frame (exact phase 8; design §12); through a relay, how live goes. */}
+      {open && checked && !bridge && !driving && appId && (
+        <p className="exact-still-note" role="note" data-exact-still={relay ? "relay" : "captured"} onPointerDown={(e) => e.stopPropagation()}>{relayNote ?? (relay ? RELAY_NOTE : CAPTURED_ONLY)}</p>
+      )}
     </div>
   );
 }
@@ -494,7 +510,7 @@ function NativeFrame({ door, port, shots, scheme, fallback, title }: { door: Loc
   );
 }
 
-function PairForm({ door, onPaired }: { door: LocalToolDoor; onPaired: () => void }) {
+function PairForm({ door, appId, onPaired }: { door: LocalToolDoor; appId: string | null; onPaired: () => void }) {
   const [code, setCode] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
   return (
@@ -504,11 +520,14 @@ function PairForm({ door, onPaired }: { door: LocalToolDoor; onPaired: () => voi
       onSubmit={(e) => {
         e.preventDefault();
         setProblem(null);
-        door.pair(code).then(onPaired, (err: unknown) => setProblem(err instanceof Error ? err.message : String(err)));
+        // A teammate's code names the wire's relay address (exact phase 8); a bridge's own starts with its port.
+        const relayed = parseRelayCode(code);
+        const paired = relayed && appId ? relayPair(appId, relayed.tool, relayed.code).then(() => undefined) : door.pair(code).then(() => undefined);
+        paired.then(onPaired, (err: unknown) => setProblem(err instanceof Error ? err.message : String(err)));
       }}
     >
       <label>
-        Pairing code from <code>isocan exact live</code>
+        Pairing code from <code>isocan exact live</code>, or a teammate's relay address and code
         <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="47811-K3M9Q-7XW2P" aria-label="Pairing code" autoFocus />
       </label>
       <button type="submit" className="btn">Pair</button>

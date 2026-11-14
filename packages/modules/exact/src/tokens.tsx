@@ -20,6 +20,7 @@ import { EXACT_PROPS, appIdOf } from "./core.ts";
 import { readBlob, useSelection } from "./inspector.tsx";
 import { exactBridge, exactCanvas } from "./live.tsx";
 import { tokensOf, type DesignToken, type ProposeAsk } from "./proposal.ts";
+import { relayPairing, relayScrub } from "./relay.ts";
 
 /**
  * **Token scrubbing on the design-system item** (exact phase 6; design §10,
@@ -106,7 +107,21 @@ function TokenChip({ token, appId, host, canvas }: { token: DesignToken; appId: 
     const door = host.localTool?.("exact") ?? null;
     if (!door || door.shut) { setState("failed"); setSaid(door?.shut ?? "token scrubbing runs on your machine: it needs live frames on and `isocan exact live` paired"); return; }
     const bridge = await exactBridge(door, appId);
-    if (!bridge) { setState("failed"); setSaid("pair a screen's Live with `isocan exact live` first — the scrub runs on its dev loop"); return; }
+    if (!bridge) {
+      // A teammate paired through the relay (exact phase 8): the drag goes to the wire as Tamber's own scrub, and the
+      // wire answers for the scope — this page refuses nothing itself.
+      if (relayPairing(appId)) {
+        setState("scrubbing");
+        setValue(base + 1);
+        const r = await relayScrub(appId, token.name, `${base + 1}px`);
+        setState(r.ok ? "let-go" : "failed");
+        setSaid(r.said);
+        // Proposing is still open to them, on the canvas: the owner's bridge holds it at their scope, and the wire answers.
+        setLast(base + 1);
+        return;
+      }
+      setState("failed"); setSaid("pair a screen's Live with `isocan exact live` first — the scrub runs on its dev loop"); return;
+    }
     try { el.setPointerCapture(pointer); } catch { /* released already */ }
     drag.current = { x, door, port: bridge.port, inFlight: false, pending: null, value: base, keep: setInterval(() => { const d = drag.current; if (d) send(d.value); }, 10_000) };
     setState("scrubbing");
@@ -147,7 +162,7 @@ function TokenChip({ token, appId, host, canvas }: { token: DesignToken; appId: 
       <button type="button" className={`exact-chip exact-token-chip${state === "scrubbing" ? " exact-chip-on" : ""}`} title={`Drag sideways to scrub ${token.name} on every live build`} onPointerDown={(e) => void down(e)} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
         <code>{token.name}</code> <span>{state === "scrubbing" && value !== null ? `${value}px` : token.light}</span>
       </button>
-      {state === "let-go" && last !== null && last !== base && (
+      {(state === "let-go" || state === "failed") && last !== null && last !== base && (
         <span className="exact-token-propose">
           <button type="button" className="exact-chip" onClick={propose}>Propose {last}px</button>
           <select value={under} onChange={(e) => setUnder(e.target.value)} aria-label="under which screen">

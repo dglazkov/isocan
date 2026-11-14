@@ -38,10 +38,14 @@ proposals as entries; a token chip scrubs web and iOS live frames together;
 `isocan exact branch` captures a branch beside the current screens. A
 release lane from `app.json`'s `deploy`: Prepare (agents may) posts Exact's
 dry-run classification as a card; Ship, Promote and Roll back are a
-person's, confirmed, signed with the keys on the machine. Next: **exact
-phase 8**, teams and hosted canvases. Waiting on a person: the real-iPhone
-walk of phase 7, and a yes to AppDrop (a hosted service and an Apple ID)
-for install QRs.
+person's, confirmed, signed with the keys on the machine. Phase 8 is
+PART-DONE: a teammate pairs at `read` through Exact's relay (proven against
+a relay on this Mac) and the wire refuses their drag, proposal, Keep and
+ship; a viewer sees captures only; the wall lays out on a phone. Next:
+**exact phase 9**. Waiting on a person: the real-iPhone walk of phase 7; a
+yes to AppDrop (a hosted service and an Apple ID); hosting the relay for
+isocan.io (DNS, a certificate, a VM) and a second machine for phase 8.
+Waiting on Exact: its relay canvas page is blank and cannot be framed.
 ---
 
 ## Phase 0 — The bridge, the index, and the three doors
@@ -309,7 +313,13 @@ is uploaded. A person's walk on a real iPhone is owed separately.
 
 ## Phase 8 — Teams and hosted canvases
 
-**Status: NOT STARTED.**
+**Status: PART-DONE, 14 Nov 2026.** Against a relay on this Mac, a second
+person paired at `read` through the relay; their token drag, proposal and
+Keep were refused on Tamber's wire (403) and the app's files hashed
+unchanged; a viewer with no pairing saw captures only, said in one
+sentence; the device wall presented two to a row at 375 px. The live page
+through the relay is blank (an Exact bug), and isocan.io, a second machine
+and a phone install wait on a person.
 
 - Exact's relay for HTTPS live frames on isocan.io.
 - `read`-scoped live frames for paired teammates; captured items for
@@ -319,6 +329,15 @@ is uploaded. A person's walk on a real iPhone is owed separately.
 **Proof:** a teammate on a second machine, on isocan.io, sees a live frame
 of the first machine's dev loop and cannot change a token; their phone
 installs the build from the QR.
+
+### Trajectory
+
+- **2026-11-14** — Write scope is the machine owner's to grant, not the canvas's (design §10 changed). A canvas editor's Keep had been accepted at `write`; now only the owner and people named in `ISOCAN_EXACT_GRANT` write or ship, and every other person pairs at `read`.
+- **2026-11-14** — Exact's relay canvas page can be framed only by Exact's own tool (`frame-ancestors`), so a teammate's live view opens in a tab of its own rather than in the item.
+- **2026-11-14** — Open: Exact's canvas gateway rewrites `{0:0}` in the app's script to `{loopback.invalid}`, so the live page through the relay throws and stays blank. Waits on Exact.
+- **2026-11-14** — Open: hosting the relay for isocan.io: A/AAAA for the domain and a wildcard under the account label, ACME DNS-01 TXT through a DNS provider's API, raw TCP 443 with SNI pass-through on a VM, `limits.perIpPerSession` well above 30, and the domain on the Public Suffix List. Waits on a person who administers isocan.io's DNS and cloud.
+- **2026-11-14** — Open: `localTool.ts` keeps the live-frame door shut on any hosted home, so even a hosted relay could not be reached from isocan.io; the smallest change is a relay door honouring only the *Live frames* switch. A core change, waiting on the hosting above.
+- **2026-11-14** — Open: a second machine on isocan.io and a phone install from the QR. Wait on a person and on AppDrop (phase 7).
 
 ## Phase 9 — From intent to Contract, and personas
 

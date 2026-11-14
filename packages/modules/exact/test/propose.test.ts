@@ -21,7 +21,7 @@ import * as record from "../src/core.ts";
 import { bindCore } from "../src/core-ref.ts";
 
 bindCore(record);
-import { opProblem, opsFromFlags, parseProposeAsk, previewRows, proposalTitle, scopeFor, tokensOf, type PreviewCell, type ProposalRecord } from "../src/proposal.ts";
+import { grantedWrite, opProblem, opsFromFlags, parseProposeAsk, previewRows, proposalTitle, scopeFor, tokensOf, type PreviewCell, type ProposalRecord } from "../src/proposal.ts";
 import { pendingProposes, settleKept } from "../src/proposals.ts";
 import type { Kit } from "../src/stories.ts";
 
@@ -39,6 +39,17 @@ describe("scopes from isocan's roles (design §10)", () => {
   it("gives an enrolled agent propose, never write, and a person who may edit write", () => {
     expect(scopeFor(true)).toBe("propose");
     expect(scopeFor(false)).toBe("write");
+  });
+
+  it("gives a person the machine's owner has not granted write read (exact phase 8)", () => {
+    const owner = { id: "usr_owner", name: "Maya" };
+    expect(scopeFor(false, grantedWrite(owner, owner, undefined))).toBe("write");
+    expect(scopeFor(false, grantedWrite({ id: "usr_t", name: "Teammate Tam" }, owner, undefined))).toBe("read");
+    expect(scopeFor(false, grantedWrite({ id: "usr_t", name: "Teammate Tam" }, owner, " teammate tam ,someone"))).toBe("write");
+    expect(scopeFor(false, grantedWrite({ id: "usr_t", name: "Tam" }, owner, "usr_t"))).toBe("write");
+    // an agent is propose whatever it was granted
+    expect(scopeFor(true, true)).toBe("propose");
+    expect(scopeFor(true, false)).toBe("propose");
   });
 });
 
@@ -155,11 +166,13 @@ describe("a Keep, and only a person's, reaches the wire", () => {
   // core's choose: the proposal's current version onto the screen, then the proposal to the trash.
   const kept = screen({ versions: [...screen().versions, { id: "v_after", blobHash: "h_after", mimeType: "image/png", filename: "after.png", size: 1, createdAt: "", createdBy: { id: "p", name: "P" } }], currentVersionId: "v_after" } as Partial<Item>);
   const del = (actor: { id: string; name: string }) => entry(12, actor, { type: "item.delete", itemId: "itm_prop" });
+  // The person running `isocan exact live`: the machine's owner, who keeps at write (exact phase 8).
+  const owner = { actor: { id: "person_1", name: "Maya" } } as never;
 
   it("accepts on the wire when a person keeps it, and says so on the screen", () => withLoop(async () => {
     const f = fakes({ ok: true, written: ["app.tamber"], heldAgain: null });
-    await settleKept(f.kit, f.host, {} as never, "c", "/app", "dev.acme.market", [del({ id: "person_1", name: "Maya" })], snap([kept], [proposalItem()]), () => {});
-    expect(f.calls).toEqual([{ verb: "accept", job: { proposal: "prop-1", ops: recordOf().ops, files: recordOf().files, name: "Maya" } }]);
+    await settleKept(f.kit, f.host, owner, "c", "/app", "dev.acme.market", [del({ id: "person_1", name: "Maya" })], snap([kept], [proposalItem()]), () => {});
+    expect(f.calls).toEqual([{ verb: "accept", job: { proposal: "prop-1", ops: recordOf().ops, files: recordOf().files, name: "Maya", scope: "write" } }]);
     const update = f.sent.find((o) => o.type === "item.update") as Extract<Operation, { type: "item.update" }>;
     expect(JSON.parse(update.patch.properties!["exact.accepted"] as string)).toMatchObject({ item: "itm_prop", version: "v_after", ok: true, written: ["app.tamber"], by: "Maya" });
   }));
@@ -167,13 +180,13 @@ describe("a Keep, and only a person's, reaches the wire", () => {
   it("reads a Keep on a canvas with groups, where the delete is a group.change (a proposal in a competition lane)", () => withLoop(async () => {
     const f = fakes({ ok: true, written: ["app.tamber"] });
     const change = entry(13, { id: "person_1", name: "Maya" }, { type: "group.change", action: { kind: "apply", change: { intent: "delete", expected: [{ itemId: "itm_prop" }] } } } as unknown as Operation);
-    await settleKept(f.kit, f.host, {} as never, "c", "/app", "dev.acme.market", [change], snap([kept], [proposalItem()]), () => {});
+    await settleKept(f.kit, f.host, owner, "c", "/app", "dev.acme.market", [change], snap([kept], [proposalItem()]), () => {});
     expect(f.calls.map((c) => c.verb)).toEqual(["accept"]);
   }));
 
   it("refuses an agent's choose: nothing reaches the wire, and the screen's picture is put back", () => withLoop(async () => {
     const f = fakes({ ok: true });
-    await settleKept(f.kit, f.host, {} as never, "c", "/app", "dev.acme.market", [del({ id: "agent_1", name: "Lead" })], snap([kept], [proposalItem()], { agent_1: { actor: { id: "agent_1", name: "Lead" } } }), () => {});
+    await settleKept(f.kit, f.host, owner, "c", "/app", "dev.acme.market", [del({ id: "agent_1", name: "Lead" })], snap([kept], [proposalItem()], { agent_1: { actor: { id: "agent_1", name: "Lead" } } }), () => {});
     expect(f.calls).toEqual([]);
     expect(f.sent[0]).toMatchObject({ type: "item.setCurrentVersion", itemId: "s_place", versionId: "v_cap" });
     expect(JSON.parse((f.sent[1] as Extract<Operation, { type: "item.update" }>).patch.properties!["exact.accepted"] as string)).toMatchObject({ ok: false, error: expect.stringMatching(/only by a person's Keep/) });
@@ -181,14 +194,22 @@ describe("a Keep, and only a person's, reaches the wire", () => {
 
   it("drops it on the wire when it is deleted without a Keep", () => withLoop(async () => {
     const f = fakes({ ok: true, dropped: "prop-1" });
-    await settleKept(f.kit, f.host, {} as never, "c", "/app", "dev.acme.market", [del({ id: "person_1", name: "Maya" })], snap([screen()], [proposalItem()]), () => {});
+    await settleKept(f.kit, f.host, owner, "c", "/app", "dev.acme.market", [del({ id: "person_1", name: "Maya" })], snap([screen()], [proposalItem()]), () => {});
     expect(f.calls).toEqual([{ verb: "drop", job: { proposal: "prop-1" } }]);
     expect(f.sent).toEqual([]);
   }));
 
+  it("keeps a teammate the owner has not granted write at read: the wire refuses, and the screen is put back (exact phase 8)", () => withLoop(async () => {
+    const f = fakes({ ok: false, written: [], error: "the wire refused the keep: accept needs `write` scope; this client has `read`" });
+    await settleKept(f.kit, f.host, owner, "c", "/app", "dev.acme.market", [del({ id: "person_2", name: "Tam" })], snap([kept], [proposalItem()]), () => {});
+    expect(f.calls).toEqual([{ verb: "accept", job: { proposal: "prop-1", ops: recordOf().ops, files: recordOf().files, name: "Tam", scope: "read" } }]);
+    expect(f.sent[0]).toMatchObject({ type: "item.setCurrentVersion", versionId: "v_cap" });
+    expect(JSON.parse((f.sent[1] as Extract<Operation, { type: "item.update" }>).patch.properties!["exact.accepted"] as string)).toMatchObject({ ok: false, by: "Tam", error: expect.stringMatching(/needs `write` scope; this client has `read`/) });
+  }));
+
   it("puts the screen back when the wire will not write it", () => withLoop(async () => {
     const f = fakes({ ok: false, error: "accept: stale" });
-    await settleKept(f.kit, f.host, {} as never, "c", "/app", "dev.acme.market", [del({ id: "person_1", name: "Maya" })], snap([kept], [proposalItem()]), () => {});
+    await settleKept(f.kit, f.host, owner, "c", "/app", "dev.acme.market", [del({ id: "person_1", name: "Maya" })], snap([kept], [proposalItem()]), () => {});
     expect(f.sent[0]).toMatchObject({ type: "item.setCurrentVersion", versionId: "v_cap" });
   }));
 });
@@ -200,7 +221,10 @@ describe("what the module never does", () => {
     expect(live).not.toMatch(/"scrub-release"/);
     expect(bridge).not.toMatch(/"scrub-release"|method: "transaction"/);
     // An agent's proposal goes out on a client the wire paired at propose scope.
-    expect(bridge).toMatch(/method: "pair-code", scope: "propose"/);
+    expect(bridge).toMatch(/pairedClient\(wire, job\.scope/);
+    expect(bridge).toMatch(/method: "pair-code", scope, name/);
+    // A Keep by a person not granted write is asked of the wire on a read client, which refuses it (exact phase 8).
+    expect(bridge).toMatch(/pairedClient\(wire, "read"/);
   });
 });
 

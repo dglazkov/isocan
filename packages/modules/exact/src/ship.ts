@@ -19,8 +19,9 @@ import type { CanvasSnapshotResponse, Item, LogEntry } from "@isocan/core";
 import type { CliHost, Ctx } from "@isocan/cli/modulehost";
 import { core } from "./core-ref.ts";
 import type { Kit } from "./stories.ts";
+import { grantedWrite } from "./proposal.ts";
 import {
-  CARD, EXACT_LANE_MIME, LANE_SIZE, PHASED_NOTE, agentRefusal, cardAt, changedScreens, classificationLine, classify,
+  CARD, EXACT_LANE_MIME, LANE_SIZE, PHASED_NOTE, agentRefusal, grantRefusal, cardAt, changedScreens, classificationLine, classify,
   originLine, parseLane, parsePrepareAsk, parsePrepareAnswer, parsePrepared, parseRelease, parseShipAsk, parseShipAnswer,
   preparedMarkdown, preparedRecord, releaseMarkdown,
   type DeployTable, type LaneFacts, type PrepareAnswer, type PrepareReport, type PreparedRecord, type ReleaseRecord, type ShipAnswer, type ShipAsk, type ShipKind,
@@ -350,6 +351,12 @@ export async function answerShip(kit: Kit, host: CliHost, ctx: Ctx, canvasId: st
   const snapshot = await ctx.client.snapshot(canvasId);
   if (isAgent(snapshot, actor.id)) {
     const sentence = agentRefusal(actor.name);
+    say(`refused a ${ask.kind} to ${ask.channel} written by ${actor.name}: ${sentence}`);
+    return { seq: ask.seq, ok: false, itemId: null, error: sentence, refused: true };
+  }
+  // A person this machine's owner has not granted write is read (exact phase 8): nothing runs. Prepare stays open.
+  if (!grantedWrite(actor, ctx.actor, process.env.ISOCAN_EXACT_GRANT)) {
+    const sentence = grantRefusal(actor.name);
     say(`refused a ${ask.kind} to ${ask.channel} written by ${actor.name}: ${sentence}`);
     return { seq: ask.seq, ok: false, itemId: null, error: sentence, refused: true };
   }

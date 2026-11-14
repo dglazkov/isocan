@@ -565,6 +565,21 @@ export async function check(host: CliHost, given: string, opts: { checks?: boole
  */
 export interface LiveOptions extends CaptureOptions { maxPasses?: string; quietMs?: string; frames?: boolean; checks?: boolean; bridgePort?: string; designPort?: string }
 
+/**
+ * The relay `isocan exact live` dials out to (exact phase 8): `ISOCAN_EXACT_RELAY` (host[:port]) and
+ * `ISOCAN_EXACT_RELAY_ACCOUNT` (the account's label; its token is Exact's, `EXACT_RELAY_TOKEN` or
+ * `~/.exact/relay/<label>/token`), and for names of your own `ISOCAN_EXACT_RELAY_CERT` and `ISOCAN_EXACT_RELAY_KEY`.
+ */
+export function relayArgs(env: Record<string, string | undefined>): string[] {
+  const at = env.ISOCAN_EXACT_RELAY?.trim();
+  if (!at) return [];
+  const account = env.ISOCAN_EXACT_RELAY_ACCOUNT?.trim();
+  if (!account) throw new Error("ISOCAN_EXACT_RELAY needs ISOCAN_EXACT_RELAY_ACCOUNT: the account label the relay gave you");
+  const cert = env.ISOCAN_EXACT_RELAY_CERT?.trim(), key = env.ISOCAN_EXACT_RELAY_KEY?.trim();
+  if (!cert !== !key) throw new Error("ISOCAN_EXACT_RELAY_CERT and ISOCAN_EXACT_RELAY_KEY go together: PEM files for the relay's names");
+  return ["--relay", at, "--relay-account", account, ...(cert && key ? ["--relay-cert", cert, "--relay-key", key] : [])];
+}
+
 export async function live(host: CliHost, given: string, opts: LiveOptions, cmd: Command): Promise<void> {
   const ctx = await host.ctxOf(cmd);
   const app = appDir(given);
@@ -584,6 +599,8 @@ export async function live(host: CliHost, given: string, opts: LiveOptions, cmd:
       ...(capture.sim ? ["--sim", capture.sim] : []),
       ...(opts.bridgePort ? ["--bridge-port", opts.bridgePort] : []),
       ...(opts.designPort ? ["--design-port", opts.designPort] : []),
+      // A teammate through Exact's relay (exact phase 8): named in the environment, so the verb's startup stays as it is.
+      ...relayArgs(process.env),
       ...(ctx.json ? ["--json"] : []),
     ], { what: "the live bridge" });
     return;

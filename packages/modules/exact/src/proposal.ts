@@ -41,9 +41,21 @@ export type TamberOp =
 
 export type Scope = "read" | "propose" | "write";
 
-/** An agent proposes; a person whose write the canvas accepted writes (design §10's table). */
-export function scopeFor(isAgent: boolean): Exclude<Scope, "read"> {
-  return isAgent ? "propose" : "write";
+/**
+ * An agent proposes; a person writes only where the paired machine's owner
+ * granted it — the owner (the person running `isocan exact live`) and the
+ * people `ISOCAN_EXACT_GRANT` names — and every other person who can see the
+ * canvas is `read` (exact phase 8, design §12): sees live, changes nothing.
+ */
+export function scopeFor(isAgent: boolean, granted = true): Scope {
+  return isAgent ? "propose" : granted ? "write" : "read";
+}
+
+/** Has this machine's owner granted this person `write`? Themselves, or an id or name in `ISOCAN_EXACT_GRANT` (comma-separated). */
+export function grantedWrite(actor: { id: string; name: string }, owner: { id: string }, grant: string | undefined): boolean {
+  if (actor.id === owner.id) return true;
+  const names = (grant ?? "").split(",").map((n) => n.trim().toLowerCase()).filter(Boolean);
+  return names.includes(actor.id.toLowerCase()) || names.includes(actor.name.trim().toLowerCase());
 }
 
 /** What `exact.propose` asks: the operations, why, what prompted it, and the area to hang it in (a design-competition lane). */
@@ -52,7 +64,7 @@ export interface ProposeAsk { seq: number; by: string | null; ops: TamberOp[]; w
 /** The answer (`exact.proposed`): the proposal item, the wire's id and class, the asker's scope, or why not. */
 export interface ProposeAnswer {
   seq: number; ok: boolean; itemId: string | null; proposal: string | null; class: "live" | "rebuild" | null;
-  scope: "propose" | "write" | null; client: string | null; how: "scrub" | "staged" | null; previews: number;
+  scope: Scope | null; client: string | null; how: "scrub" | "staged" | null; previews: number;
   /** For an agent: the wire's answer when its own client tried to `accept` — 403 `needs: write` is the scope holding. */
   scopeCheck: { status: number; scope: string | null; needs: string | null } | null;
   ms: number; error?: string;

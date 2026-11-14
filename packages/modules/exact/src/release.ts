@@ -140,6 +140,10 @@ export interface PrepareAnswer { seq: number; ok: boolean; itemId: string | null
 export const agentRefusal = (name: string): string =>
   `${name} is an agent, and only a person ships: an agent may prepare a release, and a person on this machine confirms and ships it.`;
 
+/** The sentence a person this machine's owner has not granted write gets for a lane ask (exact phase 8): they are `read`. */
+export const grantRefusal = (name: string): string =>
+  `${name} has read scope on this machine, and only its owner or someone it granted (ISOCAN_EXACT_GRANT) ships: ${name} may prepare a release, and the owner confirms and ships it.`;
+
 /** Exact has no publisher-side staged rollout (schema only at cbe553f6): said on the card, never pretended. */
 export const PHASED_NOTE = "app.json asks for a phased rollout; Exact's publisher stages none (deploy.phased is schema only), so every device on this channel takes it at its next check";
 
