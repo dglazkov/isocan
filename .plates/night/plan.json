@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "date": "2026-11-13",
+  "date": "2026-11-14",
   "shapedBy": "default",
   "readyBy": null,
   "willNotTouch": [],
@@ -11,7 +11,7 @@
   "items": [
     {
       "id": "measures",
-      "title": "Measure the practice: 41 measures; outside or broken on 2026-11-12: drafts_waiting, long_files, phases_without_issue, phases_stuck, escapes, changelog_gaps, verify_owed, lint, issues_unnamed, issues_done_open, dependency_age",
+      "title": "Measure the practice: 41 measures; outside or broken on 2026-11-13: drafts_waiting, long_files, phases_without_issue, phases_stuck, escapes, changelog_gaps, verify_owed, drift, lint, issues_unnamed, issues_done_open, dependency_age",
       "kind": "measure",
       "source": "default",
       "number": null,
@@ -19,13 +19,13 @@
       "budget": null,
       "status": "done",
       "result": {
-        "note": "10 ok, 12 outside, 19 n/a, 0 broken",
-        "link": "docs/practice/2026-11-13.md"
+        "note": "11 ok, 12 outside, 18 n/a, 0 broken",
+        "link": "docs/practice/2026-11-14.md"
       }
     },
     {
       "id": "health-phases-stuck",
-      "title": "Proposal from 2026-11-12: Move design-competition/0 (planned; docs/projects/design-competition/phases.md untouched since 2026-09-13, 60 days): take its next action, or mark it RETIRED. 74 more after it.",
+      "title": "Proposal from 2026-11-13: Move design-competition/0 (planned; docs/projects/design-competition/phases.md untouched since 2026-09-13, 61 days): take its next action, or mark it RETIRED. 75 more after it.",
       "kind": "review",
       "source": "health:phases_stuck",
       "number": {
