@@ -104,3 +104,18 @@
 .exact-record { display: flex; flex-wrap: wrap; gap: 2px; }
 .exact-record input, .exact-record select { font: inherit; min-width: 0; flex: 1; }
 .exact-verify { display: grid; gap: 4px; pointer-events: auto; }
+/* Agents propose (exact phase 6): before and after on every device and scheme, and the design system's token chips. */
+.exact-proposal { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 8px; height: 100%; padding: 12px; box-sizing: border-box; background: var(--card); color: var(--ink); overflow: hidden; font-size: 13px; }
+.exact-proposal-head { display: grid; gap: 4px; }
+.exact-proposal-ops { margin: 0; padding-left: 16px; }
+.exact-proposal-grid { width: 100%; height: 100%; border-collapse: collapse; table-layout: fixed; }
+.exact-proposal-grid th { font-weight: 500; color: var(--ink-soft); font-size: 12px; }
+.exact-proposal-grid tbody th { width: 64px; text-align: left; }
+.exact-proposal-cell { padding: 4px; vertical-align: middle; text-align: center; }
+.exact-proposal-cell img { max-width: 100%; max-height: 240px; object-fit: contain; display: block; margin: 0 auto; }
+.exact-proposal-after img { outline: 2px dashed var(--ink-soft); outline-offset: 2px; }
+.exact-tokens { gap: 6px; }
+.exact-token { display: grid; gap: 4px; }
+.exact-token-chip { cursor: ew-resize; touch-action: none; user-select: none; justify-self: start; }
+.exact-token-propose { display: flex; gap: 4px; align-items: center; }
+.exact-native > .img-view { width: 100%; height: 100%; object-fit: contain; }
