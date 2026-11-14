@@ -28,7 +28,7 @@
 import type { CanvasContents, CommentThread, Item } from "@isocan/core";
 import type { ExactIndex, ExactSource, IndexRoute, SymbolDef, Symbols } from "./core.ts";
 import { core } from "./core-ref.ts";
-import { screensAt, type SymbolRef } from "./map.ts";
+import { screensAt, type Device, type SymbolRef } from "./map.ts";
 
 /** One diagnostic as `contract build --json` prints it. */
 export interface BuildDiagnostic {
@@ -75,6 +75,8 @@ export interface Finding {
   /** Where on the phone screen, in its CSS pixels (390 wide), when the finding names a box. */
   box: [number, number, number, number] | null;
   body: string;
+  /** The screen that carries it when it is not the web phone's (exact phase 3: a host difference sits on the native screen), and that capture's width in points. */
+  anchor?: { host: string; device: Device; width: number };
 }
 
 const own = (d: { file: string }) => d.file.endsWith(".contract") && !d.file.includes(":");
@@ -216,10 +218,12 @@ export function planFindings(canvas: CanvasContents, index: Pick<ExactIndex, "ap
       if (thread.comments[0]!.body !== f.body) plan.update.push({ thread, body: f.body });
       continue;
     }
-    const item = f.routes.map((r) => core.screenItemOf(canvas, index.app.id, r, "phone", f.scheme)).find(Boolean)
-      ?? f.routes.map((r) => core.screenItemOf(canvas, index.app.id, r)).find(Boolean);
+    const item = f.anchor
+      ? f.routes.map((r) => core.screenItemOf(canvas, index.app.id, r, f.anchor!.device, f.scheme, f.anchor!.host)).find(Boolean)
+      : f.routes.map((r) => core.screenItemOf(canvas, index.app.id, r, "phone", f.scheme)).find(Boolean)
+        ?? f.routes.map((r) => core.screenItemOf(canvas, index.app.id, r)).find(Boolean);
     if (!item) continue;
-    const scale = item.width / 390;
+    const scale = item.width / (f.anchor?.width ?? 390);
     const x = f.box ? Math.round(Math.min(item.width - 8, (f.box[0] + f.box[2]) * scale)) : Math.round(item.width - 12);
     const y = f.box ? Math.round(Math.min(item.height - 8, f.box[1] * scale)) : 12;
     plan.create.push({ finding: f, item, x, y });

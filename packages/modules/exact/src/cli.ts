@@ -47,12 +47,14 @@ function register(host: CliHost): void {
     .option("--devices <list>", "the device row to capture: phone, tablet, desktop", "phone,tablet,desktop")
     .option("--schemes <list>", "light, dark", "light,dark")
     .option("--param <name=value>", "a route parameter's value for a screen with no exact.shots yet (repeatable); unnamed ones are 1", (v: string, all: string[] = []) => [...all, v])
-    .option("--force", "capture every screen even where nothing it depends on moved");
+    .option("--force", "capture every screen even where nothing it depends on moved")
+    .option("--hosts <list>", "where to capture: web, ios, macos (the web draws every device; iOS a simulator's phone, macOS a window)", "web")
+    .option("--sim <udid>", "the iOS simulator to capture and drive on — one you made for this (`xcrun simctl create`), never a booted one somebody else may own");
 
   capture(exact
     .command("open <app>")
     .description("Lay an Exact app out as a flow map: its index, a screen per route at phone, tablet and desktop in light and dark, the arrows its router can take, its design system and an anatomy card per Contract file"))
-    .action(host.run(async (app: string, opts: { param?: string[]; devices?: string; schemes?: string; force?: boolean }, cmd: Command) => (await run()).open(host, app, opts, cmd)));
+    .action(host.run(async (app: string, opts: import("./cli-run.ts").CaptureOptions, cmd: Command) => (await run()).open(host, app, opts, cmd)));
 
   capture(exact
     .command("live <app>")
@@ -64,6 +66,13 @@ function register(host: CliHost): void {
     .option("--bridge-port <port>", "the bridge's loopback port, the first number of the pairing code (default: a free one)")
     .option("--design-port <port>", "Exact Design's port, for Open in Exact Design", "5173")
     .action(host.run(async (app: string, opts: import("./cli-run.ts").LiveOptions, cmd: Command) => (await run()).live(host, app, opts, cmd)));
+
+  exact
+    .command("wall <app> <route>")
+    .description("A device wall: one route's screens on every host and device on this canvas, side by side, kept up to date by open and live")
+    .option("--canvas <canvas>")
+    .option("--scheme <scheme>", "light or dark", "light")
+    .action(host.run(async (app: string, route: string, opts: { scheme?: string }, cmd: Command) => (await run()).wall(host, app, route, opts, cmd)));
 
   exact
     .command("check <app>")

@@ -27,6 +27,8 @@ export { bindCore } from "./core-ref.ts";
 import { buildIndex, captureKeyParts, designItemProperties, designMarkdown } from "./build.ts";
 import { DEVICES, LAYOUT, SCHEMES, mapLayout, parseShots, rowOffset, rowSize, shotsText, type Device, type Scheme } from "./map.ts";
 import { buildFindings, checkFindings, movedBody, movedComments, planFindings, type CheckReport, type DiagnoseReport, type Finding } from "./findings.ts";
+import { pendingDrives, type DriveAnswer, type DriveRequest } from "./drives.ts";
+import { HOST_NAMES, NATIVE_DEVICE, UDID, compareFindings, jobSize, nativeCellWidth, nativeOffset, nativeSize, parseHosts, wallCells, wallSize, wallText, wallsOf, type CompareReport, type Host, type Wall } from "./hosts.ts";
 
 /**
  * **`isocan exact`'s verbs, run** — loaded by `cli.ts` only when a verb runs,
@@ -59,7 +61,7 @@ interface DoctorReport {
 }
 
 interface JobsReport {
-  shots: Array<{ job: number; index: number; url: string; size: string; scheme: Scheme; file: string; sha256: string; ms: number; points?: unknown }>;
+  shots: Array<{ job: number; index: number; host?: Host; url: string; size: string; scheme: Scheme; file: string; sha256: string; png?: { width: number; height: number } | null; ms: number; points?: { size?: { width: number; height: number } } | null }>;
 }
 
 /** The commit and protocol this module was proven against (design §14): newer is warned, then tried. */
@@ -176,9 +178,13 @@ interface SyncOptions {
   devices: Device[];
   schemes: Scheme[];
   force: boolean;
+  /** The hosts to capture on (exact phase 3): the web always draws every device; a native host its own. */
+  hosts: Host[];
+  /** The simulator an iOS capture runs on — one the person made for this, by UDID. */
+  sim: string | null;
 }
 
-interface ScreenResult { route: string; device: Device; scheme: Scheme; itemId: string; status: Upsert; sha256: string | null; url: string }
+interface ScreenResult { route: string; host: Host; device: Device; scheme: Scheme; itemId: string; status: Upsert; sha256: string | null; url: string; ms: number }
 
 interface SyncResult {
   index: ExactIndex;
@@ -187,6 +193,10 @@ interface SyncResult {
   anatomy: Array<{ file: string; itemId: string; status: Upsert }>;
   screens: ScreenResult[];
   captureMs: number;
+  /** Differences between hosts this pass measured (exact phase 3), and the (route, host) pairs it compared. */
+  hostFindings: Finding[];
+  compared: Array<{ route: string; host: Host }>;
+  walls: Array<{ itemId: string; route: string; status: Upsert }>;
 }
 
 /**
@@ -205,30 +215,35 @@ async function sync(host: CliHost, ctx: Ctx, canvasId: string, app: string, opts
   const appId = index.app.id;
 
   // What each screen needs: its shots (the canvas's, else the route's phone screen's, else the default) and its key.
-  interface Want { route: IndexRoute; device: Device; scheme: Scheme; shots: string; url: string; key: string; existing: Item | null }
+  interface Want { route: IndexRoute; host: Host; device: Device; scheme: Scheme; shots: string; url: string; key: string; existing: Item | null }
   const wants: Want[] = [];
+  if (opts.hosts.includes("ios") && !opts.sim) throw new Error("iOS captures run on a simulator of your own, never a booted one that may be somebody else's: `xcrun simctl create \"isocan-exact\" com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro <runtime>` prints a UDID; pass it as --sim <udid>");
   for (const route of index.routes) {
     const primary = core.screenItemOf(snapshot.canvas, appId, route.name);
     const fallback = primary?.properties?.[core.EXACT_PROPS.shots] ?? `at "${core.routeLocation(route, opts.params)}"`;
-    for (const device of opts.devices) {
-      for (const scheme of opts.schemes) {
-        const existing = core.screenItemOf(snapshot.canvas, appId, route.name, device, scheme);
-        const text = existing?.properties?.[core.EXACT_PROPS.shots] ?? fallback;
-        let shots;
-        try { shots = parseShots(text); } catch (err) { throw new Error(`${existing?.title ?? primary?.title ?? route.name}: ${(err as Error).message}`); }
-        const normal = shotsText(shots);
-        wants.push({ route, device, scheme, shots: normal, url: shots.url, key: sha256(captureKeyParts(index, route.name, device, scheme, normal)), existing });
+    for (const host of opts.hosts) {
+      // The web draws every device in the row; a native host draws its own (a simulator's phone, a Mac's window).
+      const devices = host === "web" ? opts.devices : [NATIVE_DEVICE[host]];
+      for (const device of devices) {
+        for (const scheme of opts.schemes) {
+          const existing = core.screenItemOf(snapshot.canvas, appId, route.name, device, scheme, host);
+          const text = existing?.properties?.[core.EXACT_PROPS.shots] ?? fallback;
+          let shots;
+          try { shots = parseShots(text); } catch (err) { throw new Error(`${existing?.title ?? primary?.title ?? route.name}: ${(err as Error).message}`); }
+          const normal = shotsText(shots);
+          wants.push({ route, host, device, scheme, shots: normal, url: shots.url, key: sha256(captureKeyParts(index, route.name, device, scheme, normal, host, host === "ios" ? opts.sim : null)), existing });
+        }
       }
     }
   }
   const todo = wants.filter((w) => opts.force || !w.existing || w.existing.properties?.[core.EXACT_PROPS.key] !== w.key);
 
-  // One job per way of reaching a screen.
-  const jobs: Array<{ url: string; ops: string[]; shots: Array<{ size: string; scheme: Scheme }>; wants: Want[] }> = [];
+  // One job per host and way of reaching a screen: one cold driver each.
+  const jobs: Array<{ host: Host; url: string; ops: string[]; shots: Array<{ size: string; scheme: Scheme }>; wants: Want[] }> = [];
   for (const w of todo) {
-    let job = jobs.find((j) => j.wants[0]!.shots === w.shots);
-    if (!job) { const s = parseShots(w.shots); job = { url: s.url, ops: s.ops, shots: [], wants: [] }; jobs.push(job); }
-    job.shots.push({ size: `${DEVICES[w.device].width}x${DEVICES[w.device].height}`, scheme: w.scheme });
+    let job = jobs.find((j) => j.host === w.host && j.wants[0]!.shots === w.shots);
+    if (!job) { const s = parseShots(w.shots); job = { host: w.host, url: s.url, ops: s.ops, shots: [], wants: [] }; jobs.push(job); }
+    job.shots.push({ size: jobSize(w.device), scheme: w.scheme });
     job.wants.push(w);
   }
 
@@ -238,8 +253,11 @@ async function sync(host: CliHost, ctx: Ctx, canvasId: string, app: string, opts
     const started = Date.now();
     if (jobs.length > 0) {
       const jobsFile = path.join(dir, "jobs.json");
-      await fs.writeFile(jobsFile, JSON.stringify(jobs.map(({ url, ops, shots: s }) => ({ url, ops, shots: s }))));
-      shots = await bridge<JobsReport>(host, "capture", ["--app", app, "--dir", dir, "--jobs", jobsFile], "the screenshots", true);
+      await fs.writeFile(jobsFile, JSON.stringify(jobs.map(({ host: on, url, ops, shots: s }) => ({ host: on, url, ops, shots: s }))));
+      // Under the live bridge, native captures join its dev loop (`ISOCAN_EXACT_LOOP`, set by exact-live.mjs for its own child).
+      const loop = process.env.ISOCAN_EXACT_LOOP;
+      const joined = loop && /^http:\/\/127\.0\.0\.1:\d+$/.test(loop) && jobs.some((j) => j.host !== "web") ? ["--dev-url", loop] : [];
+      shots = await bridge<JobsReport>(host, "capture", ["--app", app, "--dir", dir, "--jobs", jobsFile, ...(opts.sim ? ["--sim", opts.sim] : []), ...joined], "the screenshots", true);
     }
     const captureMs = Date.now() - started;
 
@@ -277,40 +295,111 @@ async function sync(host: CliHost, ctx: Ctx, canvasId: string, app: string, opts
       sideY += 340 + 40;
     }
 
-    const layout = mapLayout(index.routes);
+    const layout = mapLayout(index.routes, nativeCellWidth(opts.hosts));
     const mapX = origin.x + LAYOUT.sideWidth + LAYOUT.sideGap;
     const screens: ScreenResult[] = [];
+    const natives: Array<{ route: string; host: Exclude<Host, "web">; points: import("./core.ts").CapturePoints | null; file: string; size: string; url: string; ops: string[] }> = [];
     for (const w of wants) {
       const at = layout.get(w.route.name)!;
-      const primary = w.device === "phone" && w.scheme === "light";
-      const off = primary ? { x: 0, y: 0 } : rowOffset(w.device, w.scheme);
-      const size = primary ? LAYOUT.primary : rowSize(w.device);
+      const primary = w.host === "web" && w.device === "phone" && w.scheme === "light";
+      const jobIndex = jobs.findIndex((j) => j.wants.includes(w));
+      const shot = jobIndex < 0 ? null : shots.shots.find((s) => s.job === jobIndex && s.index === jobs[jobIndex]!.wants.indexOf(w))!;
+      const off = primary ? { x: 0, y: 0 } : w.host === "web" ? rowOffset(w.device, w.scheme) : nativeOffset(w.host, w.scheme);
+      const size = primary ? LAYOUT.primary : w.host === "web" ? rowSize(w.device) : nativeSize(w.host, shot?.png ?? null);
       // Shots are written on the phone screen; a device-row screen carries its own only if somebody gave it one.
       const ownShots = primary || w.existing?.properties?.[core.EXACT_PROPS.shots] !== undefined;
-      const props = core.screenProperties(index, w.route, w.url, { device: w.device, scheme: w.scheme, ...(ownShots ? { shots: w.shots } : {}), key: w.key });
-      const jobIndex = jobs.findIndex((j) => j.wants.includes(w));
-      if (jobIndex < 0) {
+      const props = core.screenProperties(index, w.route, w.url, { device: w.device, scheme: w.scheme, host: w.host, ...(ownShots ? { shots: w.shots } : {}), key: w.key, reached: w.shots });
+      if (!shot) {
         // Skipped: nothing it depends on moved. Its arrows may still have (they live on the index).
         if (w.existing && !sameProps(w.existing, props)) await host.sendOp(ctx, canvasId, { type: "item.update", itemId: w.existing.id, patch: { properties: props } }, group);
-        screens.push({ route: w.route.name, device: w.device, scheme: w.scheme, itemId: w.existing!.id, status: "skipped", sha256: null, url: w.url });
+        screens.push({ route: w.route.name, host: w.host, device: w.device, scheme: w.scheme, itemId: w.existing!.id, status: "skipped", sha256: null, url: w.url, ms: 0 });
         continue;
       }
-      const shot = shots.shots.find((s) => s.job === jobIndex && s.index === jobs[jobIndex]!.wants.indexOf(w))!;
-      const label = primary ? w.route.name : `${w.route.name} · ${w.device} ${w.scheme}`;
+      const label = primary ? w.route.name : w.host === "web" ? `${w.route.name} · ${w.device} ${w.scheme}` : `${w.route.name} · ${HOST_NAMES[w.host]} ${w.device} ${w.scheme}`;
       // Where each node is on this picture, and which line drew it: pointing on a capture (exact phase 2).
       if (shot.points) props[core.EXACT_PROPS.points] = JSON.stringify(shot.points);
       const posted = await upsert(
         host, ctx, canvasId, snapshot, w.existing,
-        { bytes: await fs.readFile(shot.file), mime: "image/png", filename: `${w.route.name}-${w.device}-${w.scheme}.png` },
+        { bytes: await fs.readFile(shot.file), mime: "image/png", filename: `${w.route.name}-${w.host === "web" ? "" : `${w.host}-`}${w.device}-${w.scheme}.png` },
         { title: `${index.app.name} · ${label}`, width: size.width, height: size.height, properties: props, at: { x: mapX + at.x + off.x, y: origin.y + at.y + off.y } },
         group,
       );
-      screens.push({ route: w.route.name, device: w.device, scheme: w.scheme, itemId: posted.itemId, status: posted.status, sha256: shot.sha256, url: w.url });
+      screens.push({ route: w.route.name, host: w.host, device: w.device, scheme: w.scheme, itemId: posted.itemId, status: posted.status, sha256: shot.sha256, url: w.url, ms: shot.ms });
+      if (w.host !== "web" && w.scheme === "light" && shot.png) natives.push({ route: w.route.name, host: w.host, points: (shot.points ?? null) as never, file: shot.file, size: `${shot.png.width}x${shot.png.height}`, url: w.url, ops: parseShots(w.shots).ops });
     }
-    return { index, indexItem, design, anatomy, screens, captureMs };
+
+    // Every recaptured native screen, set beside the web drawn at its size (design §7): a difference that is the app's
+    // own layout, not the platform's bars, becomes a comment on the native screen.
+    let hostFindings: Finding[] = [];
+    const compared = natives.map((n) => ({ route: n.route, host: n.host }));
+    if (natives.length > 0) {
+      const jobsFile = path.join(dir, "compare.json");
+      await fs.writeFile(jobsFile, JSON.stringify(natives.map((n) => ({ route: n.route, host: n.host, url: n.url, ops: n.ops, size: n.size, reference: n.file }))));
+      const report = await bridge<CompareReport>(host, "compare", ["--app", app, "--dir", dir, "--jobs", jobsFile], "the comparison between hosts", true);
+      hostFindings = compareFindings(report, natives, readings.sources);
+    }
+
+    // Each wall of this app shows its route as the screens are now.
+    const walls: SyncResult["walls"] = [];
+    const after = await ctx.client.snapshot(canvasId);
+    for (const w of wallsOf(after.canvas, appId)) {
+      const posted = await postWall(host, ctx, canvasId, after, index.app, w.route, w.scheme, w.item);
+      walls.push({ itemId: posted.itemId, route: w.route, status: posted.status });
+    }
+    return { index, indexItem, design, anatomy, screens, captureMs, hostFindings, compared, walls };
   } finally {
     await fs.rm(dir, { recursive: true, force: true });
   }
+}
+
+/**
+ * **A device wall** (design §7; journey scene 3): one route on every host
+ * and device the canvas has a screen for, side by side — a file of its own
+ * (`application/vnd.isocan.exact-wall+json`) naming each cell's screen and
+ * the bytes it showed, so it reads as a file with the module gone and is
+ * rewritten (a version only when a cell changed) as the screens move.
+ */
+async function postWall(host: CliHost, ctx: Ctx, canvasId: string, snapshot: CanvasSnapshotResponse, app: { id: string; name: string }, route: string, scheme: Scheme, existing: Item | null): Promise<{ itemId: string; status: Upsert; cells: number }> {
+  const cells = wallCells(snapshot.canvas, app.id, route, scheme);
+  if (cells.length === 0) throw new Error(`${app.name} has no screen of ${route} on this canvas — \`isocan exact open <app> --hosts web,ios,macos\` captures them first`);
+  const wall: Wall = { format: 1, app, route, scheme, cells };
+  const size = wallSize(cells);
+  const items = Object.values(snapshot.canvas.items);
+  const at = existing ? { x: existing.x, y: existing.y } : { x: items.length ? Math.round(Math.max(...items.map((i) => i.x + i.width)) + 200) : 0, y: items.length ? Math.round(Math.min(...items.map((i) => i.y))) : 0 };
+  const posted = await upsert(
+    host, ctx, canvasId, snapshot, existing,
+    { bytes: Buffer.from(wallText(wall), "utf8"), mime: core.EXACT_WALL_MIME, filename: `${route}.exact-wall.json` },
+    { title: `${app.name} · ${route} — device wall`, width: size.width, height: size.height, properties: { [core.EXACT_PROPS.app]: JSON.stringify({ id: app.id }), [core.EXACT_PROPS.route]: route, [core.EXACT_PROPS.scheme]: scheme }, at },
+    id("exact-wall"),
+  );
+  return { itemId: posted.itemId, status: posted.status, cells: cells.length };
+}
+
+/** **`isocan exact wall <app> <route>`**: the device wall item for one route, made or brought up to date. */
+export async function wall(host: CliHost, given: string, route: string, opts: { scheme?: string }, cmd: Command): Promise<void> {
+  const ctx = await host.ctxOf(cmd);
+  const app = await appOf(appDir(given));
+  const canvas = await host.resolveCanvas(ctx);
+  const scheme = listOf(opts.scheme ?? "light", SCHEMES, "scheme")[0]!;
+  const snapshot = await ctx.client.snapshot(canvas.id);
+  const existing = wallsOf(snapshot.canvas, app.id).find((w) => w.route === route && w.scheme === scheme)?.item ?? null;
+  const r = await postWall(host, ctx, canvas.id, snapshot, app, route, scheme, existing);
+  const cells = wallCells(snapshot.canvas, app.id, route, scheme);
+  if (ctx.json) return host.printJson({ ...r, route, scheme, cells: cells.map((c) => ({ itemId: c.itemId, host: c.host, device: c.device, width: c.width, height: c.height })) });
+  console.log(`${r.itemId}  ${app.name} · ${route} — device wall (${r.status}): ${cells.map((c) => `${HOST_NAMES[c.host]} ${c.device}`).join(", ")}`);
+}
+
+/** Differences between hosts as comments: new ones posted on the native screen, rewritten, or taken away when the hosts agree again — only for the (route, host) pairs this pass compared. */
+async function postHostFindings(host: CliHost, ctx: Ctx, canvasId: string, app: { id: string; name: string }, findings: readonly Finding[], compared: ReadonlyArray<{ route: string; host: Host }>): Promise<{ created: number; updated: number; removed: number }> {
+  if (compared.length === 0) return { created: 0, updated: 0, removed: 0 };
+  const snapshot = await ctx.client.snapshot(canvasId);
+  const scope = (key: string) => compared.some((c) => key.startsWith(`compare:${c.route}:${c.host}:`));
+  const plan = planFindings(snapshot.canvas, { app }, findings, scope);
+  const group = id("exact-hosts");
+  for (const c of plan.create) await host.sendOp(ctx, canvasId, { type: "thread.create", threadId: id("thr"), x: c.x, y: c.y, anchorItemId: c.item.id, comment: { id: id("cmt"), body: c.finding.body, record: true } }, group);
+  for (const u of plan.update) await host.sendOp(ctx, canvasId, { type: "comment.update", threadId: u.thread.id, commentId: u.thread.comments[0]!.id, body: u.body }, group);
+  for (const r of plan.remove) await host.sendOp(ctx, canvasId, { type: "thread.delete", threadId: r.thread.id }, group);
+  return { created: plan.create.length, updated: plan.update.length, removed: plan.remove.length };
 }
 
 function syncJson(r: SyncResult) {
@@ -320,6 +409,8 @@ function syncJson(r: SyncResult) {
     anatomy: r.anatomy,
     screens: r.screens,
     captureMs: r.captureMs,
+    hosts: { compared: r.compared, findings: r.hostFindings.map((f) => ({ key: f.key, routes: f.routes, body: f.body })) },
+    walls: r.walls,
   };
 }
 
@@ -339,25 +430,35 @@ function printSync(r: SyncResult): void {
   for (const u of r.index.unplaced) console.log(`  not drawn: ${u.verb}${u.action ? ` (${u.action})` : ""} at ${u.file}:${u.line} — ${u.why}`);
   if (r.design) console.log(`${r.design.itemId}  design system from app.tamber (${r.design.status}), ${r.index.design?.tokens.length ?? 0} tokens`);
   for (const a of r.anatomy) console.log(`${a.itemId}  anatomy of ${a.file} (${a.status})`);
-  for (const s of r.screens) console.log(`${s.itemId}  ${s.route.padEnd(14)} ${s.device.padEnd(8)} ${s.scheme.padEnd(6)} ${s.status.padEnd(12)} ${s.sha256?.slice(0, 12) ?? ""}`);
+  for (const s of r.screens) console.log(`${s.itemId}  ${s.route.padEnd(14)} ${s.host.padEnd(6)} ${s.device.padEnd(8)} ${s.scheme.padEnd(6)} ${s.status.padEnd(12)} ${s.sha256?.slice(0, 12) ?? ""}`);
+  for (const f of r.hostFindings) console.log(`${f.key}\n  ${f.body.split("\n")[0]}`);
+  if (r.compared.length) console.log(`compared ${r.compared.map((c) => `${c.route} on ${HOST_NAMES[c.host]}`).join(", ")} with the web: ${r.hostFindings.length} difference${r.hostFindings.length === 1 ? "" : "s"} beyond each platform's own bars`);
+  for (const w of r.walls) console.log(`${w.itemId}  device wall of ${w.route} (${w.status})`);
   console.log(tally(r));
 }
 
-function syncOptions(opts: { param?: string[]; devices?: string; schemes?: string; force?: boolean }): SyncOptions {
+export interface CaptureOptions { param?: string[]; devices?: string; schemes?: string; force?: boolean; hosts?: string; sim?: string }
+
+function syncOptions(opts: CaptureOptions): SyncOptions {
+  const sim = opts.sim ?? null;
+  if (sim !== null && !UDID.test(sim)) throw new Error(`--sim takes a simulator's UDID (\`xcrun simctl list devices\`), not ${JSON.stringify(sim)}: a name could be somebody else's simulator`);
   return {
     params: core.parseParams(opts.param ?? []),
     devices: listOf(opts.devices, DEVICE_NAMES, "devices"),
     schemes: listOf(opts.schemes, SCHEMES, "schemes"),
     force: opts.force === true,
+    hosts: parseHosts(opts.hosts),
+    sim,
   };
 }
 
-export async function open(host: CliHost, given: string, opts: { param?: string[]; devices?: string; schemes?: string; force?: boolean }, cmd: Command): Promise<void> {
+export async function open(host: CliHost, given: string, opts: CaptureOptions, cmd: Command): Promise<void> {
   const ctx = await host.ctxOf(cmd);
   const app = appDir(given);
   const canvas = await host.resolveCanvas(ctx);
   if (!ctx.json) console.error(`reading ${app} with its own Exact, on this machine, and capturing what moved…`);
   const r = await sync(host, ctx, canvas.id, app, syncOptions(opts));
+  await postHostFindings(host, ctx, canvas.id, r.index.app, r.hostFindings, r.compared);
   if (ctx.json) return host.printJson(syncJson(r));
   printSync(r);
 }
@@ -450,7 +551,7 @@ export async function check(host: CliHost, given: string, opts: { checks?: boole
  * move, and a version posted only where the pixels did. Runs until ctrl-c,
  * or `--max-passes` passes after the first.
  */
-export interface LiveOptions { param?: string[]; devices?: string; schemes?: string; force?: boolean; maxPasses?: string; quietMs?: string; frames?: boolean; checks?: boolean; bridgePort?: string; designPort?: string }
+export interface LiveOptions extends CaptureOptions { maxPasses?: string; quietMs?: string; frames?: boolean; checks?: boolean; bridgePort?: string; designPort?: string }
 
 export async function live(host: CliHost, given: string, opts: LiveOptions, cmd: Command): Promise<void> {
   const ctx = await host.ctxOf(cmd);
@@ -463,8 +564,12 @@ export async function live(host: CliHost, given: string, opts: LiveOptions, cmd:
     if (!host.runPackageScript) throw new Error("this isocan cannot run a script for a module — upgrade it (module API 0.2.11), or pass --no-frames");
     const child = [process.execPath, process.argv[1]!, ...process.argv.slice(2), "--no-frames"];
     if (!child.includes("--canvas")) child.push("--canvas", canvas.id);
+    const capture = syncOptions(opts);
     host.runPackageScript("scripts/exact-live.mjs", [
       "--app", app, "--child", JSON.stringify(child),
+      // Drive mode runs on the hosts this session captures, and on iOS only on the simulator named here (exact phase 3).
+      "--hosts", capture.hosts.join(","),
+      ...(capture.sim ? ["--sim", capture.sim] : []),
       ...(opts.bridgePort ? ["--bridge-port", opts.bridgePort] : []),
       ...(opts.designPort ? ["--design-port", opts.designPort] : []),
       ...(ctx.json ? ["--json"] : []),
@@ -488,14 +593,18 @@ export async function live(host: CliHost, given: string, opts: LiveOptions, cmd:
     const diag = await bridge<DiagnoseReport>(host, "diagnose", ["--app", app], "the compiler's check", true);
     const broken = diag.diagnostics.some((d) => !d.severity || d.severity === "error");
     const r = broken ? null : await sync(host, ctx, canvas.id, app, { ...options, force });
-    const recaptured = (r?.screens ?? []).filter((x) => x.device === "phone" && x.scheme === "light" && x.status !== "skipped").map((x) => ({ route: x.route, url: x.url }));
+    if (r) await postHostFindings(host, ctx, canvas.id, r.index.app, r.hostFindings, r.compared);
+    const recaptured = (r?.screens ?? []).filter((x) => x.host === "web" && x.device === "phone" && x.scheme === "light" && x.status !== "skipped").map((x) => ({ route: x.route, url: x.url }));
     const f = await postFindings(host, ctx, canvas.id, app, diag, opts.checks === false ? [] : recaptured);
     return { r, f };
   };
   if (!ctx.json) console.error(`live on ${app}, on this machine — a pass now, then one per save (ctrl-c stops)`);
+  // Drives asked for on the canvas are answered from the moment the loop starts (exact phase 3).
+  const drives = new AbortController();
+  void serveDrives(host, ctx, canvas.id, app, options, drives.signal, (line) => console.log(`${new Date().toISOString().slice(11, 19)}  ${line}`));
   { const first = await onePass(options.force); say(first.r, first.f, "opened"); }
   let passes = 0;
-  if (passes >= max) return;
+  if (passes >= max) { drives.abort(); return; }
   const changed = new Set<string>();
   let timer: NodeJS.Timeout | null = null;
   let running = false;
@@ -507,7 +616,7 @@ export async function live(host: CliHost, given: string, opts: LiveOptions, cmd:
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => void pass(), quiet);
     });
-    const stop = () => { watcher.close(); resolve(); };
+    const stop = () => { watcher.close(); drives.abort(); resolve(); };
     process.once("SIGINT", stop);
     const pass = async () => {
       if (running) { timer = setTimeout(() => void pass(), quiet); return; }
@@ -529,3 +638,60 @@ export async function live(host: CliHost, given: string, opts: LiveOptions, cmd:
   });
 }
 
+
+/**
+ * **Drives asked for on the canvas** (exact phase 3; design §5, §7): a
+ * browser whose door to this machine is shut writes `exact.drive` on a
+ * screen. This waits on the canvas's op log — the long poll every CLI waiter
+ * uses — for those writes, replays each drive with the capture bridge's own
+ * `drive` (the code the live bridge's `/drive` runs too), puts the fresh
+ * picture as a blob of the canvas and writes the answer back as
+ * `exact.driven`: a capture behind, and nothing from the browser reaches here.
+ */
+async function serveDrives(host: CliHost, ctx: Ctx, canvasId: string, app: string, options: SyncOptions, signal: AbortSignal, say: (line: string) => void): Promise<void> {
+  let since = (await ctx.client.snapshot(canvasId)).lastSeq;
+  const appId = (await appOf(app)).id;
+  while (!signal.aborted) {
+    let entries: Awaited<ReturnType<typeof ctx.client.getLog>>;
+    try {
+      entries = await ctx.client.getLog(canvasId, since, 25_000);
+    } catch {
+      if (signal.aborted) return;
+      await new Promise((r) => setTimeout(r, 2000));
+      continue;
+    }
+    if (entries.length === 0) continue;
+    since = Math.max(since, ...entries.map((e) => e.seq));
+    const snapshot = await ctx.client.snapshot(canvasId);
+    for (const { item, request } of pendingDrives(entries, snapshot.canvas, appId)) {
+      if (signal.aborted) return;
+      say(`drive on ${request.host} (${item.title}): ${request.ops.at(-1) ?? "the screen as captured"}${request.by ? `, for ${request.by}` : ""}`);
+      const answer = await answerDrive(host, ctx, canvasId, app, options, request);
+      say(`drive on ${request.host}: ${answer.ok ? `a fresh screenshot in ${answer.ms} ms` : answer.error}`);
+      await host.sendOp(ctx, canvasId, { type: "item.update", itemId: item.id, patch: { properties: { [core.EXACT_PROPS.driven]: JSON.stringify(answer) } } }, id("exact-drive"));
+    }
+  }
+}
+
+async function answerDrive(host: CliHost, ctx: Ctx, canvasId: string, app: string, options: SyncOptions, request: DriveRequest): Promise<DriveAnswer> {
+  const refused = (error: string): DriveAnswer => ({ seq: request.seq, ok: false, blobHash: null, points: null, results: [], ms: 0, error });
+  if (!(options.hosts as readonly string[]).includes(request.host)) return refused(`this \`isocan exact live\` drives ${options.hosts.join(", ")} — start it with --hosts …,${request.host}`);
+  if (request.host === "ios" && !options.sim) return refused("this `isocan exact live` has no simulator of its own to drive iOS on: --sim <udid>");
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-exact-drive-"));
+  try {
+    const job = path.join(dir, "job.json");
+    await fs.writeFile(job, JSON.stringify({ host: request.host, size: request.size, scheme: request.scheme, shots: request.shots, ops: request.ops }));
+    let r: { ok: boolean; file: string | null; points: unknown; results: DriveAnswer["results"]; ms: number; error?: string };
+    try {
+      const loop = process.env.ISOCAN_EXACT_LOOP;
+      const joined = loop && /^http:\/\/127\.0\.0\.1:\d+$/.test(loop) && request.host !== "web" ? ["--dev-url", loop] : [];
+      r = await bridge(host, "drive", ["--app", app, "--dir", dir, "--job", job, ...(options.sim ? ["--sim", options.sim] : []), ...joined], "the drive", true);
+    } catch (err) {
+      return refused((err as Error).message);
+    }
+    const blobHash = r.file ? (await ctx.client.uploadBlob(canvasId, await fs.readFile(r.file), "image/png", "drive.png")).blobHash : null;
+    return { seq: request.seq, ok: r.ok && !!blobHash, blobHash, points: r.points, results: r.results, ms: r.ms, ...(r.error ? { error: r.error } : {}) };
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+}

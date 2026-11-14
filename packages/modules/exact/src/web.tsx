@@ -18,7 +18,8 @@ import "../assets/styles.css";
 import { useEffect, useState, type ComponentType } from "react";
 import type { OverlayFacts, RendererFacts, UnderlayFacts, WebModule } from "@isocan/core";
 import { ExactScreen, PointPanel, commentRows } from "./live.tsx";
-import { EXACT_ANATOMY_MIME, EXACT_INDEX_MIME, EXACT_PROPS, exactModule, mapEdges, parseAnatomy, parseIndex, type AnatomyCard as AnatomyCardData, type ExactIndex, type MapEdge } from "./core.ts";
+import { WallCard } from "./wall.tsx";
+import { EXACT_ANATOMY_MIME, EXACT_INDEX_MIME, EXACT_PROPS, EXACT_WALL_MIME, exactModule, mapEdges, parseAnatomy, parseIndex, type AnatomyCard as AnatomyCardData, type ExactIndex, type MapEdge } from "./core.ts";
 
 /**
  * **The web half** (exact phases 0 and 1): the index and the anatomy cards
@@ -178,6 +179,8 @@ export const exactWeb: WebModule<ComponentType<UnderlayFacts>, ComponentType<Ren
   renderers: [
     { mimes: [EXACT_INDEX_MIME], component: IndexCard },
     { mimes: [EXACT_ANATOMY_MIME], component: AnatomyCard },
+    // One route on every host and device (exact phase 3, `wall.tsx`).
+    { mimes: [EXACT_WALL_MIME], component: WallCard },
     // A screen is an ordinary PNG: only the ones this module captured (they carry `exact.route`) are drawn here —
     // the capture, or the live page where this viewer asked for it (exact phase 2, `live.tsx`).
     { mimes: ["image/png"], property: EXACT_PROPS.route, component: ExactScreen },

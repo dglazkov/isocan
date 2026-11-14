@@ -259,6 +259,16 @@ phase 8 uses it.
   same on an iPhone as on the web, and it is how **Record** writes a test
   (§9).
 
+**Built 14 Nov 2026 (exact phase 3):** captures on the web, a dedicated iOS
+simulator (by UDID, its status bar pinned) and macOS; a device wall item per
+route; host compare as comments on `testId` order. Drive sends a closed list
+— `tap <testId>`, `type <testId> "<text>"`, `back` — checked in the browser
+and again on the machine. With the door open it goes through the bridge;
+with it shut (§5's *Live frames* off) the browser writes `exact.drive` on the
+screen and `isocan exact live` answers with `exact.driven`, so the browser
+never reaches the machine and Drive is never lost. Each press replays the
+drive cold (~10 s on iOS): Exact has no resident session a tool can hold.
+
 ## 8. Time and state
 
 - **Film** — `screenshot <file>.apng over <ms> every <ms>` films an

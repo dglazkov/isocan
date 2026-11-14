@@ -40,6 +40,9 @@ export const EXACT_INDEX_MIME = "application/vnd.isocan.exact-index+json";
 /** One Contract file's anatomy (exact phase 1): its components, shapes, sources, routes and tests. */
 export const EXACT_ANATOMY_MIME = "application/vnd.isocan.exact-anatomy+json";
 
+/** A device wall (exact phase 3): one route on every host and device, side by side. */
+export const EXACT_WALL_MIME = "application/vnd.isocan.exact-wall+json";
+
 /** The index's own format number — not Exact's, which moves daily. 2: the map (exact phase 1). */
 export const EXACT_INDEX_FORMAT = 2;
 
@@ -48,7 +51,7 @@ export const EXACT_PROPS = {
   app: "exact.app",
   /** A screen's route name, as Contract declares it. */
   route: "exact.route",
-  /** `web` today; `ios`, `macos`, `linux`, `android` from phase 3. */
+  /** `web`, `ios` or `macos` (exact phase 3); `linux` and `android` later. */
   host: "exact.host",
   /** `phone`, `tablet` or `desktop` — the device row (exact phase 1). */
   device: "exact.device",
@@ -76,6 +79,12 @@ export const EXACT_PROPS = {
   live: "exact.live",
   /** On a captured screen: each visible node's box at the capture size, joined to source — what pointing reads on a capture (exact phase 2). */
   points: "exact.points",
+  /** On a captured screen: the shots its capture ran, read-only — where Drive mode starts (exact phase 3). `exact.shots` is the one to edit. */
+  reached: "exact.reached",
+  /** On a screen: a drive a person asked for on the canvas (exact phase 3) — `{seq, by, host, size, scheme, shots, ops}`, written by a browser that reaches nothing on its machine; `isocan exact live` answers it. */
+  drive: "exact.drive",
+  /** On a screen: the answer to its latest `exact.drive` — `{seq, ok, blobHash, points, results, ms, error?}`, the fresh picture a blob of the canvas. */
+  driven: "exact.driven",
 } as const;
 
 /** One visible node of a capture: its box in the capture's CSS pixels, the line that drew it, and the styles that line names. */
@@ -93,6 +102,8 @@ export interface CapturePoint {
 export interface CapturePoints {
   files: Record<string, string>;
   nodes: CapturePoint[];
+  /** The capture's own size in points, when it is not its device's web size (a simulator's screen, exact phase 3). */
+  size?: { width: number; height: number };
 }
 
 export function parsePoints(text: string | undefined): CapturePoints | null {
@@ -376,14 +387,15 @@ export function parseParams(list: readonly string[]): Record<string, string> {
 }
 
 /** The properties a captured screen wears (design §4). */
-export function screenProperties(index: ExactIndex, route: IndexRoute, url: string, where: { device?: Device; scheme?: Scheme; shots?: string; key?: string } = {}): Record<string, string> {
+export function screenProperties(index: ExactIndex, route: IndexRoute, url: string, where: { device?: Device; scheme?: Scheme; shots?: string; key?: string; host?: string; reached?: string } = {}): Record<string, string> {
   const device = where.device ?? "phone";
   const scheme = where.scheme ?? "light";
-  const primary = device === "phone" && scheme === "light";
+  const host = where.host ?? "web";
+  const primary = device === "phone" && scheme === "light" && host === "web";
   return {
     [EXACT_PROPS.app]: JSON.stringify({ id: index.app.id }),
     [EXACT_PROPS.route]: route.name,
-    [EXACT_PROPS.host]: "web",
+    [EXACT_PROPS.host]: host,
     [EXACT_PROPS.device]: device,
     [EXACT_PROPS.scheme]: scheme,
     ...(index.plan ? { [EXACT_PROPS.plan]: index.plan } : {}),
@@ -391,6 +403,7 @@ export function screenProperties(index: ExactIndex, route: IndexRoute, url: stri
     [EXACT_PROPS.url]: url,
     ...(where.shots !== undefined ? { [EXACT_PROPS.shots]: where.shots } : {}),
     ...(where.key !== undefined ? { [EXACT_PROPS.key]: where.key } : {}),
+    ...(where.reached !== undefined ? { [EXACT_PROPS.reached]: where.reached } : {}),
     ...(primary ? { [EXACT_PROPS.edges]: JSON.stringify(edgesFrom(index, route.name)) } : {}),
   };
 }
@@ -424,12 +437,12 @@ export function indexItemOf(canvas: CanvasContents, appId: string): Item | null 
   return Object.values(canvas.items).find((i) => appIdOf(i) === appId && isIndex(i)) ?? null;
 }
 
-/** The screen item for one route of one app, on the web, at one device and scheme (phone/light by default). */
-export function screenItemOf(canvas: CanvasContents, appId: string, route: string, device: Device = "phone", scheme: Scheme = "light"): Item | null {
+/** The screen item for one route of one app, on one host (the web by default), at one device and scheme (phone/light by default). */
+export function screenItemOf(canvas: CanvasContents, appId: string, route: string, device: Device = "phone", scheme: Scheme = "light", host = "web"): Item | null {
   return Object.values(canvas.items).find((i) =>
     appIdOf(i) === appId &&
     i.properties?.[EXACT_PROPS.route] === route &&
-    (i.properties?.[EXACT_PROPS.host] ?? "web") === "web" &&
+    (i.properties?.[EXACT_PROPS.host] ?? "web") === host &&
     (i.properties?.[EXACT_PROPS.device] ?? "phone") === device &&
     (i.properties?.[EXACT_PROPS.scheme] ?? "light") === scheme) ?? null;
 }
@@ -586,6 +599,12 @@ export const exactModule: CoreModule = {
       mimes: [EXACT_ANATOMY_MIME],
       label: "Exact anatomy cards",
       noun: "Exact anatomy card",
+    },
+    {
+      id: "exact-wall",
+      mimes: [EXACT_WALL_MIME],
+      label: "Exact device walls",
+      noun: "Exact device wall",
     },
   ],
   contextPieces: exactContext,

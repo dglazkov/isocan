@@ -10,6 +10,11 @@
  *   node scripts/exact-bridge.mjs inputs  --app <dir> --report <file.json>
  *   node scripts/exact-bridge.mjs diagnose --app <dir> --report <file.json>
  *   node scripts/exact-bridge.mjs check   --app <dir> --report <file.json> --url <path>…
+ *   node scripts/exact-bridge.mjs compare --app <dir> --report <file.json> --dir <captures> --jobs <compare.json>
+ *   node scripts/exact-bridge.mjs drive   --app <dir> --report <file.json> --dir <out> --job <drive.json> [--sim <udid>]
+ *
+ * A capture job names its host (`web`, `ios`, `macos`; exact phase 3); an
+ * iOS one runs on the simulator `--sim <udid>` names, and on no other.
  *
  * isocan runs no compute of its own and a module may not spawn, so the
  * `exact` verbs run this, as `motion render` runs its script: through
@@ -41,7 +46,7 @@ const flag = (name) => {
 };
 const flags = (name) => argv.flatMap((a, i) => (a === name && argv[i + 1] !== undefined ? [argv[i + 1]] : []));
 
-if (!["doctor", "read", "capture", "inputs", "diagnose", "check"].includes(verb ?? "") || !flag("--app") || !flag("--report")) {
+if (!["doctor", "read", "capture", "inputs", "diagnose", "check", "compare", "drive"].includes(verb ?? "") || !flag("--app") || !flag("--report")) {
   console.error("usage: exact-bridge.mjs doctor|read|capture|inputs|diagnose|check --app <dir> --report <file.json> [--hosts web,ios] [--jobs <jobs.json>] [--dir <out> --size <w>x<h> --url <path>…]");
   process.exit(2);
 }
@@ -57,9 +62,9 @@ function fail(message) {
 }
 
 /** `bun exact.mjs <args>` in the app, as the app's launcher line runs it. */
-function exact(args, { allowFail = false, timeoutMs = 600_000 } = {}) {
+function exact(args, { allowFail = false, timeoutMs = 600_000, env = {} } = {}) {
   const started = Date.now();
-  const done = spawnSync("/bin/sh", [launcher, ...args], { cwd: app, encoding: "utf8", maxBuffer: 64 << 20, timeout: timeoutMs });
+  const done = spawnSync("/bin/sh", [launcher, ...args], { cwd: app, encoding: "utf8", maxBuffer: 64 << 20, timeout: timeoutMs, env: { ...process.env, ...env } });
   const ms = Date.now() - started;
   if (done.error) fail(`exact.mjs ${args[0]} could not start: ${done.error.message}`);
   if (done.status !== 0 && !allowFail) {
@@ -287,7 +292,10 @@ async function read() {
  * they reach the person's Exact: nothing that writes a file, no scheme.
  */
 const SHOT_OP = /^(tap|type|clock|back|fail fetch|pass fetch|prefer)\b/;
+/** The hosts a capture or a drive runs on (exact phase 3): the web, and the two this Mac drives natively. */
+const HOSTS = ["web", "ios", "macos"];
 function checkJob(job) {
+  if (!HOSTS.includes(job.host ?? "web")) fail(`a capture job's host is one of ${HOSTS.join(", ")}, not ${JSON.stringify(job.host)}`);
   if (typeof job.url !== "string" || !job.url.startsWith("/") || job.url.startsWith("//") || job.url.includes("..")) fail(`a capture job's url must be one of the app's own paths, not ${JSON.stringify(job.url)}`);
   for (const op of job.ops ?? []) {
     if (typeof op !== "string" || !SHOT_OP.test(op) || /[\n\r\0]/.test(op) || /\bcolor-scheme\b/.test(op)) fail(`a capture job carries an operation this bridge does not run: ${JSON.stringify(op)}`);
@@ -310,31 +318,182 @@ function checkJob(job) {
  */
 function captureJobs(out, jobs) {
   const shots = [];
+  const sim = simulator(jobs);
   for (const [j, job] of jobs.entries()) {
     checkJob(job);
-    const first = job.shots[0];
-    const ops = ["clock data", ...(job.ops ?? [])];
+    const host = job.host ?? "web";
+    const ops = [];
     const files = [];
     for (const [i, shot] of job.shots.entries()) {
       const file = path.join(out, `job-${j}-${i}.png`);
       files.push(file);
       // `tree` (what is hidden) and `layout` (each node's box, joined to source) right after the picture: what pointing on
-      // a capture reads, with live frames off (exact phase 2).
-      ops.push(`resize ${shot.size}`, `prefer color-scheme ${shot.scheme}`, "clock settle", `screenshot ${file}`, "tree", "layout");
+      // a capture reads, with live frames off (exact phase 2). A simulator is the size it is: no resize on iOS.
+      ops.push(...(host === "ios" ? [] : [`resize ${shot.size}`]), `prefer color-scheme ${shot.scheme}`, "clock settle", `screenshot ${file}`, "tree", "layout", ...(host === "web" ? [] : ["tree --ax"]));
     }
-    const run = exact([
-      "agent", "web", "--json", "--size", first.size, "--seed", "1", "--locale", "en-US", "--time-zone", "UTC", "--epoch", "2026-01-01",
-      "--url", job.url, ...ops,
-    ]);
-    const replies = run.stdout.split("\n").flatMap((line) => { if (!line.startsWith("{")) return []; try { return [JSON.parse(line)]; } catch { return []; } });
+    const run = drive(host, job.url, job.ops ?? [], ops, { size: job.shots[0].size, sim });
+    const replies = jsonReplies(run.stdout);
     const trees = replies.filter((r) => Array.isArray(r.nodes) && !r.env);
     const layouts = replies.filter((r) => Array.isArray(r.nodes) && r.env);
+    const axes = replies.filter((r) => r.ax);
     for (const [i, file] of files.entries()) {
-      if (!existsSync(file)) fail(`agent web wrote no screenshot for ${job.url} at ${job.shots[i].size} ${job.shots[i].scheme}:\n${run.stdout.trim().split("\n").slice(-4).join("\n")}`);
-      shots.push({ job: j, index: i, url: job.url, size: job.shots[i].size, scheme: job.shots[i].scheme, file, sha256: sha256(readFileSync(file)), ms: Math.round(run.ms / files.length), points: pointsOf(trees[i], layouts[i]) });
+      if (!existsSync(file)) fail(`agent ${host} wrote no screenshot for ${job.url} at ${job.shots[i].size} ${job.shots[i].scheme}:\n${(run.stderr + run.stdout).trim().split("\n").slice(-6).join("\n")}`);
+      const bytes = readFileSync(file);
+      const png = pngSize(bytes);
+      const points = pointsOf(trees[i], layouts[i], axes[i]);
+      // A simulator's screen is its own size: the points say it, so pointing and Drive mode scale by it (exact phase 3).
+      if (points && host !== "web" && png) points.size = png;
+      shots.push({ job: j, index: i, host, url: job.url, size: job.shots[i].size, scheme: job.shots[i].scheme, file, sha256: sha256(bytes), png, ms: Math.round(run.ms / files.length), points });
     }
   }
   return { shots };
+}
+
+const jsonReplies = (stdout) => stdout.split("\n").flatMap((line) => { if (!line.startsWith("{")) return []; try { return [JSON.parse(line)]; } catch { return []; } });
+
+/** A PNG's own width and height, from its IHDR. */
+function pngSize(bytes) {
+  return bytes.length > 24 && bytes.toString("latin1", 12, 16) === "IHDR" ? { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) } : null;
+}
+
+/**
+ * **The simulator an iOS job runs on** (exact phase 3; design §7): one the
+ * person made for this, named by `--sim <udid>` — never "a booted one", which
+ * may be somebody's own. Exact's driver takes it as `EXACT_SIM`.
+ */
+function simulator(jobs) {
+  if (!jobs.some((j) => j.host === "ios")) return null;
+  const sim = flag("--sim");
+  if (!sim || !/^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/i.test(sim)) fail("an iOS capture needs a simulator of its own, by UDID: `xcrun simctl create \"isocan-exact\" com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro <runtime>`, then --sim <udid>. A booted simulator may be somebody's own, so none is guessed.");
+  // The status bar's clock is the wall clock unless told otherwise; a capture is a function of the source, so it reads
+  // 9:41 on the simulator the person gave us for this (and only that one).
+  spawnSync("xcrun", ["simctl", "status_bar", sim, "override", "--time", "9:41", "--batteryLevel", "100", "--batteryState", "charged"], { encoding: "utf8" });
+  return sim;
+}
+
+/**
+ * **A difference between hosts, measured** (exact phase 3; design §7): for
+ * each native capture, a cold web drive of the same route at the native
+ * screen's size, compared against it with Exact's own `screenshot <png>
+ * compare <reference>` — which says, region by region, where they differ
+ * and which node and line each region is under — and the web's `tree` and
+ * `layout` at that size, so the CLI can tell the app's layout from each
+ * platform's own bars.
+ */
+function compare(out, jobs) {
+  const compares = [];
+  for (const [j, job] of jobs.entries()) {
+    checkJob({ ...job, host: "web", shots: [] });
+    if (typeof job.reference !== "string" || !job.reference.startsWith(out + path.sep) || !existsSync(job.reference)) fail(`a compare job's reference is one of this run's captures, not ${JSON.stringify(job.reference)}`);
+    if (!/^\d+x\d+$/.test(job.size ?? "")) fail(`a compare job's size is <w>x<h>, not ${JSON.stringify(job.size)}`);
+    const file = path.join(out, `compare-${j}.png`);
+    const run = drive("web", job.url, job.ops ?? [], ["clock settle", `screenshot ${file} compare ${job.reference}`, "tree", "layout"], { size: job.size, sim: null });
+    const replies = jsonReplies(run.stdout);
+    const said = replies.find((r) => r.compare);
+    const tree = replies.find((r) => Array.isArray(r.nodes) && !r.env);
+    const layout = replies.find((r) => Array.isArray(r.nodes) && r.env);
+    compares.push({
+      route: job.route, host: job.host, size: job.size,
+      compare: said ? { match: said.compare.match, regions: said.compare.regions ?? [], more: said.compare.more ?? 0 } : null,
+      text: said?.text ?? "",
+      web: pointsOf(tree, layout),
+      ...(said ? {} : { error: (run.stderr || run.stdout).trim().split("\n").slice(-3).join("\n") }),
+    });
+  }
+  return { compares };
+}
+
+/**
+ * **The root's testId** — the node that carries `navigate=`, where a native
+ * drive types a route's path (`type <root> /place/2`), as Exact's iOS recipe
+ * says. Read off the app's Contract: the first line with `navigate=` and a
+ * `testId`.
+ */
+let rootTestId;
+function rootOf() {
+  if (rootTestId !== undefined) return rootTestId;
+  const text = existsSync(path.join(app, "app.contract")) ? readFileSync(path.join(app, "app.contract"), "utf8") : "";
+  const lines = text.split("\n");
+  const at = lines.findIndex((l) => /\bnavigate=/.test(l));
+  const near = at >= 0 ? lines.slice(at, at + 3).join(" ") : "";
+  rootTestId = /\btestId="([A-Za-z0-9_-]+)"/.exec(near)?.[1] ?? null;
+  return rootTestId;
+}
+
+/**
+ * **One cold drive on a host** (exact phases 1 and 3): the driver's fixed
+ * seed, locale, zone and epoch said out loud; the route reached — `--url` on
+ * the web, `type <root> <path>` on a native host (a native app has no
+ * address bar); then `before` (the screen's own shots), then `after`.
+ */
+function drive(host, url, before, after, { size, sim, allowFail = false }) {
+  const fixed = ["--json", "--seed", "1", "--locale", "en-US", "--time-zone", "UTC", "--epoch", "2026-01-01"];
+  let args;
+  if (host === "web") args = ["agent", "web", ...fixed, "--size", size, "--url", url, "clock data", ...before, ...after];
+  else {
+    const root = rootOf();
+    if (url !== "/" && !root) fail(`a native drive opens ${url} by typing it into the node that carries navigate=, and app.contract names none with a testId`);
+    // Joined to a running dev loop when there is one (`--dev-url`, from `isocan exact live`): the native build loads
+    // the loop's current generation rather than a plan of its own.
+    const dev = flag("--dev-url");
+    const joined = dev && /^http:\/\/127\.0\.0\.1:\d+\/?$/.test(dev) ? ["--url", dev] : [];
+    args = ["agent", host, ...fixed, ...joined, ...(host === "macos" ? ["--size", size] : []), "clock data", ...(url !== "/" ? [`type ${root} ${url}`, "clock settle"] : []), ...before, ...after];
+  }
+  const env = host === "ios" ? { EXACT_SIM: sim, EXACT_SHOW_SIMULATOR: "0" } : {};
+  return exact(args, { env, allowFail, timeoutMs: host === "web" ? 600_000 : 1_800_000 });
+}
+
+/**
+ * **Drive mode's one drive** (exact phase 3; design §7): the screen reached as
+ * its shots say, then each operation a person sent — a closed list: `tap
+ * <testId>` (or `tap "<accessible name>"`), `type <testId> "<text>"`, `back`
+ * — each followed by `clock settle`, then a fresh screenshot with its nodes.
+ * Replayed whole on a cold driver: Exact prints no resident session to a
+ * tool. Both doors run this: the live bridge's `/drive` for a paired browser,
+ * and `isocan exact live` for a drive asked for on the canvas (`exact.drive`)
+ * by a browser that reaches nothing on this machine.
+ */
+const DRIVE_OP = /^(?:tap [A-Za-z0-9_.:-]{1,80}|type [A-Za-z0-9_.:-]{1,80} "(?:[^"\\\n\r]|\\.){0,400}"|back)$/;
+function driveJob(out, job) {
+  const host = job.host ?? "web";
+  if (!HOSTS.includes(host)) fail(`a drive runs on ${HOSTS.join(", ")}, not ${JSON.stringify(host)}`);
+  let url = null;
+  const shots = [];
+  for (const raw of String(job.shots ?? "").split("\n")) {
+    const line = raw.trim();
+    if (!line || line.startsWith("//")) continue;
+    const at = /^at\s+"([^"]*)"$/.exec(line);
+    if (at && url === null) { url = at[1]; continue; }
+    shots.push(line);
+  }
+  if (!url) fail("a drive starts where the screen's shots say: one at \"<path>\" first");
+  checkJob({ host, url, ops: shots, shots: [] });
+  const ops = Array.isArray(job.ops) ? job.ops : [];
+  if (ops.length > 40 || ops.some((op) => typeof op !== "string" || !DRIVE_OP.test(op))) fail("Drive mode sends tap <testId>, type <testId> \"<text>\" and back — nothing else, and at most 40");
+  const size = /^\d{2,4}x\d{2,4}$/.test(job.size ?? "") ? job.size : "390x844";
+  const scheme = job.scheme === "dark" ? "dark" : "light";
+  const sim = host === "ios" ? simulator([{ host }]) : null;
+  const file = path.join(out, "drive.png");
+  const tail = [`prefer color-scheme ${scheme}`, ...ops.flatMap((op) => [op, "clock settle"]), "clock settle", `screenshot ${file}`, "tree", "layout", ...(host === "web" ? [] : ["tree --ax"])];
+  const started = Date.now();
+  const run = drive(host, url, shots, tail, { size, sim, allowFail: true });
+  const replies = jsonReplies(run.stdout);
+  // The replies before the person's own: reaching the screen, its shots, and the scheme.
+  const before = 1 + (host !== "web" && url !== "/" ? 2 : 0) + shots.length + 1;
+  const tree = replies.find((r) => Array.isArray(r.nodes) && !r.env);
+  const layout = replies.find((r) => Array.isArray(r.nodes) && r.env);
+  const ax = replies.find((r) => r.ax) ?? null;
+  const bytes = existsSync(file) ? readFileSync(file) : null;
+  const png = bytes ? pngSize(bytes) : null;
+  const points = bytes ? pointsOf(tree, layout, ax) : null;
+  if (points && png) points.size = png;
+  const said = (run.stderr || run.stdout).trim().split("\n").filter((l) => !l.startsWith("{")).slice(-4).join("\n");
+  return {
+    ok: run.code === 0 && !!bytes, code: run.code, file: bytes ? file : null, png, points,
+    results: ops.map((op, i) => ({ op, reply: replies[before + i * 2] ?? null })),
+    ms: Date.now() - started,
+    ...(run.code === 0 && bytes ? {} : { error: said || `agent ${host} exited ${run.code}` }),
+  };
 }
 
 /**
@@ -347,7 +506,7 @@ function captureJobs(out, jobs) {
  * their digest, so a comment made on a capture carries `exact.source`.
  */
 const fileText = new Map();
-function pointsOf(tree, layout) {
+function pointsOf(tree, layout, ax = null) {
   if (!tree || !layout) return null;
   const hidden = new Set(tree.nodes.filter((n) => n.hidden || n.inactive).map((n) => n.id));
   const rel = (file) => (typeof file === "string" && file.startsWith(app + path.sep) ? path.relative(app, file) : null);
@@ -368,8 +527,39 @@ function pointsOf(tree, layout) {
       ...(cls.length ? { classes: cls } : {}),
     });
   }
+  nodes.push(...platformControls(tree, layout, ax, (_n, l) => {
+    const file = rel(l?.sourceMap?.file);
+    if (!file || l.sourceMap.status !== "compatible") return null;
+    if (!fileText.has(file)) fileText.set(file, readFileSync(path.join(app, file), "utf8"));
+    files[file] ??= sha256(fileText.get(file));
+    return { file, line: l.sourceMap.line, col: l.sourceMap.col, component: l.sourceMap.component ?? null, chain: [] };
+  }));
   return { files, nodes };
 }
+
+/**
+ * **The controls the platform draws for the app** (exact phase 3): a native
+ * host puts some of the app's own controls in its bars — a header button is
+ * a UIKit bar button, a tab a tab-bar button — where `layout` gives them no
+ * box. Its accessibility tree (`tree --ax`) does: each such element's frame,
+ * joined back to the app's node by its accessible name, so a press there
+ * presses that node by its testId, and pointing names its line.
+ */
+function platformControls(tree, layout, ax, nodeOf) {
+  if (!tree || !layout || !Array.isArray(ax?.ax?.elements)) return [];
+  const shown = tree.nodes.filter((n) => !n.hidden && !n.inactive && n.props?.testId && typeof n.props.accessibilityLabel === "string");
+  const out = [];
+  for (const e of ax.ax.elements) {
+    const cls = e.native?.class ?? "";
+    if (e.role !== "button" || !e.name || !(e.frame?.w > 0 && e.frame?.h > 0) || !/^_?(UI|NS)/.test(cls)) continue;
+    const named = shown.filter((n) => n.props.accessibilityLabel === e.name);
+    if (named.length !== 1) continue;
+    const node = nodeOf(named[0], layout.nodes.find((l) => l.id === named[0].id));
+    if (node) out.push({ ...node, x: Math.round(e.frame.x), y: Math.round(e.frame.y), w: Math.round(e.frame.w), h: Math.round(e.frame.h), type: "button", testId: named[0].props.testId });
+  }
+  return out;
+}
+
 
 /**
  * **One cold driver per screen** (phase 0's form, kept for its callers): a
@@ -448,7 +638,9 @@ function check() {
 }
 
 const result =
-  verb === "diagnose" ? diagnose()
+  verb === "drive" ? driveJob(path.resolve(flag("--dir") ?? fail("drive needs --dir")), JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("drive needs --job")), "utf8")))
+  : verb === "compare" ? compare(path.resolve(flag("--dir") ?? fail("compare needs --dir")), JSON.parse(readFileSync(path.resolve(flag("--jobs") ?? fail("compare needs --jobs")), "utf8")))
+  : verb === "diagnose" ? diagnose()
   : verb === "check" ? check()
   : verb === "doctor" ? await doctor()
   : verb === "read" ? await read()

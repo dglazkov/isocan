@@ -20,6 +20,13 @@
  *   the loop's local token, the `selection` events relayed with the file's
  *   digest, and *Open in editor*. Loopback only; every request but `/pair`
  *   carries a token a pairing minted, kept in memory (a restart revokes it);
+ * - **Drive mode** (exact phase 3; design §7) — `/drive` replays a drive on
+ *   any host this session captures (`--hosts`; iOS only on the simulator
+ *   `--sim` names): a cold `agent <host>` at the capture's fixed seed, the
+ *   screen reached as its shots say, then each press and each text the
+ *   browser sent (a closed list: `tap <testId>`, `type <testId> "<text>"`,
+ *   `back`), each followed by `clock settle`, then a fresh screenshot with
+ *   its nodes. The browser keeps the drive; the bridge keeps nothing.
  * - **the capture loop** — `--child` is the CLI's own `isocan exact live
  *   --no-frames`, which keeps the map's captures, versions and compile
  *   errors true on every save; its output is passed through.
@@ -31,10 +38,12 @@
  */
 import { spawn } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import { createServer } from "node:net";
+import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const argv = process.argv.slice(2);
 const flag = (name) => {
@@ -55,6 +64,8 @@ if (!existsSync(launcher)) {
 const manifest = JSON.parse(readFileSync(path.join(app, "app.json"), "utf8"));
 const appInfo = { id: manifest.app?.id ?? manifest.id ?? path.basename(app), name: manifest.app?.name ?? manifest.name ?? path.basename(app) };
 const designPort = Number(flag("--design-port") ?? 5173);
+const driveHosts = (flag("--hosts") ?? "web").split(",").map((h) => h.trim()).filter((h) => ["web", "ios", "macos"].includes(h));
+const sim = flag("--sim") && /^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/i.test(flag("--sim")) ? flag("--sim") : null;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const say = (text, data) => {
@@ -225,6 +236,63 @@ if (!framesOff) {
   await new Promise((r) => proxy.listen(framesPort, "127.0.0.1", r));
 }
 
+// ---------------------------------------------------------------- Drive mode
+
+const DRIVE_OP = /^(?:tap [A-Za-z0-9_.:-]{1,80}|type [A-Za-z0-9_.:-]{1,80} "(?:[^"\\\n\r]|\\.){0,400}"|back)$/;
+const SHOT_LINE = /^(tap|type|clock|back|fail fetch|pass fetch|prefer)\b/;
+
+/** A drive's shots, checked: one `at "<path>"`, then the closed list of operations a screen's shots may hold. */
+function driveShots(text) {
+  let url = null;
+  const ops = [];
+  for (const raw of String(text ?? "").split("\n")) {
+    const line = raw.trim();
+    if (!line || line.startsWith("//")) continue;
+    const at = /^at\s+"([^"]*)"$/.exec(line);
+    if (at && url === null && at[1].startsWith("/") && !at[1].startsWith("//") && !at[1].includes("..") && !/[\s\\]/.test(at[1])) { url = at[1]; continue; }
+    if (!SHOT_LINE.test(line) || /\bcolor-scheme\b/.test(line)) return null;
+    ops.push(line);
+  }
+  return url ? { url, ops } : null;
+}
+
+let driving = Promise.resolve();
+/** One drive at a time: a simulator runs one app. */
+function drive(body) {
+  const run = driving.then(() => driveOnce(body));
+  driving = run.catch(() => {});
+  return run;
+}
+
+/**
+ * **One drive, by the capture bridge's own `drive`** — the same code
+ * `isocan exact live` runs for a drive asked for on the canvas, so the two
+ * doors cannot drift: the screen reached, the operations replayed on a cold
+ * driver, and a fresh screenshot with its nodes. Asynchronous here, so the
+ * bridge keeps answering while a drive runs.
+ */
+function driveOnce(job) {
+  return new Promise((resolve) => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "isocan-exact-drive-"));
+    const done = (answer) => { rmSync(dir, { recursive: true, force: true }); resolve(answer); };
+    try {
+      writeFileSync(path.join(dir, "job.json"), JSON.stringify(job));
+      const bridgeScript = path.join(path.dirname(fileURLToPath(import.meta.url)), "exact-bridge.mjs");
+      const child = spawn(process.execPath, [bridgeScript, "drive", "--app", app, "--report", path.join(dir, "report.json"), "--dir", dir, "--job", path.join(dir, "job.json"), ...(sim ? ["--sim", sim] : [])], { stdio: ["ignore", "ignore", "pipe"] });
+      let err = "";
+      child.stderr.on("data", (d) => { err = (err + d).slice(-4000); });
+      child.on("close", () => {
+        let r;
+        try { r = JSON.parse(readFileSync(path.join(dir, "report.json"), "utf8")); } catch { return done({ ok: false, png: null, points: null, results: [], ms: 0, error: err.trim().split("\n").slice(-3).join("\n") || "the drive did not answer" }); }
+        const png = r.file ? readFileSync(r.file).toString("base64") : null;
+        done({ ok: r.ok, code: r.code, png, points: r.points, results: r.results, ms: r.ms, ...(r.error ? { error: r.error } : {}) });
+      });
+    } catch (e) {
+      done({ ok: false, png: null, points: null, results: [], ms: 0, error: e.message });
+    }
+  });
+}
+
 // ---------------------------------------------------------------- the bridge API
 
 function designLink(route) {
@@ -286,7 +354,7 @@ const api = http.createServer(async (req, res) => {
   if (!auth || !tokens.has(auth)) return answer(401, { error: "not paired with this bridge (a bridge that restarted forgets its pairings)" });
 
   if (url.pathname === "/hello" && req.method === "GET") {
-    return answer(200, { app: appInfo, dir: app, frames: framesPort, loop: loopBase, tamber: !!tamberToken, design: { port: designPort, up: await designUp() }, seq });
+    return answer(200, { app: appInfo, dir: app, frames: framesPort, loop: loopBase, tamber: !!tamberToken, design: { port: designPort, up: await designUp() }, drive: { hosts: driveHosts.filter((h) => h !== "ios" || sim) }, seq });
   }
   if (url.pathname === "/events" && req.method === "GET") {
     const after = Number(url.searchParams.get("after") ?? 0);
@@ -330,6 +398,22 @@ const api = http.createServer(async (req, res) => {
     }
     return answer(200, { url: `vscode://file${abs}:${line}:${col}` });
   }
+  if (url.pathname === "/drive" && req.method === "POST") {
+    const body = await readBody(req);
+    const host = body?.host;
+    if (!driveHosts.includes(host)) return answer(400, { error: `this bridge drives ${driveHosts.join(", ")} — \`isocan exact live --hosts …\` names the hosts` });
+    if (host === "ios" && !sim) return answer(400, { error: "this bridge has no simulator of its own to drive iOS on: `isocan exact live --hosts …,ios --sim <udid>`" });
+    const shots = driveShots(body.shots);
+    if (!shots) return answer(400, { error: "a drive starts where the screen's exact.shots say: one at \"<path>\", then tap, type, clock, back, fail fetch, pass fetch or prefer" });
+    const ops = Array.isArray(body.ops) ? body.ops : [];
+    if (ops.length > 40 || ops.some((op) => typeof op !== "string" || !DRIVE_OP.test(op))) return answer(400, { error: "Drive mode sends tap <testId>, type <testId> \"<text>\" and back — nothing else, and at most 40" });
+    const size = /^\d{2,4}x\d{2,4}$/.test(body.size ?? "") ? body.size : "390x844";
+    const scheme = body.scheme === "dark" ? "dark" : "light";
+    say(`drive on ${host}: ${ops.at(-1) ?? "the screen as captured"}`);
+    const r = await drive({ host, size, scheme, shots: String(body.shots), ops });
+    say(`drive on ${host}: ${r.ok ? `a fresh screenshot in ${r.ms} ms` : r.error}`);
+    return answer(r.ok ? 200 : 422, r);
+  }
   if (url.pathname === "/design" && req.method === "GET") {
     return answer(200, { link: designLink(url.searchParams.get("route") ?? ""), up: await designUp(), port: designPort });
   }
@@ -350,7 +434,9 @@ setInterval(() => { if (code && code.expires < Date.now()) mint(); }, 5_000).unr
 
 const childArgv = flag("--child") ? JSON.parse(flag("--child")) : null;
 if (Array.isArray(childArgv) && childArgv.length > 1) {
-  const capture = spawn(childArgv[0], childArgv.slice(1), { stdio: ["ignore", "pipe", "pipe"], detached: true, env: process.env });
+  // The capture loop joins its native captures to this dev loop (`agent ios|macos --url`): each generation the loop
+  // publishes is what they show (exact phase 3).
+  const capture = spawn(childArgv[0], childArgv.slice(1), { stdio: ["ignore", "pipe", "pipe"], detached: true, env: { ...process.env, ISOCAN_EXACT_LOOP: loopBase } });
   children.push(capture);
   capture.stdout.on("data", (d) => process.stdout.write(d));
   capture.stderr.on("data", (d) => process.stdout.write(d));

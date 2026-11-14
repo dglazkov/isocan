@@ -26,14 +26,14 @@ is scratch. Nothing is sent until Phase 10.
 
 **Phase citations name their project**: `exact phase 2`.
 
-**Where we are, 14 Nov 2026:** phases 0–2 CLOSED. An Exact app is a flow
+**Where we are, 14 Nov 2026:** phases 0–3 CLOSED. An Exact app is a flow
 map on the canvas (`isocan exact open`), kept true on save (`isocan exact
-live`), and on a loopback home its screens can go **Live** — the running dev
-page, framed through the bridge after a one-time pairing — with Alt-click
-naming the Contract line in live frames and in captures alike, compiler and
-`agent check` findings as comments, and a *Live frames* switch that, off,
-leaves the browser never contacting the bridge. Next: **exact phase 3**,
-every host and Drive mode. Nothing waits on a person.
+live`), captured on the web, a dedicated iOS simulator and macOS, with a
+device wall per route and host differences as comments. On a loopback home
+its screens can go **Live** through a paired bridge, with Alt-click naming
+the Contract line; any screen on any host can be **driven** from the canvas,
+through the bridge or, with *Live frames* off, through the canvas itself.
+Next: **exact phase 4**, time and state. Nothing waits on a person.
 ---
 
 ## Phase 0 — The bridge, the index, and the three doors
@@ -151,11 +151,14 @@ screen and leaves when fixed; an agent given only a comment's
 - **2026-11-14** — Pointing with live frames off works on captures: each capture records the driver's `layout` (boxes joined to the source map) and `tree` (what is hidden) as `exact.points`, and Alt-click resolves in the browser. Design §5's "nothing else is lost" needed this; the first build pointed in live frames only.
 - **2026-11-14** — Findings that disappear are `thread.delete`d (soft; `thread.restore` brings one back) — isocan has no resolve op. A source comment is told *Moved* once per move, not once per save.
 - **2026-11-14** — Open: nothing on the canvas names the app's directory (design §2's `exact.app = {id, path}`, relative to a bound root, is unbuilt); the fresh agent found the file by its digest. Waits on a phase that binds canvases to a repo root — exact phase 8 at the latest.
-- **2026-11-14** — Open: `outline` across several live frames of one route is built but unproven — the walk had one live frame per route. Waits on exact phase 3's device wall.
+- **2026-11-14** — Closed by exact phase 3: `outline` across several live frames of one route is built but was unproven — the walk had one live frame per route. Phase 3's device wall drew the mark in three live frames.
 
 ## Phase 3 — Every host, and Drive mode
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 14 Nov 2026.** One `open` put the cart on web, iOS and
+macOS side by side; a checkout was driven on the iOS frame from the canvas
+to its confirmation, with *Live frames* on and off; the planted host
+difference was named in a comment at its line.
 
 - iOS Simulator and macOS captures through the driver, on dedicated
   simulators; a connected iPhone when there is one.
@@ -169,6 +172,17 @@ screen and leaves when fixed; an agent given only a comment's
 **Proof:** Acme Market's cart on web, iOS and macOS side by side from one
 command; a person checks out by driving the iOS frame from the canvas;
 a deliberate layout difference between hosts is found and named.
+
+### Trajectory
+
+- **2026-11-14** — Drive mode as first built went through the local-tool door, so with *Live frames* off it was unavailable — breaking Scene 2's "Sam can still drive". The mechanism changed, not the journey: with the door shut the browser writes `exact.drive` on the screen (`item.update`), `isocan exact live` waits on the op log, replays it, and writes `exact.driven` with the fresh picture.
+- **2026-11-14** — Native captures reach a route with `type <root> <path>` (native hosts take no route `--url`) on a simulator named by UDID; none is ever guessed. `--url <dev loop>` joins a native build to the dev loop once the loop's native half is built (~82 s cold), but Exact still re-bakes its plan per drive.
+- **2026-11-14** — Exact holds no resident drive session a tool can keep, so every press replays the whole drive cold: ~10.5 s a step on iOS, ~3 s on the web. Compare comments only on `testId` order (tab bar aside), because each platform's own bars always differ in pixels.
+- **2026-11-14** — Outline across several live frames of one route (phase 2's Open entry) held on the device wall: three live cells each drew the mark.
+- **2026-11-14** — Open: a capture's `web-build`/`agent web` in the app directory breaks Tamber `inspect` in the running dev loop until it restarts (Exact cbe553f6), so pointing in live frames is unreliable while captures run. Waits on Exact; noted in the diary.
+- **2026-11-14** — Open: ~3 of 28 iOS captures moved pixels with nothing changed (status bar pinned), versioning screens needlessly. Waits on a tolerance or on Exact.
+- **2026-11-14** — Open: a live frame opens `exact.url` and ignores `exact.shots`, so the cart wall's live cells show the route's start, not the cart. Waits on a phase that drives live frames (exact phase 5's Record at the latest).
+- **2026-11-14** — Open: a canvas drive's picture is a blob referenced only from `exact.driven`, so garbage collection can sweep it after its grace period. Waits on blob references from properties, or on phase 5 keeping drives as versions.
 
 ## Phase 4 — Time and state
 

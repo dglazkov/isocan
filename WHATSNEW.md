@@ -34,6 +34,13 @@ second week.
   open it in your editor or leave a comment on that line. Compile errors and
   `agent check` findings appear as comments on the screens they affect, and
   go away when fixed.
+- **Exact apps on iPhone and Mac, and driven from the canvas.** `isocan exact
+  open <app> --hosts web,ios,macos --sim <simulator>` adds iOS Simulator and
+  macOS screens beside the web ones; `isocan exact wall <app> <route>` lays
+  one route out on every host side by side, and where the hosts lay a screen
+  out differently, a comment says so at the line. Press **Drive** on any
+  screen to tap and type into the app from the canvas — with *Live frames*
+  off too, a picture behind instead of live.
 
 ## 13 November 2026
 

@@ -17,6 +17,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { newCommentId, newThreadId, type LocalToolDoor, type ModuleCommentFacts, type ModuleMenuRow, type OverlayFacts, type RendererFacts } from "@isocan/core";
 import { EXACT_PROPS, appIdOf, parsePoints, parseSource, pointAt, selectionSummary, sourceLine, sourcePlace, type ExactSource } from "./core.ts";
+import { Driver } from "./drive.tsx";
 
 /**
  * **Live frames and pointing** (exact phase 2; design §5, §6), the browser
@@ -40,7 +41,7 @@ import { EXACT_PROPS, appIdOf, parsePoints, parseSource, pointAt, selectionSumma
 
 // ---------------------------------------------------------------- shared state
 
-interface Hello { app: { id: string; name: string }; dir: string; frames: number | null; loop: string; tamber: boolean; design: { port: number; up: boolean }; seq: number }
+interface Hello { app: { id: string; name: string }; dir: string; frames: number | null; loop: string; tamber: boolean; design: { port: number; up: boolean }; drive?: { hosts: string[] }; seq: number }
 
 interface Selection {
   /** The bridge it came from, or null: pointed at on a capture, from the screen's own `exact.points`, with no bridge asked. */
@@ -71,6 +72,8 @@ const state = {
   frames: new Map<HTMLIFrameElement, FrameRecord>(),
   /** Exact screens mounted: Alt points at captures too, live frames or not. */
   screens: 0,
+  /** The canvas as the overlay last saw it, and its host's `send` and viewer — Drive's canvas door when the local one is shut (exact phase 3). */
+  canvas: null as { id: string; contents: OverlayFacts["canvas"]; send: OverlayFacts["host"]["send"]; viewer: string | null } | null,
   version: 0,
 };
 const listeners = new Set<() => void>();
@@ -276,24 +279,32 @@ export function ExactScreen(facts: RendererFacts) {
   const [live, setLiveState] = useState(() => readLive(canvasId, itemId, item?.properties?.[EXACT_PROPS.live] === "on"));
   const [bridge, setBridge] = useState<{ port: number; hello: Hello } | null>(null);
   const [asking, setAsking] = useState(false);
+  const [driving, setDriving] = useState(false);
+  const [driveNote, setDriveNote] = useState<string | null>(null);
   const open = !!door && !door.shut;
+  const host = item?.properties?.[EXACT_PROPS.host] ?? "web";
 
   useEffect(() => {
     let alive = true;
-    if (!open || !live || !appId) { setBridge(null); return; }
+    // A bridge is asked for only through an open door: Live needs it, and so does Drive (exact phase 3).
+    if (!open || !appId) { setBridge(null); return; }
     void bridgeFor(door!, appId).then((b) => { if (alive) setBridge(b); });
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, live, appId, tick]);
+  }, [open, appId, tick]);
+  // A drive belongs to the door it began on: the switch moving under it ends it.
+  useEffect(() => { setDriving(false); }, [open]);
 
   const setLive = (on: boolean) => { writeLive(canvasId, itemId, on); setLiveState(on); if (!on) setAsking(false); };
   const device = item?.properties?.[EXACT_PROPS.device] ?? "phone";
   const scheme = item?.properties?.[EXACT_PROPS.scheme] === "dark" ? "dark" : "light";
   const path = item?.properties?.[EXACT_PROPS.url] ?? "/";
-  const showFrame = open && live && near && bridge?.hello.frames;
+  // A native window cannot be framed (design §7): only a web screen goes Live; every host drives.
+  const showFrame = host === "web" && open && live && near && bridge?.hello.frames && !driving;
+  const drives = !!bridge?.hello.drive?.hosts.includes(host);
   useEffect(() => { state.screens++; installKeys(); return () => { state.screens--; }; }, []);
   const points = parsePoints(item?.properties?.[EXACT_PROPS.points]);
-  const capW = (DEVICE_SIZE[device] ?? DEVICE_SIZE.phone!).width;
+  const capW = points?.size?.width ?? (DEVICE_SIZE[device] ?? DEVICE_SIZE.phone!).width;
   /** Alt-click on a capture: the node under the press, from what the capture recorded — no bridge, no network. */
   const pointOnCapture = (e: React.MouseEvent<HTMLDivElement>) => {
     e.stopPropagation();
@@ -315,23 +326,48 @@ export function ExactScreen(facts: RendererFacts) {
     changed();
   };
 
+  const driveSize = `${(DEVICE_SIZE[device] ?? DEVICE_SIZE.phone!).width}x${(DEVICE_SIZE[device] ?? DEVICE_SIZE.phone!).height}`;
+  const reached = item?.properties?.[EXACT_PROPS.reached] ?? item?.properties?.[EXACT_PROPS.shots] ?? `at "${path}"`;
+  const pressDrive = () => {
+    // Off is a whole answer (design §5): with the door shut nothing reaches this machine — the drive is asked for on the
+    // canvas instead, and `isocan exact live` answers it, a capture behind.
+    if (!door || door.shut) {
+      if (!state.canvas || state.canvas.id !== canvasId) { setDriveNote("Drive over the canvas needs the canvas's own door, which this view does not have"); return; }
+      setDriveNote(null);
+      setDriving(!driving);
+      return;
+    }
+    if (!bridge) { setAsking(true); setDriveNote("Pair with `isocan exact live` first — Drive runs on your machine"); return; }
+    if (!drives) { setDriveNote(`this bridge does not drive ${host}: \`isocan exact live --hosts ${host === "web" ? "web" : `web,${host}`}${host === "ios" ? " --sim <udid>" : ""}\``); return; }
+    setDriveNote(null);
+    setDriving(!driving);
+  };
+
   return (
-    <div ref={ref} className="exact-screen" data-exact-screen={live && open ? "live" : "still"}>
-      {showFrame
-        ? <LiveFrame door={door!} port={bridge!.port} framesPort={bridge!.hello.frames!} path={path} device={device} scheme={scheme} entered={entered} record={{ itemId, canvasId, port: bridge!.port, appId: appId! }} title={filename} />
-        : <img className="img-view" src={url} alt={filename} draggable={false} />}
-      {!showFrame && state.pointing && points && (
+    <div ref={ref} className="exact-screen" data-exact-screen={driving ? "drive" : live && open && host === "web" ? "live" : "still"} data-exact-host={host}>
+      {driving && (bridge || !open)
+        ? <Driver start={{ ...(open && bridge ? { door: door!, port: bridge.port } : {}), ...(state.canvas && item ? { canvas: { send: state.canvas.send, itemId: item.id, by: state.canvas.viewer, answer: parseDriven(state.canvas.contents.items[item.id]?.properties?.[EXACT_PROPS.driven]), urlOf: (hash: string) => (url.includes(facts.blobHash) ? url.replace(facts.blobHash, hash) : url) } } : {}), host, size: driveSize, scheme, shots: reached, points, width: capW, height: points?.size?.height ?? (DEVICE_SIZE[device] ?? DEVICE_SIZE.phone!).height }} url={url} alt={filename} onStop={() => setDriving(false)} />
+        : showFrame
+          ? <LiveFrame door={door!} port={bridge!.port} framesPort={bridge!.hello.frames!} path={path} device={device} scheme={scheme} entered={entered} record={{ itemId, canvasId, port: bridge!.port, appId: appId! }} title={filename} />
+          : <img className="img-view" src={url} alt={filename} draggable={false} />}
+      {!showFrame && !driving && state.pointing && points && (
         <div className="exact-point-catcher" title="Point at this line" onPointerDown={(e) => e.stopPropagation()} onClick={pointOnCapture} />
       )}
-      {open && appId && (
+      {door && appId && !driving && (
         <div className="exact-screen-bar" onPointerDown={(e) => e.stopPropagation()}>
-          <button type="button" className={`exact-chip${live ? " exact-chip-on" : ""}`} aria-pressed={live} title={live ? "Show the capture" : "Run this screen live, from your machine"} onClick={() => setLive(!live)}>
-            {live ? "Live" : "Still"}
+          {open && host === "web" && !driving && (
+            <button type="button" className={`exact-chip${live ? " exact-chip-on" : ""}`} aria-pressed={live} title={live ? "Show the capture" : "Run this screen live, from your machine"} onClick={() => setLive(!live)}>
+              {live ? "Live" : "Still"}
+            </button>
+          )}
+          <button type="button" className={`exact-chip${driving ? " exact-chip-on" : ""}${open ? "" : " exact-chip-off"}`} aria-pressed={driving} title={open ? `Drive this ${host} screen: presses and typing sent to the driver on your machine` : door.shut ?? ""} onClick={pressDrive}>
+            Drive
           </button>
-          {live && !bridge && <button type="button" className="exact-chip" onClick={() => setAsking(!asking)}>Pair…</button>}
+          {open && (live || asking) && !bridge && <button type="button" className="exact-chip" onClick={() => setAsking(!asking)}>Pair…</button>}
         </div>
       )}
-      {open && live && !bridge && asking && <PairForm door={door!} onPaired={() => { setAsking(false); state.hellos.clear(); changed(); }} />}
+      {driveNote && <p className="exact-drive-note" role="status" onPointerDown={(e) => e.stopPropagation()} onClick={() => setDriveNote(null)}>{driveNote}</p>}
+      {open && !bridge && asking && <PairForm door={door!} onPaired={() => { setAsking(false); state.hellos.clear(); changed(); }} />}
     </div>
   );
 }
@@ -427,8 +463,19 @@ async function openInEditor(door: LocalToolDoor, port: number, src: { file: stri
   return `opened ${answer?.opened ?? sourcePlace(src)} with ${answer?.with ?? "your editor"}`;
 }
 
+/** A screen's `exact.driven`, read leniently. */
+function parseDriven(text: string | undefined) {
+  if (!text) return null;
+  try { const v = JSON.parse(text) as { seq?: unknown }; return Number.isFinite(v?.seq) ? (v as NonNullable<import("./drive.tsx").CanvasDrive["answer"]>) : null; } catch { return null; }
+}
+
 export function PointPanel({ canvasId, canvas, host }: OverlayFacts) {
   useExact();
+  // The canvas, for every screen's Drive: the overlay is the one place the shell hands the canvas and its `send`.
+  useEffect(() => {
+    state.canvas = { id: canvasId, contents: canvas, send: host.send, viewer: host.viewer?.name ?? null };
+    changed();
+  }, [canvasId, canvas, host]);
   const door = host.localTool?.("exact") ?? state.door;
   const [text, setText] = useState("");
   const [said, setSaid] = useState<string | null>(null);

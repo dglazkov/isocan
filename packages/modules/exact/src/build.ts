@@ -59,9 +59,10 @@ export function buildIndex(readings: Readings): ExactIndex {
  * **What a capture depends on**, in a fixed order — the CLI digests it into
  * `exact.key`. Equal parts, equal picture: the capture is skipped.
  */
-export function captureKeyParts(index: ExactIndex, route: string, device: Device, scheme: Scheme, shots: string): string {
-  // "points": a capture carries its nodes' boxes since exact phase 2, so an older capture is taken again once.
-  return JSON.stringify([index.inputs, route, device, scheme, "web", core.CAPTURE_AT, DEVICES[device], shots, "points"]);
+export function captureKeyParts(index: ExactIndex, route: string, device: Device, scheme: Scheme, shots: string, host = "web", sim: string | null = null): string {
+  // "points": a capture carries its nodes' boxes since exact phase 2, so an older capture is taken again once. A
+  // native capture also depends on the simulator it ran on, and carries the platform's own bar controls ("ax"; exact phase 3); a web key is the same bytes as before.
+  return JSON.stringify([index.inputs, route, device, scheme, host, core.CAPTURE_AT, DEVICES[device], shots, "points", ...(host === "web" ? [] : [sim, "ax"])]);
 }
 
 /**

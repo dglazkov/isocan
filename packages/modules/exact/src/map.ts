@@ -565,8 +565,9 @@ export function rowSize(device: Device): { width: number; height: number } {
  * row (light above, dark below) to the right of its phone screen, where the
  * arrows between screens do not cross it.
  */
-export function mapLayout(routes: readonly IndexRoute[]): Map<string, { x: number; y: number; depth: number }> {
-  const cellWidth = LAYOUT.primary.width + LAYOUT.gap + (["phone", "tablet", "desktop"] as Device[]).reduce((w, d) => w + rowSize(d).width + LAYOUT.rowGap, 0);
+export function mapLayout(routes: readonly IndexRoute[], extra = 0): Map<string, { x: number; y: number; depth: number }> {
+  // `extra`: the native columns' width, when a map carries other hosts (exact phase 3).
+  const cellWidth = LAYOUT.primary.width + LAYOUT.gap + (["phone", "tablet", "desktop"] as Device[]).reduce((w, d) => w + rowSize(d).width + LAYOUT.rowGap, 0) + extra;
   const cellHeight = LAYOUT.primary.height + LAYOUT.levelGap;
   const children = new Map<string | null, IndexRoute[]>();
   for (const r of routes) children.set(r.parent, [...(children.get(r.parent) ?? []), r]);
