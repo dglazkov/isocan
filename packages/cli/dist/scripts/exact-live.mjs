@@ -5,10 +5,12 @@ const require = __isocanCreateRequire(import.meta.url);
 // scripts/exact-live.mjs
 import { spawn } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import { createServer } from "node:net";
+import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 var argv = process.argv.slice(2);
 var flag = (name) => {
   const i = argv.indexOf(name);
@@ -28,6 +30,8 @@ if (!existsSync(launcher)) {
 var manifest = JSON.parse(readFileSync(path.join(app, "app.json"), "utf8"));
 var appInfo = { id: manifest.app?.id ?? manifest.id ?? path.basename(app), name: manifest.app?.name ?? manifest.name ?? path.basename(app) };
 var designPort = Number(flag("--design-port") ?? 5173);
+var driveHosts = (flag("--hosts") ?? "web").split(",").map((h) => h.trim()).filter((h) => ["web", "ios", "macos"].includes(h));
+var sim = flag("--sim") && /^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/i.test(flag("--sim")) ? flag("--sim") : null;
 var sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 var say = (text, data) => {
   if (json) process.stdout.write(`${JSON.stringify({ bridge: data ?? { text } })}
@@ -194,6 +198,61 @@ if (!framesOff) {
   framesPort = await freePort(flag("--frames-port") ? Number(flag("--frames-port")) : void 0);
   await new Promise((r) => proxy.listen(framesPort, "127.0.0.1", r));
 }
+var DRIVE_OP = /^(?:tap [A-Za-z0-9_.:-]{1,80}|type [A-Za-z0-9_.:-]{1,80} "(?:[^"\\\n\r]|\\.){0,400}"|back)$/;
+var SHOT_LINE = /^(tap|type|clock|back|fail fetch|pass fetch|prefer)\b/;
+function driveShots(text) {
+  let url = null;
+  const ops = [];
+  for (const raw of String(text ?? "").split("\n")) {
+    const line = raw.trim();
+    if (!line || line.startsWith("//")) continue;
+    const at = /^at\s+"([^"]*)"$/.exec(line);
+    if (at && url === null && at[1].startsWith("/") && !at[1].startsWith("//") && !at[1].includes("..") && !/[\s\\]/.test(at[1])) {
+      url = at[1];
+      continue;
+    }
+    if (!SHOT_LINE.test(line) || /\bcolor-scheme\b/.test(line)) return null;
+    ops.push(line);
+  }
+  return url ? { url, ops } : null;
+}
+var driving = Promise.resolve();
+function drive(body) {
+  const run = driving.then(() => driveOnce(body));
+  driving = run.catch(() => {
+  });
+  return run;
+}
+function driveOnce(job) {
+  return new Promise((resolve) => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "isocan-exact-drive-"));
+    const done = (answer) => {
+      rmSync(dir, { recursive: true, force: true });
+      resolve(answer);
+    };
+    try {
+      writeFileSync(path.join(dir, "job.json"), JSON.stringify(job));
+      const bridgeScript = path.join(path.dirname(fileURLToPath(import.meta.url)), "exact-bridge.mjs");
+      const child = spawn(process.execPath, [bridgeScript, "drive", "--app", app, "--report", path.join(dir, "report.json"), "--dir", dir, "--job", path.join(dir, "job.json"), ...sim ? ["--sim", sim] : []], { stdio: ["ignore", "ignore", "pipe"] });
+      let err = "";
+      child.stderr.on("data", (d) => {
+        err = (err + d).slice(-4e3);
+      });
+      child.on("close", () => {
+        let r;
+        try {
+          r = JSON.parse(readFileSync(path.join(dir, "report.json"), "utf8"));
+        } catch {
+          return done({ ok: false, png: null, points: null, results: [], ms: 0, error: err.trim().split("\n").slice(-3).join("\n") || "the drive did not answer" });
+        }
+        const png = r.file ? readFileSync(r.file).toString("base64") : null;
+        done({ ok: r.ok, code: r.code, png, points: r.points, results: r.results, ms: r.ms, ...r.error ? { error: r.error } : {} });
+      });
+    } catch (e) {
+      done({ ok: false, png: null, points: null, results: [], ms: 0, error: e.message });
+    }
+  });
+}
 function designLink(route) {
   const q = new URLSearchParams({ connect: loopBase, name: appInfo.name, viewports: "Core" });
   if (route) q.set("show", route);
@@ -265,7 +324,7 @@ var api = http.createServer(async (req, res) => {
   const auth = /^Bearer (\S+)$/.exec(req.headers.authorization ?? "")?.[1];
   if (!auth || !tokens.has(auth)) return answer(401, { error: "not paired with this bridge (a bridge that restarted forgets its pairings)" });
   if (url.pathname === "/hello" && req.method === "GET") {
-    return answer(200, { app: appInfo, dir: app, frames: framesPort, loop: loopBase, tamber: !!tamberToken, design: { port: designPort, up: await designUp() }, seq });
+    return answer(200, { app: appInfo, dir: app, frames: framesPort, loop: loopBase, tamber: !!tamberToken, design: { port: designPort, up: await designUp() }, drive: { hosts: driveHosts.filter((h) => h !== "ios" || sim) }, seq });
   }
   if (url.pathname === "/events" && req.method === "GET") {
     const after = Number(url.searchParams.get("after") ?? 0);
@@ -312,6 +371,22 @@ var api = http.createServer(async (req, res) => {
     }
     return answer(200, { url: `vscode://file${abs}:${line}:${col}` });
   }
+  if (url.pathname === "/drive" && req.method === "POST") {
+    const body = await readBody(req);
+    const host = body?.host;
+    if (!driveHosts.includes(host)) return answer(400, { error: `this bridge drives ${driveHosts.join(", ")} \u2014 \`isocan exact live --hosts \u2026\` names the hosts` });
+    if (host === "ios" && !sim) return answer(400, { error: "this bridge has no simulator of its own to drive iOS on: `isocan exact live --hosts \u2026,ios --sim <udid>`" });
+    const shots = driveShots(body.shots);
+    if (!shots) return answer(400, { error: `a drive starts where the screen's exact.shots say: one at "<path>", then tap, type, clock, back, fail fetch, pass fetch or prefer` });
+    const ops = Array.isArray(body.ops) ? body.ops : [];
+    if (ops.length > 40 || ops.some((op) => typeof op !== "string" || !DRIVE_OP.test(op))) return answer(400, { error: 'Drive mode sends tap <testId>, type <testId> "<text>" and back \u2014 nothing else, and at most 40' });
+    const size = /^\d{2,4}x\d{2,4}$/.test(body.size ?? "") ? body.size : "390x844";
+    const scheme = body.scheme === "dark" ? "dark" : "light";
+    say(`drive on ${host}: ${ops.at(-1) ?? "the screen as captured"}`);
+    const r = await drive({ host, size, scheme, shots: String(body.shots), ops });
+    say(`drive on ${host}: ${r.ok ? `a fresh screenshot in ${r.ms} ms` : r.error}`);
+    return answer(r.ok ? 200 : 422, r);
+  }
   if (url.pathname === "/design" && req.method === "GET") {
     return answer(200, { link: designLink(url.searchParams.get("route") ?? ""), up: await designUp(), port: designPort });
   }
@@ -330,7 +405,7 @@ setInterval(() => {
 }, 5e3).unref();
 var childArgv = flag("--child") ? JSON.parse(flag("--child")) : null;
 if (Array.isArray(childArgv) && childArgv.length > 1) {
-  const capture = spawn(childArgv[0], childArgv.slice(1), { stdio: ["ignore", "pipe", "pipe"], detached: true, env: process.env });
+  const capture = spawn(childArgv[0], childArgv.slice(1), { stdio: ["ignore", "pipe", "pipe"], detached: true, env: { ...process.env, ISOCAN_EXACT_LOOP: loopBase } });
   children.push(capture);
   capture.stdout.on("data", (d) => process.stdout.write(d));
   capture.stderr.on("data", (d) => process.stdout.write(d));

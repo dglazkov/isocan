@@ -61,7 +61,37 @@ From nothing to the map, in order:
    line, col, component, classes) — read it to find which line draws what
    is at a place on a screen. You cannot click; point at lines by reading
    comments and `exact.points`. `--no-checks` skips agent check.
-4. `isocan exact check <app> [--no-checks] [--json]` — one pass of findings
+4. **Other hosts** (`--hosts web,ios,macos` on `open` and `live`): the
+   same route captured through Exact's driver on the iOS Simulator (a
+   phone, at the simulator's own size, UIKit's bars and all) and as the
+   macOS build (a window at the desktop size), light and dark, each a
+   screen with `exact.host` = `ios` or `macos`, in a column right of the
+   web's device row. iOS runs ONLY on a simulator made for it, named by
+   UDID: `xcrun simctl create "isocan-exact" com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro <runtime>`,
+   then `--sim <udid>`. Never pass a simulator you did not make; a booted
+   one may be somebody's own. The first native capture builds the app
+   (minutes); later ones re-bake the plan (~15 s a route). `live` with
+   `--hosts` recaptures the native screens on every save.
+   **Differences between hosts**: each native capture is set beside the
+   web drawn at its size (Exact's `screenshot … compare`); where the app's
+   own layout differs — two nodes with a `testId` in one order on the web
+   and the other natively — that is a comment on the native screen
+   (`exact.diagnostic = compare:<route>:<host>:<testId>`, with
+   `exact.source`), gone when the hosts agree. A platform's own bars are
+   not a difference.
+   **A device wall**: `isocan exact wall <app> <route> [--scheme dark]`
+   — one item showing the route on every host and device on the canvas,
+   side by side, refreshed by every `open`/`live` pass.
+   **Drive mode** is a PERSON's: on a paired browser, a screen's **Drive**
+   button sends presses and typing as driver operations (`tap <testId>`,
+   `type <testId> "<text>"`, `back`) to `isocan exact live`'s bridge, which
+   replays them on that screen's host and shows a fresh screenshot. With
+   live frames off the browser writes the drive on the screen instead
+   (`exact.drive`) and `isocan exact live` answers it (`exact.driven`, the
+   picture a blob of the canvas) — do not write or edit either. Under the
+   live bridge, native captures join its dev loop (`agent … --url`). An
+   agent drives with Exact's own `bun exact.mjs agent <host> …`.
+5. `isocan exact check <app> [--no-checks] [--json]` — one pass of findings
    without capturing: the compiler's diagnostics and `agent check both` on
    every route's phone screen, as comments, the gone ones resolved, and
    *moved* replies (below). Use it after you edit an Exact app.
@@ -105,4 +135,7 @@ Rules:
   `exact.live=on` (`isocan set <screen> --prop exact.live=on`); each viewer's
   own Live / Still wins, and viewers with live frames off see the capture.
   Live frames work only on a canvas whose home is this machine.
-- Other hosts, storyboards and proposals are not built yet.
+- A screen's `exact.reached` is the shots its capture ran (read-only); edit
+  `exact.shots` on the route's phone screen instead.
+- A connected iPhone, Linux, Android, storyboards and proposals are not
+  built yet.
