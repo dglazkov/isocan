@@ -20,7 +20,6 @@ import {
   CAPTURE_AT,
   EXACT_INDEX_MIME,
   EXACT_PROPS,
-  buildIndex,
   checkRoutes,
   contractRoutes,
   exactModule,
@@ -32,6 +31,11 @@ import {
   screenProperties,
   type Readings,
 } from "../src/core.ts";
+import { buildIndex } from "../src/build.ts";
+import * as record from "../src/core.ts";
+import { bindCore } from "../src/core-ref.ts";
+
+bindCore(record);
 
 /**
  * The readings `scripts/exact-bridge.mjs read` printed for a synthetic Acme
@@ -123,6 +127,8 @@ describe("screens", () => {
       "exact.plan": index.plan,
       "exact.at": JSON.stringify(CAPTURE_AT),
       "exact.url": "/place/1",
+      // The phone/light screen carries the arrows that leave it (exact phase 1).
+      "exact.edges": JSON.stringify([{ to: "places", verb: "back", action: null }]),
     });
     for (const key of Object.keys(props)) expect(exactModule.propertyKeys).toContain(key);
     const item = { id: "itm_1", properties: props } as unknown as Parameters<typeof screenItemOf>[0]["items"][string];
@@ -138,10 +144,20 @@ describe("screens", () => {
 
 describe("the module never spawns", () => {
   it("leaves running Exact to the package script, as motion does", () => {
-    for (const file of ["core.ts", "cli.ts", "web.tsx"]) {
+    for (const file of ["core.ts", "build.ts", "map.ts", "cli.ts", "cli-run.ts", "web.tsx"]) {
       const src = readFileSync(new URL(`../src/${file}`, import.meta.url), "utf8");
       expect(src, file).not.toMatch(/node:child_process|node:worker_threads|node:vm|\beval\(/);
     }
-    expect(readFileSync(new URL("../src/cli.ts", import.meta.url), "utf8")).toContain('runPackageScript("scripts/exact-bridge.mjs"');
+    expect(readFileSync(new URL("../src/cli-run.ts", import.meta.url), "utf8")).toContain('runPackageScript("scripts/exact-bridge.mjs"');
+  });
+});
+
+describe("start-up reads only the record", () => {
+  it("keeps the map, the builder and the verbs off every CLI start-up's path (test/cli-bundle.test.ts)", () => {
+    const core = readFileSync(new URL("../src/core.ts", import.meta.url), "utf8");
+    const cli = readFileSync(new URL("../src/cli.ts", import.meta.url), "utf8");
+    expect(core).not.toMatch(/^import (?!type )[^;]*from "\.\/(map|build|cli-run|core-ref)\.ts"/m);
+    expect(cli).not.toMatch(/^import (?!type )[^;]*from "\.\/(map|build|cli-run|core-ref)\.ts"/m);
+    expect(cli).toContain('import("./cli-run.ts")');
   });
 });

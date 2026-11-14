@@ -26,13 +26,13 @@ is scratch. Nothing is sent until Phase 10.
 
 **Phase citations name their project**: `exact phase 2`.
 
-**Where we are, 13 Nov 2026:** phase 0 CLOSED — `isocan exact doctor` and
-`isocan exact open` index Acme Market from Contract and post a deterministic
-web screenshot per route, and the three facts are measured (below). Live
-frames need a product change: only a bridge proxy loads, and only outside an
-HTML item's content origin. Next: **exact phase 1**, the map. Nothing waits on
-a person.
-
+**Where we are, 13 Nov 2026:** phases 0–1 CLOSED. `isocan exact open` lays
+an Exact app out as a flow map — every route on phone, tablet and desktop,
+light and dark, labelled router arrows, `app.tamber` as the design system,
+an anatomy card per file — and `isocan exact live` re-captures on save,
+versioning only screens whose pixels moved. Live frames need a product change
+(phase 0: a bridge proxy drawn by the shell). Next: **exact phase 2**, live
+and pointing at lines. Nothing waits on a person.
 ---
 
 ## Phase 0 — The bridge, the index, and the three doors
@@ -88,7 +88,9 @@ in [`probes/`](probes/), rerunnable):
 
 ## Phase 1 — The map
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 13 Nov 2026.** A fresh agent given only `--agent-help`
+built the map on a new canvas; one component's text edit versioned exactly
+the 12 screens that draw it; the version slider walks a screen's history.
 
 - The flow map: screens laid out by tab and stack, edges for every router
   verb an action can take (design §3), drawn by `edges()` and exported by
@@ -104,6 +106,13 @@ in [`probes/`](probes/), rerunnable):
 agent through `--agent-help` alone, ends with the map; an edit to one
 component's text produces new versions on exactly the screens that show it
 and no others; version-diff's slider walks a screen's history.
+
+### Trajectory
+
+- **2026-11-13** — Design §3's question answered: `contract symbols` names a `path("route")` target as a `route` reference at its column, but not the verb, the action or `back(nav)`; the module reads those from the source range. `bun exact.mjs contract symbols app.contract` in the fixture.
+- **2026-11-13** — A capture's key hashes the app's input files and the Exact commit, not the build: `web-build` output differs on every rebuild. So every save recaptures every screen, and versions land only where pixels changed — cost grows with screens × devices × schemes, which phase 2's resident session should cut.
+- **2026-11-13** — The release CLI's startup ceiling (5.1 MB, `test/cli-bundle.test.ts`) was crossed by the map; the module's heavy half now loads inside its verbs (`cli-run.ts`, core handed over by `core-ref.ts`), leaving ~0.02 MB. Every later phase keeps its code off the startup path.
+- **2026-11-13** — Open: `ModuleEdge` carries no label, so the JSON Canvas export drops the arrows' verbs; the module's own underlay shows them. Adding one is a core change, waiting on a decision that it is wanted.
 
 ## Phase 2 — Live, and pointing at lines
 

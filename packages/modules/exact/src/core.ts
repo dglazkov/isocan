@@ -14,7 +14,13 @@
  * limitations under the License.
  */
 
-import type { CanvasContents, CoreModule, Item } from "@isocan/core";
+import type { CanvasContents, ContextPiece, CoreModule, Item, ModuleEdge } from "@isocan/core";
+import type { AnatomyFile, CompiledTests, DesignReading, Device, FlowEdge, IndexDesign, Scheme, UnplacedNavigation } from "./map.ts";
+
+// The map's builders (`build.ts`, `map.ts`) are what the CLI's verbs run, and
+// are imported by them lazily: this file is read at every CLI start-up (the
+// module's record is registered before argv is parsed), so it holds only the
+// keys, the shapes, and what the canvas itself asks — arrows and context rows.
 
 /**
  * **Exact on the canvas, the facts both surfaces share** (exact phase 0;
@@ -31,9 +37,11 @@ import type { CanvasContents, CoreModule, Item } from "@isocan/core";
  */
 
 export const EXACT_INDEX_MIME = "application/vnd.isocan.exact-index+json";
+/** One Contract file's anatomy (exact phase 1): its components, shapes, sources, routes and tests. */
+export const EXACT_ANATOMY_MIME = "application/vnd.isocan.exact-anatomy+json";
 
-/** The index's own format number — not Exact's, which moves daily. */
-export const EXACT_INDEX_FORMAT = 1;
+/** The index's own format number — not Exact's, which moves daily. 2: the map (exact phase 1). */
+export const EXACT_INDEX_FORMAT = 2;
 
 export const EXACT_PROPS = {
   /** On every item this module makes: `{ id }`, the app's bundle id. Intent, so it replicates. */
@@ -42,8 +50,9 @@ export const EXACT_PROPS = {
   route: "exact.route",
   /** `web` today; `ios`, `macos`, `linux`, `android` from phase 3. */
   host: "exact.host",
-  /** `phone` today; tablet and desktop come with phase 1's device row. */
+  /** `phone`, `tablet` or `desktop` — the device row (exact phase 1). */
   device: "exact.device",
+  /** `light` or `dark`. */
   scheme: "exact.scheme",
   /** SHA-256 of the plan the capture ran. */
   plan: "exact.plan",
@@ -51,6 +60,18 @@ export const EXACT_PROPS = {
   at: "exact.at",
   /** The location the driver opened, a route's pattern with its parameters filled. */
   url: "exact.url",
+  /** How the screen is reached: Exact's launch lines (`at "/place/2"`, `tap …`), editable (exact phase 1). */
+  shots: "exact.shots",
+  /** What the capture depended on, digested: unchanged means the capture is skipped. */
+  key: "exact.key",
+  /** On a route's phone/light screen: the arrows that leave it, `[{to, verb, action}]`, from the index. */
+  edges: "exact.edges",
+  /** On an anatomy card: the Contract file it describes. */
+  file: "exact.file",
+  /** On the design-system item: the Tamber IR digest it was written from. */
+  tamber: "exact.tamber",
+  /** On the index: counts for `isocan context`, which cannot read the index's bytes. */
+  summary: "exact.summary",
 } as const;
 
 /** The driver's defaults, said explicitly so a capture never depends on an unsaid default moving. */
@@ -106,12 +127,23 @@ export interface ExactIndex {
   routes: IndexRoute[];
   /** The router's name (`routes nav` → `nav`), when the app declares one. */
   router: string | null;
-  /** The app's own components, actions and data sources, by name (the anatomy, phase 1, reads further). */
+  /** The app's own components, actions and data sources, by name. */
   components: string[];
   actions: Array<{ name: string; component: string | null; writes: string[] }>;
   sources: string[];
   /** The index's routes against the web build's `routes.json`: a check, never an input. */
   routesJson: RoutesCheck;
+  /** The flow map's arrows (design §3), and what the reader could not place. */
+  edges: FlowEdge[];
+  unplaced: UnplacedNavigation[];
+  /** One entry per Contract file. */
+  anatomy: AnatomyFile[];
+  /** `app.ts`'s `export const grants`, as written; null when it exports none. */
+  grants: string | null;
+  /** `tamber ir` with each token's `uses`, or null for an app with no design. */
+  design: IndexDesign | null;
+  /** A digest of everything a capture depends on: the app's own files and the Exact commit. */
+  inputs: string | null;
 }
 
 export interface RoutesCheck {
@@ -202,26 +234,15 @@ export interface Readings {
   routesJson: RoutesJson;
   symbols: Symbols;
   sources: Record<string, string>;
+  /** `contract test` per `*.test.contract` (exact phase 1; absent in a phase 0 reading). */
+  tests?: CompiledTests[];
+  /** `app.ts`'s grants line, as written. */
+  grants?: string | null;
+  /** `tamber ir` and the wire's `uses` per token. */
+  design?: DesignReading | null;
+  inputs?: string | null;
 }
 
-/** The index of design §3, from the readings alone. */
-export function buildIndex(readings: Readings): ExactIndex {
-  const { router, routes } = contractRoutes(readings.symbols, readings.sources);
-  const defs = readings.symbols.definitions.filter(own);
-  const names = (kind: string) => [...new Set(defs.filter((d) => d.kind === kind).map((d) => d.name))].sort();
-  return {
-    format: EXACT_INDEX_FORMAT,
-    app: readings.app,
-    exact: readings.exact,
-    plan: readings.plan,
-    routes,
-    router,
-    components: names("component"),
-    actions: defs.filter((d) => d.kind === "action").map((d) => ({ name: d.name, component: d.component ?? null, writes: d.writes ?? [] })),
-    sources: [...new Set(readings.symbols.definitions.filter((d) => d.kind === "source" && own(d)).map((d) => d.name))].sort(),
-    routesJson: checkRoutes(routes, readings.routesJson),
-  };
-}
 
 /**
  * **Where the driver opens a route**: its pattern with each `:name` filled.
@@ -246,18 +267,30 @@ export function parseParams(list: readonly string[]): Record<string, string> {
 }
 
 /** The properties a captured screen wears (design §4). */
-export function screenProperties(index: ExactIndex, route: IndexRoute, url: string): Record<string, string> {
+export function screenProperties(index: ExactIndex, route: IndexRoute, url: string, where: { device?: Device; scheme?: Scheme; shots?: string; key?: string } = {}): Record<string, string> {
+  const device = where.device ?? "phone";
+  const scheme = where.scheme ?? "light";
+  const primary = device === "phone" && scheme === "light";
   return {
     [EXACT_PROPS.app]: JSON.stringify({ id: index.app.id }),
     [EXACT_PROPS.route]: route.name,
     [EXACT_PROPS.host]: "web",
-    [EXACT_PROPS.device]: "phone",
-    [EXACT_PROPS.scheme]: "light",
+    [EXACT_PROPS.device]: device,
+    [EXACT_PROPS.scheme]: scheme,
     ...(index.plan ? { [EXACT_PROPS.plan]: index.plan } : {}),
     [EXACT_PROPS.at]: JSON.stringify(CAPTURE_AT),
     [EXACT_PROPS.url]: url,
+    ...(where.shots !== undefined ? { [EXACT_PROPS.shots]: where.shots } : {}),
+    ...(where.key !== undefined ? { [EXACT_PROPS.key]: where.key } : {}),
+    ...(primary ? { [EXACT_PROPS.edges]: JSON.stringify(edgesFrom(index, route.name)) } : {}),
   };
 }
+
+/** The arrows that leave one route, as its phone/light screen carries them. */
+export function edgesFrom(index: ExactIndex, route: string): Array<{ to: string; verb: string; action: string | null }> {
+  return index.edges.filter((e) => e.from === route).map((e) => ({ to: e.to, verb: e.verb, action: e.action }));
+}
+
 
 /** The bundle id an item says it belongs to, or null. */
 export function appIdOf(item: Item): string | null {
@@ -271,19 +304,35 @@ export function appIdOf(item: Item): string | null {
   }
 }
 
-/** The index item of an app on this canvas, if there is one. */
-export function indexItemOf(canvas: CanvasContents, appId: string): Item | null {
-  return Object.values(canvas.items).find((i) => appIdOf(i) === appId && !i.properties?.[EXACT_PROPS.route]) ?? null;
+/** Is this item an Exact index (by its current version's mime)? */
+function isIndex(item: Item): boolean {
+  const v = item.versions.find((x) => x.id === item.currentVersionId) ?? item.versions.at(-1);
+  return v?.mimeType === EXACT_INDEX_MIME;
 }
 
-/** The screen item for one route of one app at phase 0's one host, device and scheme. */
-export function screenItemOf(canvas: CanvasContents, appId: string, route: string): Item | null {
+/** The index item of an app on this canvas, if there is one. */
+export function indexItemOf(canvas: CanvasContents, appId: string): Item | null {
+  return Object.values(canvas.items).find((i) => appIdOf(i) === appId && isIndex(i)) ?? null;
+}
+
+/** The screen item for one route of one app, on the web, at one device and scheme (phone/light by default). */
+export function screenItemOf(canvas: CanvasContents, appId: string, route: string, device: Device = "phone", scheme: Scheme = "light"): Item | null {
   return Object.values(canvas.items).find((i) =>
     appIdOf(i) === appId &&
     i.properties?.[EXACT_PROPS.route] === route &&
     (i.properties?.[EXACT_PROPS.host] ?? "web") === "web" &&
-    (i.properties?.[EXACT_PROPS.device] ?? "phone") === "phone" &&
-    (i.properties?.[EXACT_PROPS.scheme] ?? "light") === "light") ?? null;
+    (i.properties?.[EXACT_PROPS.device] ?? "phone") === device &&
+    (i.properties?.[EXACT_PROPS.scheme] ?? "light") === scheme) ?? null;
+}
+
+/** An app's anatomy card for one Contract file. */
+export function anatomyItemOf(canvas: CanvasContents, appId: string, file: string): Item | null {
+  return Object.values(canvas.items).find((i) => appIdOf(i) === appId && i.properties?.[EXACT_PROPS.file] === file) ?? null;
+}
+
+/** The design-system item this module wrote for an app. */
+export function designItemOf(canvas: CanvasContents, appId: string): Item | null {
+  return Object.values(canvas.items).find((i) => appIdOf(i) === appId && i.properties?.[EXACT_PROPS.tamber] !== undefined) ?? null;
 }
 
 /** The index as a file: stable key order, so the same readings are the same bytes and post no new version. */
@@ -291,10 +340,126 @@ export function indexText(index: ExactIndex): string {
   return `${JSON.stringify(index, null, 2)}\n`;
 }
 
+/** An index of this format, or phase 0's (format 1), read with the map's fields empty. */
 export function parseIndex(text: string): ExactIndex {
-  const value = JSON.parse(text) as ExactIndex;
-  if (value?.format !== EXACT_INDEX_FORMAT || !Array.isArray(value.routes)) throw new Error("not an Exact index this build reads");
+  const value = JSON.parse(text) as Partial<ExactIndex> & { format?: number };
+  if ((value?.format !== EXACT_INDEX_FORMAT && value?.format !== 1) || !Array.isArray(value.routes)) throw new Error("not an Exact index this build reads");
+  return { edges: [], unplaced: [], anatomy: [], grants: null, design: null, inputs: null, ...value, format: EXACT_INDEX_FORMAT } as ExactIndex;
+}
+
+/** An anatomy card's bytes: the file's entry, with the app it belongs to. */
+export interface AnatomyCard {
+  app: { id: string; name: string };
+  grants: string | null;
+  entry: AnatomyFile;
+}
+
+export function anatomyText(index: ExactIndex, entry: AnatomyFile): string {
+  const card: AnatomyCard = { app: index.app, grants: index.grants, entry };
+  return `${JSON.stringify(card, null, 2)}\n`;
+}
+
+export function parseAnatomy(text: string): AnatomyCard {
+  const value = JSON.parse(text) as AnatomyCard;
+  if (!value?.entry || typeof value.entry.file !== "string") throw new Error("not an Exact anatomy card");
   return value;
+}
+
+/** The counts `isocan context` shows for an app, carried on its index item. */
+export interface IndexSummary {
+  name: string;
+  routes: number;
+  arrows: number;
+  components: string[];
+  sources: string[];
+  grants: string | null;
+  tokens: number;
+  files: string[];
+}
+
+export function indexSummary(index: ExactIndex): IndexSummary {
+  return {
+    name: index.app.name,
+    routes: index.routes.length,
+    arrows: index.edges.length,
+    components: index.components,
+    sources: index.sources,
+    grants: index.grants,
+    tokens: index.design?.tokens.length ?? 0,
+    files: index.anatomy.map((a) => a.file),
+  };
+}
+
+
+/** The phone/light screen of each route of each app, by `app\u0000route`. */
+function primaries(canvas: CanvasContents): Map<string, Item> {
+  const out = new Map<string, Item>();
+  for (const item of Object.values(canvas.items)) {
+    const app = appIdOf(item);
+    const route = item.properties?.[EXACT_PROPS.route];
+    if (!app || !route) continue;
+    if ((item.properties?.[EXACT_PROPS.device] ?? "phone") !== "phone" || (item.properties?.[EXACT_PROPS.scheme] ?? "light") !== "light" || (item.properties?.[EXACT_PROPS.host] ?? "web") !== "web") continue;
+    out.set(`${app}\u0000${route}`, item);
+  }
+  return out;
+}
+
+export interface MapEdge extends ModuleEdge {
+  verb: string;
+  action: string | null;
+}
+
+/**
+ * **The flow map's arrows, read off the canvas** (design §3): each route's
+ * phone screen carries the arrows that leave it; each resolves to the
+ * phone screen of the route it reaches. Never stored as edges, so a screen
+ * taken away takes its arrows with it.
+ */
+export function mapEdges(canvas: CanvasContents): MapEdge[] {
+  const byRoute = primaries(canvas);
+  const out: MapEdge[] = [];
+  for (const [key, from] of byRoute) {
+    const app = key.split("\u0000")[0]!;
+    let list: Array<{ to?: unknown; verb?: unknown; action?: unknown }> = [];
+    try { list = JSON.parse(from.properties?.[EXACT_PROPS.edges] ?? "[]") as typeof list; } catch { continue; }
+    if (!Array.isArray(list)) continue;
+    for (const e of list) {
+      if (typeof e?.to !== "string") continue;
+      const to = byRoute.get(`${app}\u0000${e.to}`);
+      if (!to || to.id === from.id) continue;
+      out.push({ from, to, verb: typeof e.verb === "string" ? e.verb : "push", action: typeof e.action === "string" ? e.action : null });
+    }
+  }
+  return out;
+}
+
+/** `isocan context`'s rows: what each Exact app on the canvas is, for an agent that just joined. */
+export function exactContext(canvas: CanvasContents): ContextPiece[] {
+  const out: ContextPiece[] = [];
+  for (const item of Object.values(canvas.items)) {
+    if (!isIndex(item)) continue;
+    const raw = item.properties?.[EXACT_PROPS.summary];
+    if (!raw) continue;
+    let s: IndexSummary;
+    try { s = JSON.parse(raw) as IndexSummary; } catch { continue; }
+    const screens = Object.values(canvas.items).filter((i) => appIdOf(i) === appIdOf(item) && i.properties?.[EXACT_PROPS.route]).length;
+    out.push({
+      name: `Exact app: ${s.name}`,
+      source: "canvas",
+      present: true,
+      updatedAt: item.updatedAt,
+      size: [
+        `${s.routes} routes, ${s.arrows} arrows, ${screens} screens`,
+        `components ${s.components.join(", ") || "none"}`,
+        `sources ${s.sources.join(", ") || "none"}`,
+        `grants ${s.grants ? JSON.stringify(s.grants) : "none"}`,
+        `${s.tokens} design tokens`,
+        `anatomy of ${s.files.join(", ")}`,
+      ].join("; "),
+      fix: `\`isocan get "${item.title}"\` is the index; each file's anatomy card is an item; \`isocan exact live <dir>\` keeps the map true as the app is edited.`,
+    });
+  }
+  return out;
 }
 
 export const exactModule: CoreModule = {
@@ -307,7 +472,15 @@ export const exactModule: CoreModule = {
       label: "Exact indexes",
       noun: "Exact index",
     },
+    {
+      id: "exact-anatomy",
+      mimes: [EXACT_ANATOMY_MIME],
+      label: "Exact anatomy cards",
+      noun: "Exact anatomy card",
+    },
   ],
+  contextPieces: exactContext,
+  edges: (canvas) => mapEdges(canvas).map(({ from, to }) => ({ from, to })),
 };
 
 export default exactModule;

@@ -29,6 +29,12 @@ second week.
   own Exact on your machine. Run it again and only screens whose pixels
   changed get a new version. `isocan exact doctor` says which Exact checkout,
   commit and Bun the app uses, and whether the web host is set up.
+- **The whole Exact app as a map.** `isocan exact open` now lays every route
+  out on phone, tablet and desktop, light and dark, with arrows labelled by
+  the action that takes you between screens, the app's design tokens as the
+  canvas's design system, and a card per source file. `isocan exact live`
+  keeps it current as you edit: change one component's text and only the
+  screens that show it get a new version.
 
 ## 11 November 2026
 

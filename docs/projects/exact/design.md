@@ -93,9 +93,9 @@ Every input is something Exact prints for tools:
 - **Navigation edges** — `contract symbols --json` gives each action's
   definitions, references and inferred `writes`; the router verbs (`open`,
   `push`, `replace`, `back`) in an action's body name its destination.
-  **Open question**: whether `symbols` names the route a verb targets, or the
-  module must read it from the action's source range. Phase 1 decides; the
-  fallback is a small reader over the range `symbols` already gives.
+  **Measured 13 Nov 2026 (exact phase 1):** `symbols` names the target route
+  at its column but not the verb or the action, so the module reads those
+  from the source range `symbols` already gives.
 - **Components, shapes, sources, grants** — `symbols` and `app.ts`'s
   `export const grants`; one compact card per Contract file, and rows in
   `isocan context` (`contextPieces`), so any agent that joins can answer
@@ -412,7 +412,7 @@ outside callers, so it is the part our diary is most worth reading for. So:
 
 1. ~~Live frames through two ancestors: which door~~ — measured: a bridge proxy that rewrites framing and Origin, drawn by the shell, never inside an HTML item (§5).
 2. ~~Web ↔ bridge on loopback~~ — decided: a paired local-tool door the shell owns, with live frames switchable off per machine, per screen and per bridge (§5).
-3. Whether `contract symbols` names a router verb's target route (§3).
+3. ~~Whether `contract symbols` names a router verb's target route~~ — measured: it names the route, not the verb or action; the module reads those from the source range (§3).
 4. ~~Whether a held Tamber proposal renders without being accepted~~ — measured: it does not; a scrub does (§10).
 5. ~~Whether Exact's agent session API holds across rebuilds~~ — measured: it does (§2).
 6. Whether the runtime survives an opaque-origin sandbox (`localStorage`

@@ -7,3 +7,8 @@
 .exact-routes li { display: flex; justify-content: space-between; gap: 8px; border-bottom: 1px solid var(--line); padding: 4px 0; }
 .exact-routes .exact-pushed { padding-left: 16px; }
 .exact-routes code { color: var(--ink-soft); }
+/* The anatomy card and the flow map's arrows (exact phase 1). */
+.exact-anatomy .exact-part { color: var(--ink); border-bottom: 1px solid var(--line); padding: 4px 0; }
+.exact-anatomy .exact-part span { color: var(--ink-soft); }
+.exact-arrows { position: absolute; pointer-events: none; overflow: visible; color: var(--ink-soft); }
+.exact-arrow-back { stroke-dasharray: 6 4; }
