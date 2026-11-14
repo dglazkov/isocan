@@ -1,11 +1,34 @@
+/**
+ * Copyright 2026 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import { describe, expect, it } from "vitest";
 import { emptyCanvas, type Item, type PresenceSession } from "@isocan/core";
 import {
+  type CursorAnim,
+  dampFactor,
+  MAX_AGENT_SPEED,
+  MAX_WANDER_SPEED,
   nextWorkingWaypoint,
   otherTabSessionIds,
   sessionLocus,
   sessionWorkingBounds,
+  sessionWorkingKey,
+  SNAP_DISTANCE,
   spreadOverlaps,
+  stepCursorAnim,
 } from "../src/lib/presence.ts";
 import { sessionName } from "../src/lib/names.ts";
 
@@ -209,5 +232,124 @@ describe("otherTabSessionIds", () => {
     ];
     const marked = otherTabSessionIds(sessions, { id: "usr_acme", name: "Acme" });
     expect([...marked]).toEqual(["s_older"]);
+  });
+});
+
+describe("stepCursorAnim", () => {
+  const seeded = (seed = 1) => {
+    let s = seed >>> 0;
+    return () => {
+      s = (s * 1664525 + 1013904223) >>> 0;
+      return s / 0x100000000;
+    };
+  };
+
+  it("never loops or teleports inside wide items (> 2 * SNAP_DISTANCE)", () => {
+    const huge = { x: 4000, y: 2000, width: SNAP_DISTANCE * 3, height: SNAP_DISTANCE * 2 };
+    const home = { x: huge.x + huge.width / 2, y: huge.y + huge.height / 2 };
+    const rng = seeded(7);
+    let rec: CursorAnim | undefined;
+    let now = 1000;
+    const dt = 1000 / 60;
+    const maxStep = MAX_WANDER_SPEED * (dt / 1000) + 1e-6;
+
+    for (let i = 0; i < 600; i++) {
+      const prevX = rec?.x;
+      const prevY = rec?.y;
+      const res = stepCursorAnim(rec, {
+        home,
+        workingBounds: huge,
+        workingKey: "item:itm_huge",
+        kind: "cli",
+        nowMs: now,
+        dtMs: dt,
+        rng,
+      });
+      rec = res.rec;
+      if (prevX !== undefined && prevY !== undefined) {
+        expect(Math.hypot(rec.x - prevX, rec.y - prevY)).toBeLessThanOrEqual(maxStep);
+      }
+      expect(rec.x).toBeGreaterThanOrEqual(huge.x);
+      expect(rec.x).toBeLessThanOrEqual(huge.x + huge.width);
+      expect(rec.y).toBeGreaterThanOrEqual(huge.y);
+      expect(rec.y).toBeLessThanOrEqual(huge.y + huge.height);
+      now += dt;
+    }
+  });
+
+  it("is frame-rate invariant across 60Hz, 120Hz, and 240Hz", () => {
+    const runAt = (hz: number) => {
+      const dt = 1000 / hz;
+      let rec: CursorAnim | undefined = {
+        x: 0,
+        y: 0,
+        tx: 0,
+        ty: 0,
+        nextAt: 0,
+        dwellMs: 0,
+        workingKey: null,
+      };
+      let now = 1000;
+      const steps = Math.round(0.5 * hz);
+      for (let i = 0; i < steps; i++) {
+        const res = stepCursorAnim(rec, {
+          home: { x: 350, y: 150 },
+          kind: "cli",
+          nowMs: now,
+          dtMs: dt,
+        });
+        rec = res.rec;
+        now += dt;
+      }
+      return { x: rec.x, y: rec.y };
+    };
+    const at60 = runAt(60);
+    const at120 = runAt(120);
+    const at240 = runAt(240);
+    expect(Math.hypot(at60.x - at120.x, at60.y - at120.y)).toBeLessThan(1.5);
+    expect(Math.hypot(at60.x - at240.x, at60.y - at240.y)).toBeLessThan(1.5);
+    expect(dampFactor(0.1, 1000 / 60)).toBeCloseTo(0.1, 6);
+  });
+
+  it("caps commuting agent speed and resets dwell immediately when target item switches", () => {
+    const itemA = { x: 100, y: 100, width: 400, height: 300 };
+    const itemB = { x: 900, y: 100, width: 400, height: 300 };
+    // Force a thinking pause on itemA (roll < 0.22 -> 0.05) with long dwell
+    let { rec } = stepCursorAnim(undefined, {
+      home: { x: 300, y: 250 },
+      workingBounds: itemA,
+      workingKey: sessionWorkingKey({ kind: "working", itemId: "itm_a" }),
+      kind: "cli",
+      nowMs: 1000,
+      dtMs: 16,
+      rng: () => 0.05,
+    });
+    // Dwelling in place: zero jitter, moved === false
+    const paused = stepCursorAnim(rec, {
+      home: { x: 300, y: 250 },
+      workingBounds: itemA,
+      workingKey: sessionWorkingKey({ kind: "working", itemId: "itm_a" }),
+      kind: "cli",
+      nowMs: 1016,
+      dtMs: 16,
+      rng: () => 0.05,
+    });
+    expect(paused.moved).toBe(false);
+    expect([paused.rec.x, paused.rec.y]).toEqual([300, 250]);
+
+    // Switch working target to itemB (800px away, within SNAP_DISTANCE): moves immediately without waiting on dwell
+    const switched = stepCursorAnim(paused.rec, {
+      home: { x: 1100, y: 250 },
+      workingBounds: itemB,
+      workingKey: sessionWorkingKey({ kind: "working", itemId: "itm_b" }),
+      kind: "cli",
+      nowMs: 1032,
+      dtMs: 16,
+      rng: () => 0.5,
+    });
+    expect(switched.moved).toBe(true);
+    const stepDist = Math.hypot(switched.rec.x - 300, switched.rec.y - 250);
+    expect(stepDist).toBeGreaterThan(0);
+    expect(stepDist).toBeLessThanOrEqual(MAX_AGENT_SPEED * (16 / 1000) + 1e-6);
   });
 });

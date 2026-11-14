@@ -1,3 +1,19 @@
+/**
+ * Copyright 2026 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import { classifyAutomaticSource } from "@isocan/api/context";
 import { contextPinPort, pinFromSource } from "@isocan/api";
 import { registerPersonalContext } from "./personal-context.ts";
@@ -6,7 +22,7 @@ import { summaryColumn, summaryReport, summaryStatsReport } from "./summary.ts";
 import { registerKeys } from "./keys.ts";
 import { registerModel } from "./model.ts";
 import { registerTweak } from "./tweak.ts";
-import { makeTextAnchor, resolveTextAnchor, quoteRange, SOURCE_PATH_PROP } from "@isocan/core";
+import { makeTextAnchor, resolveTextAnchor, quoteRange, SOURCE_PATH_PROP, threadTargetItem } from "@isocan/core";
 // The copy lint's tells: slop.ts is eager already, so it is handed to the lazy lint rather than imported by it.
 import { SLOP_RULES } from "@isocan/core";
 import { CanvasGroups, insertedItemBox, resolveCanvasGroupRef } from "@isocan/api";
@@ -13055,12 +13071,13 @@ session
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const thread = resolveThread(snapshot, ref);
       await rememberThread(ctx, p.id, thread.id);
+      const target = threadTargetItem(snapshot.canvas, thread);
       await touchSession(ctx, p.id, {
         activity: { kind: "working", threadId: thread.id },
         // The thread you are ANSWERING, which survives walking off to work on
         // the items it is about — unlike `activity`, which is where you stand.
         onThread: thread.id,
-        cursor: threadLocus(snapshot, thread),
+        cursor: target ? itemCenter(target) : threadLocus(snapshot, thread),
         ...(opts.say ? { status: opts.say, statusSource: "explicit" as const } : {}),
       });
       await touchBridge(ctx, p.id, { type: "isocan:open-thread", threadId: thread.id });
@@ -13401,10 +13418,11 @@ async function landPresence(
   entry: WatchedLogEntry,
   snap: () => Promise<CanvasSnapshotResponse>,
 ): Promise<void> {
-  const op = entry.envelope.op as { threadId: string };
+  const op = entry.envelope.op as { threadId: string; comment?: { items?: string[] } };
   const snapshot = await snap();
   const thread = snapshot.canvas.threads[op.threadId];
-  const cursor = thread ? threadLocus(snapshot, thread) : null;
+  const target = threadTargetItem(snapshot.canvas, thread, op.comment?.items);
+  const cursor = target ? itemCenter(target) : thread ? threadLocus(snapshot, thread) : null;
   const patch: import("@isocan/core").UpdateSessionRequest = {
     status: "reading your comment…",
     statusSource: "lifecycle",

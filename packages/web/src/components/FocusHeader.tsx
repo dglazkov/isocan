@@ -1,3 +1,19 @@
+/**
+ * Copyright 2026 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import "./focus.css";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
@@ -38,6 +54,14 @@ export interface FocusHeaderProps {
   /** View-mode speaker notes toggle state & handler. */
   presenterNotes?: boolean;
   onToggleNotes?: () => void;
+  /** Full screen's deck turning itself: on or off, and how many seconds a
+   *  slide stays. Present only where a deck is being presented. */
+  autoAdvance?: {
+    on: boolean;
+    seconds: number;
+    onToggle: () => void;
+    onSeconds: (seconds: number) => void;
+  };
 }
 
 /**
@@ -60,6 +84,7 @@ export function FocusHeader({
   centerAddon,
   presenterNotes,
   onToggleNotes,
+  autoAdvance,
 }: FocusHeaderProps) {
   const navigate = useNavigate();
   const canEdit = useCanEdit();
@@ -280,6 +305,51 @@ export function FocusHeader({
       <span className="spacer" />
 
       <div className="floats fs-cluster">
+        {/* The deck turning itself, every so many seconds, looping from the
+            last slide to the first. This tab's alone — a viewer's playback,
+            like the notes beside it, not something everybody watching gets. */}
+        {mode === "view" && autoAdvance && (
+          <span className="fullscreen-autoadvance" role="group" aria-label="Auto-advance">
+            <button
+              type="button"
+              className={`fullscreen-notes-toggle${autoAdvance.on ? " on" : ""}`}
+              onClick={autoAdvance.onToggle}
+              aria-pressed={autoAdvance.on}
+              title={
+                autoAdvance.on
+                  ? "Stop turning the slides by themselves (A)"
+                  : `Turn to the next slide every ${autoAdvance.seconds} s, looping from the last to the first (A)`
+              }
+            >
+              {autoAdvance.on ? "❚❚ Auto" : "▶ Auto"}
+            </button>
+            {/* One field, the unit inside its border: a bare "s" after the box
+                read as belonging to the button beside it. */}
+            <label className="fullscreen-autoadvance-field">
+              <input
+                className="fullscreen-autoadvance-seconds"
+                type="number"
+                min={2}
+                max={600}
+                step={1}
+                aria-label="Seconds per slide"
+                title="Seconds per slide"
+                defaultValue={autoAdvance.seconds}
+                key={autoAdvance.seconds}
+                onBlur={(e) => {
+                  // An emptied field keeps the pace it had, not a surprise one.
+                  const typed = e.currentTarget.value.trim();
+                  if (typed) autoAdvance.onSeconds(Number(typed));
+                  else e.currentTarget.value = String(autoAdvance.seconds);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") e.currentTarget.blur();
+                }}
+              />
+              <span className="fullscreen-autoadvance-unit" aria-hidden="true">s</span>
+            </label>
+          </span>
+        )}
         {mode === "view" && onToggleNotes && (
           <button
             type="button"

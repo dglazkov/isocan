@@ -1,3 +1,19 @@
+/**
+ * Copyright 2026 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
 import { accessSync, constants, existsSync, lstatSync, mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
@@ -58,7 +74,7 @@ describe("the release tree", () => {
     // arguments each prints its usage and exits 2 — which it can only reach
     // after its whole module graph has loaded, so exit 2 IS "it starts", and
     // ERR_MODULE_NOT_FOUND (exit 1) is the failure this file exists for.
-    for (const script of ["scripts/canvas-shot.mjs", "scripts/deck-export.mjs", "scripts/motion-render.mjs"]) {
+    for (const script of ["scripts/canvas-shot.mjs", "scripts/deck-export.mjs", "scripts/motion-render.mjs", "scripts/exact-bridge.mjs", "scripts/exact-live.mjs"]) {
       const done = spawnSync(process.execPath, [path.join(tree, script)], { encoding: "utf8", cwd: scratch });
       expect(done.stderr, `${script} did not start`).not.toMatch(/ERR_MODULE_NOT_FOUND/);
       expect(done.stderr).toMatch(/usage:/);

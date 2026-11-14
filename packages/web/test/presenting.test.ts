@@ -1,3 +1,19 @@
+/**
+ * Copyright 2026 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -28,6 +44,12 @@ describe("full screen presents", () => {
     expect(view).toMatch(/navigate\(itemPath\(canvasId, next\.id\)\)/);
   });
 
+  it("starts and stops the deck turning itself on A, as ▶ Auto does", () => {
+    const row = SHORTCUTS.find((s) => s.keys.includes("A") && /turning themselves/.test(s.does));
+    expect(row, "A must be in the shortcut list").toBeTruthy();
+    expect(view).toMatch(/e\.key === "a" \|\| e\.key === "A"\)\) \{[\s\S]{0,200}setAutoAdvance\(!ui\.autoAdvance\)/);
+  });
+
   it("gives the slide the whole window", () => {
     // The bar used to take a slice off the top of every slide. Its own comment
     // argued against that — "every pixel this takes is one the thing you are
@@ -37,7 +59,7 @@ describe("full screen presents", () => {
   });
 
   it("rests the chrome when nothing is moving, and a pointer brings it back", () => {
-    expect(view).toMatch(/setResting\(true\), REST_AFTER_MS/);
+    expect(view).toMatch(/setTimeout\(rest, REST_AFTER_MS\)/);
     expect(view).toMatch(/addEventListener\("pointermove", wake/);
     expect(css).toMatch(/\.fullscreen\.resting \.fs-bar \{ opacity: 0/);
   });

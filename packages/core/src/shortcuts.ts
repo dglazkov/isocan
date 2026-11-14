@@ -1,4 +1,20 @@
 /**
+ * Copyright 2026 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
  * Every key the canvas answers to, written down once.
  *
  * The list lives in core rather than in the overlay that shows it, because
@@ -69,7 +85,9 @@ export const SHORTCUTS: Shortcut[] = [
     note: "In the switcher, when anything is archived. For this opening only: it starts at the canvases in the list every time, the way `canvas list` does without --with-archived",
   },
   { keys: ["⌘←", "⌘→", "⌘↑", "⌘↓"], does: "Jump to the nearest item that way", group: "Moving around", note: "Only items clear of the edge you leave — something overlapping you is beside you, not above it. In full screen the next item opens full screen too: a row of screens is a slideshow" },
-  { keys: ["←", "→", "↑", "↓", "PgUp", "PgDn"], does: "Flip through the slides", group: "Moving around", note: "Full screen only. Items marked 🎬 (right-click → Make this a slide) are the deck, in reading order; with none marked, every item is. Page Up/Down flip too, so a presenter's clicker works" },
+  { keys: ["←", "→", "↑", "↓", "PgUp", "PgDn"], does: "Flip through the slides", group: "Moving around", note: "Full screen only. Items marked 🎬 (right-click → Make this a slide) are the deck, in reading order; with none marked, every item is. Page Up/Down flip too, so a presenter's clicker works. Forward from the last slide comes round to the first" },
+  { keys: ["A"], does: "Start or stop the slides turning themselves, in full screen", group: "Moving around", note: "The ▶ Auto button in the bar: the next slide every few seconds, looping from the last to the first" },
+  { keys: ["Space"], does: "Show or hide the bar, in full screen", group: "Moving around", note: "Shown this way it stays until you press Space again or move the mouse" },
   { keys: ["N"], does: "Speaker notes, in full screen", group: "Moving around" },
   { keys: ["Scroll", "Pinch"], does: "Pan and zoom", group: "Moving around" },
 

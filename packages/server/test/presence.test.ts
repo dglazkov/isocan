@@ -1,3 +1,19 @@
+/**
+ * Copyright 2026 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
@@ -420,6 +436,76 @@ describe("presence over the daemon", () => {
       await new Promise((r) => setTimeout(r, 25));
     }
     expect(roster.map((s) => s.kind)).toEqual(["cli"]);
+  });
+
+  it("drops stale out-of-order presence-relay frames after a newer relay completes", async () => {
+    const ws = new WebSocket(currentSocketUrl(`${base.replace("http", "ws")}/ws?canvasId=prj_1`), {
+      headers: badge.headers,
+    });
+    const messages: ServerMessage[] = [];
+    ws.on("message", (data) => messages.push(JSON.parse(String(data))));
+    await new Promise((resolve, reject) => (ws.on("open", resolve), ws.on("error", reject)));
+    await until(() => messages.some((m) => m.type === "snapshot"));
+
+    const originalRequireActor = daemon.engine.requireActor.bind(daemon.engine);
+    let releaseFirst!: () => void;
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const slowActor = { id: "usr_slow_acme", name: "Slow" };
+    const fastActor = { id: "usr_fast_acme", name: "Fast" };
+    daemon.engine.requireActor = async (badgeId, actorId) => {
+      if (actorId === slowActor.id) {
+        await firstGate;
+        return;
+      }
+      if (actorId === fastActor.id) return;
+      return originalRequireActor(badgeId, actorId);
+    };
+
+    try {
+      const makeSession = (sessionId: string, actor: { id: string; name: string }, x: number): PresenceSession => ({
+        sessionId,
+        actor,
+        kind: "cli",
+        harness: null,
+        label: null,
+        cursor: { x, y: 10 },
+        selection: [],
+        status: null,
+        statusSource: null,
+        activity: null,
+        onThread: null,
+        lastSeen: new Date().toISOString(),
+      });
+
+      // Frame 1 stalls waiting on `requireActor(slowActor)`.
+      ws.send(
+        JSON.stringify({
+          type: "presence-relay",
+          sessions: [makeSession("ses_old", slowActor, 100)],
+        }),
+      );
+      await new Promise((r) => setTimeout(r, 20));
+
+      // Frame 2 supersedes Frame 1 and resolves immediately.
+      ws.send(
+        JSON.stringify({
+          type: "presence-relay",
+          sessions: [makeSession("ses_new", fastActor, 900)],
+        }),
+      );
+      await until(() => daemon.presence.roster("prj_1").some((s) => s.sessionId === "ses_new"));
+
+      // Release Frame 1: because revision 1 < revision 2, it must NOT overwrite `ses_new`.
+      releaseFirst();
+      await new Promise((r) => setTimeout(r, 40));
+      const ids = daemon.presence.roster("prj_1").map((s) => s.sessionId);
+      expect(ids).toEqual(["ses_new"]);
+    } finally {
+      daemon.engine.requireActor = originalRequireActor;
+      ws.close();
+    }
   });
 });
 

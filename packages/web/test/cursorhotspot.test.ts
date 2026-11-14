@@ -1,7 +1,25 @@
 // @vitest-environment jsdom
+
+/**
+ * Copyright 2026 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, createElement as h } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { emptyCanvas, type Item } from "@isocan/core";
 import { PresenceHub } from "../../server/src/presence.ts";
 import { CursorLayer } from "../src/components/CursorLayer.tsx";
 import { rememberMark } from "../src/lib/marks.ts";
@@ -128,5 +146,77 @@ describe("who wears the robot", () => {
     const cursor = draw(1);
     expect(cursor.querySelector(".cursor-glyph")).toBeNull();
     expect(cursor.classList.contains("marked")).toBe(false);
+  });
+});
+
+describe("working cursor stability", () => {
+  it("never teleports back to a distant session.cursor while working on a referenced item", () => {
+    const canvas = emptyCanvas();
+    canvas.items["itm_far"] = {
+      id: "itm_far",
+      title: "Acme Far Card",
+      x: 3500,
+      y: 2200,
+      width: 800,
+      height: 500,
+      properties: {},
+      versions: [{ id: "v1", blobHash: "h1", mimeType: "text/html", filename: "a.html", size: 1, createdAt: "", createdBy: rover }],
+      currentVersionId: "v1",
+      createdAt: "",
+      createdBy: rover,
+      updatedAt: "",
+      updatedBy: rover,
+    } as Item;
+    canvas.threads["thr_main"] = {
+      id: "thr_main",
+      x: 0,
+      y: 0,
+      anchorItemId: null,
+      main: true,
+      comments: [{ id: "c1", author: rover, body: "Update the far card", items: ["itm_far"], createdAt: "" }],
+      createdAt: "",
+      createdBy: rover,
+    };
+
+    const rafQueue: FrameRequestCallback[] = [];
+    let now = 1000;
+    vi.stubGlobal("performance", { now: () => now });
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+      rafQueue.push(cb);
+      return rafQueue.length;
+    });
+
+    const farSession = hub.roster("prj_acme")[0]!;
+    hub.touch("prj_acme", farSession.sessionId, {
+      cursor: { x: 0, y: 0 },
+      activity: { kind: "working", threadId: "thr_main" },
+    });
+    useCanvasStore.setState({ canvas, sessions: hub.roster("prj_acme") });
+    useUiStore.setState({ viewport: { tx: 0, ty: 0, scale: 1 } });
+
+    act(() => root.render(h(CursorLayer)));
+
+    let prev: { x: number; y: number } | null = null;
+    for (let i = 0; i < 180; i++) {
+      now += 1000 / 120; // 120Hz display
+      const cb = rafQueue.shift();
+      expect(cb).toBeDefined();
+      act(() => cb!(now));
+      const el = host.querySelector<HTMLElement>(".remote-cursor");
+      expect(el).not.toBeNull();
+      const x = parseFloat(el!.style.left);
+      const y = parseFloat(el!.style.top);
+      // Anchored over `itm_far` [3500..4300, 2200..2700], never yanked back toward (0, 0).
+      expect(x).toBeGreaterThanOrEqual(3500);
+      expect(x).toBeLessThanOrEqual(4300);
+      expect(y).toBeGreaterThanOrEqual(2200);
+      expect(y).toBeLessThanOrEqual(2700);
+      if (prev) {
+        // Calm motion at 120Hz: never teleports or spikes.
+        expect(Math.hypot(x - prev.x, y - prev.y)).toBeLessThan(10);
+      }
+      prev = { x, y };
+    }
+    useCanvasStore.setState({ canvas: null });
   });
 });

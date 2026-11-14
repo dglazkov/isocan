@@ -21,6 +21,84 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 14 November 2026
+
+- **Exact screens can go live (experiment).** Running isocan on your own
+  machine, `isocan exact live <app>` prints a pairing code; press **Live** on
+  a screen, enter it once, and the screen becomes your running app — edits
+  show a moment after you save. Each screen has a Live / Still switch, and
+  *Live frames* under the Exact experiment turns the whole thing off: then
+  your browser never connects to your machine at all.
+- **Alt-click points at the line.** Hold Alt and click anything on an Exact
+  screen, live or not, to see the Contract file and line that drew it, then
+  open it in your editor or leave a comment on that line. Compile errors and
+  `agent check` findings appear as comments on the screens they affect, and
+  go away when fixed.
+- **Exact apps on iPhone and Mac, and driven from the canvas.** `isocan exact
+  open <app> --hosts web,ios,macos --sim <simulator>` adds iOS Simulator and
+  macOS screens beside the web ones; `isocan exact wall <app> <route>` lays
+  one route out on every host side by side, and where the hosts lay a screen
+  out differently, a comment says so at the line. Press **Drive** on any
+  screen to tap and type into the app from the canvas — with *Live frames*
+  off too, a picture behind instead of live.
+- **Film an interaction, frame by frame.** Press **Film** on an Exact screen
+  (or run `isocan exact film`) and the app plays the press on its own clock;
+  a filmstrip lands beside the screen. Drag across it to scrub the motion,
+  see the component's state at each frame, and leave a comment at a moment —
+  opening the comment takes the strip back there. **Inspect** shows a
+  screen's accessibility tree, layout, performance and logs.
+- **Tests as storyboards.** Each test in an Exact app shows as a row of
+  frames, one per step. Press **Run** to run it on the web, iPhone and Mac
+  from the canvas: green steps, or the failing step in red with Exact's
+  reason, its frame and its tree. **Record** in Drive mode turns your taps
+  and typing into a proposed test, with `expect` lines from what changed;
+  it is written to your app only when you keep it.
+- **Agents propose; you keep.** Ask an agent to change an Exact app and its
+  ideas arrive as proposal cards under the screen, pictured before and
+  after on phone, tablet, desktop and iPhone, light and dark — nothing
+  changes in your files until you press Keep. Ask for directions with a
+  design competition and vote between them. Drag a token chip (say, corner
+  radius) on the design system and every live frame, web and iPhone, moves
+  with it until you let go. `isocan exact branch` shows a branch's screens
+  beside the current ones.
+
+## 13 November 2026
+
+- **Exact apps on the canvas, first step (experiment).** Tick *Exact* under
+  Settings → Experiments, then `isocan exact open <app>` reads an Exact app's
+  routes and posts a phone-size web screenshot of each one, taken with your
+  own Exact on your machine. Run it again and only screens whose pixels
+  changed get a new version. `isocan exact doctor` says which Exact checkout,
+  commit and Bun the app uses, and whether the web host is set up.
+- **The whole Exact app as a map.** `isocan exact open` now lays every route
+  out on phone, tablet and desktop, light and dark, with arrows labelled by
+  the action that takes you between screens, the app's design tokens as the
+  canvas's design system, and a card per source file. `isocan exact live`
+  keeps it current as you edit: change one component's text and only the
+  screens that show it get a new version.
+
+## 11 November 2026
+
+- **Space shows the bar while you present.** In full screen, press Space to
+  bring up the top bar without reaching for the mouse, and again to put it
+  away. Shown this way it stays until you press Space or move the mouse.
+- **A starts and stops the slides.** In full screen, press A to set the deck
+  turning itself (the same as **▶ Auto**), and A again to stop it.
+- **→ on the last slide goes back to the first.** Moving forward past the end
+  of a deck brings you round to the start; ← on the first slide still stays
+  put.
+
+## 10 November 2026
+
+- **Slides turn themselves.** In full screen, press **▶ Auto** in the top
+  bar and the deck moves to the next slide every 10 seconds, looping from the
+  last slide back to the first. Change the seconds in the box beside it;
+  your browser remembers the pace. Turning a slide by hand gives it the full
+  interval again, and leaving full screen stops it.
+- **The arrow keys keep working while you present.** Clicking on a slide —
+  or coming back to the tab — no longer leaves → and ← (and Esc) doing
+  nothing.
+
 ## 25 October 2026
 
 - **Make a drawing move.** With **Motion** on in Settings → Experiments,

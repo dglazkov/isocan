@@ -1,0 +1,2130 @@
+{
+ "recorded": "2026-11-13",
+ "exact": {
+  "commit": "cbe553f67efa73d54ea6a1862395a6fefb5b5048"
+ },
+ "how": "node scripts/exact-bridge.mjs read --app <scratch>/acme-market (exact phase 1): the synthetic Acme Market grown with a ShippingNote component drawn on the places list and a place's page only, a Browse button on the empty Saved tab whose action pushes savedPlace, and two more Tamber tokens. Symbols are cut to the app’s own files (so a reference’s `to` indexes the uncut list); everything else is as printed.",
+ "readings": {
+  "app": {
+   "id": "dev.acme.market",
+   "name": "Acme Market"
+  },
+  "exact": {
+   "commit": "cbe553f67efa73d54ea6a1862395a6fefb5b5048",
+   "protocol": null
+  },
+  "plan": "8dec6d0f0e8abe1c86158fc393a4f7155d06007655d5af2e169d2558012d9317",
+  "routesJson": {
+   "routes": [
+    {
+     "name": "places",
+     "pattern": "/",
+     "render": "client",
+     "notfound": false
+    },
+    {
+     "name": "place",
+     "pattern": "/place/:id",
+     "render": "client",
+     "notfound": false
+    },
+    {
+     "name": "saved",
+     "pattern": "/saved",
+     "render": "client",
+     "notfound": false
+    },
+    {
+     "name": "savedPlace",
+     "pattern": "/saved/:id",
+     "render": "client",
+     "notfound": false
+    },
+    {
+     "name": "notfound",
+     "pattern": "",
+     "render": "client",
+     "notfound": true
+    }
+   ]
+  },
+  "symbols": {
+   "definitions": [
+    {
+     "col": 7,
+     "end_col": 12,
+     "file": "app.contract",
+     "kind": "shape",
+     "line": 14,
+     "name": "Place"
+    },
+    {
+     "col": 3,
+     "end_col": 5,
+     "file": "app.contract",
+     "kind": "field",
+     "line": 15,
+     "name": "id",
+     "owner": "Place"
+    },
+    {
+     "col": 3,
+     "end_col": 7,
+     "file": "app.contract",
+     "kind": "field",
+     "line": 16,
+     "name": "name",
+     "owner": "Place"
+    },
+    {
+     "col": 3,
+     "end_col": 7,
+     "file": "app.contract",
+     "kind": "field",
+     "line": 17,
+     "name": "area",
+     "owner": "Place"
+    },
+    {
+     "col": 3,
+     "end_col": 8,
+     "file": "app.contract",
+     "kind": "field",
+     "line": 18,
+     "name": "about",
+     "owner": "Place"
+    },
+    {
+     "col": 4,
+     "end_col": 10,
+     "file": "app.contract",
+     "kind": "fn",
+     "line": 20,
+     "name": "nameOf"
+    },
+    {
+     "col": 4,
+     "end_col": 11,
+     "file": "app.contract",
+     "kind": "fn",
+     "line": 21,
+     "name": "matches"
+    },
+    {
+     "col": 11,
+     "end_col": 14,
+     "file": "app.contract",
+     "kind": "component",
+     "line": 23,
+     "name": "App"
+    },
+    {
+     "col": 9,
+     "component": "App",
+     "end_col": 14,
+     "file": "app.contract",
+     "kind": "state",
+     "line": 24,
+     "name": "saved"
+    },
+    {
+     "col": 9,
+     "component": "App",
+     "end_col": 20,
+     "file": "app.contract",
+     "kind": "state",
+     "line": 25,
+     "name": "placesQuery"
+    },
+    {
+     "col": 9,
+     "component": "App",
+     "end_col": 19,
+     "file": "app.contract",
+     "kind": "state",
+     "line": 26,
+     "name": "savedQuery"
+    },
+    {
+     "col": 10,
+     "component": "App",
+     "end_col": 21,
+     "file": "app.contract",
+     "kind": "derive",
+     "line": 28,
+     "name": "placesShown"
+    },
+    {
+     "col": 10,
+     "component": "App",
+     "end_col": 20,
+     "file": "app.contract",
+     "kind": "derive",
+     "line": 29,
+     "name": "savedShown"
+    },
+    {
+     "col": 12,
+     "component": "App",
+     "end_col": 18,
+     "file": "app.contract",
+     "kind": "resource",
+     "line": 27,
+     "name": "places"
+    },
+    {
+     "col": 10,
+     "component": "App",
+     "end_col": 14,
+     "file": "app.contract",
+     "kind": "action",
+     "line": 30,
+     "name": "pick",
+     "writes": [
+      "nav"
+     ]
+    },
+    {
+     "col": 10,
+     "component": "App",
+     "end_col": 16,
+     "file": "app.contract",
+     "kind": "action",
+     "line": 33,
+     "name": "follow",
+     "writes": [
+      "nav"
+     ]
+    },
+    {
+     "col": 10,
+     "component": "App",
+     "end_col": 16,
+     "file": "app.contract",
+     "kind": "action",
+     "line": 35,
+     "name": "search",
+     "writes": [
+      "placesQuery",
+      "savedQuery"
+     ]
+    },
+    {
+     "col": 10,
+     "component": "App",
+     "end_col": 16,
+     "file": "app.contract",
+     "kind": "action",
+     "line": 41,
+     "name": "browse",
+     "writes": [
+      "nav"
+     ]
+    },
+    {
+     "col": 10,
+     "component": "App",
+     "end_col": 16,
+     "file": "app.contract",
+     "kind": "action",
+     "line": 43,
+     "name": "toggle",
+     "writes": [
+      "saved"
+     ]
+    },
+    {
+     "col": 86,
+     "component": "App",
+     "end_col": 91,
+     "file": "app.contract",
+     "kind": "testId",
+     "line": 46,
+     "name": "app"
+    },
+    {
+     "col": 48,
+     "component": "App",
+     "end_col": 56,
+     "file": "app.contract",
+     "kind": "testId",
+     "line": 70,
+     "name": "browse"
+    },
+    {
+     "col": 33,
+     "component": "App",
+     "end_col": 39,
+     "file": "app.contract",
+     "kind": "testId",
+     "line": 94,
+     "name": "tabs"
+    },
+    {
+     "col": 18,
+     "component": "App",
+     "end_col": 30,
+     "file": "app.contract",
+     "kind": "testId",
+     "line": 96,
+     "name": "tab-places"
+    },
+    {
+     "col": 18,
+     "component": "App",
+     "end_col": 29,
+     "file": "app.contract",
+     "kind": "testId",
+     "line": 100,
+     "name": "tab-saved"
+    },
+    {
+     "col": 11,
+     "end_col": 23,
+     "file": "app.contract",
+     "kind": "component",
+     "line": 108,
+     "name": "ShippingNote"
+    },
+    {
+     "col": 33,
+     "component": "ShippingNote",
+     "end_col": 48,
+     "file": "app.contract",
+     "kind": "testId",
+     "line": 111,
+     "name": "shipping-note"
+    },
+    {
+     "col": 8,
+     "component": "App",
+     "end_col": 11,
+     "file": "app.contract",
+     "kind": "state",
+     "line": 8,
+     "name": "nav"
+    },
+    {
+     "col": 7,
+     "end_col": 13,
+     "file": "app.contract",
+     "kind": "route",
+     "line": 9,
+     "name": "places"
+    },
+    {
+     "col": 5,
+     "end_col": 10,
+     "file": "app.contract",
+     "kind": "route",
+     "line": 10,
+     "name": "place"
+    },
+    {
+     "col": 7,
+     "end_col": 12,
+     "file": "app.contract",
+     "kind": "route",
+     "line": 11,
+     "name": "saved"
+    },
+    {
+     "col": 5,
+     "end_col": 15,
+     "file": "app.contract",
+     "kind": "route",
+     "line": 12,
+     "name": "savedPlace"
+    },
+    {
+     "col": 11,
+     "end_col": 17,
+     "file": "app.contract",
+     "kind": "parameter",
+     "line": 20,
+     "name": "places",
+     "owner": "nameOf"
+    },
+    {
+     "col": 28,
+     "end_col": 30,
+     "file": "app.contract",
+     "kind": "parameter",
+     "line": 20,
+     "name": "id",
+     "owner": "nameOf"
+    },
+    {
+     "col": 76,
+     "end_col": 77,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 20,
+     "name": "p",
+     "owner": "nameOf"
+    },
+    {
+     "col": 106,
+     "end_col": 107,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 20,
+     "name": "p",
+     "owner": "nameOf"
+    },
+    {
+     "col": 12,
+     "end_col": 13,
+     "file": "app.contract",
+     "kind": "parameter",
+     "line": 21,
+     "name": "p",
+     "owner": "matches"
+    },
+    {
+     "col": 22,
+     "end_col": 23,
+     "file": "app.contract",
+     "kind": "parameter",
+     "line": 21,
+     "name": "q",
+     "owner": "matches"
+    },
+    {
+     "col": 38,
+     "component": "App",
+     "end_col": 39,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 28,
+     "name": "p"
+    },
+    {
+     "col": 37,
+     "component": "App",
+     "end_col": 38,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 29,
+     "name": "p"
+    },
+    {
+     "col": 21,
+     "end_col": 31,
+     "file": "app.contract",
+     "kind": "source",
+     "line": 27,
+     "name": "loadPlaces"
+    },
+    {
+     "col": 15,
+     "component": "App",
+     "end_col": 19,
+     "file": "app.contract",
+     "kind": "parameter",
+     "line": 30,
+     "name": "name",
+     "owner": "pick"
+    },
+    {
+     "col": 17,
+     "component": "App",
+     "end_col": 20,
+     "file": "app.contract",
+     "kind": "parameter",
+     "line": 33,
+     "name": "url",
+     "owner": "follow"
+    },
+    {
+     "col": 17,
+     "component": "App",
+     "end_col": 20,
+     "file": "app.contract",
+     "kind": "parameter",
+     "line": 35,
+     "name": "tab",
+     "owner": "search"
+    },
+    {
+     "col": 30,
+     "component": "App",
+     "end_col": 31,
+     "file": "app.contract",
+     "kind": "parameter",
+     "line": 35,
+     "name": "v",
+     "owner": "search"
+    },
+    {
+     "col": 17,
+     "component": "App",
+     "end_col": 19,
+     "file": "app.contract",
+     "kind": "parameter",
+     "line": 43,
+     "name": "id",
+     "owner": "toggle"
+    },
+    {
+     "col": 47,
+     "component": "App",
+     "end_col": 48,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 44,
+     "name": "s",
+     "owner": "toggle"
+    },
+    {
+     "col": 13,
+     "component": "App",
+     "end_col": 14,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 49,
+     "name": "t"
+    },
+    {
+     "col": 17,
+     "component": "App",
+     "end_col": 18,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 51,
+     "name": "e"
+    },
+    {
+     "col": 29,
+     "component": "App",
+     "end_col": 30,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 78,
+     "name": "p"
+    },
+    {
+     "col": 44,
+     "component": "App",
+     "end_col": 45,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 86,
+     "name": "x"
+    },
+    {
+     "col": 25,
+     "component": "App",
+     "end_col": 26,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 86,
+     "name": "p"
+    }
+   ],
+   "references": [
+    {
+     "col": 5,
+     "end_col": 15,
+     "file": "app.contract",
+     "kind": "component",
+     "line": 6,
+     "name": "EmptyState",
+     "to": 49
+    },
+    {
+     "col": 19,
+     "end_col": 24,
+     "file": "app.contract",
+     "kind": "shape",
+     "line": 20,
+     "name": "Place",
+     "to": 0
+    },
+    {
+     "col": 62,
+     "end_col": 68,
+     "file": "app.contract",
+     "kind": "parameter",
+     "line": 20,
+     "name": "places",
+     "to": 82
+    },
+    {
+     "col": 81,
+     "end_col": 82,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 20,
+     "name": "p",
+     "to": 84
+    },
+    {
+     "col": 83,
+     "end_col": 85,
+     "file": "app.contract",
+     "kind": "field",
+     "line": 20,
+     "name": "id",
+     "to": 1
+    },
+    {
+     "col": 89,
+     "end_col": 91,
+     "file": "app.contract",
+     "kind": "parameter",
+     "line": 20,
+     "name": "id",
+     "to": 83
+    },
+    {
+     "col": 112,
+     "end_col": 113,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 20,
+     "name": "p",
+     "to": 85
+    },
+    {
+     "col": 114,
+     "end_col": 118,
+     "file": "app.contract",
+     "kind": "field",
+     "line": 20,
+     "name": "name",
+     "to": 2
+    },
+    {
+     "col": 15,
+     "end_col": 20,
+     "file": "app.contract",
+     "kind": "shape",
+     "line": 21,
+     "name": "Place",
+     "to": 0
+    },
+    {
+     "col": 41,
+     "end_col": 42,
+     "file": "app.contract",
+     "kind": "parameter",
+     "line": 21,
+     "name": "p",
+     "to": 86
+    },
+    {
+     "col": 43,
+     "end_col": 47,
+     "file": "app.contract",
+     "kind": "field",
+     "line": 21,
+     "name": "name",
+     "to": 2
+    },
+    {
+     "col": 71,
+     "end_col": 72,
+     "file": "app.contract",
+     "kind": "parameter",
+     "line": 21,
+     "name": "q",
+     "to": 87
+    },
+    {
+     "col": 98,
+     "end_col": 99,
+     "file": "app.contract",
+     "kind": "parameter",
+     "line": 21,
+     "name": "p",
+     "to": 86
+    },
+    {
+     "col": 100,
+     "end_col": 104,
+     "file": "app.contract",
+     "kind": "field",
+     "line": 21,
+     "name": "area",
+     "to": 3
+    },
+    {
+     "col": 128,
+     "end_col": 129,
+     "file": "app.contract",
+     "kind": "parameter",
+     "line": 21,
+     "name": "q",
+     "to": 87
+    },
+    {
+     "col": 24,
+     "end_col": 30,
+     "file": "app.contract",
+     "kind": "resource",
+     "line": 28,
+     "name": "places",
+     "to": 17
+    },
+    {
+     "col": 43,
+     "end_col": 50,
+     "file": "app.contract",
+     "kind": "fn",
+     "line": 28,
+     "name": "matches",
+     "to": 10
+    },
+    {
+     "col": 51,
+     "end_col": 52,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 28,
+     "name": "p",
+     "to": 88
+    },
+    {
+     "col": 54,
+     "end_col": 65,
+     "file": "app.contract",
+     "kind": "state",
+     "line": 28,
+     "name": "placesQuery",
+     "to": 13
+    },
+    {
+     "col": 23,
+     "end_col": 29,
+     "file": "app.contract",
+     "kind": "resource",
+     "line": 29,
+     "name": "places",
+     "to": 17
+    },
+    {
+     "col": 42,
+     "end_col": 47,
+     "file": "app.contract",
+     "kind": "state",
+     "line": 29,
+     "name": "saved",
+     "to": 12
+    },
+    {
+     "col": 57,
+     "end_col": 58,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 29,
+     "name": "p",
+     "to": 89
+    },
+    {
+     "col": 59,
+     "end_col": 61,
+     "file": "app.contract",
+     "kind": "field",
+     "line": 29,
+     "name": "id",
+     "to": 1
+    },
+    {
+     "col": 67,
+     "end_col": 74,
+     "file": "app.contract",
+     "kind": "fn",
+     "line": 29,
+     "name": "matches",
+     "to": 10
+    },
+    {
+     "col": 75,
+     "end_col": 76,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 29,
+     "name": "p",
+     "to": 89
+    },
+    {
+     "col": 78,
+     "end_col": 88,
+     "file": "app.contract",
+     "kind": "state",
+     "line": 29,
+     "name": "savedQuery",
+     "to": 14
+    },
+    {
+     "col": 43,
+     "end_col": 48,
+     "file": "app.contract",
+     "kind": "shape",
+     "line": 27,
+     "name": "Place",
+     "to": 0
+    },
+    {
+     "col": 5,
+     "end_col": 8,
+     "file": "app.contract",
+     "kind": "state",
+     "line": 31,
+     "name": "nav",
+     "to": 77
+    },
+    {
+     "col": 18,
+     "end_col": 21,
+     "file": "app.contract",
+     "kind": "state",
+     "line": 31,
+     "name": "nav",
+     "to": 77
+    },
+    {
+     "col": 23,
+     "end_col": 27,
+     "file": "app.contract",
+     "kind": "parameter",
+     "line": 31,
+     "name": "name",
+     "to": 91
+    },
+    {
+     "col": 5,
+     "end_col": 8,
+     "file": "app.contract",
+     "kind": "state",
+     "line": 34,
+     "name": "nav",
+     "to": 77
+    },
+    {
+     "col": 14,
+     "end_col": 17,
+     "file": "app.contract",
+     "kind": "state",
+     "line": 34,
+     "name": "nav",
+     "to": 77
+    },
+    {
+     "col": 19,
+     "end_col": 22,
+     "file": "app.contract",
+     "kind": "parameter",
+     "line": 34,
+     "name": "url",
+     "to": 92
+    },
+    {
+     "col": 8,
+     "end_col": 11,
+     "file": "app.contract",
+     "kind": "parameter",
+     "line": 36,
+     "name": "tab",
+     "to": 93
+    },
+    {
+     "col": 7,
+     "end_col": 17,
+     "file": "app.contract",
+     "kind": "state",
+     "line": 37,
+     "name": "savedQuery",
+     "to": 14
+    },
+    {
+     "col": 20,
+     "end_col": 21,
+     "file": "app.contract",
+     "kind": "parameter",
+     "line": 37,
+     "name": "v",
+     "to": 94
+    },
+    {
+     "col": 7,
+     "end_col": 18,
+     "file": "app.contract",
+     "kind": "state",
+     "line": 39,
+     "name": "placesQuery",
+     "to": 13
+    },
+    {
+     "col": 21,
+     "end_col": 22,
+     "file": "app.contract",
+     "kind": "parameter",
+     "line": 39,
+     "name": "v",
+     "to": 94
+    },
+    {
+     "col": 5,
+     "end_col": 8,
+     "file": "app.contract",
+     "kind": "state",
+     "line": 42,
+     "name": "nav",
+     "to": 77
+    },
+    {
+     "col": 16,
+     "end_col": 19,
+     "file": "app.contract",
+     "kind": "state",
+     "line": 42,
+     "name": "nav",
+     "to": 77
+    },
+    {
+     "col": 26,
+     "end_col": 38,
+     "file": "app.contract",
+     "kind": "route",
+     "line": 42,
+     "name": "savedPlace",
+     "to": 81
+    },
+    {
+     "col": 5,
+     "end_col": 10,
+     "file": "app.contract",
+     "kind": "state",
+     "line": 44,
+     "name": "saved",
+     "to": 12
+    },
+    {
+     "col": 13,
+     "end_col": 18,
+     "file": "app.contract",
+     "kind": "state",
+     "line": 44,
+     "name": "saved",
+     "to": 12
+    },
+    {
+     "col": 28,
+     "end_col": 30,
+     "file": "app.contract",
+     "kind": "parameter",
+     "line": 44,
+     "name": "id",
+     "to": 95
+    },
+    {
+     "col": 34,
+     "end_col": 39,
+     "file": "app.contract",
+     "kind": "state",
+     "line": 44,
+     "name": "saved",
+     "to": 12
+    },
+    {
+     "col": 52,
+     "end_col": 53,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 44,
+     "name": "s",
+     "to": 96
+    },
+    {
+     "col": 57,
+     "end_col": 59,
+     "file": "app.contract",
+     "kind": "parameter",
+     "line": 44,
+     "name": "id",
+     "to": 95
+    },
+    {
+     "col": 63,
+     "end_col": 68,
+     "file": "app.contract",
+     "kind": "state",
+     "line": 44,
+     "name": "saved",
+     "to": 12
+    },
+    {
+     "col": 77,
+     "end_col": 79,
+     "file": "app.contract",
+     "kind": "parameter",
+     "line": 44,
+     "name": "id",
+     "to": 95
+    },
+    {
+     "col": 31,
+     "end_col": 34,
+     "file": "app.contract",
+     "kind": "state",
+     "line": 46,
+     "name": "nav",
+     "to": 77
+    },
+    {
+     "col": 72,
+     "end_col": 78,
+     "file": "app.contract",
+     "kind": "action",
+     "line": 46,
+     "name": "follow",
+     "to": 19
+    },
+    {
+     "col": 18,
+     "end_col": 21,
+     "file": "app.contract",
+     "kind": "state",
+     "line": 49,
+     "name": "nav",
+     "to": 77
+    },
+    {
+     "col": 31,
+     "end_col": 32,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 49,
+     "name": "t",
+     "to": 97
+    },
+    {
+     "col": 46,
+     "end_col": 47,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 50,
+     "name": "t",
+     "to": 97
+    },
+    {
+     "col": 22,
+     "end_col": 23,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 51,
+     "name": "t",
+     "to": 97
+    },
+    {
+     "col": 34,
+     "end_col": 35,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 51,
+     "name": "e",
+     "to": 98
+    },
+    {
+     "col": 39,
+     "end_col": 40,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 52,
+     "name": "e",
+     "to": 98
+    },
+    {
+     "col": 74,
+     "end_col": 75,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 52,
+     "name": "e",
+     "to": 98
+    },
+    {
+     "col": 25,
+     "end_col": 26,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 55,
+     "name": "e",
+     "to": 98
+    },
+    {
+     "col": 62,
+     "end_col": 63,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 55,
+     "name": "e",
+     "to": 98
+    },
+    {
+     "col": 92,
+     "end_col": 98,
+     "file": "app.contract",
+     "kind": "fn",
+     "line": 55,
+     "name": "nameOf",
+     "to": 9
+    },
+    {
+     "col": 99,
+     "end_col": 105,
+     "file": "app.contract",
+     "kind": "resource",
+     "line": 55,
+     "name": "places",
+     "to": 17
+    },
+    {
+     "col": 107,
+     "end_col": 108,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 55,
+     "name": "e",
+     "to": 98
+    },
+    {
+     "col": 48,
+     "end_col": 49,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 56,
+     "name": "e",
+     "to": 98
+    },
+    {
+     "col": 70,
+     "end_col": 71,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 56,
+     "name": "e",
+     "to": 98
+    },
+    {
+     "col": 22,
+     "end_col": 23,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 57,
+     "name": "e",
+     "to": 98
+    },
+    {
+     "col": 43,
+     "end_col": 44,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 57,
+     "name": "e",
+     "to": 98
+    },
+    {
+     "col": 34,
+     "end_col": 40,
+     "file": "app.contract",
+     "kind": "action",
+     "line": 58,
+     "name": "toggle",
+     "to": 22
+    },
+    {
+     "col": 41,
+     "end_col": 42,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 58,
+     "name": "e",
+     "to": 98
+    },
+    {
+     "col": 66,
+     "end_col": 71,
+     "file": "app.contract",
+     "kind": "state",
+     "line": 58,
+     "name": "saved",
+     "to": 12
+    },
+    {
+     "col": 81,
+     "end_col": 82,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 58,
+     "name": "e",
+     "to": 98
+    },
+    {
+     "col": 38,
+     "end_col": 39,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 59,
+     "name": "t",
+     "to": 97
+    },
+    {
+     "col": 30,
+     "end_col": 35,
+     "file": "app.contract",
+     "kind": "state",
+     "line": 60,
+     "name": "saved",
+     "to": 12
+    },
+    {
+     "col": 45,
+     "end_col": 46,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 60,
+     "name": "e",
+     "to": 98
+    },
+    {
+     "col": 22,
+     "end_col": 23,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 61,
+     "name": "e",
+     "to": 98
+    },
+    {
+     "col": 45,
+     "end_col": 46,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 61,
+     "name": "e",
+     "to": 98
+    },
+    {
+     "col": 67,
+     "end_col": 72,
+     "file": "app.contract",
+     "kind": "state",
+     "line": 61,
+     "name": "saved",
+     "to": 12
+    },
+    {
+     "col": 48,
+     "end_col": 49,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 62,
+     "name": "t",
+     "to": 97
+    },
+    {
+     "col": 68,
+     "end_col": 78,
+     "file": "app.contract",
+     "kind": "state",
+     "line": 62,
+     "name": "savedQuery",
+     "to": 14
+    },
+    {
+     "col": 81,
+     "end_col": 92,
+     "file": "app.contract",
+     "kind": "state",
+     "line": 62,
+     "name": "placesQuery",
+     "to": 13
+    },
+    {
+     "col": 100,
+     "end_col": 106,
+     "file": "app.contract",
+     "kind": "action",
+     "line": 62,
+     "name": "search",
+     "to": 20
+    },
+    {
+     "col": 107,
+     "end_col": 108,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 62,
+     "name": "t",
+     "to": 97
+    },
+    {
+     "col": 56,
+     "end_col": 57,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 63,
+     "name": "t",
+     "to": 97
+    },
+    {
+     "col": 40,
+     "end_col": 41,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 64,
+     "name": "t",
+     "to": 97
+    },
+    {
+     "col": 20,
+     "end_col": 21,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 65,
+     "name": "e",
+     "to": 98
+    },
+    {
+     "col": 42,
+     "end_col": 43,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 65,
+     "name": "e",
+     "to": 98
+    },
+    {
+     "col": 19,
+     "end_col": 31,
+     "file": "app.contract",
+     "kind": "component",
+     "line": 66,
+     "name": "ShippingNote",
+     "to": 28
+    },
+    {
+     "col": 20,
+     "end_col": 21,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 68,
+     "name": "e",
+     "to": 98
+    },
+    {
+     "col": 42,
+     "end_col": 47,
+     "file": "app.contract",
+     "kind": "state",
+     "line": 68,
+     "name": "saved",
+     "to": 12
+    },
+    {
+     "col": 19,
+     "end_col": 29,
+     "file": "app.contract",
+     "kind": "component",
+     "line": 69,
+     "name": "EmptyState",
+     "to": 49
+    },
+    {
+     "col": 30,
+     "end_col": 36,
+     "file": "app.contract",
+     "kind": "prop",
+     "line": 69,
+     "name": "symbol",
+     "to": 50
+    },
+    {
+     "col": 56,
+     "end_col": 61,
+     "file": "app.contract",
+     "kind": "prop",
+     "line": 69,
+     "name": "title",
+     "to": 51
+    },
+    {
+     "col": 81,
+     "end_col": 88,
+     "file": "app.contract",
+     "kind": "prop",
+     "line": 69,
+     "name": "message",
+     "to": 52
+    },
+    {
+     "col": 34,
+     "end_col": 40,
+     "file": "app.contract",
+     "kind": "action",
+     "line": 70,
+     "name": "browse",
+     "to": 21
+    },
+    {
+     "col": 25,
+     "end_col": 26,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 72,
+     "name": "e",
+     "to": 98
+    },
+    {
+     "col": 47,
+     "end_col": 48,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 72,
+     "name": "e",
+     "to": 98
+    },
+    {
+     "col": 23,
+     "end_col": 24,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 73,
+     "name": "t",
+     "to": 97
+    },
+    {
+     "col": 43,
+     "end_col": 53,
+     "file": "app.contract",
+     "kind": "derive",
+     "line": 73,
+     "name": "savedShown",
+     "to": 16
+    },
+    {
+     "col": 56,
+     "end_col": 67,
+     "file": "app.contract",
+     "kind": "derive",
+     "line": 73,
+     "name": "placesShown",
+     "to": 15
+    },
+    {
+     "col": 97,
+     "end_col": 103,
+     "file": "app.contract",
+     "kind": "resource",
+     "line": 73,
+     "name": "places",
+     "to": 17
+    },
+    {
+     "col": 21,
+     "end_col": 31,
+     "file": "app.contract",
+     "kind": "component",
+     "line": 74,
+     "name": "EmptyState",
+     "to": 49
+    },
+    {
+     "col": 32,
+     "end_col": 38,
+     "file": "app.contract",
+     "kind": "prop",
+     "line": 74,
+     "name": "symbol",
+     "to": 50
+    },
+    {
+     "col": 56,
+     "end_col": 61,
+     "file": "app.contract",
+     "kind": "prop",
+     "line": 74,
+     "name": "title",
+     "to": 51
+    },
+    {
+     "col": 76,
+     "end_col": 83,
+     "file": "app.contract",
+     "kind": "prop",
+     "line": 74,
+     "name": "message",
+     "to": 52
+    },
+    {
+     "col": 40,
+     "end_col": 41,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 76,
+     "name": "e",
+     "to": 98
+    },
+    {
+     "col": 35,
+     "end_col": 36,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 78,
+     "name": "t",
+     "to": 97
+    },
+    {
+     "col": 55,
+     "end_col": 65,
+     "file": "app.contract",
+     "kind": "derive",
+     "line": 78,
+     "name": "savedShown",
+     "to": 16
+    },
+    {
+     "col": 68,
+     "end_col": 79,
+     "file": "app.contract",
+     "kind": "derive",
+     "line": 78,
+     "name": "placesShown",
+     "to": 15
+    },
+    {
+     "col": 85,
+     "end_col": 86,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 78,
+     "name": "p",
+     "to": 99
+    },
+    {
+     "col": 87,
+     "end_col": 89,
+     "file": "app.contract",
+     "kind": "field",
+     "line": 78,
+     "name": "id",
+     "to": 1
+    },
+    {
+     "col": 38,
+     "end_col": 39,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 79,
+     "name": "e",
+     "to": 98
+    },
+    {
+     "col": 63,
+     "end_col": 75,
+     "file": "app.contract",
+     "kind": "route",
+     "line": 79,
+     "name": "savedPlace",
+     "to": 81
+    },
+    {
+     "col": 77,
+     "end_col": 78,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 79,
+     "name": "p",
+     "to": 99
+    },
+    {
+     "col": 79,
+     "end_col": 81,
+     "file": "app.contract",
+     "kind": "field",
+     "line": 79,
+     "name": "id",
+     "to": 1
+    },
+    {
+     "col": 90,
+     "end_col": 97,
+     "file": "app.contract",
+     "kind": "route",
+     "line": 79,
+     "name": "place",
+     "to": 79
+    },
+    {
+     "col": 99,
+     "end_col": 100,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 79,
+     "name": "p",
+     "to": 99
+    },
+    {
+     "col": 101,
+     "end_col": 103,
+     "file": "app.contract",
+     "kind": "field",
+     "line": 79,
+     "name": "id",
+     "to": 1
+    },
+    {
+     "col": 116,
+     "end_col": 117,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 79,
+     "name": "t",
+     "to": 97
+    },
+    {
+     "col": 126,
+     "end_col": 127,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 79,
+     "name": "p",
+     "to": 99
+    },
+    {
+     "col": 128,
+     "end_col": 130,
+     "file": "app.contract",
+     "kind": "field",
+     "line": 79,
+     "name": "id",
+     "to": 1
+    },
+    {
+     "col": 36,
+     "end_col": 37,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 81,
+     "name": "p",
+     "to": 99
+    },
+    {
+     "col": 38,
+     "end_col": 42,
+     "file": "app.contract",
+     "kind": "field",
+     "line": 81,
+     "name": "name",
+     "to": 2
+    },
+    {
+     "col": 36,
+     "end_col": 37,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 82,
+     "name": "p",
+     "to": 99
+    },
+    {
+     "col": 38,
+     "end_col": 42,
+     "file": "app.contract",
+     "kind": "field",
+     "line": 82,
+     "name": "area",
+     "to": 3
+    },
+    {
+     "col": 38,
+     "end_col": 39,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 85,
+     "name": "e",
+     "to": 98
+    },
+    {
+     "col": 30,
+     "end_col": 36,
+     "file": "app.contract",
+     "kind": "resource",
+     "line": 86,
+     "name": "places",
+     "to": 17
+    },
+    {
+     "col": 49,
+     "end_col": 50,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 86,
+     "name": "x",
+     "to": 100
+    },
+    {
+     "col": 51,
+     "end_col": 53,
+     "file": "app.contract",
+     "kind": "field",
+     "line": 86,
+     "name": "id",
+     "to": 1
+    },
+    {
+     "col": 57,
+     "end_col": 58,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 86,
+     "name": "e",
+     "to": 98
+    },
+    {
+     "col": 74,
+     "end_col": 75,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 86,
+     "name": "p",
+     "to": 101
+    },
+    {
+     "col": 76,
+     "end_col": 78,
+     "file": "app.contract",
+     "kind": "field",
+     "line": 86,
+     "name": "id",
+     "to": 1
+    },
+    {
+     "col": 32,
+     "end_col": 33,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 90,
+     "name": "p",
+     "to": 101
+    },
+    {
+     "col": 34,
+     "end_col": 38,
+     "file": "app.contract",
+     "kind": "field",
+     "line": 90,
+     "name": "area",
+     "to": 3
+    },
+    {
+     "col": 32,
+     "end_col": 33,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 93,
+     "name": "p",
+     "to": 101
+    },
+    {
+     "col": 34,
+     "end_col": 39,
+     "file": "app.contract",
+     "kind": "field",
+     "line": 93,
+     "name": "about",
+     "to": 4
+    },
+    {
+     "col": 75,
+     "end_col": 76,
+     "file": "app.contract",
+     "kind": "local",
+     "line": 93,
+     "name": "t",
+     "to": 97
+    },
+    {
+     "col": 71,
+     "end_col": 74,
+     "file": "app.contract",
+     "kind": "state",
+     "line": 95,
+     "name": "nav",
+     "to": 77
+    },
+    {
+     "col": 98,
+     "end_col": 102,
+     "file": "app.contract",
+     "kind": "action",
+     "line": 95,
+     "name": "pick",
+     "to": 18
+    },
+    {
+     "col": 70,
+     "end_col": 73,
+     "file": "app.contract",
+     "kind": "state",
+     "line": 99,
+     "name": "nav",
+     "to": 77
+    },
+    {
+     "col": 96,
+     "end_col": 100,
+     "file": "app.contract",
+     "kind": "action",
+     "line": 99,
+     "name": "pick",
+     "to": 18
+    },
+    {
+     "col": 14,
+     "end_col": 19,
+     "file": "app.contract",
+     "kind": "state",
+     "line": 103,
+     "name": "saved",
+     "to": 12
+    },
+    {
+     "col": 23,
+     "end_col": 28,
+     "file": "app.contract",
+     "kind": "state",
+     "line": 105,
+     "name": "saved",
+     "to": 12
+    }
+   ]
+  },
+  "sources": {
+   "app.contract": "// Acme Market: two tabs, each its own stack: a list that pushes a detail in each.\n// The root tablist is the iOS tab bar; a screen a tab pushed survives a visit to the other.\n// Each tab's list has the bar's search field, its own query (`contract vocab search`).\n// App-drawn bars have a different layout: run `bun exact.mjs contract vocab tabs`.\n// A native badge uses its box's inner text; XCUITest finds the tab by `tab-saved`.\nuse EmptyState from \"exact:content\"\n\nroutes nav\n  tab places \"/\"\n    place \"/place/:id\"\n  tab saved \"/saved\"\n    savedPlace \"/saved/:id\"\n\nshape Place\n  id: string\n  name: string\n  area: string\n  about: string\n\nfn nameOf(places: Place[], id: string): string = match first(places.filter(p => p.id == id)) { case some(p) => p.name, case none => \"\" }\nfn matches(p: Place, q: string): bool = p.name.toLowerCase().includes(q.trim().toLowerCase()) or p.area.toLowerCase().includes(q.trim().toLowerCase())\n\ncomponent App\n  state saved = [] persist\n  state placesQuery = \"\"\n  state savedQuery = \"\"\n  resource places = loadPlaces() as shape Place[] else empty()\n  derive placesShown = places.filter(p => matches(p, placesQuery))\n  derive savedShown = places.filter(p => saved.includes(p.id) and matches(p, savedQuery))\n  action pick(name: string)\n    nav = select(nav, name)\n  // A row is a link to its place; the browser's Back, Forward and a deep link arrive here too.\n  action follow(url: string)\n    nav = go(nav, url)\n  action search(tab: string, v: string)\n    if tab == \"saved\"\n      savedQuery = v\n    else\n      placesQuery = v\n  // The empty Saved tab's button opens the first place on top of it.\n  action browse\n    nav = push(nav, path(\"savedPlace\", \"1\"))\n  action toggle(id: string)\n    saved = saved.includes(id) ? saved.filter(s => s != id) : saved.concat([id])\n  view\n    main navigationKey=`${top(nav).id}` navigationBack=\"back\" navigate=follow testId=\"app\" width=\"100%\" height=\"100%\"\n      display=\"flex\" flex-direction=\"column\"\n      column flex=1 min-height=0 position=\"relative\"\n        for t in nav.tabs key=t.name\n          column role=\"tabpanel\" id=`panel-${t.name}` position=\"absolute\" inset=0\n            for e in t.stack key=e.id\n              column navigationKey=`${e.id}` navigationScroll=`content-${e.id}` position=\"absolute\" inset=0\n                display=\"flex\" flex-direction=\"column\"\n                header display=\"flex\" flex-wrap=\"wrap\" align-items=\"center\" gap=8 padding=\"8px 16px\"\n                  text (e.name == \"places\" ? \"Acme Market\" : e.name == \"saved\" ? \"Saved\" : nameOf(places, e.params.id))\n                    role=\"heading\" aria-level=(e.name == \"places\" or e.name == \"saved\" ? 1 : 2) flex=1 color=\"brand.ink\"\n                  if e.name == \"place\" or e.name == \"savedPlace\"\n                    button press=toggle(e.params.id) aria-label=(saved.includes(e.params.id) ? \"Remove from Saved\" : \"Save\")\n                      testId=`save-${t.name}`\n                      image (saved.includes(e.params.id) ? \"symbol:bookmark-fill\" : \"symbol:bookmark\")\n                  if e.name == \"places\" or (e.name == \"saved\" and saved.length > 0)\n                    input type=\"search\" value=(t.name == \"saved\" ? savedQuery : placesQuery) input=search(t.name)\n                      placeholder=\"Search\" aria-label=(t.name == \"saved\" ? \"Search Saved\" : \"Search Places\")\n                      testId=`search-${t.name}` width=\"100%\"\n                if e.name == \"places\" or e.name == \"place\"\n                  ShippingNote()\n                // An empty tab and a search with no match are each an `EmptyState` in the list's place.\n                if e.name == \"saved\" and saved.length == 0\n                  EmptyState(symbol=\"symbol:bookmark\", title=\"No Saved Places\", message=\"Open a place and tap the bookmark.\")\n                    button press=browse testId=\"browse\"\n                      text \"Browse\"\n                else if e.name == \"places\" or e.name == \"saved\"\n                  if (t.name == \"saved\" ? savedShown : placesShown).length == 0 and not pending(places)\n                    EmptyState(symbol=\"symbol:search\", title=\"No Results\", message=\"Check the spelling or try a new search.\")\n                  else\n                    list id=`content-${e.id}` appearance=\"auto\" listStyle=\"inset-grouped\" flex=1 min-height=0\n                      section\n                        for p in (t.name == \"saved\" ? savedShown : placesShown) key=p.id\n                          link href=(e.name == \"saved\" ? path(\"savedPlace\", p.id) : path(\"place\", p.id)) testId=`${t.name}-${p.id}`\n                            column flex=1 min-width=0 gap=2 padding-top=4 padding-bottom=4\n                              text p.name\n                              text p.area font=\"-exact-subheadline\" color=\"-exact-secondary-label\"\n                            image \"symbol:forward-chevron\"\n                else\n                  list id=`content-${e.id}` appearance=\"auto\" listStyle=\"inset-grouped\" flex=1 min-height=0\n                    for p in places.filter(x => x.id == e.params.id) key=p.id\n                      section\n                        row\n                          text \"Area\"\n                          text p.area\n                      section\n                        row padding-top=10 padding-bottom=10\n                          text p.about flex=1 min-width=0 testId=`about-${t.name}`\n      row role=\"tablist\" testId=\"tabs\"\n        button role=\"tab\" aria-controls=\"panel-places\" aria-selected=(nav.tab == \"places\") press=pick(\"places\")\n          testId=\"tab-places\" flex=1\n          image \"symbol:home\"\n          text \"Places\"\n        button role=\"tab\" aria-controls=\"panel-saved\" aria-selected=(nav.tab == \"saved\") press=pick(\"saved\")\n          testId=\"tab-saved\" flex=1\n          image \"symbol:bookmark\"\n          text \"Saved\"\n          if saved.length > 0\n            row background-color=\"-exact-system-red\" border-radius=12\n              text `${saved.length}` font-variant-numeric=\"tabular-nums\"\n\n// One line of shop copy, shown on the places list and a place's page only.\ncomponent ShippingNote\n  view\n    text \"Free shipping on orders over $50\" font=\"-exact-footnote\" color=\"note.ink\"\n      padding=\"4px 16px\" testId=\"shipping-note\"\n"
+  },
+  "tests": [
+   {
+    "file": "app.test.contract",
+    "tests": [
+     {
+      "name": "each tab keeps its own stack",
+      "steps": [
+       {
+        "op": "tap",
+        "target": "places-2",
+        "form": "press",
+        "line": 2
+       },
+       {
+        "op": "clock",
+        "arg": "settle",
+        "line": 3
+       },
+       {
+        "op": "expect-text",
+        "target": "about-places",
+        "value": "A canvas tote with an inside pocket.",
+        "line": 4
+       },
+       {
+        "op": "tap",
+        "target": "tab-saved",
+        "form": "press",
+        "line": 5
+       },
+       {
+        "op": "expect-state",
+        "name": "nav.tab",
+        "comparison": "equal",
+        "value": "saved",
+        "line": 6
+       },
+       {
+        "op": "tap",
+        "target": "tab-places",
+        "form": "press",
+        "line": 7
+       },
+       {
+        "op": "expect-tree",
+        "target": "about-places",
+        "present": true,
+        "line": 8
+       }
+      ]
+     },
+     {
+      "name": "a saved place shows under Saved, and stays saved after a relaunch",
+      "steps": [
+       {
+        "op": "tap",
+        "target": "tab-saved",
+        "form": "press",
+        "line": 11
+       },
+       {
+        "op": "expect-state",
+        "name": "savedShown",
+        "comparison": "equal",
+        "value": [],
+        "line": 12
+       },
+       {
+        "op": "tap",
+        "target": "tab-places",
+        "form": "press",
+        "line": 13
+       },
+       {
+        "op": "tap",
+        "target": "places-1",
+        "form": "press",
+        "line": 14
+       },
+       {
+        "op": "clock",
+        "arg": "settle",
+        "line": 15
+       },
+       {
+        "op": "tap",
+        "target": "save-places",
+        "form": "press",
+        "line": 16
+       },
+       {
+        "op": "expect-state",
+        "name": "saved.0",
+        "comparison": "equal",
+        "value": "1",
+        "line": 17
+       },
+       {
+        "op": "tap",
+        "target": "tab-saved",
+        "form": "press",
+        "line": 18
+       },
+       {
+        "op": "tap",
+        "target": "saved-1",
+        "form": "press",
+        "line": 19
+       },
+       {
+        "op": "clock",
+        "arg": "settle",
+        "line": 20
+       },
+       {
+        "op": "expect-text",
+        "target": "about-saved",
+        "value": "A stoneware mug that holds twelve ounces.",
+        "line": 21
+       },
+       {
+        "op": "reload",
+        "line": 22
+       },
+       {
+        "op": "expect-state",
+        "name": "saved.0",
+        "comparison": "equal",
+        "value": "1",
+        "line": 23
+       }
+      ]
+     },
+     {
+      "name": "each tab's search filters its own list as you type",
+      "steps": [
+       {
+        "op": "type",
+        "target": "search-places",
+        "text": "kitchen",
+        "append": false,
+        "line": 26
+       },
+       {
+        "op": "expect-tree",
+        "target": "places-1",
+        "present": true,
+        "line": 27
+       },
+       {
+        "op": "expect-tree",
+        "target": "places-2",
+        "present": false,
+        "line": 28
+       },
+       {
+        "op": "tap",
+        "target": "places-1",
+        "form": "press",
+        "line": 29
+       },
+       {
+        "op": "clock",
+        "arg": "settle",
+        "line": 30
+       },
+       {
+        "op": "tap",
+        "target": "save-places",
+        "form": "press",
+        "line": 31
+       },
+       {
+        "op": "tap",
+        "target": "tab-saved",
+        "form": "press",
+        "line": 32
+       },
+       {
+        "op": "expect-tree",
+        "target": "saved-1",
+        "present": true,
+        "line": 33
+       },
+       {
+        "op": "type",
+        "target": "search-saved",
+        "text": "tote",
+        "append": false,
+        "line": 34
+       },
+       {
+        "op": "expect-tree",
+        "target": "saved-1",
+        "present": false,
+        "line": 35
+       },
+       {
+        "op": "tap",
+        "target": "tab-places",
+        "form": "press",
+        "line": 36
+       },
+       {
+        "op": "back",
+        "line": 37
+       },
+       {
+        "op": "clock",
+        "arg": "settle",
+        "line": 38
+       },
+       {
+        "op": "expect-tree",
+        "target": "places-1",
+        "present": true,
+        "line": 39
+       },
+       {
+        "op": "expect-tree",
+        "target": "places-2",
+        "present": false,
+        "line": 40
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "grants": "",
+  "design": {
+   "ir": {
+    "format": 1,
+    "digest": "ee4455fe9836ee66",
+    "name": "acme",
+    "tuples": 1,
+    "axes": [],
+    "dials": [],
+    "tokens": [
+     {
+      "name": "brand.ink",
+      "kind": "color",
+      "role": null,
+      "values": [
+       "light-dark(#1b4d3eff, #8fd3b6ff)"
+      ],
+      "entries": null,
+      "dials": [],
+      "fallback": [
+       "#1b4d3eff",
+       "#8fd3b6ff"
+      ]
+     },
+     {
+      "name": "note.ink",
+      "kind": "color",
+      "role": null,
+      "values": [
+       "light-dark(#5b6b62ff, #a8b8aeff)"
+      ],
+      "entries": null,
+      "dials": [],
+      "fallback": [
+       "#5b6b62ff",
+       "#a8b8aeff"
+      ]
+     },
+     {
+      "name": "space.note",
+      "kind": "number",
+      "role": null,
+      "values": [
+       "4"
+      ],
+      "entries": null,
+      "dials": [],
+      "fallback": [
+       "4",
+       "4"
+      ]
+     }
+    ],
+    "exports": null
+   },
+   "uses": {
+    "brand.ink": {
+     "sites": [
+      {
+       "col": 19,
+       "component": "App",
+       "end_col": 23,
+       "file": "app.contract",
+       "line": 55,
+       "row": "text_color",
+       "site": 14
+      }
+     ],
+     "aliases": []
+    },
+    "note.ink": {
+     "sites": [
+      {
+       "col": 5,
+       "component": "ShippingNote",
+       "end_col": 9,
+       "file": "app.contract",
+       "line": 110,
+       "row": "text_color",
+       "site": 18
+      }
+     ],
+     "aliases": []
+    },
+    "space.note": {
+     "sites": [],
+     "aliases": []
+    }
+   }
+  },
+  "inputs": "3af8d6fa5d851a465d56aa93503d630395e702a2b80b8e4aa7fbfae2e146d617"
+ }
+}

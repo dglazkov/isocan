@@ -4091,7 +4091,7 @@ button.mt-card:hover { border-color: var(--accent); }
 .file-card-text i { font-style: normal; font-size: 10.5px; color: var(--ink-soft); }
 
 /* ---------- remote cursors (presence) ---------- */
-.remote-cursor { position: absolute; display: flex; flex-direction: column; align-items: flex-start; }
+.remote-cursor { position: absolute; display: flex; flex-direction: column; align-items: flex-start; width: max-content; }
 /* Your own, drawn like everyone else's. Fixed rather than absolute because it
    follows the POINTER, not the world; inert, because it is a picture of your
    hand and must never eat the click your hand is making. */
