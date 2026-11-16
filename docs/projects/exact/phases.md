@@ -47,7 +47,10 @@ wireframe flow becomes a Contract scaffold on a branch whose generated
 test passes on web and iOS; personas drive the app and leave filmstrips
 and notes; a design system is extracted from one app and applied to
 another as Exact's held import, with the token mapping, landing on Keep.
-Only tokens travel yet. Next: **exact phase 10**. Waiting on a person: the real-iPhone walk of phase 7; a
+Only tokens travel yet. Phase 10 is CLOSED: the gathered diary went to the
+Exact team on Dion's yes. No phase is left unstarted; what remains waits
+on a person, on Exact, or on the work named in phase 9's Open entries.
+Waiting on a person: the real-iPhone walk of phase 7; a
 yes to AppDrop (a hosted service and an Apple ID); hosting the relay for
 isocan.io (DNS, a certificate, a VM) and a second machine for phase 8.
 Waiting on Exact: its relay canvas page is blank and cannot be framed
@@ -393,7 +396,9 @@ changed after it.
 
 ## Phase 10 — The diary goes home
 
-**Status: NOT STARTED.** After phase 9, or whenever the build stops.
+**Status: CLOSED, 15 Nov 2026.** Nine phases of diaries gathered into one
+entry for the Exact team, previewed to Dion, and sent on his yes alone from
+a copy holding nothing else (receipt `20e0128b-788e-42cc-83de-e6c0e4141449`).
 
 - Gather every phase's diary from the fixture app into one, for a reader on
   the Exact team: what a canvas client needed from the Tamber wire, the
@@ -404,6 +409,10 @@ changed after it.
 
 **Proof:** the receipt, recorded in this file's trajectory — or Dion's no,
 recorded the same way.
+
+### Trajectory
+
+- **2026-11-15** — Sent on Dion's yes: one gathered diary (what a canvas client needed from the wire, the driver, the source map, delivery, the relay and the held import, with seven ranked asks), 0 logged commands, receipt `20e0128b-788e-42cc-83de-e6c0e4141449`. Exact's `send` sends every unsent diary in a project, so it went from a fresh copy holding only that entry; the relay fix had gone the same way on 14 Nov (`fb9ecb45-4e50-4e6b-ad6e-e7e9e70557f2`).
 
 ---
 
