@@ -1,0 +1,291 @@
+import { createRequire as __isocanCreateRequire } from "node:module";
+const require = __isocanCreateRequire(import.meta.url);
+import {
+  grantedWrite,
+  opsFromFlags,
+  parseAcceptAnswer,
+  parseProposalRecord,
+  parseProposeAnswer,
+  parseProposeAsk,
+  proposalTitle,
+  scopeFor
+} from "./chunk-RIAJPPUS.mjs";
+import {
+  DEVICES
+} from "./chunk-ERSF5LUL.mjs";
+import {
+  core
+} from "./chunk-QSPCCLE6.mjs";
+
+// packages/modules/exact/src/proposals.ts
+import { promises as fs } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+var id = (prefix) => `${prefix}_${Math.random().toString(36).slice(2, 12)}`;
+var P = () => core.EXACT_PROPS;
+var currentVersion = (item) => item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions.at(-1);
+var LOOP = /^http:\/\/127\.0\.0\.1:\d+$/;
+async function proposeVerb(host, ref, opts, cmd) {
+  const ctx = await host.ctxOf(cmd);
+  const canvas = await host.resolveCanvas(ctx);
+  const snapshot = await ctx.client.snapshot(canvas.id);
+  const screen = host.resolveItem(snapshot, ref);
+  if (!screen.properties?.[P().route] || !core.appIdOf(screen)) throw new Error(`${screen.title} is not an Exact screen \u2014 propose on a screen \`isocan exact open\` posted (it carries exact.route)`);
+  const ops = opsFromFlags(opts.token ?? [], opts.row ?? [], opts.op ?? []);
+  const why = (opts.why ?? "").trim();
+  if (!why) throw new Error('a proposal says why, in design words: --why "\u2026" (two sentences at most)');
+  if ((why.match(/[.!?](\s|$)/g) ?? []).length > 2) throw new Error("the why is two sentences at most; say the rest in a comment");
+  const cites = (opts.cites ?? []).map((c) => {
+    const at = c.indexOf(":");
+    if (at <= 0) throw new Error(`--cites takes kind:ref (comment:<id>, op:<seq>, \u2026), not ${JSON.stringify(c)}`);
+    return { kind: c.slice(0, at), ref: c.slice(at + 1) };
+  });
+  const area = opts.in ? host.resolveItem(snapshot, opts.in).id : null;
+  const seq = Date.now();
+  const ask = { seq, by: ctx.actor.name, ops, why, cites, in: area };
+  await host.sendOp(ctx, canvas.id, { type: "item.update", itemId: screen.id, patch: { properties: { [P().propose]: JSON.stringify(ask) } } }, id("exact-propose"));
+  const wait = opts.wait === void 0 ? 540 : Number(opts.wait);
+  if (!(wait >= 0)) throw new Error(`--wait takes seconds, not ${opts.wait}`);
+  if (wait === 0) {
+    if (ctx.json) return host.printJson({ asked: { screen: screen.id, seq } });
+    console.log(`asked on ${screen.title} \u2014 \`isocan exact live\` holds it and posts the proposal under the screen; read exact.proposed there`);
+    return;
+  }
+  if (!ctx.json) console.error(`asked on ${screen.title}; waiting for \`isocan exact live\` to hold it and picture it on every device (a minute or two)\u2026`);
+  const deadline = Date.now() + wait * 1e3;
+  for (; ; ) {
+    const now = await ctx.client.snapshot(canvas.id);
+    const answer = parseProposeAnswer(now.canvas.items[screen.id]?.properties?.[P().proposed]);
+    if (answer && answer.seq === seq) {
+      if (ctx.json) return host.printJson(answer);
+      if (!answer.ok) throw new Error(`not proposed: ${answer.error}`);
+      console.log(`${answer.itemId}  proposed (${answer.class}, ${answer.previews} pictures, held as ${answer.proposal} by ${answer.client} at ${answer.scope} scope) \u2014 a person's Keep writes it; nothing is written until then`);
+      return;
+    }
+    if (Date.now() > deadline) throw new Error(`no answer in ${wait} s \u2014 is \`isocan exact live <app>\` running for this canvas, without --no-frames? The ask stays on the screen; it answers when it starts`);
+    await new Promise((r) => setTimeout(r, 2e3));
+  }
+}
+function pendingProposes(entries, snapshot, appId) {
+  const out = /* @__PURE__ */ new Map();
+  for (const e of entries) {
+    const op = e.envelope.op;
+    if (op.type !== "item.update" || !op.itemId || !op.patch?.properties || !(P().propose in op.patch.properties)) continue;
+    const item = snapshot.canvas.items[op.itemId];
+    if (!item || core.appIdOf(item) !== appId || !item.properties?.[P().route]) continue;
+    const ask = parseProposeAsk(item.properties?.[P().propose]);
+    const answered = parseProposeAnswer(item.properties?.[P().proposed]);
+    if (ask && (!answered || answered.seq < ask.seq)) out.set(item.id, { item, ask, seq: e.seq, actor: e.envelope.actor });
+  }
+  return [...out.values()];
+}
+async function answerPropose(kit, host, ctx, canvasId, app, opts, pending) {
+  const { item: screen, ask, seq: askSeq, actor } = pending;
+  const started = Date.now();
+  const snapshot = await ctx.client.snapshot(canvasId);
+  const isAgent = !!snapshot.canvas.agents?.[actor.id];
+  const scope = scopeFor(isAgent, grantedWrite(actor, ctx.actor, process.env.ISOCAN_EXACT_GRANT));
+  const refused = (error, extra = {}) => ({ seq: ask.seq, ok: false, itemId: null, proposal: null, class: null, scope, client: null, how: null, previews: 0, scopeCheck: null, ms: Date.now() - started, error, ...extra });
+  const loop = process.env.ISOCAN_EXACT_LOOP;
+  if (!loop || !LOOP.test(loop)) return refused("a proposal is held by the dev loop's Forma wire, and this `isocan exact live` runs none (--no-frames): start it without --no-frames");
+  const shots = screen.properties[P().reached] ?? screen.properties[P().shots] ?? `at "${screen.properties[P().url] ?? "/"}"`;
+  const ios = opts.hosts.includes("ios") && !!opts.sim;
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-exact-propose-"));
+  let r;
+  try {
+    const job = path.join(dir, "job.json");
+    await fs.writeFile(job, JSON.stringify({
+      ops: ask.ops,
+      scope,
+      name: actor.name,
+      shots,
+      devices: Object.keys(DEVICES).map((d) => ({ device: d, size: `${DEVICES[d].width}x${DEVICES[d].height}` })),
+      schemes: ["light", "dark"],
+      ios
+    }));
+    try {
+      r = await kit.bridge(host, "propose", ["--app", app, "--dir", path.join(dir, "out"), "--job", job, "--dev-url", loop, ...ios ? ["--sim", opts.sim] : []], "the proposal's preview", true);
+    } catch (err) {
+      return refused(err.message);
+    }
+    const base = { proposal: r.proposal ?? null, class: r.class ?? null, client: r.client ?? null, how: r.how ?? null, scopeCheck: r.scopeCheck ?? null };
+    if (!r.ok || !r.proposal || !r.previews?.length || scope === "read") {
+      if (r.proposal) await dropOnWire(kit, host, app, loop, r.proposal);
+      return refused(r.error ?? "the proposal was not pictured", base);
+    }
+    const posted = await postProposalItem(host, ctx, canvasId, screen, r, {
+      seq: ask.seq,
+      askSeq,
+      asker: { id: actor.id, name: actor.name, kind: isAgent ? "agent" : "person" },
+      scope: scope === "propose" ? "propose" : "write",
+      ops: ask.ops,
+      why: ask.why,
+      cites: ask.cites,
+      in: ask.in,
+      title: proposalTitle(actor.name, ask.ops)
+    });
+    if ("error" in posted) {
+      await dropOnWire(kit, host, app, loop, r.proposal);
+      return refused(posted.error, base);
+    }
+    return { seq: ask.seq, ok: true, itemId: posted.itemId, ...base, scope, previews: posted.cells, ms: Date.now() - started };
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+}
+async function postProposalItem(host, ctx, canvasId, screen, r, meta) {
+  const route = screen.properties[P().route];
+  const blobs = /* @__PURE__ */ new Map();
+  const put = async (file, sha) => {
+    const known = blobs.get(sha);
+    if (known) return known;
+    const b = await ctx.client.uploadBlob(canvasId, await fs.readFile(file), "image/png", path.basename(file));
+    const v = { blobHash: b.blobHash, size: b.size };
+    blobs.set(sha, v);
+    return v;
+  };
+  const versions = [];
+  const cells = [];
+  const version = async (file, sha, name) => {
+    const b = await put(file, sha);
+    const v = { id: id("ver"), blobHash: b.blobHash, mimeType: "image/png", filename: name, size: b.size };
+    versions.push(v);
+    return v.id;
+  };
+  for (const p of r.previews) {
+    const stem = `${route}-${p.host}-${p.device}-${p.scheme}`;
+    const before = await version(p.before, p.beforeSha256, `${stem}-before.png`);
+    const after = await version(p.after, p.afterSha256, `${stem}-proposed.png`);
+    cells.push({ host: p.host, device: p.device, scheme: p.scheme, before, after, restored: p.restored });
+  }
+  const host_ = screen.properties[P().host] ?? "web", device = screen.properties[P().device] ?? "phone", scheme = screen.properties[P().scheme] ?? "light";
+  const own = r.previews.find((p) => p.host === host_ && p.device === device && p.scheme === scheme);
+  if (!own) return { error: `this session pictures ${[...new Set(r.previews.map((p) => p.host))].join(", ")}; ${screen.title} is a ${host_} screen \u2014 propose on a screen this \`isocan exact live\` captures` };
+  await version(own.after, own.afterSha256, `${route}-${host_}-${device}-${scheme}.png`);
+  const record = {
+    seq: meta.seq,
+    route,
+    asker: meta.asker,
+    scope: meta.scope,
+    client: r.client,
+    proposal: r.proposal,
+    class: r.class,
+    how: r.how,
+    ops: meta.ops,
+    files: r.files ?? {},
+    changed: r.changed ?? [],
+    previews: cells,
+    at: (/* @__PURE__ */ new Date()).toISOString()
+  };
+  const snapshot = await ctx.client.snapshot(canvasId);
+  const size = { width: 1080, height: 300 + 280 * new Set(cells.map((c) => `${c.host}/${c.device}`)).size };
+  const area = meta.in ? snapshot.canvas.items[meta.in] : null;
+  const placement = area ? host.placementFor(snapshot, { in: area.id }, size) : { x: Math.round(screen.x), y: Math.round(screen.y + screen.height + 80) };
+  const itemId = id("itm");
+  const [first, ...rest] = versions;
+  const group = id("exact-proposal");
+  const add = {
+    type: "item.add",
+    itemId,
+    version: first,
+    width: size.width,
+    height: size.height,
+    placement,
+    title: meta.title,
+    // Core's proposal, by its own keys (`packages/core/src/proposal.ts`): hung beneath the screen it changes, citing the ask.
+    properties: {
+      proposal: "sure",
+      parent: screen.id,
+      proposalCites: JSON.stringify([{ kind: "op", ref: String(meta.askSeq) }, ...meta.cites]),
+      proposalWhy: meta.why,
+      [P().app]: JSON.stringify({ id: core.appIdOf(screen) }),
+      [P().proposal]: JSON.stringify(record),
+      ...meta.properties
+    },
+    ...snapshot.project.groupMode === "groups" && !area ? { containerId: null, groupPlacement: "exact" } : {}
+  };
+  try {
+    await host.sendOp(ctx, canvasId, add, group);
+    for (const v of rest) await host.sendOp(ctx, canvasId, { type: "item.addVersion", itemId, version: v }, group);
+  } catch (err) {
+    return { error: err.message };
+  }
+  return { itemId, cells: cells.length };
+}
+async function dropOnWire(kit, host, app, loop, proposal) {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-exact-drop-"));
+  try {
+    const job = path.join(dir, "job.json");
+    await fs.writeFile(job, JSON.stringify({ proposal }));
+    await kit.bridge(host, "drop", ["--app", app, "--job", job, "--dev-url", loop], "the drop", true);
+  } catch {
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+}
+async function settleKept(kit, host, ctx, canvasId, app, appId, entries, snapshot, say) {
+  const loop = process.env.ISOCAN_EXACT_LOOP;
+  const trashed = new Map(snapshot.canvas.trash.map((t) => [t.item.id, t.item]));
+  for (const e of entries) {
+    const op = e.envelope.op;
+    const ids = op.type === "item.delete" ? [op.itemId] : op.type === "group.change" ? [...new Set(JSON.stringify(op).match(/itm_[A-Za-z0-9_-]+/g) ?? [])] : [];
+    for (const goneId of ids) await settleOne(goneId, e);
+  }
+  async function settleOne(goneId, e) {
+    const gone = trashed.get(goneId);
+    const record = gone ? parseProposalRecord(gone.properties?.[P().proposal]) : null;
+    if (!gone || !record || core.appIdOf(gone) !== appId) return;
+    const screen = snapshot.canvas.items[gone.properties?.parent ?? ""];
+    const picture = currentVersion(gone);
+    const kept = !!screen && !!picture && screen.versions.some((v) => v.id === picture.id);
+    if (!loop || !LOOP.test(loop)) {
+      say(`${kept ? "kept" : "dropped"} ${gone.title}, but this \`isocan exact live\` runs no dev loop (--no-frames): nothing reached the wire`);
+      return;
+    }
+    if (!kept) {
+      await dropOnWire(kit, host, app, loop, record.proposal);
+      say(`dropped: ${gone.title} (${record.proposal})`);
+      return;
+    }
+    if (parseAcceptAnswer(screen.properties?.[P().accepted])?.item === gone.id) return;
+    const by = e.envelope.actor;
+    const answer = async (a) => {
+      const full = { item: gone.id, version: picture.id, by: by.name, at: (/* @__PURE__ */ new Date()).toISOString(), ...a };
+      await host.sendOp(ctx, canvasId, { type: "item.update", itemId: screen.id, patch: { properties: { [P().accepted]: JSON.stringify(full) } } }, id("exact-accept"));
+    };
+    const putBack = async () => {
+      const before = screen.versions.filter((v) => v.id !== picture.id).at(-1);
+      if (before && screen.currentVersionId === picture.id) await host.sendOp(ctx, canvasId, { type: "item.setCurrentVersion", itemId: screen.id, versionId: before.id }, id("exact-accept"));
+    };
+    const keptAt = grantedWrite(by, ctx.actor, process.env.ISOCAN_EXACT_GRANT) ? "write" : "read";
+    if (snapshot.canvas.agents?.[by.id]) {
+      await putBack();
+      await answer({ ok: false, proposal: record.proposal, heldAgain: null, written: [], error: `${by.name} is an agent: a proposal reaches the files only by a person's Keep` });
+      say(`refused: ${by.name}, an agent, chose ${gone.title}`);
+      return;
+    }
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-exact-accept-"));
+    let r;
+    try {
+      const job = path.join(dir, "job.json");
+      await fs.writeFile(job, JSON.stringify({ proposal: record.proposal, ops: record.ops, files: record.files, name: by.name, scope: keptAt }));
+      r = await kit.bridge(host, "accept", ["--app", app, "--job", job, "--dev-url", loop], "the accept", true);
+    } catch (err) {
+      r = { ok: false, error: err.message };
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+    if (!r.ok) await putBack();
+    await answer({ ok: r.ok, proposal: record.proposal, heldAgain: r.heldAgain ?? null, written: r.written ?? [], ...r.error ? { error: r.error } : {} });
+    say(r.ok ? `kept by ${by.name}: ${gone.title} \u2014 accepted on the wire, wrote ${(r.written ?? []).join(", ") || "nothing"}` : `kept by ${by.name}, not written: ${r.error}`);
+  }
+}
+
+export {
+  proposeVerb,
+  pendingProposes,
+  answerPropose,
+  postProposalItem,
+  dropOnWire,
+  settleKept
+};

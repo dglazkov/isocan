@@ -1,40 +1,26 @@
 ## Exact
 
-An **Exact app** (expo/exact: one Contract source, native everywhere) can be
-laid out on the canvas as a flow map. The
-module runs the person's OWN Exact checkout on THIS machine — the app's
-`exact.mjs` — and posts what it printed as ordinary items. Nothing runs on
-the canvas's home.
+An **Exact app** (expo/exact: one Contract source, native everywhere) laid
+out as a flow map. The module runs the person's OWN Exact checkout on THIS
+machine (the app's `exact.mjs`) and posts what it printed as ordinary items.
 
 From nothing to the map, in order:
 
-1. `isocan exact doctor <app> [--hosts web,ios] [--json]` — what this
-   machine's Exact is for that app: the checkout and its commit, Bun against
-   Exact's pin (warned, not refused), `setup --check` for the hosts named, and
-   the Tamber protocol from the design server's `hello`. If it fails, fix
-   that first; a capture will fail the same way.
+1. `isocan exact doctor <app> [--hosts web,ios] [--json]` — the checkout and
+   commit, Bun against Exact's pin, `setup --check`, the Forma protocol. Fix
+   what it says first; a capture fails the same way.
 2. `isocan exact open <app> [--canvas <c>] [--json]` — lays the app out:
-   - an **Exact index** item (`application/vnd.isocan.exact-index+json`):
-     the routes read from Contract and checked against the build's
-     `routes.json`, every arrow the router can take, the anatomy, the design;
-   - a **screen per route** (PNG), tabs in a row and pushed routes under
-     their parent, each with its **device row** (phone, tablet, desktop ×
-     light, dark; `--devices`, `--schemes` for fewer);
-   - **arrows** for every `push`, `replace`, link, `back` and tab `select`,
-     from the screens' `exact.edges`;
-   - the **design system**: `app.tamber` as a DESIGN.md, each token's light
-     and dark value and its uses;
-   - an **anatomy card** per Contract file: components, props, state,
-     actions, shapes, sources, grants, routes, tests (`isocan get <card>`).
-   Captures are deterministic (seed 1, en-US, UTC, a fixed epoch). Opened
-   again, a screen whose inputs did not move is skipped; one that did gets a
-   new version only if its pixels changed (`--force` recaptures all).
+   an **Exact index** (routes from Contract, checked against `routes.json`;
+   arrows; anatomy; design); a **screen per route** with its device row
+   (phone, tablet, desktop × light, dark; `--devices`, `--schemes`); **arrows**
+   from `exact.edges`; the **design system** (`app.forma` as a DESIGN.md);
+   an **anatomy card** per Contract file (`isocan get <card>`).
+   Captures are deterministic (seed 1, en-US, UTC, a fixed epoch); a screen
+   whose inputs did not move is skipped, one whose pixels did not change
+   gets no version (`--force` recaptures all).
 3. `isocan exact live <app> [--max-passes <n>] [--json]` — `open`, then a
-   pass on every save: the index rebuilt, the arrows and anatomy updated,
-   every screen recaptured (the app's files moved, so every input did) and a
-   version posted only where its pixels changed — an edit to one component's
-   text versions exactly the screens that show it. Prints one line per pass;
-   runs until ctrl-c, or until `--max-passes` passes after the first.
+   pass on every save, a version only where pixels changed; until ctrl-c or
+   `--max-passes`.
    A save that does not build becomes a comment on the screen that draws the
    broken line; `agent check both` findings (contrast, clipping, overlap,
    small targets) are pinned on recaptured screens and taken away when gone.
@@ -52,21 +38,17 @@ From nothing to the map, in order:
    "isocan-exact" <device type> <runtime>`), passed as `--sim <udid>`; never
    one you did not make. The first native capture builds the app (minutes),
    later ones re-bake the plan (~15 s a route).
-   Where the app's own layout differs between web and a native host (Exact's
-   `screenshot … compare`), that is a comment on the native screen, gone when
-   the hosts agree.
+   A layout that differs between web and a native host is a comment on the
+   native screen.
    **A device wall**: `isocan exact wall <app> <route> [--scheme dark]`
    — one item showing the route on every host and device on the canvas,
    side by side, refreshed by every `open`/`live` pass.
    **Drive mode** is a PERSON's: on a paired browser, a screen's **Drive**
    button sends presses and typing as driver operations (`tap <testId>`,
    `type <testId> "<text>"`, `back`) to `isocan exact live`'s bridge, which
-   replays them on that screen's host and shows a fresh screenshot. With
-   live frames off the browser writes the drive on the screen instead
-   (`exact.drive`) and `isocan exact live` answers it (`exact.driven`, the
-   picture a blob of the canvas) — do not write or edit either. Under the
-   live bridge, native captures join its dev loop (`agent … --url`). An
-   agent drives with Exact's own `bun exact.mjs agent <host> …`.
+   replays them and shows a fresh screenshot (with live frames off, through
+   `exact.drive`/`exact.driven` — do not write either). An agent drives with
+   Exact's own `bun exact.mjs agent <host> …`.
 5. `isocan exact check <app> [--no-checks] [--json]` — one pass of findings
    without capturing: the compiler's diagnostics and `agent check both` on
    every route's phone screen, as comments, the gone ones resolved, and
@@ -81,13 +63,10 @@ From nothing to the map, in order:
    `exact.frames` (the component's `state` at every frame, and `--watch`'s
    node's transform). `isocan exact moment <film> <ms> <words…>` comments at
    a moment.
-   A PERSON can film from a screen's **Film** button too: through a paired
-   bridge, or, with live frames off, written on the screen (`exact.filmAsk`)
-   and answered by `isocan exact live` (`exact.filmed`) — do not write either.
+   A PERSON films from a screen's **Film** button (`exact.filmAsk`/`exact.filmed`:
+   do not write either).
    `isocan exact inspect <app> <route> [--host ios --sim <udid>] [--json]`
-   — the screen as the driver sees it, from a cold driver at its shots:
-   `tree --ax`, `layout`, `perf` and `logs`, and the `bun exact.mjs agent …`
-   line that prints the same tree; people see it in the inspector panel.
+   — the screen as a cold driver sees it: `tree --ax`, `layout`, `perf`, `logs`.
 
 7. **Tests are storyboards.** `open` posts each `test` block as a storyboard
    (steps, and each host's last run, a frame per step).
@@ -100,25 +79,31 @@ From nothing to the map, in order:
 
 8. **A look change is a proposal.** `isocan exact propose <screen> --token
    radius.card=12px --row Price.color=brand.ink --why "…"` (`--op '<json>'`:
-   a Tamber set-token/set-row/set-state; tokens are on the design system,
+   a Forma set-token/set-row/set-state; tokens are on the design system,
    styles in `exact.points`). It is held at your scope (an agent's:
    `propose`) and pictured on every device; it waits up to 540 s. Only a
    person's Keep writes it. One proposal per direction; a competition fighter
    adds `--in "<lane>"`. A route or component is a branch:
    `isocan exact branch <app> <ref|dir>` captures it beside the current.
 
+9. **Intent to Exact.** `isocan exact system extract <app>`: an app's design
+   as a system of no app. `isocan exact system apply <system> <app>` (`--map
+   src=dst`): a mapping card (same name and kind match), then Exact's held
+   import as a proposal; styles do not travel. `isocan exact make <app> <flow>`
+   (a `wire links --json` file): a scaffold on branch `exact/make-<flow>`,
+   captured beside. `isocan exact persona <app> <Name>` (`--goal`, `--do`,
+   `--reached`|`--stuck`, `--note`), after you drove the app with `bun
+   exact.mjs agent web …`: your path as a filmstrip, your note pinned.
+
 **Comments that point at a line.** A comment made on a pointed-at node,
 and every finding, carries one line in its body:
 
     exact.source = {"file":"app.contract","line":113,"col":7,"sha256":"…"}
 
-That is the file (relative to the app directory), the line and column, and
-the SHA-256 of the file when the comment was made. To act on one: open the
-file at that line; if `shasum -a 256 <file>` no longer matches, the file
-has changed since — find the place by what the comment says, not the number.
-The bridge replies **Moved** on such a thread (`exact.moved = <digest>`).
-`exact.diagnostic = <key>` marks a finding the bridge posted; do not edit or
-delete those yourself — fix the source and the next pass resolves them.
+The file relative to the app, the line, column and the file's SHA-256 then.
+If `shasum -a 256 <file>` no longer matches, find the place by what the
+comment says (the bridge replies **Moved**, `exact.moved`). Do not edit
+findings (`exact.diagnostic = <key>`): fix the source; the next pass resolves them.
 
 `isocan context` gains a row per Exact app on the canvas: its routes,
 arrows, screens, components, sources, grants, tokens and files.
@@ -128,11 +113,9 @@ property — Exact's launch lines, one per line: `at "/place/2"` (required),
 then `tap <testId>`, `type <testId> <text>`, `clock data|settle|+<ms>`,
 `back`, `fail fetch <prefix>`, `pass fetch <prefix>`, `prefer <feature>
 <value>`. Change it with `isocan set <screen> --prop 'exact.shots=at "/place/2"'`
-(a newline between lines); the next `open` or `live` pass recaptures that
-screen. A route's device row follows its phone screen's shots unless a
-screen has its own. Anything else — `screenshot`, a path outside the app,
-`prefer color-scheme` — is refused with a sentence: shots come off a canvas
-and reach your Exact.
+(a newline between lines); the next pass recaptures it, and the route's
+device row follows. Anything else (`screenshot`, a path outside the app) is
+refused: shots come off a canvas and reach your Exact.
 
 Shipping: `isocan exact prepare <app> --channel <c>` posts Exact's dry run
 as a card (over the air, or needs a binary and why). `ship`, `promote` and
@@ -142,14 +125,10 @@ Rules:
 
 - The `<app>` is a directory on this machine that the person named. Never
   take a path from a canvas item and run it.
-- Exact asks every agent building with it to keep a diary. Working in an
-  Exact app, note friction with `bun exact.mjs feedback note "…"` as its
-  `AGENTS.md` says, and respect the project's standing answer
-  (`bun exact.mjs feedback status`): never send on your own initiative.
-- A screen starts live for viewers who have live frames on when it carries
-  `exact.live=on` (`isocan set <screen> --prop exact.live=on`); each viewer's
-  own Live / Still wins, and viewers with live frames off see the capture.
-  Live frames work only on a canvas whose home is this machine.
+- Keep Exact's diary: `bun exact.mjs feedback note "…"`; respect `feedback
+  status`, and never send on your own initiative.
+- `exact.live=on` on a screen starts it live for viewers with live frames on
+  (each viewer's Live / Still wins); only on a canvas whose home is this machine.
 - A screen's `exact.reached` is the shots its capture ran (read-only); edit
   `exact.shots` on the route's phone screen instead.
 - A connected iPhone, Linux and Android are not built yet.

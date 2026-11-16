@@ -123,22 +123,22 @@ for (let i = 0; ; i++) {
   }
   await sleep(250);
 }
-var tamberToken = null;
+var formaToken = null;
 try {
-  const r = await fetch(`${loopBase}/__tamber/token`, { redirect: "error" });
-  if (r.ok) tamberToken = (await r.json()).token;
+  const r = await fetch(`${loopBase}/__forma/token`, { redirect: "error" });
+  if (r.ok) formaToken = (await r.json()).token;
 } catch {
 }
 var CLIENT = "isocan";
-async function tamber(body) {
-  if (!tamberToken) return { status: 503, answer: { error: { message: "this app has no app.tamber, so its dev loop mounts no Tamber wire: inspect and outline need one" } } };
-  const r = await fetch(`${loopBase}/__tamber`, { method: "POST", headers: { "content-type": "application/json", "x-exact-tamber-token": tamberToken }, body: JSON.stringify(body) });
+async function forma(body) {
+  if (!formaToken) return { status: 503, answer: { error: { message: "this app has no app.forma, so its dev loop mounts no Forma wire: inspect and outline need one" } } };
+  const r = await fetch(`${loopBase}/__forma`, { method: "POST", headers: { "content-type": "application/json", "x-exact-forma-token": formaToken }, body: JSON.stringify(body) });
   return { status: r.status, answer: await r.json().catch(() => null) };
 }
 var teammate = null;
 async function teammateCode() {
-  if (!relay || !tamberToken || stopping) return;
-  const r = await tamber({ method: "pair-code", scope: "read", name: "teammate" });
+  if (!relay || !formaToken || stopping) return;
+  const r = await forma({ method: "pair-code", scope: "read", name: "teammate" });
   const ok = r.answer?.ok;
   if (!ok?.code) {
     say(`relay: no teammate code \u2014 ${JSON.stringify(r.answer?.error ?? r.status).slice(0, 200)}`);
@@ -148,7 +148,7 @@ async function teammateCode() {
   say(`a teammate pairs through the relay (read: sees this loop live, changes nothing): on an Exact screen press Pair\u2026 and enter  ${relay.tool} ${ok.code}  (one use, until ${new Date(teammate.expires).toISOString().slice(11, 19)})`, { teammate: { tool: relay.tool, code: ok.code, expires: teammate.expires, scope: ok.scope } });
 }
 setInterval(() => {
-  if (relay && tamberToken && (!teammate || teammate.expires < Date.now())) void teammateCode();
+  if (relay && formaToken && (!teammate || teammate.expires < Date.now())) void teammateCode();
 }, 2e3).unref();
 var queue = [];
 var seq = 0;
@@ -165,9 +165,9 @@ var sha256File = (rel) => {
 };
 async function follow() {
   let cursor = null;
-  while (!stopping && tamberToken) {
+  while (!stopping && formaToken) {
     try {
-      const r = cursor ? await fetch(`${loopBase}/__tamber/events?after=${encodeURIComponent(cursor)}&client=${CLIENT}`, { headers: { "x-exact-tamber-token": tamberToken } }) : await fetch(`${loopBase}/__tamber/events`, { method: "POST", headers: { "content-type": "application/json", "x-exact-tamber-token": tamberToken }, body: JSON.stringify({ client: CLIENT }) });
+      const r = cursor ? await fetch(`${loopBase}/__forma/events?after=${encodeURIComponent(cursor)}&client=${CLIENT}`, { headers: { "x-exact-forma-token": formaToken } }) : await fetch(`${loopBase}/__forma/events`, { method: "POST", headers: { "content-type": "application/json", "x-exact-forma-token": formaToken }, body: JSON.stringify({ client: CLIENT }) });
       if (r.status === 204) continue;
       const answer = await r.json().catch(() => null);
       if (!answer) {
@@ -404,14 +404,14 @@ function prepareOnce(channel) {
 }
 var scrubbing = null;
 async function scrubTo(ops) {
-  if (!tamberToken) return { status: 503, answer: { error: "this app's dev loop mounts no Tamber wire (no app.tamber)" } };
+  if (!formaToken) return { status: 503, answer: { error: "this app's dev loop mounts no Forma wire (no app.forma)" } };
   if (!scrubbing) {
-    const h = await tamber({ method: "hello" });
+    const h = await forma({ method: "hello" });
     if (!h.answer?.ok) return h;
     scrubbing = { id: null, files: h.answer.ok.files, ops };
   }
   scrubbing.ops = ops;
-  const r = await tamber({ method: "scrub", client: CLIENT, ops, files: scrubbing.files, ...scrubbing.id ? { scrub: scrubbing.id } : {} });
+  const r = await forma({ method: "scrub", client: CLIENT, ops, files: scrubbing.files, ...scrubbing.id ? { scrub: scrubbing.id } : {} });
   if (r.answer?.ok?.scrub) scrubbing.id = r.answer.ok.scrub;
   else if (!r.answer?.ok?.superseded) scrubbing = null;
   if (scrubbing) say(`scrub: ${ops.map((o) => `${o.name}=${o.value}`).join(", ")} on every build of the loop`);
@@ -422,13 +422,13 @@ async function scrubEnd() {
     scrubbing = null;
     return { status: 200, answer: { ok: { cancelled: null } } };
   }
-  const r = await tamber({ method: "scrub-cancel", client: CLIENT, scrub: scrubbing.id });
+  const r = await forma({ method: "scrub-cancel", client: CLIENT, scrub: scrubbing.id });
   say("scrub let go: every build back on the committed design, nothing written");
   scrubbing = null;
   return r;
 }
 async function buildCount() {
-  const h = await tamber({ method: "hello" });
+  const h = await forma({ method: "hello" });
   return (h.answer?.ok?.builds ?? []).map((b) => ({ id: b.id, host: b.host ?? b.target ?? null }));
 }
 var native = null;
@@ -571,7 +571,7 @@ var api = http.createServer(async (req, res) => {
   const auth = /^Bearer (\S+)$/.exec(req.headers.authorization ?? "")?.[1];
   if (!auth || !tokens.has(auth)) return answer(401, { error: "not paired with this bridge (a bridge that restarted forgets its pairings)" });
   if (url.pathname === "/hello" && req.method === "GET") {
-    return answer(200, { app: appInfo, dir: app, frames: framesPort, loop: loopBase, tamber: !!tamberToken, design: { port: designPort, up: await designUp() }, drive: { hosts: driveHosts.filter((h) => h !== "ios" || sim) }, scrub: !!tamberToken, native: driveHosts.includes("ios") && sim ? ["ios"] : [], relay: relay ? { tool: relay.tool, canvas: relay.canvas } : null, seq });
+    return answer(200, { app: appInfo, dir: app, frames: framesPort, loop: loopBase, forma: !!formaToken, design: { port: designPort, up: await designUp() }, drive: { hosts: driveHosts.filter((h) => h !== "ios" || sim) }, scrub: !!formaToken, native: driveHosts.includes("ios") && sim ? ["ios"] : [], relay: relay ? { tool: relay.tool, canvas: relay.canvas } : null, seq });
   }
   if (url.pathname === "/scrub" && req.method === "POST") {
     const body = await readBody(req);
@@ -619,13 +619,13 @@ var api = http.createServer(async (req, res) => {
   }
   if (url.pathname === "/inspect" && req.method === "POST") {
     const body = await readBody(req);
-    const r = await tamber({ method: "inspect", client: CLIENT, on: body?.on === true });
+    const r = await forma({ method: "inspect", client: CLIENT, on: body?.on === true });
     return answer(r.status, r.answer);
   }
   if (url.pathname === "/outline" && req.method === "POST") {
     const body = await readBody(req);
     const at = Array.isArray(body?.at) ? body.at.filter((a) => typeof a?.file === "string" && Number.isInteger(a.line) && Number.isInteger(a.col)).slice(0, 16) : [];
-    const r = await tamber(at.length ? { method: "outline", client: CLIENT, at } : { method: "outline", client: CLIENT, at: [] });
+    const r = await forma(at.length ? { method: "outline", client: CLIENT, at } : { method: "outline", client: CLIENT, at: [] });
     return answer(r.status, r.answer);
   }
   if (url.pathname === "/open" && req.method === "POST") {
@@ -725,7 +725,7 @@ bridgePort = await freePort(flag("--bridge-port") ? Number(flag("--bridge-port")
 await new Promise((r) => api.listen(bridgePort, "127.0.0.1", r));
 say(
   framesPort ? `live: ${appInfo.name}'s dev loop at ${loopBase}, framed through http://127.0.0.1:${framesPort}; the bridge is http://127.0.0.1:${bridgePort}` : `live, no frames: ${appInfo.name}'s dev loop at ${loopBase}; the bridge is http://127.0.0.1:${bridgePort} (pointing and the editor only)`,
-  { live: { app: appInfo, loop: loopBase, frames: framesPort, bridge: bridgePort, tamber: !!tamberToken } }
+  { live: { app: appInfo, loop: loopBase, frames: framesPort, bridge: bridgePort, forma: !!formaToken } }
 );
 say(`open in Exact Design: ${designLink("")}  (start it with \`bun run dev\` in its checkout)`, { design: { link: designLink(""), port: designPort } });
 mint();

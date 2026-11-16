@@ -141,3 +141,11 @@
 .exact-release-screens figure { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; max-width: 240px; }
 .exact-release-screens figcaption { grid-column: 1 / -1; font-size: 11px; }
 .exact-release-screens img { width: 100%; height: auto; }
+.exact-system-tokens { display: grid; gap: 4px; max-height: 320px; overflow: auto; }
+.exact-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; border: 1px solid var(--line); margin-right: 4px; vertical-align: -1px; }
+.exact-system-map { flex: 1 1 100%; min-width: 0; font: inherit; font-size: 12px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--ink); }
+.exact-persona { display: grid; gap: 8px; padding: 12px; height: 100%; box-sizing: border-box; overflow: hidden; }
+.exact-persona-strip { display: flex; gap: 12px; overflow-x: auto; }
+.exact-persona-frame { margin: 0; display: grid; gap: 4px; flex: 0 0 180px; font-size: 11px; }
+.exact-persona-frame img { width: 180px; border: 1px solid var(--line); border-radius: 6px; }
+.exact-persona-broke img { outline: 2px solid var(--danger); }
