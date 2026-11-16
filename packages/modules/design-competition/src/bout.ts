@@ -473,14 +473,31 @@ export function arenaOrigin(canvas: CanvasContents): { x: number; y: number } {
  * was asked. Who it IS lives in its working directory (the template); what to
  * DO lives here.
  */
-export function fighterBrief(bout: Bout, lane: Lane, pack: FighterPack, agentName: string): string {
+export function exactTargetOf(canvas: CanvasContents, bout: Bout): { id: string; title: string } | null {
+  const target = bout.target ? canvas.items[bout.target] : undefined;
+  return target && target.properties["exact.route"] ? { id: target.id, title: target.title } : null;
+}
+
+export function entryRule(lane: string, exact: { id: string; title: string } | null): string {
+  return exact
+    ? `propose on "${exact.title}": \`isocan exact propose ${exact.id} --in "${lane}" --why "…"\`, your entry (no \`isocan add\`)`
+    : `build only in your lane (\`isocan add … --in "${lane}"\`)`;
+}
+
+export function takeRefusal(canvas: CanvasContents, bout: Bout): string | null {
+  return exactTargetOf(canvas, bout) ? "an Exact screen: Keep the winning proposal instead" : null;
+}
+
+export function fighterBrief(bout: Bout, lane: Lane, pack: FighterPack, agentName: string, exact: { id: string; title: string } | null = null): string {
   const rivals = bout.lanes.filter((l) => l.packId !== lane.packId).map((l) => l.area.title);
   return [
     `@${agentName} — you are fighting in **${bout.brief.title.replace(/^Design competition — /, "")}**.`,
     "",
-    `**The brief** is the Brief card above the lanes. **Your lane** is "${lane.area.title}". Build ${bout.entryKind === "flow" ? "a flow of three screens" : "one screen"} there, in the spirit of *${pack.title}* (${pack.credit}) — your \`DESIGN.md\` is the design system scoped to your lane: \`isocan design --css --in "${lane.area.title}"\` prints its tokens.`,
+    exact
+      ? `**The brief** is the Brief card. **Your lane** is "${lane.area.title}". One direction, in the spirit of *${pack.title}*, as a proposal.`
+      : `**The brief** is the Brief card above the lanes. **Your lane** is "${lane.area.title}". Build ${bout.entryKind === "flow" ? "a flow of three screens" : "one screen"} there, in the spirit of *${pack.title}* (${pack.credit}) — your \`DESIGN.md\` is the design system scoped to your lane: \`isocan design --css --in "${lane.area.title}"\` prints its tokens.`,
     "",
-    `**The rules of the bout:** build only in your lane (\`isocan add … --in "${lane.area.title}"\`); do not read the other lanes (${rivals.join(", ")}); one entry; hand it in with \`isocan competition handin <item>\` before the bell (${bout.minutes} minutes). You are an homage, not the person — never sign as them.`,
+    `**The rules of the bout:** ${entryRule(lane.area.title, exact)}; do not read the other lanes (${rivals.join(", ")}); one entry; hand it in with \`isocan competition handin <item>\` before the bell (${bout.minutes} minutes). You are an homage, not the person — never sign as them.`,
     "",
     "When the bell rings you will be asked to critique each rival entry in your voice and rank the ones you did not make. Until then: build.",
   ].join("\n");
@@ -492,6 +509,7 @@ export interface StartInput {
   /** The actor each lane's fighter was enrolled as. */
   actors: Record<string, { id: string; name: string }>;
   now: Date;
+  exact?: { id: string; title: string } | null;
 }
 
 /**
@@ -515,7 +533,7 @@ export function startPlan(input: StartInput): Operation[] {
       x: lane.area.x + CARD.width + AREA_INSET * 3,
       y: lane.area.y + AREA_HEAD + 20,
       anchorItemId: lane.area.id,
-      comment: { id: newCommentId(), body: fighterBrief(input.bout, lane, pack, actor.name), mentions: [actor.id], items: [input.bout.brief.id] },
+      comment: { id: newCommentId(), body: fighterBrief(input.bout, lane, pack, actor.name, input.exact ?? null), mentions: [actor.id], items: [input.bout.brief.id] },
     });
   }
   ops.push({ type: "item.update", itemId: input.bout.brief.id, patch: { properties: { [P.phase]: "building", [P.until]: until } } });

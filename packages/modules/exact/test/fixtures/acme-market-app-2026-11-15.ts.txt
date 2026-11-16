@@ -1,0 +1,14 @@
+import type { Answer, Sources } from './app.contract.d.ts';
+
+export const grants = '';
+
+const sources: Sources = {
+  loadPlaces: () => [
+    { id: '1', name: 'Acme Mug', area: 'Kitchen', about: 'A stoneware mug that holds twelve ounces.', price: 12 },
+    { id: '2', name: 'Acme Tote', area: 'Bags', about: 'A canvas tote with an inside pocket.', price: 18 },
+    { id: '3', name: 'Acme Lamp', area: 'Home', about: 'A desk lamp with a warm, dimmable light.', price: 45 },
+  ],
+  // Hermes runs the data module on the native hosts and defines HermesInternal; a browser does not.
+  whichEngine: () => (typeof (globalThis as { HermesInternal?: unknown }).HermesInternal === 'undefined' ? { name: 'browser' } : { name: 'hermes' }),
+};
+export const answer: Answer = (source, args, store, storage, native) => sources[source](args, store, storage, native);

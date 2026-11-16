@@ -268,7 +268,10 @@ three buttons, three verbs:
   (`item.addVersion`). **Not `choose`**: `convergePlan` folds a child into its
   parent and *trashes every sibling*, and the siblings here are the other
   entries, which are the record of why. A competition converges by copying,
-  not by folding.
+  not by folding. **On an Exact screen** (exact phase 6, 14 Nov 2026) the
+  entries are Tamber proposals, fighters are told `isocan exact propose …
+  --in <lane>`, and Take it refuses: the winner lands only by the person's
+  Keep on its proposal, which is what writes the app's files.
 - **Remix** — a new bout, one fighter (the winner's, by default), the winning
   entry as its input and a generated brief listing every 🔴 dot and every
   critique idea from the other lanes. Diverge, then converge: the remix is the

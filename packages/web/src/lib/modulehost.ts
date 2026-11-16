@@ -28,6 +28,7 @@ import { glideToBox } from "./zoomactions.ts";
 import { currentCommands } from "./commands.ts";
 import { runLocalCommand } from "./localcommands.ts";
 import { postToMain } from "./mainthread.ts";
+import { localToolDoor } from "./localTool.ts";
 
 /**
  * **The web half's host object** (#156, 9 Sep 2026).
@@ -134,6 +135,8 @@ export function webHostFor(canvasId: string, actor: Actor, destination = creatio
       throw new Error(`the rc did not enrol ${ask.name} — its terminal says why`);
     },
     viewer: { id: actor.id, name: actor.name },
+    // The local-tool door (exact phase 2): shut unless this home is on this machine and the tool's switch is on.
+    localTool: localToolDoor,
     /** The shell's own selection action, handed to modules unchanged — so a
      *  module's "select these" and a person's click land in exactly the same
      *  state, side effects and all. Unknown ids are dropped rather than

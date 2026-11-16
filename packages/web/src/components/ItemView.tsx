@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import { localToolDoor } from "../lib/localTool.ts";
 import { groupContentBox, groupCellBox, groupGridNeedsRoom, groupChildren, groupAncestors, groupScopedRoot, groupDropTarget, groupDropPolicy, groupTransformClosure, groupStackBox, isGroupItem, reachHeld } from "@isocan/core";
 import { frameGap, groupsEnabled, enterCanvasGroup, scopedHit } from "../lib/canvasgroups.ts";
 import { Suspense, lazy, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -1864,6 +1865,7 @@ function VersionFace({
         entered={entered}
         url={url}
         readText={readText}
+        localTool={localToolDoor}
       /></Suspense>
     );
   }

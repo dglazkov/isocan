@@ -36,6 +36,9 @@ import {
   FIGHTER_MIME,
   arenaPlan,
   bellPlan,
+  entryRule,
+  exactTargetOf,
+  takeRefusal,
   boutRounds,
   findBout,
   readCard,
@@ -239,6 +242,31 @@ describe("the start, the bell and the tally", () => {
     expect(briefs.map((op) => (op.type === "thread.create" ? op.comment.mentions : []))).toEqual([["agt_kare"], ["agt_rams"], ["agt_linear"]]);
     expect(bout.phase).toBe("building");
     expect(bout.lanes.map((l) => l.actorId)).toEqual(["agt_kare", "agt_rams", "agt_linear"]);
+  });
+
+  it("on an Exact screen, has fighters propose in their lane instead of adding a file (exact phase 6)", () => {
+    const laid = layBout();
+    const screen = { ...Object.values(laid.canvas.items)[0]!, id: "s_place", title: "Acme Market · place", properties: { "exact.route": "place" } } as Item;
+    const canvas = { ...laid.canvas, items: { ...laid.canvas.items, s_place: screen } };
+    const bout = { ...laid.bout, target: "s_place" };
+    const exact = exactTargetOf(canvas, bout);
+    expect(exact).toEqual({ id: "s_place", title: "Acme Market · place" });
+    const ops = startPlan({ bout, packs, actors: fightersActors, now: new Date("2026-09-11T10:00:00.000Z"), exact });
+    const bodies = ops.flatMap((op) => (op.type === "thread.create" ? [op.comment.body] : []));
+    expect(bodies).toHaveLength(3);
+    for (const b of bodies) {
+      expect(b).toContain("isocan exact propose s_place --in");
+      expect(b).not.toContain("`isocan add …");
+    }
+    expect(entryRule("Road Signs", exact)).toContain('--in "Road Signs"');
+    // Take would draw the winner's picture with the files unchanged: on an Exact screen it refuses, naming Keep.
+    expect(takeRefusal(canvas, bout)).toMatch(/Keep the winning proposal/);
+    expect(takeRefusal(laid.canvas, laid.bout)).toBeNull();
+    // Every other bout keeps the file path, word for word.
+    expect(exactTargetOf(laid.canvas, laid.bout)).toBeNull();
+    expect(entryRule("Road Signs", null)).toBe('build only in your lane (`isocan add … --in "Road Signs"`)');
+    const plain = startPlan({ bout: laid.bout, packs, actors: fightersActors, now: new Date("2026-09-11T10:00:00.000Z") });
+    expect(plain.flatMap((op) => (op.type === "thread.create" ? [op.comment.body] : [])).every((b) => b.includes('`isocan add … --in "') && !b.includes("exact propose"))).toBe(true);
   });
 
   function voted(reactions: Record<string, Record<string, string[]>>, extra: Record<string, string> = {}) {

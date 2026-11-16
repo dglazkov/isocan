@@ -1,0 +1,2240 @@
+{
+ "compare": {
+  "compares": [
+   {
+    "route": "cart",
+    "host": "ios",
+    "size": "402x874",
+    "compare": {
+     "match": 0.9862700228832952,
+     "regions": [
+      {
+       "screen": {
+        "x": 16,
+        "y": 18,
+        "w": 125,
+        "h": 21
+       },
+       "count": 795,
+       "colours": {
+        "screen": {
+         "fill": "#fff",
+         "ink": "#244"
+        },
+        "reference": {
+         "fill": "#fff",
+         "ink": "#000"
+        }
+       },
+       "hint": null
+      },
+      {
+       "screen": {
+        "x": 33,
+        "y": 253,
+        "w": 79,
+        "h": 18
+       },
+       "count": 597,
+       "colours": {
+        "screen": {
+         "fill": "#fff",
+         "ink": "#06d"
+        },
+        "reference": {
+         "fill": "#fff",
+         "ink": "#000"
+        }
+       },
+       "hint": null
+      },
+      {
+       "screen": {
+        "x": 141,
+        "y": 803,
+        "w": 33,
+        "h": 37
+       },
+       "count": 570,
+       "colours": {
+        "screen": {
+         "fill": "#fff"
+        },
+        "reference": {
+         "fill": "#ddf",
+         "ink": "#06f"
+        }
+       },
+       "hint": null
+      },
+      {
+       "screen": {
+        "x": 31,
+        "y": 75,
+        "w": 79,
+        "h": 35
+       },
+       "count": 449,
+       "colours": {
+        "screen": {
+         "fill": "#fff",
+         "ink": "#000"
+        },
+        "reference": {
+         "fill": "#fff",
+         "ink": "#222"
+        }
+       },
+       "hint": null
+      },
+      {
+       "screen": {
+        "x": 288,
+        "y": 26,
+        "w": 79,
+        "h": 13
+       },
+       "count": 412,
+       "colours": {
+        "screen": {
+         "fill": "#fff"
+        },
+        "reference": {
+         "fill": "#fff",
+         "ink": "#2b4"
+        }
+       },
+       "hint": null
+      },
+      {
+       "screen": {
+        "x": 33,
+        "y": 345,
+        "w": 72,
+        "h": 13
+       },
+       "count": 376,
+       "colours": {
+        "screen": {
+         "fill": "#fff"
+        },
+        "reference": {
+         "fill": "#fff",
+         "ink": "#09f"
+        }
+       },
+       "hint": null
+      }
+     ],
+     "more": 8
+    },
+    "text": "compare <captures>/job-0-0.png: 98.6% matches (402\u00d7874 px); diff <captures>/compare-0.diff.png (reference | screen | differences); side by side at half size, <captures>/compare-0.side.png (reference | screen, the regions outlined); up close, <captures>/compare-0.regions.png (a row a region, 1 to 6)\n  1 [16,18 125\u00d721] (795 px\u00b2) under View [0,0 402\u00d753] app.contract:83, in app [0,0 402\u00d7874] app.contract:75: here #244 on #fff, in the reference #000 on #fff\n  2 [33,253 79\u00d718] (597 px\u00b2) under Text \"Checkout\" [33,251 336\u00d718] app.contract:201: here #06d on #fff, in the reference #000 on #fff\n  3 [141,803 33\u00d737] (570 px\u00b2) under tab-places [0,818 201\u00d756] app.contract:146: here #fff, in the reference #06f on #ddf\n  4 [31,75 79\u00d735] (449 px\u00b2) under cart-2 [17,78 368\u00d752] app.contract:191: here #000 on #fff, in the reference #222 on #fff\n  5 [288,26 79\u00d713] (412 px\u00b2) under Text \"Cart\" [99,14 287\u00d724] app.contract:84: here #fff, in the reference #2b4 on #fff\n  6 [33,345 72\u00d713] (376 px\u00b2) under cart-list [0,53 402\u00d7764] app.contract:183: here #fff, in the reference #09f on #fff\n  \u2026 and 8 smaller regions, in the diff",
+    "web": {
+     "files": {
+      "app.contract": "e6d24a32540f774aca658da516761acba0f8e1714d6901fba4547709b0d8f88b"
+     },
+     "nodes": [
+      {
+       "x": 0,
+       "y": 0,
+       "w": 402,
+       "h": 874,
+       "type": "View",
+       "testId": "app",
+       "file": "app.contract",
+       "line": 75,
+       "col": 5,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 0,
+       "y": 0,
+       "w": 402,
+       "h": 817,
+       "type": "View",
+       "file": "app.contract",
+       "line": 77,
+       "col": 7,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 0,
+       "y": 0,
+       "w": 402,
+       "h": 817,
+       "type": "View",
+       "file": "app.contract",
+       "line": 79,
+       "col": 11,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 0,
+       "y": 0,
+       "w": 402,
+       "h": 817,
+       "type": "View",
+       "file": "app.contract",
+       "line": 81,
+       "col": 15,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 0,
+       "y": 0,
+       "w": 402,
+       "h": 53,
+       "type": "View",
+       "file": "app.contract",
+       "line": 83,
+       "col": 17,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 99,
+       "y": 14,
+       "w": 287,
+       "h": 24,
+       "type": "Text",
+       "file": "app.contract",
+       "line": 84,
+       "col": 19,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 0,
+       "y": 53,
+       "w": 402,
+       "h": 764,
+       "type": "List",
+       "testId": "cart-list",
+       "file": "app.contract",
+       "line": 183,
+       "col": 7,
+       "component": "CartView",
+       "chain": [
+        {
+         "file": "app.contract",
+         "line": 109,
+         "col": 19,
+         "component": "App"
+        }
+       ]
+      },
+      {
+       "x": 0,
+       "y": 77,
+       "w": 402,
+       "h": 54,
+       "type": "View",
+       "file": "app.contract",
+       "line": 189,
+       "col": 9,
+       "component": "CartView",
+       "chain": [
+        {
+         "file": "app.contract",
+         "line": 109,
+         "col": 19,
+         "component": "App"
+        }
+       ]
+      },
+      {
+       "x": 16,
+       "y": 77,
+       "w": 370,
+       "h": 54,
+       "type": "View",
+       "file": "app.contract",
+       "line": 189,
+       "col": 9,
+       "component": "CartView",
+       "chain": [
+        {
+         "file": "app.contract",
+         "line": 109,
+         "col": 19,
+         "component": "App"
+        }
+       ]
+      },
+      {
+       "x": 17,
+       "y": 78,
+       "w": 368,
+       "h": 52,
+       "type": "View",
+       "testId": "cart-2",
+       "file": "app.contract",
+       "line": 191,
+       "col": 13,
+       "component": "CartView",
+       "chain": [
+        {
+         "file": "app.contract",
+         "line": 109,
+         "col": 19,
+         "component": "App"
+        }
+       ]
+      },
+      {
+       "x": 33,
+       "y": 95,
+       "w": 299,
+       "h": 18,
+       "type": "Text",
+       "file": "app.contract",
+       "line": 192,
+       "col": 15,
+       "component": "CartView",
+       "chain": [
+        {
+         "file": "app.contract",
+         "line": 109,
+         "col": 19,
+         "component": "App"
+        }
+       ]
+      },
+      {
+       "x": 340,
+       "y": 95,
+       "w": 29,
+       "h": 18,
+       "type": "Text",
+       "file": "app.contract",
+       "line": 193,
+       "col": 15,
+       "component": "CartView",
+       "chain": [
+        {
+         "file": "app.contract",
+         "line": 109,
+         "col": 19,
+         "component": "App"
+        }
+       ]
+      },
+      {
+       "x": 0,
+       "y": 155,
+       "w": 402,
+       "h": 54,
+       "type": "View",
+       "file": "app.contract",
+       "line": 195,
+       "col": 11,
+       "component": "CartView",
+       "chain": [
+        {
+         "file": "app.contract",
+         "line": 109,
+         "col": 19,
+         "component": "App"
+        }
+       ]
+      },
+      {
+       "x": 16,
+       "y": 155,
+       "w": 370,
+       "h": 54,
+       "type": "View",
+       "file": "app.contract",
+       "line": 195,
+       "col": 11,
+       "component": "CartView",
+       "chain": [
+        {
+         "file": "app.contract",
+         "line": 109,
+         "col": 19,
+         "component": "App"
+        }
+       ]
+      },
+      {
+       "x": 17,
+       "y": 156,
+       "w": 368,
+       "h": 52,
+       "type": "View",
+       "testId": "cart-total",
+       "file": "app.contract",
+       "line": 196,
+       "col": 13,
+       "component": "CartView",
+       "chain": [
+        {
+         "file": "app.contract",
+         "line": 109,
+         "col": 19,
+         "component": "App"
+        }
+       ]
+      },
+      {
+       "x": 33,
+       "y": 173,
+       "w": 299,
+       "h": 18,
+       "type": "Text",
+       "file": "app.contract",
+       "line": 197,
+       "col": 15,
+       "component": "CartView",
+       "chain": [
+        {
+         "file": "app.contract",
+         "line": 109,
+         "col": 19,
+         "component": "App"
+        }
+       ]
+      },
+      {
+       "x": 340,
+       "y": 173,
+       "w": 29,
+       "h": 18,
+       "type": "Text",
+       "file": "app.contract",
+       "line": 198,
+       "col": 15,
+       "component": "CartView",
+       "chain": [
+        {
+         "file": "app.contract",
+         "line": 109,
+         "col": 19,
+         "component": "App"
+        }
+       ]
+      },
+      {
+       "x": 0,
+       "y": 233,
+       "w": 402,
+       "h": 54,
+       "type": "View",
+       "file": "app.contract",
+       "line": 199,
+       "col": 9,
+       "component": "CartView",
+       "chain": [
+        {
+         "file": "app.contract",
+         "line": 109,
+         "col": 19,
+         "component": "App"
+        }
+       ]
+      },
+      {
+       "x": 16,
+       "y": 233,
+       "w": 370,
+       "h": 54,
+       "type": "View",
+       "file": "app.contract",
+       "line": 199,
+       "col": 9,
+       "component": "CartView",
+       "chain": [
+        {
+         "file": "app.contract",
+         "line": 109,
+         "col": 19,
+         "component": "App"
+        }
+       ]
+      },
+      {
+       "x": 17,
+       "y": 234,
+       "w": 368,
+       "h": 52,
+       "type": "Pressable",
+       "testId": "checkout",
+       "file": "app.contract",
+       "line": 200,
+       "col": 11,
+       "component": "CartView",
+       "chain": [
+        {
+         "file": "app.contract",
+         "line": 109,
+         "col": 19,
+         "component": "App"
+        }
+       ]
+      },
+      {
+       "x": 33,
+       "y": 251,
+       "w": 336,
+       "h": 18,
+       "type": "Text",
+       "file": "app.contract",
+       "line": 201,
+       "col": 13,
+       "component": "CartView",
+       "chain": [
+        {
+         "file": "app.contract",
+         "line": 109,
+         "col": 19,
+         "component": "App"
+        }
+       ]
+      },
+      {
+       "x": 0,
+       "y": 817,
+       "w": 402,
+       "h": 57,
+       "type": "View",
+       "testId": "tabs",
+       "file": "app.contract",
+       "line": 145,
+       "col": 7,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 0,
+       "y": 818,
+       "w": 201,
+       "h": 56,
+       "type": "Control",
+       "testId": "tab-places",
+       "file": "app.contract",
+       "line": 146,
+       "col": 9,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 89,
+       "y": 827,
+       "w": 22,
+       "h": 22,
+       "type": "Image",
+       "file": "app.contract",
+       "line": 148,
+       "col": 11,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 81,
+       "y": 851,
+       "w": 38,
+       "h": 15,
+       "type": "Text",
+       "file": "app.contract",
+       "line": 149,
+       "col": 11,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 201,
+       "y": 818,
+       "w": 201,
+       "h": 56,
+       "type": "Control",
+       "testId": "tab-saved",
+       "file": "app.contract",
+       "line": 150,
+       "col": 9,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 291,
+       "y": 827,
+       "w": 22,
+       "h": 22,
+       "type": "Image",
+       "file": "app.contract",
+       "line": 152,
+       "col": 11,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 284,
+       "y": 851,
+       "w": 35,
+       "h": 15,
+       "type": "Text",
+       "file": "app.contract",
+       "line": 153,
+       "col": 11,
+       "component": "App",
+       "chain": []
+      }
+     ]
+    }
+   },
+   {
+    "route": "cart",
+    "host": "macos",
+    "size": "1280x800",
+    "compare": {
+     "match": 0.9914580078125,
+     "regions": [
+      {
+       "screen": {
+        "x": 256,
+        "y": 18,
+        "w": 166,
+        "h": 21
+       },
+       "count": 1744,
+       "colours": {
+        "screen": {
+         "fill": "#fff",
+         "ink": "#244"
+        },
+        "reference": {
+         "fill": "#fff"
+        }
+       },
+       "hint": null
+      },
+      {
+       "screen": {
+        "x": 256,
+        "y": 56,
+        "w": 287,
+        "h": 36
+       },
+       "count": 903,
+       "colours": {
+        "screen": {
+         "fill": "#fff",
+         "ink": "#999"
+        },
+        "reference": {
+         "fill": "#fff",
+         "ink": "#222"
+        }
+       },
+       "hint": null
+      },
+      {
+       "screen": {
+        "x": 576,
+        "y": 18,
+        "w": 126,
+        "h": 17
+       },
+       "count": 666,
+       "colours": {
+        "screen": {
+         "fill": "#fff",
+         "ink": "#244"
+        },
+        "reference": {
+         "fill": "#fff"
+        }
+       },
+       "hint": null
+      },
+      {
+       "screen": {
+        "x": 17,
+        "y": 12,
+        "w": 80,
+        "h": 26
+       },
+       "count": 601,
+       "colours": {
+        "screen": {
+         "fill": "#ddd",
+         "ink": "#000"
+        },
+        "reference": {
+         "fill": "#fff",
+         "ink": "#244"
+        }
+       },
+       "hint": null
+      },
+      {
+       "screen": {
+        "x": 257,
+        "y": 107,
+        "w": 185,
+        "h": 12
+       },
+       "count": 600,
+       "colours": {
+        "screen": {
+         "fill": "#fff",
+         "ink": "#666"
+        },
+        "reference": {
+         "fill": "#fff",
+         "ink": "#222"
+        }
+       },
+       "hint": null
+      },
+      {
+       "screen": {
+        "x": 273,
+        "y": 151,
+        "w": 83,
+        "h": 31
+       },
+       "count": 488,
+       "colours": {
+        "screen": {
+         "fill": "#fff",
+         "ink": "#000"
+        },
+        "reference": {
+         "fill": "#fff",
+         "ink": "#222"
+        }
+       },
+       "hint": null
+      }
+     ],
+     "more": 17
+    },
+    "text": "compare <captures>/job-1-0.png: 99.1% matches (1280\u00d7800 px); diff <captures>/compare-1.diff.png (reference | screen | differences); side by side at half size, <captures>/compare-1.side.png (reference | screen, the regions outlined); up close, <captures>/compare-1.regions.png (a row a region, 1 to 6)\n  1 [256,18 166\u00d721] (1744 px\u00b2) under Text \"Acme Market\" [256,12 260\u00d732] app.contract:84: here #244 on #fff, in the reference #fff\n  2 [256,56 287\u00d736] (903 px\u00b2) under search-places (TextInput \"Search Places\") [256,56 287\u00d736] app.contract:96: here #999 on #fff, in the reference #222 on #fff\n  3 [576,18 126\u00d717] (666 px\u00b2) under View [560,0 720\u00d753] app.contract:83, in app [0,0 1280\u00d7800] app.contract:75: here #244 on #fff, in the reference #fff\n  4 [17,12 80\u00d726] (601 px\u00b2) under Text \"Places\" [48,20 49\u00d720] app.contract:149: here #000 on #ddd, in the reference #244 on #fff\n  5 [257,107 185\u00d712] (600 px\u00b2) under shipping-note (Text \"Free shipping on orders ove\u2026\") [240,101 319\u00d723] app.contract:161: here #666 on #fff, in the reference #222 on #fff\n  6 [273,151 83\u00d731] (488 px\u00b2) under View [273,144 253\u00d745] app.contract:131, in places-1 [257,141 285\u00d752] app.contract:130: here #000 on #fff, in the reference #222 on #fff\n  \u2026 and 17 smaller regions, in the diff",
+    "web": {
+     "files": {
+      "app.contract": "e6d24a32540f774aca658da516761acba0f8e1714d6901fba4547709b0d8f88b"
+     },
+     "nodes": [
+      {
+       "x": 0,
+       "y": 0,
+       "w": 1280,
+       "h": 800,
+       "type": "View",
+       "testId": "app",
+       "file": "app.contract",
+       "line": 75,
+       "col": 5,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 240,
+       "y": 0,
+       "w": 1040,
+       "h": 800,
+       "type": "View",
+       "file": "app.contract",
+       "line": 77,
+       "col": 7,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 240,
+       "y": 0,
+       "w": 1040,
+       "h": 800,
+       "type": "View",
+       "file": "app.contract",
+       "line": 79,
+       "col": 11,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 240,
+       "y": 0,
+       "w": 320,
+       "h": 800,
+       "type": "View",
+       "file": "app.contract",
+       "line": 81,
+       "col": 15,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 240,
+       "y": 0,
+       "w": 319,
+       "h": 101,
+       "type": "View",
+       "file": "app.contract",
+       "line": 83,
+       "col": 17,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 256,
+       "y": 12,
+       "w": 260,
+       "h": 32,
+       "type": "Text",
+       "file": "app.contract",
+       "line": 84,
+       "col": 19,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 524,
+       "y": 9,
+       "w": 19,
+       "h": 37,
+       "type": "Pressable",
+       "testId": "open-cart",
+       "file": "app.contract",
+       "line": 92,
+       "col": 21,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 524,
+       "y": 9,
+       "w": 19,
+       "h": 19,
+       "type": "Image",
+       "file": "app.contract",
+       "line": 93,
+       "col": 23,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 524,
+       "y": 28,
+       "w": 19,
+       "h": 18,
+       "type": "Text",
+       "file": "app.contract",
+       "line": 94,
+       "col": 23,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 256,
+       "y": 56,
+       "w": 287,
+       "h": 36,
+       "type": "TextInput",
+       "testId": "search-places",
+       "file": "app.contract",
+       "line": 96,
+       "col": 21,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 240,
+       "y": 101,
+       "w": 319,
+       "h": 23,
+       "type": "Text",
+       "testId": "shipping-note",
+       "file": "app.contract",
+       "line": 161,
+       "col": 5,
+       "component": "ShippingNote",
+       "chain": [
+        {
+         "file": "app.contract",
+         "line": 100,
+         "col": 19,
+         "component": "App"
+        }
+       ]
+      },
+      {
+       "x": 240,
+       "y": 124,
+       "w": 319,
+       "h": 676,
+       "type": "List",
+       "file": "app.contract",
+       "line": 127,
+       "col": 21,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 240,
+       "y": 140,
+       "w": 319,
+       "h": 158,
+       "type": "View",
+       "file": "app.contract",
+       "line": 128,
+       "col": 23,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 256,
+       "y": 140,
+       "w": 287,
+       "h": 158,
+       "type": "View",
+       "file": "app.contract",
+       "line": 128,
+       "col": 23,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 257,
+       "y": 141,
+       "w": 285,
+       "h": 52,
+       "type": "Pressable",
+       "testId": "places-1",
+       "file": "app.contract",
+       "line": 130,
+       "col": 27,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 273,
+       "y": 144,
+       "w": 253,
+       "h": 45,
+       "type": "View",
+       "file": "app.contract",
+       "line": 131,
+       "col": 29,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 273,
+       "y": 148,
+       "w": 253,
+       "h": 18,
+       "type": "Text",
+       "file": "app.contract",
+       "line": 132,
+       "col": 31,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 273,
+       "y": 168,
+       "w": 253,
+       "h": 17,
+       "type": "Text",
+       "file": "app.contract",
+       "line": 133,
+       "col": 31,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 257,
+       "y": 193,
+       "w": 285,
+       "h": 52,
+       "type": "Pressable",
+       "testId": "places-2",
+       "file": "app.contract",
+       "line": 130,
+       "col": 27,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 273,
+       "y": 196,
+       "w": 253,
+       "h": 45,
+       "type": "View",
+       "file": "app.contract",
+       "line": 131,
+       "col": 29,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 273,
+       "y": 200,
+       "w": 253,
+       "h": 18,
+       "type": "Text",
+       "file": "app.contract",
+       "line": 132,
+       "col": 31,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 273,
+       "y": 220,
+       "w": 253,
+       "h": 17,
+       "type": "Text",
+       "file": "app.contract",
+       "line": 133,
+       "col": 31,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 257,
+       "y": 245,
+       "w": 285,
+       "h": 52,
+       "type": "Pressable",
+       "testId": "places-3",
+       "file": "app.contract",
+       "line": 130,
+       "col": 27,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 273,
+       "y": 248,
+       "w": 253,
+       "h": 45,
+       "type": "View",
+       "file": "app.contract",
+       "line": 131,
+       "col": 29,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 273,
+       "y": 252,
+       "w": 253,
+       "h": 18,
+       "type": "Text",
+       "file": "app.contract",
+       "line": 132,
+       "col": 31,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 273,
+       "y": 272,
+       "w": 253,
+       "h": 17,
+       "type": "Text",
+       "file": "app.contract",
+       "line": 133,
+       "col": 31,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 560,
+       "y": 0,
+       "w": 720,
+       "h": 800,
+       "type": "View",
+       "file": "app.contract",
+       "line": 81,
+       "col": 15,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 560,
+       "y": 0,
+       "w": 720,
+       "h": 53,
+       "type": "View",
+       "file": "app.contract",
+       "line": 83,
+       "col": 17,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 659,
+       "y": 14,
+       "w": 605,
+       "h": 24,
+       "type": "Text",
+       "file": "app.contract",
+       "line": 84,
+       "col": 19,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 560,
+       "y": 53,
+       "w": 720,
+       "h": 747,
+       "type": "List",
+       "testId": "cart-list",
+       "file": "app.contract",
+       "line": 183,
+       "col": 7,
+       "component": "CartView",
+       "chain": [
+        {
+         "file": "app.contract",
+         "line": 109,
+         "col": 19,
+         "component": "App"
+        }
+       ]
+      },
+      {
+       "x": 560,
+       "y": 77,
+       "w": 720,
+       "h": 54,
+       "type": "View",
+       "file": "app.contract",
+       "line": 189,
+       "col": 9,
+       "component": "CartView",
+       "chain": [
+        {
+         "file": "app.contract",
+         "line": 109,
+         "col": 19,
+         "component": "App"
+        }
+       ]
+      },
+      {
+       "x": 576,
+       "y": 77,
+       "w": 688,
+       "h": 54,
+       "type": "View",
+       "file": "app.contract",
+       "line": 189,
+       "col": 9,
+       "component": "CartView",
+       "chain": [
+        {
+         "file": "app.contract",
+         "line": 109,
+         "col": 19,
+         "component": "App"
+        }
+       ]
+      },
+      {
+       "x": 577,
+       "y": 78,
+       "w": 686,
+       "h": 52,
+       "type": "View",
+       "testId": "cart-2",
+       "file": "app.contract",
+       "line": 191,
+       "col": 13,
+       "component": "CartView",
+       "chain": [
+        {
+         "file": "app.contract",
+         "line": 109,
+         "col": 19,
+         "component": "App"
+        }
+       ]
+      },
+      {
+       "x": 593,
+       "y": 95,
+       "w": 617,
+       "h": 18,
+       "type": "Text",
+       "file": "app.contract",
+       "line": 192,
+       "col": 15,
+       "component": "CartView",
+       "chain": [
+        {
+         "file": "app.contract",
+         "line": 109,
+         "col": 19,
+         "component": "App"
+        }
+       ]
+      },
+      {
+       "x": 1218,
+       "y": 95,
+       "w": 29,
+       "h": 18,
+       "type": "Text",
+       "file": "app.contract",
+       "line": 193,
+       "col": 15,
+       "component": "CartView",
+       "chain": [
+        {
+         "file": "app.contract",
+         "line": 109,
+         "col": 19,
+         "component": "App"
+        }
+       ]
+      },
+      {
+       "x": 560,
+       "y": 155,
+       "w": 720,
+       "h": 54,
+       "type": "View",
+       "file": "app.contract",
+       "line": 195,
+       "col": 11,
+       "component": "CartView",
+       "chain": [
+        {
+         "file": "app.contract",
+         "line": 109,
+         "col": 19,
+         "component": "App"
+        }
+       ]
+      },
+      {
+       "x": 576,
+       "y": 155,
+       "w": 688,
+       "h": 54,
+       "type": "View",
+       "file": "app.contract",
+       "line": 195,
+       "col": 11,
+       "component": "CartView",
+       "chain": [
+        {
+         "file": "app.contract",
+         "line": 109,
+         "col": 19,
+         "component": "App"
+        }
+       ]
+      },
+      {
+       "x": 577,
+       "y": 156,
+       "w": 686,
+       "h": 52,
+       "type": "View",
+       "testId": "cart-total",
+       "file": "app.contract",
+       "line": 196,
+       "col": 13,
+       "component": "CartView",
+       "chain": [
+        {
+         "file": "app.contract",
+         "line": 109,
+         "col": 19,
+         "component": "App"
+        }
+       ]
+      },
+      {
+       "x": 593,
+       "y": 173,
+       "w": 617,
+       "h": 18,
+       "type": "Text",
+       "file": "app.contract",
+       "line": 197,
+       "col": 15,
+       "component": "CartView",
+       "chain": [
+        {
+         "file": "app.contract",
+         "line": 109,
+         "col": 19,
+         "component": "App"
+        }
+       ]
+      },
+      {
+       "x": 1218,
+       "y": 173,
+       "w": 29,
+       "h": 18,
+       "type": "Text",
+       "file": "app.contract",
+       "line": 198,
+       "col": 15,
+       "component": "CartView",
+       "chain": [
+        {
+         "file": "app.contract",
+         "line": 109,
+         "col": 19,
+         "component": "App"
+        }
+       ]
+      },
+      {
+       "x": 560,
+       "y": 233,
+       "w": 720,
+       "h": 54,
+       "type": "View",
+       "file": "app.contract",
+       "line": 199,
+       "col": 9,
+       "component": "CartView",
+       "chain": [
+        {
+         "file": "app.contract",
+         "line": 109,
+         "col": 19,
+         "component": "App"
+        }
+       ]
+      },
+      {
+       "x": 576,
+       "y": 233,
+       "w": 688,
+       "h": 54,
+       "type": "View",
+       "file": "app.contract",
+       "line": 199,
+       "col": 9,
+       "component": "CartView",
+       "chain": [
+        {
+         "file": "app.contract",
+         "line": 109,
+         "col": 19,
+         "component": "App"
+        }
+       ]
+      },
+      {
+       "x": 577,
+       "y": 234,
+       "w": 686,
+       "h": 52,
+       "type": "Pressable",
+       "testId": "checkout",
+       "file": "app.contract",
+       "line": 200,
+       "col": 11,
+       "component": "CartView",
+       "chain": [
+        {
+         "file": "app.contract",
+         "line": 109,
+         "col": 19,
+         "component": "App"
+        }
+       ]
+      },
+      {
+       "x": 593,
+       "y": 251,
+       "w": 654,
+       "h": 18,
+       "type": "Text",
+       "file": "app.contract",
+       "line": 201,
+       "col": 13,
+       "component": "CartView",
+       "chain": [
+        {
+         "file": "app.contract",
+         "line": 109,
+         "col": 19,
+         "component": "App"
+        }
+       ]
+      },
+      {
+       "x": 0,
+       "y": 0,
+       "w": 240,
+       "h": 800,
+       "type": "View",
+       "testId": "tabs",
+       "file": "app.contract",
+       "line": 145,
+       "col": 7,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 10,
+       "y": 12,
+       "w": 219,
+       "h": 36,
+       "type": "Control",
+       "testId": "tab-places",
+       "file": "app.contract",
+       "line": 146,
+       "col": 9,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 20,
+       "y": 21,
+       "w": 18,
+       "h": 18,
+       "type": "Image",
+       "file": "app.contract",
+       "line": 148,
+       "col": 11,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 48,
+       "y": 20,
+       "w": 49,
+       "h": 20,
+       "type": "Text",
+       "file": "app.contract",
+       "line": 149,
+       "col": 11,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 10,
+       "y": 50,
+       "w": 219,
+       "h": 36,
+       "type": "Control",
+       "testId": "tab-saved",
+       "file": "app.contract",
+       "line": 150,
+       "col": 9,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 20,
+       "y": 59,
+       "w": 18,
+       "h": 18,
+       "type": "Image",
+       "file": "app.contract",
+       "line": 152,
+       "col": 11,
+       "component": "App",
+       "chain": []
+      },
+      {
+       "x": 48,
+       "y": 58,
+       "w": 45,
+       "h": 20,
+       "type": "Text",
+       "file": "app.contract",
+       "line": 153,
+       "col": 11,
+       "component": "App",
+       "chain": []
+      }
+     ]
+    }
+   }
+  ]
+ },
+ "natives": [
+  {
+   "route": "cart",
+   "host": "ios",
+   "points": {
+    "files": {
+     "app.contract": "e6d24a32540f774aca658da516761acba0f8e1714d6901fba4547709b0d8f88b"
+    },
+    "nodes": [
+     {
+      "x": 0,
+      "y": 0,
+      "w": 402,
+      "h": 874,
+      "type": "View",
+      "testId": "app",
+      "file": "app.contract",
+      "line": 75,
+      "col": 5,
+      "component": "App",
+      "chain": []
+     },
+     {
+      "x": 0,
+      "y": 0,
+      "w": 402,
+      "h": 874,
+      "type": "View",
+      "file": "app.contract",
+      "line": 77,
+      "col": 7,
+      "component": "App",
+      "chain": []
+     },
+     {
+      "x": 0,
+      "y": 0,
+      "w": 402,
+      "h": 874,
+      "type": "View",
+      "file": "app.contract",
+      "line": 79,
+      "col": 11,
+      "component": "App",
+      "chain": []
+     },
+     {
+      "x": 0,
+      "y": 0,
+      "w": 402,
+      "h": 874,
+      "type": "View",
+      "file": "app.contract",
+      "line": 81,
+      "col": 15,
+      "component": "App",
+      "chain": []
+     },
+     {
+      "x": 0,
+      "y": 116,
+      "w": 402,
+      "h": 758,
+      "type": "List",
+      "testId": "cart-list",
+      "file": "app.contract",
+      "line": 183,
+      "col": 7,
+      "component": "CartView",
+      "chain": [
+       {
+        "file": "app.contract",
+        "line": 109,
+        "col": 19,
+        "component": "App"
+       }
+      ]
+     },
+     {
+      "x": 0,
+      "y": 151,
+      "w": 402,
+      "h": 52,
+      "type": "View",
+      "file": "app.contract",
+      "line": 185,
+      "col": 11,
+      "component": "CartView",
+      "chain": [
+       {
+        "file": "app.contract",
+        "line": 109,
+        "col": 19,
+        "component": "App"
+       }
+      ]
+     },
+     {
+      "x": 16,
+      "y": 151,
+      "w": 370,
+      "h": 52,
+      "type": "View",
+      "file": "app.contract",
+      "line": 185,
+      "col": 11,
+      "component": "CartView",
+      "chain": [
+       {
+        "file": "app.contract",
+        "line": 109,
+        "col": 19,
+        "component": "App"
+       }
+      ]
+     },
+     {
+      "x": 16,
+      "y": 151,
+      "w": 370,
+      "h": 52,
+      "type": "View",
+      "testId": "cart-total",
+      "file": "app.contract",
+      "line": 186,
+      "col": 13,
+      "component": "CartView",
+      "chain": [
+       {
+        "file": "app.contract",
+        "line": 109,
+        "col": 19,
+        "component": "App"
+       }
+      ]
+     },
+     {
+      "x": 32,
+      "y": 167,
+      "w": 299,
+      "h": 20,
+      "type": "Text",
+      "file": "app.contract",
+      "line": 187,
+      "col": 15,
+      "component": "CartView",
+      "chain": [
+       {
+        "file": "app.contract",
+        "line": 109,
+        "col": 19,
+        "component": "App"
+       }
+      ]
+     },
+     {
+      "x": 339,
+      "y": 167,
+      "w": 31,
+      "h": 20,
+      "type": "Text",
+      "file": "app.contract",
+      "line": 188,
+      "col": 15,
+      "component": "CartView",
+      "chain": [
+       {
+        "file": "app.contract",
+        "line": 109,
+        "col": 19,
+        "component": "App"
+       }
+      ]
+     },
+     {
+      "x": 0,
+      "y": 238,
+      "w": 402,
+      "h": 52,
+      "type": "View",
+      "file": "app.contract",
+      "line": 189,
+      "col": 9,
+      "component": "CartView",
+      "chain": [
+       {
+        "file": "app.contract",
+        "line": 109,
+        "col": 19,
+        "component": "App"
+       }
+      ]
+     },
+     {
+      "x": 16,
+      "y": 238,
+      "w": 370,
+      "h": 52,
+      "type": "View",
+      "file": "app.contract",
+      "line": 189,
+      "col": 9,
+      "component": "CartView",
+      "chain": [
+       {
+        "file": "app.contract",
+        "line": 109,
+        "col": 19,
+        "component": "App"
+       }
+      ]
+     },
+     {
+      "x": 16,
+      "y": 238,
+      "w": 370,
+      "h": 52,
+      "type": "View",
+      "testId": "cart-2",
+      "file": "app.contract",
+      "line": 191,
+      "col": 13,
+      "component": "CartView",
+      "chain": [
+       {
+        "file": "app.contract",
+        "line": 109,
+        "col": 19,
+        "component": "App"
+       }
+      ]
+     },
+     {
+      "x": 32,
+      "y": 254,
+      "w": 299,
+      "h": 20,
+      "type": "Text",
+      "file": "app.contract",
+      "line": 192,
+      "col": 15,
+      "component": "CartView",
+      "chain": [
+       {
+        "file": "app.contract",
+        "line": 109,
+        "col": 19,
+        "component": "App"
+       }
+      ]
+     },
+     {
+      "x": 339,
+      "y": 254,
+      "w": 31,
+      "h": 20,
+      "type": "Text",
+      "file": "app.contract",
+      "line": 193,
+      "col": 15,
+      "component": "CartView",
+      "chain": [
+       {
+        "file": "app.contract",
+        "line": 109,
+        "col": 19,
+        "component": "App"
+       }
+      ]
+     },
+     {
+      "x": 0,
+      "y": 325,
+      "w": 402,
+      "h": 52,
+      "type": "View",
+      "file": "app.contract",
+      "line": 199,
+      "col": 9,
+      "component": "CartView",
+      "chain": [
+       {
+        "file": "app.contract",
+        "line": 109,
+        "col": 19,
+        "component": "App"
+       }
+      ]
+     },
+     {
+      "x": 16,
+      "y": 325,
+      "w": 370,
+      "h": 52,
+      "type": "View",
+      "file": "app.contract",
+      "line": 199,
+      "col": 9,
+      "component": "CartView",
+      "chain": [
+       {
+        "file": "app.contract",
+        "line": 109,
+        "col": 19,
+        "component": "App"
+       }
+      ]
+     },
+     {
+      "x": 16,
+      "y": 325,
+      "w": 370,
+      "h": 52,
+      "type": "Pressable",
+      "testId": "checkout",
+      "file": "app.contract",
+      "line": 200,
+      "col": 11,
+      "component": "CartView",
+      "chain": [
+       {
+        "file": "app.contract",
+        "line": 109,
+        "col": 19,
+        "component": "App"
+       }
+      ]
+     },
+     {
+      "x": 32,
+      "y": 341,
+      "w": 338,
+      "h": 20,
+      "type": "Text",
+      "file": "app.contract",
+      "line": 201,
+      "col": 13,
+      "component": "CartView",
+      "chain": [
+       {
+        "file": "app.contract",
+        "line": 109,
+        "col": 19,
+        "component": "App"
+       }
+      ]
+     }
+    ],
+    "size": {
+     "width": 402,
+     "height": 874
+    }
+   }
+  },
+  {
+   "route": "cart",
+   "host": "macos",
+   "points": {
+    "files": {
+     "app.contract": "e6d24a32540f774aca658da516761acba0f8e1714d6901fba4547709b0d8f88b"
+    },
+    "nodes": [
+     {
+      "x": 0,
+      "y": 0,
+      "w": 1280,
+      "h": 800,
+      "type": "View",
+      "testId": "app",
+      "file": "app.contract",
+      "line": 75,
+      "col": 5,
+      "component": "App",
+      "chain": []
+     },
+     {
+      "x": 0,
+      "y": 0,
+      "w": 1280,
+      "h": 776,
+      "type": "View",
+      "file": "app.contract",
+      "line": 77,
+      "col": 7,
+      "component": "App",
+      "chain": []
+     },
+     {
+      "x": 0,
+      "y": 0,
+      "w": 1280,
+      "h": 776,
+      "type": "View",
+      "file": "app.contract",
+      "line": 79,
+      "col": 11,
+      "component": "App",
+      "chain": []
+     },
+     {
+      "x": 0,
+      "y": 776,
+      "w": 1280,
+      "h": 24,
+      "type": "View",
+      "testId": "tabs",
+      "file": "app.contract",
+      "line": 145,
+      "col": 7,
+      "component": "App",
+      "chain": []
+     },
+     {
+      "x": 0,
+      "y": 776,
+      "w": 640,
+      "h": 24,
+      "type": "Control",
+      "testId": "tab-places",
+      "file": "app.contract",
+      "line": 146,
+      "col": 9,
+      "component": "App",
+      "chain": []
+     },
+     {
+      "x": 640,
+      "y": 776,
+      "w": 640,
+      "h": 24,
+      "type": "Control",
+      "testId": "tab-saved",
+      "file": "app.contract",
+      "line": 150,
+      "col": 9,
+      "component": "App",
+      "chain": []
+     },
+     {
+      "x": 0,
+      "y": 0,
+      "w": 1280,
+      "h": 776,
+      "type": "View",
+      "file": "app.contract",
+      "line": 81,
+      "col": 15,
+      "component": "App",
+      "chain": []
+     },
+     {
+      "x": 0,
+      "y": 0,
+      "w": 1280,
+      "h": 38,
+      "type": "View",
+      "file": "app.contract",
+      "line": 83,
+      "col": 17,
+      "component": "App",
+      "chain": []
+     },
+     {
+      "x": 16,
+      "y": 8,
+      "w": 1248,
+      "h": 22,
+      "type": "Text",
+      "file": "app.contract",
+      "line": 84,
+      "col": 19,
+      "component": "App",
+      "chain": []
+     },
+     {
+      "x": 0,
+      "y": 38,
+      "w": 1280,
+      "h": 738,
+      "type": "List",
+      "testId": "cart-list",
+      "file": "app.contract",
+      "line": 183,
+      "col": 7,
+      "component": "CartView",
+      "chain": [
+       {
+        "file": "app.contract",
+        "line": 109,
+        "col": 19,
+        "component": "App"
+       }
+      ]
+     },
+     {
+      "x": 268,
+      "y": 48,
+      "w": 744,
+      "h": 36,
+      "type": "View",
+      "file": "app.contract",
+      "line": 185,
+      "col": 11,
+      "component": "CartView",
+      "chain": [
+       {
+        "file": "app.contract",
+        "line": 109,
+        "col": 19,
+        "component": "App"
+       }
+      ]
+     },
+     {
+      "x": 288,
+      "y": 48,
+      "w": 704,
+      "h": 36,
+      "type": "View",
+      "file": "app.contract",
+      "line": 185,
+      "col": 11,
+      "component": "CartView",
+      "chain": [
+       {
+        "file": "app.contract",
+        "line": 109,
+        "col": 19,
+        "component": "App"
+       }
+      ]
+     },
+     {
+      "x": 288,
+      "y": 48,
+      "w": 704,
+      "h": 36,
+      "type": "View",
+      "testId": "cart-total",
+      "file": "app.contract",
+      "line": 186,
+      "col": 13,
+      "component": "CartView",
+      "chain": [
+       {
+        "file": "app.contract",
+        "line": 109,
+        "col": 19,
+        "component": "App"
+       }
+      ]
+     },
+     {
+      "x": 298,
+      "y": 58,
+      "w": 652,
+      "h": 16,
+      "type": "Text",
+      "file": "app.contract",
+      "line": 187,
+      "col": 15,
+      "component": "CartView",
+      "chain": [
+       {
+        "file": "app.contract",
+        "line": 109,
+        "col": 19,
+        "component": "App"
+       }
+      ]
+     },
+     {
+      "x": 958,
+      "y": 58,
+      "w": 25,
+      "h": 16,
+      "type": "Text",
+      "file": "app.contract",
+      "line": 188,
+      "col": 15,
+      "component": "CartView",
+      "chain": [
+       {
+        "file": "app.contract",
+        "line": 109,
+        "col": 19,
+        "component": "App"
+       }
+      ]
+     },
+     {
+      "x": 268,
+      "y": 94,
+      "w": 744,
+      "h": 36,
+      "type": "View",
+      "file": "app.contract",
+      "line": 189,
+      "col": 9,
+      "component": "CartView",
+      "chain": [
+       {
+        "file": "app.contract",
+        "line": 109,
+        "col": 19,
+        "component": "App"
+       }
+      ]
+     },
+     {
+      "x": 288,
+      "y": 94,
+      "w": 704,
+      "h": 36,
+      "type": "View",
+      "file": "app.contract",
+      "line": 189,
+      "col": 9,
+      "component": "CartView",
+      "chain": [
+       {
+        "file": "app.contract",
+        "line": 109,
+        "col": 19,
+        "component": "App"
+       }
+      ]
+     },
+     {
+      "x": 288,
+      "y": 94,
+      "w": 704,
+      "h": 36,
+      "type": "View",
+      "testId": "cart-2",
+      "file": "app.contract",
+      "line": 191,
+      "col": 13,
+      "component": "CartView",
+      "chain": [
+       {
+        "file": "app.contract",
+        "line": 109,
+        "col": 19,
+        "component": "App"
+       }
+      ]
+     },
+     {
+      "x": 298,
+      "y": 104,
+      "w": 652,
+      "h": 16,
+      "type": "Text",
+      "file": "app.contract",
+      "line": 192,
+      "col": 15,
+      "component": "CartView",
+      "chain": [
+       {
+        "file": "app.contract",
+        "line": 109,
+        "col": 19,
+        "component": "App"
+       }
+      ]
+     },
+     {
+      "x": 958,
+      "y": 104,
+      "w": 25,
+      "h": 16,
+      "type": "Text",
+      "file": "app.contract",
+      "line": 193,
+      "col": 15,
+      "component": "CartView",
+      "chain": [
+       {
+        "file": "app.contract",
+        "line": 109,
+        "col": 19,
+        "component": "App"
+       }
+      ]
+     },
+     {
+      "x": 268,
+      "y": 140,
+      "w": 744,
+      "h": 36,
+      "type": "View",
+      "file": "app.contract",
+      "line": 199,
+      "col": 9,
+      "component": "CartView",
+      "chain": [
+       {
+        "file": "app.contract",
+        "line": 109,
+        "col": 19,
+        "component": "App"
+       }
+      ]
+     },
+     {
+      "x": 288,
+      "y": 140,
+      "w": 704,
+      "h": 36,
+      "type": "View",
+      "file": "app.contract",
+      "line": 199,
+      "col": 9,
+      "component": "CartView",
+      "chain": [
+       {
+        "file": "app.contract",
+        "line": 109,
+        "col": 19,
+        "component": "App"
+       }
+      ]
+     },
+     {
+      "x": 288,
+      "y": 140,
+      "w": 704,
+      "h": 36,
+      "type": "Pressable",
+      "testId": "checkout",
+      "file": "app.contract",
+      "line": 200,
+      "col": 11,
+      "component": "CartView",
+      "chain": [
+       {
+        "file": "app.contract",
+        "line": 109,
+        "col": 19,
+        "component": "App"
+       }
+      ]
+     },
+     {
+      "x": 298,
+      "y": 150,
+      "w": 684,
+      "h": 16,
+      "type": "Text",
+      "file": "app.contract",
+      "line": 201,
+      "col": 13,
+      "component": "CartView",
+      "chain": [
+       {
+        "file": "app.contract",
+        "line": 109,
+        "col": 19,
+        "component": "App"
+       }
+      ]
+     }
+    ],
+    "size": {
+     "width": 1280,
+     "height": 800
+    }
+   }
+  }
+ ],
+ "sources": {
+  "app.contract": "// Acme Market: two tabs, each its own stack: a list that pushes a detail in each.\n// The root tablist is the iOS tab bar; a screen a tab pushed survives a visit to the other.\n// Each tab's list has the bar's search field, its own query (`contract vocab search`).\n// App-drawn bars have a different layout: run `bun exact.mjs contract vocab tabs`.\n// A native badge uses its box's inner text; XCUITest finds the tab by `tab-saved`.\nuse EmptyState from \"exact:content\"\n\nroutes nav\n  tab places \"/\"\n    place \"/place/:id\"\n    cart \"/cart\"\n      checkout \"/checkout\"\n        done \"/done\"\n  tab saved \"/saved\"\n    savedPlace \"/saved/:id\"\n\nshape Engine\n  name: string\n\nshape Place\n  id: string\n  name: string\n  area: string\n  about: string\n  price: number\n\nfn nameOf(places: Place[], id: string): string = match first(places.filter(p => p.id == id)) { case some(p) => p.name, case none => \"\" }\nfn money(n: number): string = `$${n}`\nfn priceOf(places: Place[], id: string): number = match first(places.filter(p => p.id == id)) { case some(p) => p.price, case none => 0 }\nfn matches(p: Place, q: string): bool = p.name.toLowerCase().includes(q.trim().toLowerCase()) or p.area.toLowerCase().includes(q.trim().toLowerCase())\n\ncomponent App\n  state saved = [] persist\n  state placesQuery = \"\"\n  state savedQuery = \"\"\n  state cart = []\n  state buyer = \"\"\n  state ordered = \"\"\n  resource places = loadPlaces() as shape Place[] else empty()\n  // Which engine runs the data module: \"hermes\" on the native hosts, \"browser\" on the web. The cart\n  // reads it, so the native cart's layout differs from the web's on purpose (exact phase 3's planted difference).\n  resource engine = whichEngine() as shape Engine else empty()\n  derive cartItems = places.filter(p => cart.includes(p.id))\n  derive cartTotal = sum(cartItems.map(p => p.price))\n  derive placesShown = places.filter(p => matches(p, placesQuery))\n  derive savedShown = places.filter(p => saved.includes(p.id) and matches(p, savedQuery))\n  action pick(name: string)\n    nav = select(nav, name)\n  // A row is a link to its place; the browser's Back, Forward and a deep link arrive here too.\n  action follow(url: string)\n    nav = go(nav, url)\n  action search(tab: string, v: string)\n    if tab == \"saved\"\n      savedQuery = v\n    else\n      placesQuery = v\n  // The empty Saved tab's button opens the first place on top of it.\n  action browse\n    nav = push(nav, path(\"savedPlace\", \"1\"))\n  action add(id: string)\n    cart = cart.includes(id) ? cart : cart.concat([id])\n  action openCart\n    nav = push(nav, path(\"cart\"))\n  action checkout\n    nav = push(nav, path(\"checkout\"))\n  action name(v: string)\n    buyer = v\n  action placeOrder\n    ordered = buyer == \"\" ? \"Guest\" : buyer\n    cart = []\n    nav = replace(nav, path(\"done\"))\n  action toggle(id: string)\n    saved = saved.includes(id) ? saved.filter(s => s != id) : saved.concat([id])\n  view\n    main navigationKey=`${top(nav).id}` navigationBack=\"back\" navigate=follow testId=\"app\" width=\"100%\" height=\"100%\"\n      display=\"flex\" flex-direction=\"column\"\n      column flex=1 min-height=0 position=\"relative\"\n        for t in nav.tabs key=t.name\n          column role=\"tabpanel\" id=`panel-${t.name}` position=\"absolute\" inset=0\n            for e in t.stack key=e.id\n              column navigationKey=`${e.id}` navigationScroll=`content-${e.id}` position=\"absolute\" inset=0\n                display=\"flex\" flex-direction=\"column\"\n                header display=\"flex\" flex-wrap=\"wrap\" align-items=\"center\" gap=8 padding=\"8px 16px\"\n                  text (e.name == \"places\" ? \"Acme Market\" : e.name == \"saved\" ? \"Saved\" : e.name == \"cart\" ? \"Cart\"\n                    : e.name == \"checkout\" ? \"Checkout\" : e.name == \"done\" ? \"Order placed\" : nameOf(places, e.params.id))\n                    role=\"heading\" aria-level=(e.name == \"places\" or e.name == \"saved\" ? 1 : 2) flex=1 color=\"brand.ink\"\n                  if e.name == \"place\" or e.name == \"savedPlace\"\n                    button press=toggle(e.params.id) aria-label=(saved.includes(e.params.id) ? \"Remove from Saved\" : \"Save\")\n                      testId=`save-${t.name}`\n                      image (saved.includes(e.params.id) ? \"symbol:bookmark-fill\" : \"symbol:bookmark\")\n                  if e.name == \"places\" or e.name == \"place\"\n                    button press=openCart testId=\"open-cart\" aria-label=`Cart, ${cart.length} ${cart.length == 1 ? \"item\" : \"items\"}`\n                      image \"symbol:cart\"\n                      text `${cart.length}` font-variant-numeric=\"tabular-nums\"\n                  if e.name == \"places\" or (e.name == \"saved\" and saved.length > 0)\n                    input type=\"search\" value=(t.name == \"saved\" ? savedQuery : placesQuery) input=search(t.name)\n                      placeholder=\"Search\" aria-label=(t.name == \"saved\" ? \"Search Saved\" : \"Search Places\")\n                      testId=`search-${t.name}` width=\"100%\"\n                if e.name == \"places\" or e.name == \"place\"\n                  ShippingNote()\n                if e.name == \"place\" or e.name == \"savedPlace\"\n                  PriceTag(amount=money(priceOf(places, e.params.id)))\n                if e.name == \"place\"\n                  row padding=\"4px 16px\"\n                    button press=add(e.params.id) testId=\"add-to-cart\" buttonStyle=\"filled\"\n                      text (cart.includes(e.params.id) ? \"In your cart\" : \"Add to cart\")\n                // An empty tab and a search with no match are each an `EmptyState` in the list's place.\n                if e.name == \"cart\"\n                  CartView(items=cartItems, total=money(cartTotal), engine=engine.name, go=checkout)\n                else if e.name == \"checkout\"\n                  column padding=\"12px 16px\" gap=12\n                    text `${cartItems.length} ${cartItems.length == 1 ? \"item\" : \"items\"}, ${money(cartTotal)}` testId=\"checkout-summary\"\n                    input value=buyer input=name placeholder=\"Your name\" aria-label=\"Your name\" testId=\"buyer-name\"\n                    button press=placeOrder testId=\"place-order\" buttonStyle=\"filled\"\n                      text \"Place order\"\n                else if e.name == \"done\"\n                  column padding=\"12px 16px\" gap=8\n                    text `Thank you, ${ordered}. Your order is on its way.` testId=\"confirmation\"\n                else if e.name == \"saved\" and saved.length == 0\n                  EmptyState(symbol=\"symbol:bookmark\", title=\"No Saved Places\", message=\"Open a place and tap the bookmark.\")\n                    button press=browse testId=\"browse\"\n                      text \"Browse\"\n                else if e.name == \"places\" or e.name == \"saved\"\n                  if (t.name == \"saved\" ? savedShown : placesShown).length == 0 and not pending(places)\n                    EmptyState(symbol=\"symbol:search\", title=\"No Results\", message=\"Check the spelling or try a new search.\")\n                  else\n                    list id=`content-${e.id}` appearance=\"auto\" listStyle=\"inset-grouped\" flex=1 min-height=0\n                      section\n                        for p in (t.name == \"saved\" ? savedShown : placesShown) key=p.id\n                          link href=(e.name == \"saved\" ? path(\"savedPlace\", p.id) : path(\"place\", p.id)) testId=`${t.name}-${p.id}`\n                            column flex=1 min-width=0 gap=2 padding-top=4 padding-bottom=4\n                              text p.name\n                              text p.area font=\"-exact-subheadline\" color=\"-exact-secondary-label\"\n                            image \"symbol:forward-chevron\"\n                else\n                  list id=`content-${e.id}` appearance=\"auto\" listStyle=\"inset-grouped\" flex=1 min-height=0\n                    for p in places.filter(x => x.id == e.params.id) key=p.id\n                      section\n                        row\n                          text \"Area\"\n                          text p.area\n                      section\n                        row padding-top=10 padding-bottom=10\n                          text p.about flex=1 min-width=0 testId=`about-${t.name}`\n      row role=\"tablist\" testId=\"tabs\"\n        button role=\"tab\" aria-controls=\"panel-places\" aria-selected=(nav.tab == \"places\") press=pick(\"places\")\n          testId=\"tab-places\" flex=1\n          image \"symbol:home\"\n          text \"Places\"\n        button role=\"tab\" aria-controls=\"panel-saved\" aria-selected=(nav.tab == \"saved\") press=pick(\"saved\")\n          testId=\"tab-saved\" flex=1\n          image \"symbol:bookmark\"\n          text \"Saved\"\n          if saved.length > 0\n            row background-color=\"-exact-system-red\" border-radius=12\n              text `${saved.length}` font-variant-numeric=\"tabular-nums\"\n\n// One line of shop copy, shown on the places list and a place's page only.\ncomponent ShippingNote\n  view\n    text \"Free shipping on orders over $75\" font=\"-exact-footnote\" color=\"note.ink\"\n      padding=\"4px 16px\" testId=\"shipping-note\"\n\n// A place page's price line; its look is the shared Price style, not its own attributes.\ncomponent PriceTag\n  props\n    amount: string\n  view\n    text `From ${amount}` class=Price testId=\"price\"\n\n// The cart: its rows, the total and the way to checkout. On the native hosts the total sits above the rows,\n// on the web below them \u2014 planted on purpose (exact phase 3), for the canvas's compare to find and name.\ncomponent CartView\n  props\n    items: Place[]\n    total: string\n    engine: string\n    go: action\n  view\n    if items.length == 0\n      EmptyState(symbol=\"symbol:cart\", title=\"Your Cart Is Empty\", message=\"Open a place and tap Add to cart.\")\n    else\n      list appearance=\"auto\" listStyle=\"inset-grouped\" flex=1 min-height=0 testId=\"cart-list\"\n        if engine == \"hermes\"\n          section\n            row testId=\"cart-total\"\n              text \"Total\" flex=1\n              text total font-variant-numeric=\"tabular-nums\"\n        section\n          for p in items key=p.id\n            row testId=`cart-${p.id}`\n              text p.name flex=1\n              text money(p.price) font-variant-numeric=\"tabular-nums\"\n        if engine != \"hermes\"\n          section\n            row testId=\"cart-total\"\n              text \"Total\" flex=1\n              text total font-variant-numeric=\"tabular-nums\"\n        section\n          button press=go testId=\"checkout\"\n            text \"Checkout\"\n\nstyle Price\n  font=\"-exact-title3\" color=\"brand.ink\" padding=\"12px 16px 4px\"\n"
+ }
+}
