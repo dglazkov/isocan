@@ -348,12 +348,27 @@ installs the build from the QR.
   arrows), as a proposal.
 - Motion items → Contract `keyframes`; moodboard and design-system tokens →
   `tamber import dtcg`.
+- **A design system you can take from one app and apply to another.**
+  `isocan exact system extract <app>` reads an app's design (`ir`: its
+  tokens per mode and its named styles, such as a glass card) into a
+  design-system item that belongs to no app, labelled with where it came
+  from. On the canvas a person improves it with the token chips they
+  already scrub (phase 6). **Apply** to another app writes nothing: it
+  sends the system to that app's served design as Exact's own held import
+  (`import dtcg`), so it arrives as proposal items pictured on every
+  device, with a table of which source token became which target token and
+  which had no match. Keep writes the files; Discard leaves them as they
+  were.
 - **Persona runs** against the live app through the driver: goals,
   filmstrips of each path, notes where they got stuck, a critique summary.
 
 **Proof:** a three-screen wireframe flow becomes three Exact screens that
 pass their generated test on web and iOS; two personas reach a goal and one
-gets stuck where a deliberate dead end is.
+gets stuck where a deliberate dead end is; a design system extracted from
+one synthetic app (translucent cards, a hairline border, a soft shadow) and
+applied to Acme Market shows Acme's screens in that style as proposals on
+web and iOS, with the token mapping, Acme's files unchanged until Keep and
+changed after it.
 
 ## Phase 10 — The diary goes home
 

@@ -434,6 +434,19 @@ its layout inspector. It does not vendor Exact Design's code: its shared
 runtime patches hashed SDK chunks and is fragile across SDK pins by its own
 account.
 
+**Design systems travel between apps.** A team's apps often share a look
+(several Exact apps already carry the same palette and a glass card style,
+copied by hand). The module makes that a thing on the canvas: *extract*
+reads one app's design through Exact's `ir` into a design-system item that
+belongs to no app; people improve it with the same token chips that scrub
+live frames; *apply* hands it to another app's served design as Exact's
+held import (`import dtcg`), which Exact already turns into proposals, so
+the module renders them with phase 6's proposal items and Keep. Two rules
+follow from §1 and §10. The canvas never writes the target's design file
+itself; Exact's held import and Keep do. And the mapping from source token
+names to target token names is shown before anything is held, with each
+unmatched token named, because a silent best guess is a facade.
+
 ## 14. Following a moving target
 
 Exact changes daily and promises nothing. So:

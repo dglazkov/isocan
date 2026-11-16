@@ -199,6 +199,13 @@ colour of their own, a `shape` and a stub source, and a test from the
 flow's arrows. The scaffold arrives as a proposal; accepted, the three
 wireframes sit beside three real screens on every device.
 
+Later she wants Acme Market to look like the team's other app, with its
+translucent glass cards and soft shadows. She extracts that app's design
+system onto the canvas, warms its accent by scrubbing a chip, and applies
+it to Acme Market. Acme's screens appear restyled as proposals on every
+device, beside a table of which token became which; she keeps it, and the
+files change only then.
+
 **The point**: the canvas already holds intent (wireframes, mood boards,
 motion); Exact turns intent into a native app; the module is the bridge.
 
