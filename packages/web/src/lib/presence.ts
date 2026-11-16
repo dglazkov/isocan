@@ -1,3 +1,19 @@
+/**
+ * Copyright 2026 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import type { ActorJoins, ActorNames, CanvasContents, PresenceSession } from "@isocan/core";
 import { QUIET_AFTER_MS, sameActor, threadTargetItem } from "@isocan/core";
 
@@ -62,12 +78,74 @@ export function sessionWorkingBounds(
   };
 }
 
+const FRAME_MS = 1000 / 60;
+
+const LERP_HUMAN = 0.22; // real cursors track tightly (60Hz equivalent)
+const LERP_AGENT = 0.1; // CLI hops glide deliberately (60Hz equivalent)
+const WANDER_LERP = 0.045; // calm, deliberate drift while "working" (60Hz equivalent)
+
+/** World-unit jump threshold beyond which a cursor teleports instead of gliding across the map. */
+export const SNAP_DISTANCE = 1600;
+/** Maximum world units/sec while wandering inside an item's working bounds. */
+export const MAX_WANDER_SPEED = 360;
+/** Maximum world units/sec for agent cursors commuting between targets. */
+export const MAX_AGENT_SPEED = 1100;
+
+interface WorkingBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** Per-session eased animation state held by `CursorLayer` across frames. */
+export interface CursorAnim {
+  x: number;
+  y: number;
+  tx: number;
+  ty: number;
+  /** Next waypoint decision, ms timestamp (wander only); 0 while commuting. */
+  nextAt: number;
+  /** Dwell duration (ms) to pause AFTER arriving at `(tx, ty)`. */
+  dwellMs: number;
+  /** Target identity for the active working bounds so switching items cancels stale dwells. */
+  workingKey: string | null;
+  /** The last real position a living ground was given while working. */
+  fx?: number;
+  fy?: number;
+}
+
+/** Frame-rate-independent damping factor matching `rate60` per 60Hz frame. */
+export function dampFactor(rate60: number, dtMs: number): number {
+  const dt = Math.min(100, Math.max(0, dtMs));
+  if (dt <= 0) return 0;
+  return 1 - Math.pow(1 - rate60, dt / FRAME_MS);
+}
+
+/** Stable key for a working activity so switching targets cancels stale wander dwells. */
+export function sessionWorkingKey(activity: PresenceSession["activity"]): string | null {
+  if (activity?.kind !== "working") return null;
+  if ("itemId" in activity) return `item:${activity.itemId}`;
+  if ("threadId" in activity) return `thread:${activity.threadId}`;
+  return `at:${activity.x}:${activity.y}`;
+}
+
+function distanceToBounds(point: { x: number; y: number }, bounds: WorkingBounds): number {
+  const nearX = Math.max(bounds.x, Math.min(bounds.x + bounds.width, point.x));
+  const nearY = Math.max(bounds.y, Math.min(bounds.y + bounds.height, point.y));
+  return Math.hypot(nearX - point.x, nearY - point.y);
+}
+
+function outsideBounds(x: number, y: number, bounds: WorkingBounds): boolean {
+  return x < bounds.x || x > bounds.x + bounds.width || y < bounds.y || y > bounds.y + bounds.height;
+}
+
 /**
  * Pick the next cursor target strictly inside `bounds`, scanning along lines
  * and between interior sections rather than hugging the outer border.
  */
 export function nextWorkingWaypoint(
-  bounds: { x: number; y: number; width: number; height: number },
+  bounds: WorkingBounds,
   current: { x: number; y: number },
   rng: () => number = Math.random,
 ): { tx: number; ty: number; dwellMs: number } {
@@ -88,30 +166,156 @@ export function nextWorkingWaypoint(
   const cy = clampY(current.y);
   const roll = rng();
 
-  if (roll < 0.18) {
-    // Brief thinking pause right where the cursor sits.
-    return { tx: cx, ty: cy, dwellMs: 450 + rng() * 650 };
+  if (roll < 0.22) {
+    // Calm thinking pause right where the cursor sits.
+    return { tx: cx, ty: cy, dwellMs: 750 + rng() * 1100 };
   }
 
-  if (roll < 0.72) {
+  if (roll < 0.8) {
     // Local scan along the current line/region (mostly horizontal, small vertical drift).
     const nearRightEdge = cx > minX + spanX * 0.72;
     const dirX = nearRightEdge ? (rng() < 0.75 ? -1 : 1) : rng() < 0.72 ? 1 : -1;
-    const stepX = dirX * (0.12 + rng() * 0.28) * spanX;
-    const stepY = (rng() - 0.5) * 0.18 * spanY;
+    const stepX = dirX * Math.min(280, (0.1 + rng() * 0.22) * spanX);
+    const stepY = (rng() - 0.5) * Math.min(140, 0.16 * spanY);
     return {
       tx: clampX(cx + stepX),
       ty: clampY(cy + stepY),
-      dwellMs: 320 + rng() * 480,
+      dwellMs: 550 + rng() * 750,
     };
   }
 
-  // Reposition to another interior section of the item.
+  // Deliberate reposition to another interior section of the item.
   return {
-    tx: clampX(minX + (0.08 + rng() * 0.84) * spanX),
-    ty: clampY(minY + (0.08 + rng() * 0.84) * spanY),
-    dwellMs: 420 + rng() * 620,
+    tx: clampX(minX + (0.1 + rng() * 0.8) * spanX),
+    ty: clampY(minY + (0.1 + rng() * 0.8) * spanY),
+    dwellMs: 700 + rng() * 950,
   };
+}
+
+/**
+ * Advance a single cursor's visual position by one animation frame (`dtMs`).
+ *
+ * Frame-rate independent, velocity-capped for agents/wandering, and anchored
+ * strictly to `workingBounds` when working so a stale `session.cursor` far from
+ * the active item can never trigger a `SNAP_DISTANCE` teleport loop.
+ */
+export function stepCursorAnim(
+  existing: CursorAnim | undefined,
+  opts: {
+    home: { x: number; y: number };
+    workingBounds?: WorkingBounds | undefined;
+    workingKey?: string | null | undefined;
+    kind: PresenceSession["kind"];
+    nowMs: number;
+    dtMs: number;
+    rng?: (() => number) | undefined;
+  },
+): { rec: CursorAnim; moved: boolean } {
+  const { home, workingBounds, workingKey = null, kind, nowMs, dtMs, rng = Math.random } = opts;
+  const dt = Math.min(100, Math.max(0, dtMs));
+  let rec = existing;
+  let snapped = false;
+
+  if (!rec) {
+    rec = {
+      x: home.x,
+      y: home.y,
+      tx: home.x,
+      ty: home.y,
+      nextAt: 0,
+      dwellMs: 0,
+      workingKey: null,
+    };
+    snapped = true;
+  } else {
+    // Measure distance against the active working rectangle itself (so wide items
+    // never self-snap) or against the stationary target when idle.
+    const gap = workingBounds
+      ? distanceToBounds(rec, workingBounds)
+      : Math.hypot(home.x - rec.x, home.y - rec.y);
+    if (gap > SNAP_DISTANCE) {
+      rec.x = home.x;
+      rec.y = home.y;
+      rec.tx = home.x;
+      rec.ty = home.y;
+      rec.nextAt = 0;
+      rec.dwellMs = 0;
+      rec.workingKey = null;
+      snapped = true;
+    }
+  }
+
+  if (workingBounds) {
+    const targetKey = workingKey ?? "__working__";
+    const targetChanged = rec.workingKey !== targetKey || outsideBounds(rec.tx, rec.ty, workingBounds);
+    if (targetChanged) {
+      rec.workingKey = targetKey;
+      const next = nextWorkingWaypoint(workingBounds, rec, rng);
+      rec.tx = next.tx;
+      rec.ty = next.ty;
+      rec.dwellMs = next.dwellMs;
+      rec.nextAt = Math.hypot(rec.tx - rec.x, rec.ty - rec.y) <= 0.5 ? nowMs + next.dwellMs : 0;
+    } else if (Math.hypot(rec.tx - rec.x, rec.ty - rec.y) <= 0.5) {
+      if (rec.nextAt === 0) {
+        rec.nextAt = nowMs + rec.dwellMs;
+      }
+      if (nowMs >= rec.nextAt) {
+        const next = nextWorkingWaypoint(workingBounds, rec, rng);
+        rec.tx = next.tx;
+        rec.ty = next.ty;
+        rec.dwellMs = next.dwellMs;
+        rec.nextAt = Math.hypot(rec.tx - rec.x, rec.ty - rec.y) <= 0.5 ? nowMs + next.dwellMs : 0;
+      }
+    }
+  } else {
+    rec.workingKey = null;
+    rec.tx = home.x;
+    rec.ty = home.y;
+    rec.nextAt = 0;
+    rec.dwellMs = 0;
+  }
+
+  const dx = rec.tx - rec.x;
+  const dy = rec.ty - rec.y;
+  const dist = Math.hypot(dx, dy);
+
+  if (dist > 0.5 && dt > 0) {
+    const commuting = workingBounds ? distanceToBounds(rec, workingBounds) > 0 : false;
+    const rate60 = workingBounds
+      ? commuting
+        ? LERP_AGENT
+        : WANDER_LERP
+      : kind === "web"
+        ? LERP_HUMAN
+        : LERP_AGENT;
+    const alpha = dampFactor(rate60, dt);
+    let stepX = dx * alpha;
+    let stepY = dy * alpha;
+    const maxSpeed = workingBounds && !commuting
+      ? MAX_WANDER_SPEED
+      : kind !== "web"
+        ? MAX_AGENT_SPEED
+        : Infinity;
+    if (Number.isFinite(maxSpeed)) {
+      const stepLen = Math.hypot(stepX, stepY);
+      const maxStep = maxSpeed * (dt / 1000);
+      if (stepLen > maxStep && maxStep > 0) {
+        const scale = maxStep / stepLen;
+        stepX *= scale;
+        stepY *= scale;
+      }
+    }
+    rec.x += stepX;
+    rec.y += stepY;
+    if (Math.hypot(rec.tx - rec.x, rec.ty - rec.y) <= 0.5) {
+      rec.x = rec.tx;
+      rec.y = rec.ty;
+      if (workingBounds) rec.nextAt = nowMs + rec.dwellMs;
+    }
+    return { rec, moved: true };
+  }
+
+  return { rec, moved: snapped };
 }
 
 /** Where a session stands in the world: the center of the item it declared it

@@ -1,3 +1,19 @@
+/**
+ * Copyright 2026 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import { attestedEmail, faceMark } from "@isocan/core";
 import { lazy, type ReactNode, Suspense, useEffect, useRef, useState } from "react";
 import type { Actor } from "@isocan/core";
@@ -616,6 +632,8 @@ export function IdentityMenu({
                     disabled={refused}
                     onChange={(e) => {
                       setExperiment(entry.id, e.target.checked);
+                      // A refinement that is the default once its parent is asked for comes on with it (exact phase 2).
+                      if (e.target.checked) for (const child of EXPERIMENTS) if (child.under === entry.id && child.withParent) setExperiment(child.id, true);
                       void loadExperiments();
                     }}
                   />

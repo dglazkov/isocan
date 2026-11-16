@@ -1,3 +1,19 @@
+/**
+ * Copyright 2026 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
@@ -193,6 +209,14 @@ describe("invariant 1: the app origin after the extraction is the app origin bef
     expect(appCsp).toContain("frame-src");
     expect(appCsp).toContain(daemon.contentBase!);
     expect(CONTENT_CSP).toContain("connect-src 'none'");
+  });
+
+  it("the app CSP is exactly what it was before the local-tool door (exact phase 2): no connect-src, no loopback added", async () => {
+    // Exact's live frames reach a bridge on 127.0.0.1 from the app document. They need nothing new here — `frame-src`
+    // already allows http:, and the app document sets no connect-src — so the door changed no policy, and a hosted
+    // home (whose door stays shut) serves the same header it always has. A change to this string is a review.
+    const page = await fetch(`${base}/`, { headers: badge.headers });
+    expect(page.headers.get("content-security-policy")).toBe(`frame-src 'self' ${daemon.contentBase} https: http: blob: data:`);
   });
 
   it("the content origin serves bytes badge-less, with its own policy", async () => {

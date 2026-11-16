@@ -1,3 +1,19 @@
+/**
+ * Copyright 2026 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import { DesignRepairClientError } from "./design-repair-capability.ts";
 import { supportsDesignRepairs } from "@isocan/core";
 import { DesignDecisionClientError, designDecisionOperation } from "./design-decision-capability.ts";
@@ -825,6 +841,8 @@ export function attachWebSockets(
     // presence message and torn down with the socket.
     let sessionId: string | null = null;
     let presenceRevision = 0;
+    let relayRevision = 0;
+    let rcRelayRevision = 0;
 
     let room = rooms.get(canvasId);
     if (!room) {
@@ -915,6 +933,7 @@ export function attachWebSockets(
        */
       if (message.type === "presence-relay") {
         if (!bearer || !Array.isArray(message.sessions)) return;
+        const revision = ++relayRevision;
         void (async () => {
           const allowed: PresenceSession[] = [];
           for (const session of message.sessions) {
@@ -929,6 +948,7 @@ export function attachWebSockets(
             }
             allowed.push(session);
           }
+          if (revision !== relayRevision || ws.readyState !== WebSocket.OPEN) return;
           presence.mirror(canvasId!, relayOrigin, allowed);
         })();
         return;
@@ -943,6 +963,7 @@ export function attachWebSockets(
        */
       if (message.type === "rc-relay") {
         if (!bearer || !rc) return;
+        const revision = ++rcRelayRevision;
         const parked = message.parked === true;
         const ids = Array.isArray(message.actorIds)
           ? message.actorIds.filter((id): id is string => typeof id === "string")
@@ -983,6 +1004,7 @@ export function attachWebSockets(
             const made = rcPoliciesOf({ [actorId]: policy }, allowed, owner);
             if (made?.[actorId]) policies[actorId] = made[actorId];
           }
+          if (revision !== rcRelayRevision || ws.readyState !== WebSocket.OPEN) return;
           rc.mirror(relayOrigin, canvasId!, {
             parked,
             actorIds: allowed,

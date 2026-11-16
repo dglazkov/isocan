@@ -1,3 +1,19 @@
+/**
+ * Copyright 2026 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import type { ContextPiece } from "./context.ts";
 import type { Actor, Canvas, CanvasContents, CommentThread, Item, ItemVersion } from "./model.ts";
 import type { NodeCapabilities } from "./capabilities.ts";
@@ -555,6 +571,8 @@ export interface WebHost {
    * that drifts; this hands over the composer's own.
    */
   commands: () => readonly CommandMetadata[];
+  /** **The local-tool door** (exact phase 2) — the same one `RendererFacts.localTool` is. Absent on an older shell. */
+  localTool?: ((tool: string) => LocalToolDoor) | undefined;
   /**
    * **Run this line the way the composer's send does** (proposed: `host`) —
    * not a second implementation of it. A module command that opens a dialog
@@ -833,6 +851,70 @@ export interface RendererFacts {
   entered: boolean;
   url: string;
   readText: () => Promise<string>;
+  /**
+   * **The local-tool door** (exact phase 2; `docs/projects/exact/design.md`
+   * §5) — how this browser reaches a tool's bridge on this machine, if it
+   * may. Absent on an older shell. See `LocalToolDoor`.
+   */
+  localTool?: ((tool: string) => LocalToolDoor) | undefined;
+}
+
+/**
+ * **A paired door from this browser to a tool on this machine** (exact phase
+ * 2; design §5). The shell owns it, so a module never spells a loopback
+ * address or keeps a token of its own:
+ *
+ * - **Shut unless the home is itself on this machine** (http on 127.0.0.1,
+ *   localhost or [::1]) — a hosted HTTPS canvas waits for a relay (exact
+ *   phase 8) — and unless the person left the tool's switch on: the
+ *   experiment `<tool>.local` ("Live frames" for `exact`), per browser.
+ *   Shut means nothing is fetched and nothing is framed: `fetch` throws and
+ *   `frameUrl` answers null without touching the network.
+ * - **Paired once** with the code the tool's bridge printed —
+ *   `<port>-XXXXX-XXXXX`, one use, two minutes — and the token it answers
+ *   is kept in this browser for this machine, never in an item, a property
+ *   or an op.
+ * - **Loopback only**: every request goes to `http://127.0.0.1:<port>`, a
+ *   port this browser paired with.
+ *
+ * Generic on purpose — a tool is a name — so the sandbox and motion modules
+ * can ask for it later; only Exact uses it today.
+ */
+export interface LocalToolDoor {
+  /** Why the door is shut in this browser, in words, or null when it is open. */
+  shut: string | null;
+  /** The bridges this browser has paired with for this tool, newest first. */
+  paired: () => readonly number[];
+  /** Pair with a bridge: the code it printed, `<port>-XXXXX-XXXXX`. Resolves with its port. */
+  pair: (code: string) => Promise<{ port: number }>;
+  /** A request to a paired bridge, its token added. `path` starts with `/`. Throws when shut or unpaired. */
+  fetch: (port: number, path: string, init?: { method?: "GET" | "POST"; body?: string; signal?: AbortSignal }) => Promise<Response>;
+  /** The address a frame may load from a paired bridge, or null when the door is shut. */
+  frameUrl: (port: number, path: string) => string | null;
+  /** Forget a pairing (a bridge that restarted answers 401 to its old token). */
+  forget: (port: number) => void;
+  /** Called when pairings or the switch change; returns its cleanup. */
+  watch: (listener: () => void) => () => void;
+}
+
+/** The pairing code a local tool's bridge prints: its port, then a one-use code (exact phase 2). */
+export function parseLocalToolCode(text: string): { port: number; code: string } | null {
+  const m = /^\s*(\d{4,5})[-\s]+([0-9A-Za-z]{5})-?([0-9A-Za-z]{5})\s*$/.exec(text);
+  if (!m) return null;
+  const port = Number(m[1]);
+  if (!(port >= 1024 && port <= 65535)) return null;
+  return { port, code: `${m[2]!.toUpperCase()}-${m[3]!.toUpperCase()}` };
+}
+
+/** Is this page's origin on this machine — the one place a local-tool door may open (exact phase 2)? */
+export function loopbackOrigin(href: string): boolean {
+  try {
+    const u = new URL(href);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return false;
+    return u.hostname === "127.0.0.1" || u.hostname === "localhost" || u.hostname === "[::1]" || u.hostname === "::1";
+  } catch {
+    return false;
+  }
 }
 
 /** How a module draws its own mimes on a card and the stage, ahead of the built-in chain. */

@@ -1,0 +1,239 @@
+// Acme Market: two tabs, each its own stack: a list that pushes a detail in each.
+// The root tablist is the iOS tab bar; a screen a tab pushed survives a visit to the other.
+// Each tab's list has the bar's search field, its own query (`contract vocab search`).
+// App-drawn bars have a different layout: run `bun exact.mjs contract vocab tabs`.
+// A native badge uses its box's inner text; XCUITest finds the tab by `tab-saved`.
+use EmptyState from "exact:content"
+
+routes nav
+  tab places "/"
+    place "/place/:id"
+    // The cart and its checkout are pushed in turn from a place, declared side by side.
+    cart "/cart"
+    checkout "/checkout"
+    done "/done"
+  tab saved "/saved"
+    savedPlace "/saved/:id"
+
+shape Engine
+  name: string
+
+shape Place
+  id: string
+  name: string
+  area: string
+  about: string
+  price: number
+
+fn nameOf(places: Place[], id: string): string = match first(places.filter(p => p.id == id)) { case some(p) => p.name, case none => "" }
+fn money(n: number): string = `$${n}`
+fn priceOf(places: Place[], id: string): number = match first(places.filter(p => p.id == id)) { case some(p) => p.price, case none => 0 }
+fn matches(p: Place, q: string): bool = p.name.toLowerCase().includes(q.trim().toLowerCase()) or p.area.toLowerCase().includes(q.trim().toLowerCase())
+
+component App
+  state saved = [] persist
+  state placesQuery = ""
+  state savedQuery = ""
+  state cart = []
+  state buyer = ""
+  state ordered = ""
+  // The cart sheet (isocan exact phase 4): "Add to cart" springs it up over the place's page.
+  state sheetOpen = false
+  resource places = loadPlaces() as shape Place[] else empty()
+  // Which engine runs the data module: "hermes" on the native hosts, "browser" on the web. The cart
+  // reads it, so the native cart's layout differs from the web's on purpose (exact phase 3's planted difference).
+  resource engine = whichEngine() as shape Engine else empty()
+  derive cartItems = places.filter(p => cart.includes(p.id))
+  derive cartTotal = sum(cartItems.map(p => p.price))
+  derive placesShown = places.filter(p => matches(p, placesQuery))
+  derive savedShown = places.filter(p => saved.includes(p.id) and matches(p, savedQuery))
+  action pick(name: string)
+    nav = select(nav, name)
+  // A row is a link to its place; the browser's Back, Forward and a deep link arrive here too.
+  action follow(url: string)
+    nav = go(nav, url)
+  action search(tab: string, v: string)
+    if tab == "saved"
+      savedQuery = v
+    else
+      placesQuery = v
+  // The empty Saved tab's button opens the first place on top of it.
+  action browse
+    nav = push(nav, path("savedPlace", "1"))
+  action add(id: string)
+    cart = cart.includes(id) ? cart : cart.concat([id])
+    sheetOpen = true
+  action closeSheet
+    sheetOpen = false
+  action openCart
+    sheetOpen = false
+    nav = push(nav, path("cart"))
+  action checkout
+    nav = push(nav, path("checkout"))
+  action name(v: string)
+    buyer = v
+  action placeOrder
+    ordered = buyer == "" ? "Guest" : buyer
+    cart = []
+    nav = replace(nav, path("done"))
+  action toggle(id: string)
+    saved = saved.includes(id) ? saved.filter(s => s != id) : saved.concat([id])
+  view
+    main navigationKey=`${top(nav).id}` navigationBack="back" navigate=follow testId="app" width="100%" height="100%"
+      display="flex" flex-direction="column"
+      column flex=1 min-height=0 position="relative"
+        for t in nav.tabs key=t.name
+          column role="tabpanel" id=`panel-${t.name}` position="absolute" inset=0
+            for e in t.stack key=e.id
+              column navigationKey=`${e.id}` navigationScroll=`content-${e.id}` position="absolute" inset=0
+                display="flex" flex-direction="column" overflow="hidden"
+                header display="flex" flex-wrap="wrap" align-items="center" gap=8 padding="8px 16px"
+                  text (e.name == "places" ? "Acme Market" : e.name == "saved" ? "Saved" : e.name == "cart" ? "Cart"
+                    : e.name == "checkout" ? "Checkout" : e.name == "done" ? "Order placed" : nameOf(places, e.params.id))
+                    role="heading" aria-level=(e.name == "places" or e.name == "saved" ? 1 : 2) flex=1 color="brand.ink"
+                  if e.name == "place" or e.name == "savedPlace"
+                    button press=toggle(e.params.id) aria-label=(saved.includes(e.params.id) ? "Remove from Saved" : "Save")
+                      testId=`save-${t.name}`
+                      image (saved.includes(e.params.id) ? "symbol:bookmark-fill" : "symbol:bookmark")
+                  if e.name == "places" or e.name == "place"
+                    button press=openCart testId="open-cart" aria-label=`Cart, ${cart.length} ${cart.length == 1 ? "item" : "items"}`
+                      image "symbol:cart"
+                      text `${cart.length}` font-variant-numeric="tabular-nums"
+                  if e.name == "places" or (e.name == "saved" and saved.length > 0)
+                    input type="search" value=(t.name == "saved" ? savedQuery : placesQuery) input=search(t.name)
+                      placeholder="Search" aria-label=(t.name == "saved" ? "Search Saved" : "Search Places")
+                      testId=`search-${t.name}` width="100%"
+                if e.name == "places" or e.name == "place"
+                  ShippingNote()
+                if e.name == "place" or e.name == "savedPlace"
+                  PriceTag(amount=money(priceOf(places, e.params.id)))
+                if e.name == "place"
+                  row padding="4px 16px"
+                    button press=add(e.params.id) testId="add-to-cart" buttonStyle="filled"
+                      text (cart.includes(e.params.id) ? "In your cart" : "Add to cart")
+                // An empty tab and a search with no match are each an `EmptyState` in the list's place.
+                if e.name == "cart"
+                  CartView(items=cartItems, total=money(cartTotal), engine=engine.name, go=checkout)
+                else if e.name == "checkout"
+                  column padding="12px 16px" gap=12
+                    text `${cartItems.length} ${cartItems.length == 1 ? "item" : "items"}, ${money(cartTotal)}` testId="checkout-summary"
+                    input value=buyer input=name placeholder="Your name" aria-label="Your name" testId="buyer-name"
+                    button press=placeOrder testId="place-order" buttonStyle="filled"
+                      text "Place order"
+                else if e.name == "done"
+                  column padding="12px 16px" gap=8
+                    text `Thank you, ${ordered}. Your order is on its way.` testId="confirmation"
+                else if e.name == "saved" and saved.length == 0
+                  EmptyState(symbol="symbol:bookmark", title="No Saved Places", message="Open a place and tap the bookmark.")
+                    button press=browse testId="browse"
+                      text "Browse"
+                else if e.name == "places" or e.name == "saved"
+                  if (t.name == "saved" ? savedShown : placesShown).length == 0 and not pending(places)
+                    EmptyState(symbol="symbol:search", title="No Results", message="Check the spelling or try a new search.")
+                  else
+                    list id=`content-${e.id}` appearance="auto" listStyle="inset-grouped" flex=1 min-height=0
+                      section
+                        for p in (t.name == "saved" ? savedShown : placesShown) key=p.id
+                          link href=(e.name == "saved" ? path("savedPlace", p.id) : path("place", p.id)) testId=`${t.name}-${p.id}`
+                            column flex=1 min-width=0 gap=2 padding-top=4 padding-bottom=4
+                              text p.name
+                              text p.area font="-exact-subheadline" color="-exact-secondary-label"
+                            image "symbol:forward-chevron"
+                else
+                  list id=`content-${e.id}` appearance="auto" listStyle="inset-grouped" flex=1 min-height=0
+                    for p in places.filter(x => x.id == e.params.id) key=p.id
+                      section
+                        row
+                          text "Area"
+                          text p.area
+                      section
+                        row padding-top=10 padding-bottom=10
+                          text p.about flex=1 min-width=0 testId=`about-${t.name}`
+                // The cart sheet: always mounted under a place, below the page until "Add to cart" opens it, then
+                // sprung up — an underdamped spring (ratio ~0.64), so it overshoots and settles inside 600 ms (`clock +16` frames it).
+                if e.name == "place"
+                  CartSheet(open=sheetOpen, count=cartItems.length, total=money(cartTotal), view=openCart, close=closeSheet)
+      row role="tablist" testId="tabs"
+        button role="tab" aria-controls="panel-places" aria-selected=(nav.tab == "places") press=pick("places")
+          testId="tab-places" flex=1
+          image "symbol:home"
+          text "Places"
+        button role="tab" aria-controls="panel-saved" aria-selected=(nav.tab == "saved") press=pick("saved")
+          testId="tab-saved" flex=1
+          image "symbol:bookmark"
+          text "Saved"
+          if saved.length > 0
+            row background-color="-exact-system-red" border-radius=12
+              text `${saved.length}` font-variant-numeric="tabular-nums"
+
+// One line of shop copy, shown on the places list and a place's page only.
+component ShippingNote
+  view
+    text "Free shipping on orders over $75" font="-exact-footnote" color="note.ink"
+      padding="4px 16px" testId="shipping-note"
+
+// A place page's price line; its look is the shared Price style, not its own attributes.
+component PriceTag
+  props
+    amount: string
+  view
+    row padding="4px 16px"
+      text `From ${amount}` class=Price testId="price" flex=1
+
+// The cart: its rows, the total and the way to checkout. On the native hosts the total sits above the rows,
+// on the web below them — planted on purpose (exact phase 3), for the canvas's compare to find and name.
+component CartView
+  props
+    items: Place[]
+    total: string
+    engine: string
+    go: action
+  view
+    if items.length == 0
+      EmptyState(symbol="symbol:cart", title="Your Cart Is Empty", message="Open a place and tap Add to cart.")
+    else
+      list appearance="auto" listStyle="inset-grouped" flex=1 min-height=0 testId="cart-list"
+        if engine == "hermes"
+          section
+            row testId="cart-total"
+              text "Total" flex=1
+              text total font-variant-numeric="tabular-nums"
+        section
+          for p in items key=p.id
+            row testId=`cart-${p.id}`
+              text p.name flex=1
+              text money(p.price) font-variant-numeric="tabular-nums"
+        if engine != "hermes"
+          section
+            row testId="cart-total"
+              text "Total" flex=1
+              text total font-variant-numeric="tabular-nums"
+        section
+          button press=go testId="checkout"
+            text "Checkout"
+
+// The sheet "Add to cart" opens over a place's page: its entrance is a spring on translate, which the agent's
+// virtual clock drives frame by frame (isocan exact phase 4 films it at 16 ms).
+component CartSheet
+  props
+    open: bool
+    count: number
+    total: string
+    view: action
+    close: action
+  view
+    column position="absolute" left=0 right=0 bottom=0 padding="16px 16px 28px" gap=12
+      background-color="-exact-secondary-background" border-radius=16 testId="cart-sheet"
+      translate=(open ? "0px 0px" : "0px 360px") inert=(not open) aria-hidden=(not open)
+      transition="translate -exact-spring(300, 22, 1)"
+      text "Added to your cart" role="heading" aria-level=2 font="-exact-headline" color="brand.ink"
+      text `${count} ${count == 1 ? "item" : "items"}, ${total}` testId="sheet-summary" font-variant-numeric="tabular-nums"
+      row gap=12
+        button press=view testId="sheet-view-cart" buttonStyle="filled"
+          text "View cart"
+        button press=close testId="sheet-close"
+          text "Keep shopping"
+
+style Price
+  font="-exact-title3" color="brand.ink" padding="12px 16px"
+  background-color="-exact-secondary-background" border-radius="radius.card"

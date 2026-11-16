@@ -1,3 +1,19 @@
+/**
+ * Copyright 2026 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import { spawn } from "node:child_process";
@@ -7,6 +23,7 @@ import { fileURLToPath } from "node:url";
 import { type Daemon } from "@isocan/server";
 import { startDaemon, stopDaemons } from "@isocan/server/daemon";
 import { nodeModulesDir } from "./deps.ts";
+import { reservePort } from "../../../test/ports.ts";
 
 /**
  * Bootstrapping through npx, and what the next command finds (#48).
@@ -67,12 +84,14 @@ beforeEach(async () => {
   durableBin = path.join(bin, "isocan");
   await fs.symlink(path.join(repo, "packages", "cli", "bin", "isocan.js"), durableBin);
 
-  // A port nobody holds: take one, then let it go.
-  const scout = await startDaemon({ port: 0, home });
-  const address = scout.app.server.address();
-  port = typeof address === "object" && address ? address.port : 0;
-  await scout.close();
-  await stopDaemons(port, home).catch(() => {});
+  // A port from this worker's private slice, below every ephemeral floor —
+  // not a `listen(0) → close` guess. The guess lost once in CI: another
+  // worker's daemon took the number back, setup adopted that daemon (with a
+  // birth default of its own) as this machine's, so the fresh-machine block
+  // never ran and `report.birth` was missing — and the afterEach's
+  // `stopDaemons(port)` then killed whoever answered there, which was the
+  // other worker ("Worker exited unexpectedly"). See `test/ports.ts`.
+  port = await reservePort();
 });
 
 afterEach(async () => {
@@ -200,11 +219,15 @@ describe("the default home a fresh machine gets", () => {
   it("stays local, and says why, when the default home does not answer", async () => {
     // A first run on a laptop with no network must still leave a working local
     // daemon. The refusal is a line in the report, not an exit code.
-    await elsewhere.close();
-    const done = await setup({ ISOCAN_DEFAULT_HOME: elsewhereUrl });
+    // An address nothing listens on, from this worker's slice. Not the closed
+    // `elsewhere`: its released number is ephemeral, and anything in the run
+    // may be handed it before setup dials it.
+    const silent = `http://127.0.0.1:${await reservePort()}`;
+    const done = await setup({ ISOCAN_DEFAULT_HOME: silent });
     expect(done.code).toBe(0);
     const report = JSON.parse(done.stdout) as Record<string, string>;
     expect(report.birth).toContain("stay on this machine");
+    expect(report.birth).toContain(silent);
     expect(report.app).toBe(`http://127.0.0.1:${port}`);
     expect((await health()).home).toBeUndefined();
   });

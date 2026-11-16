@@ -21,6 +21,81 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 15 November 2026
+
+- **Design systems that travel between Exact apps.** `isocan exact system
+  extract` lifts one app's design onto the canvas as a system you can tune
+  with its token chips; Apply offers it to another app as a proposal, with
+  a table of which token became which and which had no match. Nothing
+  changes until you Keep. For now colours and lengths travel; named styles
+  such as a glass card do not yet.
+- **Make it Exact.** A wireframe flow becomes Contract screens on a branch,
+  with a test drawn from its arrows. **Personas** drive an Exact app toward
+  a goal and leave a filmstrip of their path and a note where they got
+  stuck.
+
+## 14 November 2026
+
+- **Exact screens can go live (experiment).** Running isocan on your own
+  machine, `isocan exact live <app>` prints a pairing code; press **Live** on
+  a screen, enter it once, and the screen becomes your running app — edits
+  show a moment after you save. Each screen has a Live / Still switch, and
+  *Live frames* under the Exact experiment turns the whole thing off: then
+  your browser never connects to your machine at all.
+- **Alt-click points at the line.** Hold Alt and click anything on an Exact
+  screen, live or not, to see the Contract file and line that drew it, then
+  open it in your editor or leave a comment on that line. Compile errors and
+  `agent check` findings appear as comments on the screens they affect, and
+  go away when fixed.
+- **Exact apps on iPhone and Mac, and driven from the canvas.** `isocan exact
+  open <app> --hosts web,ios,macos --sim <simulator>` adds iOS Simulator and
+  macOS screens beside the web ones; `isocan exact wall <app> <route>` lays
+  one route out on every host side by side, and where the hosts lay a screen
+  out differently, a comment says so at the line. Press **Drive** on any
+  screen to tap and type into the app from the canvas — with *Live frames*
+  off too, a picture behind instead of live.
+- **Film an interaction, frame by frame.** Press **Film** on an Exact screen
+  (or run `isocan exact film`) and the app plays the press on its own clock;
+  a filmstrip lands beside the screen. Drag across it to scrub the motion,
+  see the component's state at each frame, and leave a comment at a moment —
+  opening the comment takes the strip back there. **Inspect** shows a
+  screen's accessibility tree, layout, performance and logs.
+- **Tests as storyboards.** Each test in an Exact app shows as a row of
+  frames, one per step. Press **Run** to run it on the web, iPhone and Mac
+  from the canvas: green steps, or the failing step in red with Exact's
+  reason, its frame and its tree. **Record** in Drive mode turns your taps
+  and typing into a proposed test, with `expect` lines from what changed;
+  it is written to your app only when you keep it.
+- **Agents propose; you keep.** Ask an agent to change an Exact app and its
+  ideas arrive as proposal cards under the screen, pictured before and
+  after on phone, tablet, desktop and iPhone, light and dark — nothing
+  changes in your files until you press Keep. Ask for directions with a
+  design competition and vote between them. Drag a token chip (say, corner
+  radius) on the design system and every live frame, web and iPhone, moves
+  with it until you let go. `isocan exact branch` shows a branch's screens
+  beside the current ones.
+- **Ship from the board.** An Exact app's release lane shows its channels
+  and releases. Prepare (an agent may) says what would go over the air and
+  what needs a new binary, uploading nothing. Ship, Promote and Roll back
+  are yours alone: you confirm the channel and changes, and Exact signs with
+  the keys on your machine. A running app picks the update up at its next
+  check.
+
+## 13 November 2026
+
+- **Exact apps on the canvas, first step (experiment).** Tick *Exact* under
+  Settings → Experiments, then `isocan exact open <app>` reads an Exact app's
+  routes and posts a phone-size web screenshot of each one, taken with your
+  own Exact on your machine. Run it again and only screens whose pixels
+  changed get a new version. `isocan exact doctor` says which Exact checkout,
+  commit and Bun the app uses, and whether the web host is set up.
+- **The whole Exact app as a map.** `isocan exact open` now lays every route
+  out on phone, tablet and desktop, light and dark, with arrows labelled by
+  the action that takes you between screens, the app's design tokens as the
+  canvas's design system, and a card per source file. `isocan exact live`
+  keeps it current as you edit: change one component's text and only the
+  screens that show it get a new version.
+
 ## 11 November 2026
 
 - **Space shows the bar while you present.** In full screen, press Space to

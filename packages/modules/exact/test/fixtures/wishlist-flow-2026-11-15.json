@@ -1,0 +1,176 @@
+{
+  "flow": "Wishlist",
+  "request": "a wishlist: the things you wished for, one of them, and a confirmation",
+  "screens": [
+    {
+      "itemId": "itm_Z3wGKltu_8",
+      "title": "Wishlist"
+    },
+    {
+      "itemId": "itm_NHx0ZSR15r",
+      "title": "Wished item"
+    },
+    {
+      "itemId": "itm_OdXWV5_S8N",
+      "title": "Added to your wishlist"
+    }
+  ],
+  "links": [
+    {
+      "from": "itm_Z3wGKltu_8",
+      "key": "header#leading",
+      "label": "Back",
+      "intent": "back",
+      "to": "back",
+      "transition": "pop",
+      "rule": "back"
+    },
+    {
+      "from": "itm_Z3wGKltu_8",
+      "key": "header#action-1",
+      "label": "Filter",
+      "intent": "filter",
+      "to": null,
+      "needs": "Filter panel",
+      "transition": "overlay",
+      "rule": "missing"
+    },
+    {
+      "from": "itm_Z3wGKltu_8",
+      "key": "nav#tab-1",
+      "label": "Home",
+      "intent": "home",
+      "nav": true,
+      "to": "itm_Z3wGKltu_8",
+      "transition": "none",
+      "rule": "tab"
+    },
+    {
+      "from": "itm_Z3wGKltu_8",
+      "key": "nav#tab-2",
+      "label": "Search",
+      "intent": "search",
+      "nav": true,
+      "to": null,
+      "needs": "Search",
+      "transition": "none",
+      "rule": "missing"
+    },
+    {
+      "from": "itm_Z3wGKltu_8",
+      "key": "nav#tab-3",
+      "label": "Notifications",
+      "intent": "notifications",
+      "nav": true,
+      "to": null,
+      "needs": "Notifications",
+      "transition": "none",
+      "rule": "missing"
+    },
+    {
+      "from": "itm_Z3wGKltu_8",
+      "key": "nav#tab-4",
+      "label": "Profile",
+      "intent": "profile",
+      "nav": true,
+      "to": null,
+      "needs": "Profile",
+      "transition": "none",
+      "rule": "missing"
+    },
+    {
+      "from": "itm_Z3wGKltu_8",
+      "key": "main.3#row",
+      "label": "Row",
+      "to": "itm_NHx0ZSR15r",
+      "transition": "push",
+      "rule": "row"
+    },
+    {
+      "from": "itm_Z3wGKltu_8",
+      "key": "fab#action",
+      "label": "Add",
+      "intent": "add",
+      "to": null,
+      "needs": "Form",
+      "transition": "push",
+      "rule": "missing"
+    },
+    {
+      "from": "itm_NHx0ZSR15r",
+      "key": "header#leading",
+      "label": "Back",
+      "intent": "back",
+      "to": "back",
+      "transition": "pop",
+      "rule": "back"
+    },
+    {
+      "from": "itm_NHx0ZSR15r",
+      "key": "header#action-1",
+      "label": "Share",
+      "intent": "share",
+      "to": null,
+      "needs": "Sheet",
+      "transition": "overlay",
+      "rule": "missing"
+    },
+    {
+      "from": "itm_NHx0ZSR15r",
+      "key": "main.1#action-1",
+      "label": "Edit",
+      "intent": "edit",
+      "to": null,
+      "needs": "Form",
+      "transition": "push",
+      "rule": "missing"
+    },
+    {
+      "from": "itm_NHx0ZSR15r",
+      "key": "main.1#action-2",
+      "label": "Share",
+      "intent": "share",
+      "to": null,
+      "needs": "Sheet",
+      "transition": "overlay",
+      "rule": "missing"
+    },
+    {
+      "from": "itm_NHx0ZSR15r",
+      "key": "main.3#post",
+      "label": "Submit",
+      "intent": "submit",
+      "to": "itm_OdXWV5_S8N",
+      "transition": "push",
+      "rule": "intent"
+    },
+    {
+      "from": "itm_NHx0ZSR15r",
+      "key": "footer#action",
+      "label": "Edit",
+      "intent": "edit",
+      "to": null,
+      "needs": "Form",
+      "transition": "push",
+      "rule": "missing"
+    },
+    {
+      "from": "itm_OdXWV5_S8N",
+      "key": "overlay#confirm",
+      "label": "Confirm",
+      "intent": "confirm",
+      "to": "back",
+      "transition": "overlay",
+      "rule": "back"
+    },
+    {
+      "from": "itm_OdXWV5_S8N",
+      "key": "overlay#cancel",
+      "label": "Cancel",
+      "intent": "cancel",
+      "to": "back",
+      "transition": "overlay",
+      "rule": "back"
+    }
+  ]
+}

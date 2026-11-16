@@ -1,3 +1,19 @@
+/**
+ * Copyright 2026 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import guideText from "../agent-guide.md";
 import { existsSync, promises as fs, readFileSync } from "node:fs";
 import path from "node:path";
@@ -29,6 +45,9 @@ import {
   entriesOf,
   findBout,
   handinPatch,
+  entryRule,
+  exactTargetOf,
+  takeRefusal,
   laneMarkdown,
   laneOfActor,
   laneOfItem,
@@ -304,6 +323,7 @@ your own rc, each named for its principle — an homage, never the person.
         let snapshot = await ctx.client.snapshot(canvas.id);
         const bout = boutOrSay(snapshot, ref);
         if (bout.phase !== "laid") throw new Error(`this bout is already ${bout.phase}`);
+        const exact = exactTargetOf(snapshot.canvas, bout);
         const list = fighters();
         const packs: Record<string, FighterPack> = {};
         const actors: Record<string, { id: string; name: string }> = {};
@@ -314,7 +334,7 @@ your own rc, each named for its principle — an homage, never the person.
           const enrolled = await host.enrol(ctx, canvas.id, {
             name: fighter.pack.agentName,
             template: "design-competition.fighter",
-            args: { pack: fighter.pack.id, module: fighter.module, bout: bout.brief.id, lane: lane.area.title, canvas: canvas.id },
+            args: { pack: fighter.pack.id, module: fighter.module, bout: bout.brief.id, lane: lane.area.title, canvas: canvas.id, ...(exact ? { exact: exact.id, exactTitle: exact.title } : {}) },
           });
           actors[lane.packId] = { id: enrolled.actorId, name: fighter.pack.agentName };
           if (!ctx.json) console.error(`${fighter.pack.agentName} enrolled — working in ${enrolled.dir}`);
@@ -322,7 +342,7 @@ your own rc, each named for its principle — an homage, never the person.
         snapshot = await ctx.client.snapshot(canvas.id);
         const fresh = boutOrSay(snapshot, bout.brief.id);
         const group = newGroupId();
-        for (const op of startPlan({ bout: fresh, packs, actors, now: new Date() })) await sendOp(ctx, canvas.id, op, group);
+        for (const op of startPlan({ bout: fresh, packs, actors, now: new Date(), exact })) await sendOp(ctx, canvas.id, op, group);
         if (ctx.json) return printJson({ bout: bout.brief.id, fighters: actors });
         console.log(
           `the fighters walk in — ${Object.values(actors).map((a) => a.name).join(", ")}, ${bout.minutes} minutes. ` +
@@ -557,6 +577,8 @@ your own rc, each named for its principle — an homage, never the person.
         if (!bout.target) throw new Error("this bout was about no screen (--attach) — there is nothing to take it onto");
         const target = snapshot.canvas.items[bout.target];
         if (!target) throw new Error("the screen this bout was about is gone");
+        const refused = takeRefusal(snapshot.canvas, bout);
+        if (refused) throw new Error(refused);
         const v = winner.versions.find((x) => x.id === winner.currentVersionId) ?? winner.versions[0]!;
         await sendOp(ctx, canvas.id, {
           type: "item.addVersion",
@@ -770,7 +792,7 @@ async function prepareFighter(args: Readonly<Record<string, string>>, into: stri
     "## The rules of the bout",
     "",
     `- Your brief is a message addressed to you in your lane, "${lane}". Read the Brief card above the lanes.`,
-    `- Build ONLY in your lane: \`isocan add <file> --in "${lane}"\`. Do not read the other lanes.`,
+    `- ${(() => { const r = entryRule(lane, args.exact ? { id: args.exact, title: args.exactTitle ?? args.exact } : null); return r[0]!.toUpperCase() + r.slice(1); })()}. Do not read the other lanes.`,
     "- One entry. Hand it in before the bell: `isocan competition handin <item>`.",
     "- After the bell: one critique thread on each rival entry, in your voice, naming which of your questions decided it; then rank the entries you did not make: `isocan competition vote <entry> --rank 1`. Never rank your own. Never place a 🏆 — a person decides.",
     "- Park between turns on your own lane: `isocan wait --in \"" + lane + "\" --json --timeout 900`.",

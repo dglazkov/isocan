@@ -1,9 +1,25 @@
+/**
+ * Copyright 2026 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import { canonicalJson, type Actor } from "@isocan/core";
 import { parseDesignArtifactRef, parseDesignBrief, parseDesignQuestionSet, parseDesignResponse, type DesignArtifactRef, type DesignBrief, type DesignQuestionSet, type DesignResponse } from "@isocan/core/design-partner";
 import { parseDesignComparison, parseDesignDecisionInput, type DesignComparison, type DesignDecisionInput } from "@isocan/core/design-decision";
 import { parseDesignProjection, type DesignProjection } from "./design-system-reader.ts";
 import { designCraftGuidance, designCraftRevision, designCraftSources } from "./design-craft-guidance.ts";
-import { craftLicense, craftNotice } from "./craft/sources.ts";
+import { craftLicense, craftNotice } from "./third_party/craft/sources.ts";
 import { parseDesignReviewOutput } from "./design-review-contract.ts";
 
 /** Guidance is selected explicitly; ordinary design work never opts in automatically. */
