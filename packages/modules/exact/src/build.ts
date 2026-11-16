@@ -66,11 +66,11 @@ export function captureKeyParts(index: ExactIndex, route: string, device: Device
 }
 
 /**
- * **`app.tamber` as the canvas's design system** (design §3): a DESIGN.md —
+ * **`app.forma` as the canvas's design system** (design §3): a DESIGN.md —
  * isocan's own format, so `isocan style`, `design check` and the DTCG export
  * read it with nothing of ours — whose colours are each token's light value,
  * and whose body says, per token, its light and dark values and every place
- * the app reads it (`tamber uses`). The full IR rides in `isocan.exact`.
+ * the app reads it (`forma uses`). The full IR rides in `isocan.exact`.
  */
 export function designMarkdown(index: ExactIndex): string | null {
   const design = index.design;
@@ -82,8 +82,8 @@ export function designMarkdown(index: ExactIndex): string | null {
     else if ((t.kind === "number" || t.kind === "length") && t.values.length === 1 && /^\d+(\.\d+)?(px)?$/.test(t.values[0]!)) spacing[t.name] = /px$/.test(t.values[0]!) ? t.values[0]! : Number(t.values[0]);
   }
   const tokens: DesignTokens = {
-    name: `${index.app.name} (app.tamber)`,
-    description: `The design of the Exact app ${index.app.id}, read from its app.tamber by \`tamber ir\` (digest ${design.digest}). Edit app.tamber, not this file: the next capture rewrites it.`,
+    name: `${index.app.name} (app.forma)`,
+    description: `The design of the Exact app ${index.app.id}, read from its app.forma by \`forma ir\` (digest ${design.digest}). Edit app.forma, not this file: the next capture rewrites it.`,
     ...(Object.keys(colors).length ? { colors } : {}),
     ...(Object.keys(spacing).length ? { spacing } : {}),
     isocan: { exact: { app: index.app.id, digest: design.digest, tokens: design.tokens.map((t) => ({ name: t.name, kind: t.kind, values: t.values })) } },
@@ -93,7 +93,7 @@ export function designMarkdown(index: ExactIndex): string | null {
   const body = [
     "## Overview",
     "",
-    `The tokens of ${index.app.name}'s \`app.tamber\`, as the app's own compiler folds them, with where each is used.`,
+    `The tokens of ${index.app.name}'s \`app.forma\`, as the app's own compiler folds them, with where each is used.`,
     "",
     "## Colors",
     "",

@@ -61,7 +61,7 @@ interface DoctorReport {
   dirty: number;
   bun: { path: string; version: string | null; pin: string | null; engines: string | null; packageManager: string | null };
   setup: Array<{ host: string; status: string; what: string; detail: string }>;
-  tamber: { protocol: string | null; format?: number | null; note: string | null };
+  forma: { protocol: string | null; format?: number | null; note: string | null };
 }
 
 interface JobsReport {
@@ -69,7 +69,7 @@ interface JobsReport {
 }
 
 /** The commit and protocol this module was proven against (design §14): newer is warned, then tried. */
-export const PROVEN = { commit: "cbe553f6", protocol: "tamber/1.18", bun: "1.4.2" } as const;
+export const PROVEN = { commit: "a54f4234", protocol: "forma/1.18", bun: "1.4.2" } as const;
 
 async function bridge<T>(host: CliHost, verb: string, args: string[], what: string, quiet: boolean): Promise<T> {
   if (!host.runPackageScript) throw new Error("this isocan cannot run a script for a module — upgrade it (module API 0.2.11)");
@@ -94,14 +94,14 @@ export async function doctor(host: CliHost, given: string | undefined, opts: { h
   const warnings: string[] = [];
   if (r.bun.pin && r.bun.version && r.bun.version !== r.bun.pin) warnings.push(`Bun ${r.bun.version} is not Exact's pin ${r.bun.pin} — warned, not refused`);
   if (r.commit && !r.commit.startsWith(PROVEN.commit)) warnings.push(`this module was proven against Exact ${PROVEN.commit}; ${r.commit.slice(0, 8)} is tried as it is`);
-  if (r.tamber.protocol && r.tamber.protocol !== PROVEN.protocol) warnings.push(`Tamber ${r.tamber.protocol} is not ${PROVEN.protocol}, which this module was proven against`);
+  if (r.forma.protocol && r.forma.protocol !== PROVEN.protocol) warnings.push(`Forma ${r.forma.protocol} is not ${PROVEN.protocol}, which this module was proven against`);
   if (r.dirty > 0) warnings.push(`the checkout has ${r.dirty} changed file${r.dirty === 1 ? "" : "s"}`);
   const missing = r.setup.filter((row) => row.status !== "ok" && row.status !== "ready");
   if (ctx.json) return host.printJson({ ...r, proven: PROVEN, warnings, ready: missing.length === 0 });
   console.log(`${r.app} — on this machine`);
   console.log(`  checkout  ${r.checkout} @ ${r.commit?.slice(0, 8) ?? "?"}${r.subject ? ` (${r.subject})` : ""}`);
   console.log(`  bun       ${r.bun.version ?? "not found"} (${r.bun.path}); Exact pins ${r.bun.pin ?? r.bun.packageManager ?? "?"}`);
-  console.log(`  tamber    ${r.tamber.protocol ?? `none — ${r.tamber.note}`}`);
+  console.log(`  forma     ${r.forma.protocol ?? `none — ${r.forma.note}`}`);
   for (const row of r.setup) if (row.what !== "setup --check") console.log(`  ${row.status.padEnd(8)}  ${row.host}: ${row.what} — ${row.detail}`);
   for (const row of r.setup) if (row.what === "setup --check") console.log(`  ${row.host}: ${row.status}`);
   for (const w of warnings) console.log(`  warning: ${w}`);
@@ -284,7 +284,7 @@ async function sync(host: CliHost, ctx: Ctx, canvasId: string, app: string, opts
       design = await upsert(
         host, ctx, canvasId, snapshot, core.designItemOf(snapshot.canvas, appId),
         { bytes: Buffer.from(md, "utf8"), mime: "text/markdown", filename: "DESIGN.md" },
-        { title: `${index.app.name} — design system (app.tamber)`, width: LAYOUT.sideWidth, height: 360, properties: designItemProperties(index), at: { x: origin.x, y: sideY } },
+        { title: `${index.app.name} — design system (app.forma)`, width: LAYOUT.sideWidth, height: 360, properties: designItemProperties(index), at: { x: origin.x, y: sideY } },
         group,
       );
       sideY += 360 + 40;
@@ -439,7 +439,7 @@ function printSync(r: SyncResult): void {
     : `  routes.json disagrees: only in Contract ${JSON.stringify(r.index.routesJson.onlyContract)}, only in routes.json ${JSON.stringify(r.index.routesJson.onlyRoutesJson)}`);
   for (const e of r.index.edges) console.log(`  ${e.from} → ${e.to}  ${e.verb}${e.action ? ` (${e.action})` : ""}  ${e.file}:${e.line}`);
   for (const u of r.index.unplaced) console.log(`  not drawn: ${u.verb}${u.action ? ` (${u.action})` : ""} at ${u.file}:${u.line} — ${u.why}`);
-  if (r.design) console.log(`${r.design.itemId}  design system from app.tamber (${r.design.status}), ${r.index.design?.tokens.length ?? 0} tokens`);
+  if (r.design) console.log(`${r.design.itemId}  design system from app.forma (${r.design.status}), ${r.index.design?.tokens.length ?? 0} tokens`);
   for (const a of r.anatomy) console.log(`${a.itemId}  anatomy of ${a.file} (${a.status})`);
   for (const s of r.screens) console.log(`${s.itemId}  ${s.route.padEnd(14)} ${s.host.padEnd(6)} ${s.device.padEnd(8)} ${s.scheme.padEnd(6)} ${s.status.padEnd(12)} ${s.sha256?.slice(0, 12) ?? ""}`);
   for (const f of r.hostFindings) console.log(`${f.key}\n  ${f.body.split("\n")[0]}`);
@@ -747,6 +747,17 @@ async function serveDrives(host: CliHost, ctx: Ctx, canvasId: string, app: strin
       say(`proposal: ${answer.ok ? `${answer.itemId} (${answer.class}, ${answer.previews} pictures, ${answer.client} at ${answer.scope}${answer.scopeCheck ? `; its accept refused ${answer.scopeCheck.status} needs ${answer.scopeCheck.needs}` : ""}) in ${answer.ms} ms` : answer.error}`);
       await host.sendOp(ctx, canvasId, { type: "item.update", itemId: pending.item.id, patch: { properties: { [core.EXACT_PROPS.proposed]: JSON.stringify(answer) } } }, id("exact-propose"));
     }
+    // A design system applied (exact phase 9): the mapping card, then Exact's held import, pictured as a proposal.
+    {
+      const { pendingApplies, answerApply } = await import("./systems.ts");
+      for (const pending of pendingApplies(entries, snapshot, appId)) {
+        if (signal.aborted) return;
+        say(`apply from ${pending.actor.name}: ${pending.item.title}`);
+        const answer = await answerApply(kit, host, ctx, canvasId, app, { hosts: options.hosts, sim: options.sim }, pending);
+        say(`apply: ${answer.ok ? `card ${answer.card}, ${answer.mapped} mapped, ${answer.unmatched.length} unmatched; ${answer.itemId} (${answer.class}, held as ${answer.proposal}, ${answer.previews} pictures) in ${answer.ms} ms` : answer.error}`);
+        await host.sendOp(ctx, canvasId, { type: "item.update", itemId: pending.item.id, patch: { properties: { [core.EXACT_PROPS.applied]: JSON.stringify(answer) } } }, id("exact-apply"));
+      }
+    }
     const settledSnapshot = await ctx.client.snapshot(canvasId);
     await settleKept(kit, host, ctx, canvasId, app, appId, entries, settledSnapshot, say);
     // Ship (exact phase 7): a prepare asked for on the lane, and a ship, promote or roll back — refused when an agent wrote it.
@@ -1051,6 +1062,26 @@ export async function verifyApp(host: CliHost, given: string, opts: { hosts?: st
 /** `isocan exact propose <screen>` (exact phase 6): an ask on the screen; `isocan exact live` holds and pictures it. */
 export async function propose(host: CliHost, ref: string, opts: ProposeOptions, cmd: Command): Promise<void> {
   return proposeVerb(host, ref, opts, cmd);
+}
+
+/** `isocan exact system extract <app>` and `system apply <system> <app>` (exact phase 9): a design system that travels between apps. */
+export async function system(host: CliHost, kind: "extract" | "apply", args: string[], opts: import("./systems.ts").ApplyOptions, cmd: Command): Promise<void> {
+  const s = await import("./systems.ts");
+  if (kind === "extract") return s.extractVerb(kit, host, appDir(args[0]), cmd);
+  if (args.length < 2) throw new Error("isocan exact system apply <system> <app>");
+  return s.applyVerb(kit, host, args[0]!, appDir(args[1]), opts, cmd);
+}
+
+/** `isocan exact make <app> <flow.json>` (exact phase 9): a wireframe flow as a Contract scaffold on a branch, captured beside. */
+export async function make(host: CliHost, given: string, flow: string, opts: import("./makes.ts").MakeOptions, cmd: Command): Promise<void> {
+  const { makeVerb } = await import("./makes.ts");
+  return makeVerb(kit, host, appDir(given), flow, opts, cmd);
+}
+
+/** `isocan exact persona <app> <name>` (exact phase 9): a persona's path, replayed on the driver as a filmstrip, with its note. */
+export async function persona(host: CliHost, given: string, name: string, opts: import("./personas.ts").PersonaOptions, cmd: Command): Promise<void> {
+  const { personaVerb } = await import("./personas.ts");
+  return personaVerb(kit, host, appDir(given), name, opts, cmd);
 }
 
 /** `isocan exact branch <app> <ref|dir>` (exact phase 6): a branch's screens captured in a staging copy, beside the current. */

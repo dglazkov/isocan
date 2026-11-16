@@ -24,6 +24,8 @@ import { InspectorPanel, SelectionWatch } from "./inspector.tsx";
 import { StoryboardCard } from "./storyboard.tsx";
 import { ProposalCard } from "./proposalcard.tsx";
 import { TokenPanel } from "./tokens.tsx";
+import { SystemPanel } from "./systempanel.tsx";
+import { PersonaStrip } from "./personacard.tsx";
 import { LaneCard, ReleaseCard } from "./lane.tsx";
 import { exactCanvas, useExactStore } from "./live.tsx";
 import { parseVerifyAnswer, parseVerifyAsk } from "./story.ts";
@@ -236,6 +238,8 @@ export const exactWeb: WebModule<ComponentType<UnderlayFacts>, ComponentType<Ren
     { mimes: ["text/markdown"], property: EXACT_PROPS.classification, component: ReleaseCard },
     // A proposal is core's, and an ordinary PNG (exact phase 6, `proposalcard.tsx`): before and after on every device and scheme.
     { mimes: ["image/png"], property: EXACT_PROPS.proposal, component: ProposalCard },
+    // A persona's run (exact phase 9, `personacard.tsx`): its frames side by side, the step it broke on in red.
+    { mimes: ["image/png"], property: EXACT_PROPS.persona, component: PersonaStrip },
     // A film is an ordinary animated PNG (exact phase 4, `film.tsx`): the ones that carry `exact.film` are drawn as a scrubber.
     { mimes: ["image/png"], property: EXACT_PROPS.film, component: FilmStrip },
     // A screen is an ordinary PNG: only the ones this module captured (they carry `exact.route`) are drawn here —
@@ -249,6 +253,8 @@ export const exactWeb: WebModule<ComponentType<UnderlayFacts>, ComponentType<Ren
     { region: "right", label: "Exact inspector", component: InspectorPanel },
     // The design system's length tokens as chips: a drag scrubs every live build (exact phase 6, `tokens.tsx`).
     { region: "right", label: "Exact tokens", component: TokenPanel },
+    // A design system of no app: chips that edit it, and Apply to another app as Exact's held import (exact phase 9, `systempanel.tsx`).
+    { region: "right", label: "Exact design system", component: SystemPanel },
   ],
   comments: commentRows,
 };

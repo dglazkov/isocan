@@ -36,7 +36,7 @@
  * nothing is written to one: the CLI posts what the report says.
  *
  * It reads only what Exact prints for tools (design §14): `web-build`'s
- * `routes.json`, `contract symbols`, `contract test`, `tamber ir`, the
+ * `routes.json`, `contract symbols`, `contract test`, `forma ir`, the
  * design server's `hello` and `uses`, the agent driver's screenshots and
  * `setup --check`. Every launch is `/bin/sh exact.mjs …`, the
  * app's own launcher line, so the Bun it picks is the one the app would.
@@ -46,7 +46,7 @@
  */
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync, accessSync, constants } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, writeFileSync, accessSync, constants } from "node:fs";
 import { createServer } from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -58,7 +58,7 @@ const flag = (name) => {
 };
 const flags = (name) => argv.flatMap((a, i) => (a === name && argv[i + 1] !== undefined ? [argv[i + 1]] : []));
 
-if (!["doctor", "read", "capture", "inputs", "diagnose", "check", "compare", "drive", "film", "facts", "run", "record", "verify", "propose", "accept", "drop", "stage-branch", "lane", "prepare", "ship"].includes(verb ?? "") || !flag("--app") || !flag("--report")) {
+if (!["doctor", "read", "capture", "inputs", "diagnose", "check", "compare", "drive", "film", "facts", "run", "record", "verify", "propose", "accept", "drop", "stage-branch", "lane", "prepare", "ship", "system-extract", "system-apply", "make-branch", "persona"].includes(verb ?? "") || !flag("--app") || !flag("--report")) {
   console.error("usage: exact-bridge.mjs doctor|read|capture|inputs|diagnose|check --app <dir> --report <file.json> [--hosts web,ios] [--jobs <jobs.json>] [--dir <out> --size <w>x<h> --url <path>…]");
   process.exit(2);
 }
@@ -68,7 +68,7 @@ const report = path.resolve(flag("--report"));
 /**
  * **The web build this bridge drives, kept apart from the dev loop's** (exact
  * phase 6). A `web-build` into the app's own web dist leaves the running dev
- * loop's pages deaf to Tamber — measured 14 Nov 2026 (Exact cbe553f6): after
+ * loop's pages deaf to Forma — measured 14 Nov 2026 (Exact cbe553f6): after
  * one, a scrub reached the iOS app joined to the loop and not one web page,
  * and phase 3 saw `inspect` break the same way. Exact's `EXACT_WEB_DIST` names
  * another dist for `web-build` and the web driver alike, so every capture,
@@ -129,6 +129,23 @@ function bunOf(pin) {
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
+/**
+ * **`contract symbols`, its files named as the app's**: Exact names a file a
+ * `use` line reached by its real absolute path (`/private/var/…` for a
+ * `/var/…` app), and app.contract by its own name. Each file inside the app
+ * is named relative to it here, so `sources`, findings and the flow map key
+ * every file one way (exact phase 9: a scaffold's second file was skipped).
+ */
+function symbolsOf({ allowFail = false } = {}) {
+  const run = exact(["contract", "symbols", "app.contract"], { allowFail });
+  let parsed;
+  try { parsed = JSON.parse(run.stdout); } catch (err) { if (allowFail) return null; throw err; }
+  const roots = [...new Set([app, realpathSync(app)])].map((r) => r + path.sep);
+  const rel = (f) => { if (typeof f !== "string" || !path.isAbsolute(f)) return f; const root = roots.find((r) => f.startsWith(r)); return root ? f.slice(root.length) : f; };
+  for (const list of [parsed.definitions ?? [], parsed.references ?? []]) for (const d of list) d.file = rel(d.file);
+  return parsed;
+}
+
 function freePort() {
   return new Promise((resolve, reject) => {
     const s = createServer();
@@ -141,13 +158,28 @@ function freePort() {
  * **A design server of the app's own, for a few questions** — started on a
  * free loopback port, asked, and stopped. An app without a design mounts no
  * wire, which is an answer too. `ask(method, body)` posts one request with
- * the loopback token, as `tamber op` does.
+ * the loopback token, as `forma op` does.
  */
+/**
+ * **The app's design file**, as Exact finds it (`forma` help): the file
+ * app.json's `"forma"` names, else `app.forma` beside `app.contract`. Exact
+ * renamed Tamber to Forma (Nov 2026) and refuses an `app.tamber`; that is
+ * said here, never renamed for the person.
+ */
+function designFile() {
+  let named = null;
+  try { named = JSON.parse(readFileSync(path.join(app, "app.json"), "utf8")).forma ?? null; } catch { /* no app.json */ }
+  const file = path.join(app, typeof named === "string" ? named : "app.forma");
+  if (existsSync(file)) return { file, note: null };
+  if (existsSync(path.join(app, "app.tamber"))) return { file: null, note: "the app's design is still app.tamber: Exact renamed Tamber to Forma, so rename it to app.forma (and its first line `tamber` to `forma`)" };
+  return { file: null, note: "no app.forma: the app has no design, so no Forma wire is mounted" };
+}
+
 async function withDesignServer(questions) {
-  const design = existsSync(path.join(app, "app.tamber"));
-  if (!design) return { ok: false, note: "no app.tamber: the app has no design, so no Tamber wire is mounted" };
+  const found = designFile();
+  if (!found.file) return { ok: false, note: found.note };
   const port = await freePort();
-  const child = spawn("/bin/sh", [launcher, "tamber", "serve", ".", "--port", String(port)], { cwd: app, stdio: ["ignore", "pipe", "pipe"], detached: true });
+  const child = spawn("/bin/sh", [launcher, "forma", "serve", ".", "--port", String(port)], { cwd: app, stdio: ["ignore", "pipe", "pipe"], detached: true });
   let said = "";
   child.stdout.on("data", (d) => { said += d; });
   child.stderr.on("data", (d) => { said += d; });
@@ -157,14 +189,14 @@ async function withDesignServer(questions) {
     let token = null;
     while (Date.now() < deadline && !token) {
       try {
-        const r = await fetch(`${base}/__tamber/token`, { redirect: "error" });
+        const r = await fetch(`${base}/__forma/token`, { redirect: "error" });
         if (r.ok) token = (await r.json()).token;
       } catch { /* not listening yet */ }
       if (!token) await new Promise((r) => setTimeout(r, 250));
     }
     if (!token) return { ok: false, note: `the design server did not answer on ${base}: ${said.trim().split("\n").at(-1) ?? ""}` };
     const ask = async (body) => {
-      const r = await fetch(`${base}/__tamber`, { method: "POST", headers: { "content-type": "application/json", "x-exact-tamber-token": token }, body: JSON.stringify(body) });
+      const r = await fetch(`${base}/__forma`, { method: "POST", headers: { "content-type": "application/json", "x-exact-forma-token": token }, body: JSON.stringify(body) });
       const answer = await r.json().catch(() => null);
       return { status: r.status, answer };
     };
@@ -174,7 +206,7 @@ async function withDesignServer(questions) {
   }
 }
 
-async function tamberHello() {
+async function formaHello() {
   const done = await withDesignServer(async (ask) => {
     const { status, answer } = await ask({ method: "hello" });
     if (!answer?.ok) return { protocol: null, note: `hello answered ${status}: ${answer?.error?.message ?? "nothing"}` };
@@ -184,12 +216,13 @@ async function tamberHello() {
 }
 
 /**
- * **The design** (design §3): `tamber ir` (the folded IR), and the wire's
+ * **The design** (design §3): `forma ir` (the folded IR), and the wire's
  * `uses` for each token — every style row that reads it, at its line.
  */
 async function design() {
-  if (!existsSync(path.join(app, "app.tamber"))) return null;
-  const ir = JSON.parse(exact(["tamber", "ir", "."]).stdout);
+  const found = designFile();
+  if (!found.file) { if (existsSync(path.join(app, "app.tamber"))) fail(found.note); return null; }
+  const ir = JSON.parse(exact(["forma", "ir", "."]).stdout);
   const done = await withDesignServer(async (ask) => {
     const uses = {};
     for (const t of ir.tokens ?? []) {
@@ -246,7 +279,7 @@ async function doctor() {
   const bun = bunOf(pin);
   const hosts = (flag("--hosts") ?? "web").split(",").map((h) => h.trim()).filter(Boolean);
   const pkg = JSON.parse(readFileSync(path.join(dir, "package.json"), "utf8"));
-  const tamber = await tamberHello();
+  const forma = await formaHello();
   return {
     app: path.basename(app),
     checkout: dir,
@@ -255,7 +288,7 @@ async function doctor() {
     dirty: (git(dir, ["status", "--porcelain", "--untracked-files=no"]) ?? "").split("\n").filter(Boolean).length,
     bun: { path: bun.bin, version: bun.version, pin, engines: pkg.engines?.bun ?? null, packageManager: pkg.packageManager ?? null },
     setup: setupCheck(dir, bun.bin, hosts),
-    tamber,
+    forma,
   };
 }
 
@@ -266,8 +299,9 @@ async function read() {
   const dist = process.env.EXACT_WEB_DIST;
   const routesFile = path.join(dist, "routes.json");
   if (!existsSync(routesFile)) fail(`web-build wrote no ${routesFile} — Exact changed where its routes go`);
-  const symbols = exact(["contract", "symbols", "app.contract"]);
-  const parsed = JSON.parse(symbols.stdout);
+  const symbolsStarted = Date.now();
+  const parsed = symbolsOf();
+  const symbols = { ms: Date.now() - symbolsStarted };
   const sources = {};
   for (const file of new Set(parsed.definitions.map((d) => d.file))) {
     if (file.includes(":") || !file.endsWith(".contract")) continue;
@@ -958,9 +992,8 @@ function diagnose() {
     diagnostics = JSON.parse(build.stdout.trim().split("\n").filter((l) => l.startsWith("[")).at(-1) ?? "null");
   } catch { diagnostics = null; }
   if (!Array.isArray(diagnostics)) fail(`\`contract build --json\` printed no diagnostics list (exit ${build.code}):\n${(build.stderr || build.stdout).trim().split("\n").slice(-4).join("\n")}`);
-  const sym = exact(["contract", "symbols", "app.contract"], { allowFail: true });
-  let symbols = null;
-  try { symbols = JSON.parse(sym.stdout); } catch { /* a file that does not parse names nothing */ }
+  // A file that does not parse names nothing.
+  const symbols = symbolsOf({ allowFail: true });
   const sources = {};
   const digests = {};
   const files = new Set(["app.contract", ...diagnostics.map((d) => d.file), ...(symbols?.definitions ?? []).map((d) => d.file)]);
@@ -999,8 +1032,8 @@ function check() {
 // ---------------------------------------------------------------- proposals (exact phase 6; design §10)
 
 /**
- * **The operations a proposal may carry** — a closed list of Tamber's own
- * (`docs/tamber-protocol.md`, Operations): a token's value, a row of a style
+ * **The operations a proposal may carry** — a closed list of Forma's own
+ * (`docs/forma-protocol.md`, Operations): a token's value, a row of a style
  * or at a place, a state part's row. Anything else is refused before the wire
  * sees it: these come off a canvas, from whoever asked.
  */
@@ -1017,16 +1050,16 @@ function checkProposalOps(ops) {
   }
 }
 
-/** The dev loop's Tamber wire, through its local token (loopback only): the person's own bridge, `write`. */
+/** The dev loop's Forma wire, through its local token (loopback only): the person's own bridge, `write`. */
 async function wireOf() {
   const dev = flag("--dev-url");
-  if (!dev || !/^http:\/\/127\.0\.0\.1:\d+\/?$/.test(dev)) fail("a proposal is held by the dev loop's Tamber wire, and this `isocan exact live` runs no dev loop — start it without --no-frames");
+  if (!dev || !/^http:\/\/127\.0\.0\.1:\d+\/?$/.test(dev)) fail("a proposal is held by the dev loop's Forma wire, and this `isocan exact live` runs no dev loop — start it without --no-frames");
   const base = dev.replace(/\/$/, "");
   let token = null;
-  try { const r = await fetch(`${base}/__tamber/token`, { redirect: "error" }); if (r.ok) token = (await r.json()).token; } catch { /* no wire */ }
-  if (!token) fail(`the dev loop at ${base} mounts no Tamber wire (an app with no app.tamber has none)`);
+  try { const r = await fetch(`${base}/__forma/token`, { redirect: "error" }); if (r.ok) token = (await r.json()).token; } catch { /* no wire */ }
+  if (!token) fail(`the dev loop at ${base} mounts no Forma wire (an app with no app.forma has none)`);
   const ask = async (body, tok = token) => {
-    const r = await fetch(`${base}/__tamber`, { method: "POST", headers: { "content-type": "application/json", "x-exact-tamber-token": tok }, body: JSON.stringify(body) });
+    const r = await fetch(`${base}/__forma`, { method: "POST", headers: { "content-type": "application/json", "x-exact-forma-token": tok }, body: JSON.stringify(body) });
     return { status: r.status, answer: await r.json().catch(() => null) };
   };
   return { base, token, ask };
@@ -1079,7 +1112,7 @@ async function scrubPreview(wire, out, job, files, sim) {
   const hosts = ["web", ...(job.ios && sim ? ["ios"] : [])];
   const client = "isocan-preview";
   const presence = new AbortController();
-  fetch(`${wire.base}/__tamber/subscribe`, { method: "POST", headers: { "content-type": "application/json", "x-exact-tamber-token": wire.token }, body: JSON.stringify({ client }), signal: presence.signal }).catch(() => {});
+  fetch(`${wire.base}/__forma/subscribe`, { method: "POST", headers: { "content-type": "application/json", "x-exact-forma-token": wire.token }, body: JSON.stringify({ client }), signal: presence.signal }).catch(() => {});
   const signal = (s, which) => path.join(out, `go-${s}-${which}`);
   const shot = (host, device, s, phase) => path.join(out, `${host}-${device}-${s}-${phase}.png`);
   const iosDevice = "phone";
@@ -1220,11 +1253,11 @@ async function stagedPreview(out, job, texts, sim) {
   return { how: "staged", previews, errors };
 }
 
-/** A client of the wire's own, paired by the local token at `scope` (never `write`): Tamber's pairing, as a remote one. */
+/** A client of the wire's own, paired by the local token at `scope` (never `write`): Forma's pairing, as a remote one. */
 async function pairedClient(wire, scope, name) {
   const code = await wire.ask({ method: "pair-code", scope, name });
   if (!code.answer?.ok?.code) return { error: `pair-code: ${wireError(code)}` };
-  const pr = await fetch(`${wire.base}/__tamber/pair`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code: code.answer.ok.code, name }) });
+  const pr = await fetch(`${wire.base}/__forma/pair`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code: code.answer.ok.code, name }) });
   const paired = await pr.json().catch(() => null);
   const p = paired?.ok ?? paired;
   if (!p?.token) return { error: `pair: ${pr.status} ${JSON.stringify(paired).slice(0, 200)}` };
@@ -1253,7 +1286,7 @@ async function proposeJob(out, job) {
   const files = hello.answer.ok.files;
   let token = wire.token, client = `person:${name}`, scopeCheck = null;
   if (job.scope !== "write") {
-    // Tamber's own pairing, minted by the local token: a client of its own, at the asker's scope (`propose` for an
+    // Forma's own pairing, minted by the local token: a client of its own, at the asker's scope (`propose` for an
     // agent, `read` for a person this machine's owner has not granted write: exact phase 8), never `write`.
     const p = await pairedClient(wire, job.scope, `isocan-${name}`);
     if (p.error) return { ok: false, error: p.error };
@@ -1286,7 +1319,7 @@ async function proposeJob(out, job) {
 }
 
 /**
- * **A person's Keep, written** — Tamber's `accept` of the held proposal, with
+ * **A person's Keep, written** — Forma's `accept` of the held proposal, with
  * the local token (`write`: the person who started this bridge, whose Keep
  * the canvas recorded). A held proposal lives 15 minutes and dies with the
  * loop; one gone is held again from the operations and digests it was made
@@ -1324,6 +1357,175 @@ async function dropJob(job) {
   if (!job.proposal) return { ok: true, dropped: null };
   const r = await wire.ask({ method: "drop", proposal: job.proposal, client: "isocan" });
   return { ok: !!r.answer?.ok || r.status === 404, dropped: r.answer?.ok?.dropped ?? null, status: r.status };
+}
+
+/**
+ * **A design system, read off the app** (exact phase 9; design §13): Exact's
+ * printed interfaces only — `forma ir` (each token's name, kind and source),
+ * `forma export dtcg` (each token's value per scheme, by Exact's own
+ * serializer) and the named styles `contract symbols` names, each read at
+ * its line with the rows indented under it. Nothing is written.
+ */
+function systemExtract() {
+  const found = designFile();
+  if (!found.file) fail(found.note);
+  const ir = JSON.parse(exact(["forma", "ir", "."]).stdout);
+  const doc = JSON.parse(exact(["forma", "export", "dtcg", "."]).stdout);
+  const leaves = { light: {}, dark: {} };
+  const flat = (tree, pre, out) => {
+    for (const [k, v] of Object.entries(tree ?? {})) {
+      // A group that is a token too (`ink` beside `ink.muted`) keeps its own value under `$root`.
+      if (k === "$root" && v && typeof v === "object" && "$value" in v && pre.length) { out[pre.join(".")] = v; continue; }
+      if (k.startsWith("$")) continue;
+      const name = [...pre, k].join(".");
+      if (v && typeof v === "object" && "$value" in v) out[name] = v; else if (v && typeof v === "object") flat(v, [...pre, k], out);
+    }
+  };
+  const contexts = doc?.modifiers?.mode?.contexts ?? {};
+  const other = Object.keys(contexts).filter((c) => c !== "light" && c !== "dark");
+  for (const s of ["light", "dark"]) for (const set of contexts[s] ?? []) flat(set, [], leaves[s]);
+  const symbols = symbolsOf();
+  const styles = [];
+  for (const d of symbols.definitions.filter((x) => x.kind === "style" && x.file.endsWith(".contract") && !x.file.includes(":"))) {
+    const at = path.resolve(app, d.file);
+    if (!at.startsWith(app + path.sep)) continue;
+    const lines = readFileSync(at, "utf8").split("\n");
+    const rows = [];
+    for (let i = d.line; i < lines.length; i++) {
+      const line = lines[i];
+      if (!/^\s+\S/.test(line)) break;
+      for (const m of line.matchAll(/([A-Za-z-][A-Za-z0-9-]*)=("(?:[^"\\]|\\.)*"|[^\s"]+)/g)) rows.push({ row: m[1], value: m[2].startsWith('"') ? JSON.parse(m[2]) : m[2] });
+    }
+    styles.push({ name: d.name, file: d.file, line: d.line, rows });
+  }
+  let manifest = {};
+  try { manifest = JSON.parse(readFileSync(path.join(app, "app.json"), "utf8")); } catch { /* none */ }
+  return {
+    from: { id: manifest.app?.id ?? manifest.id ?? path.basename(app), name: manifest.app?.name ?? manifest.name ?? path.basename(app), dir: path.basename(app), commit: git(checkout().dir, ["rev-parse", "HEAD"]) },
+    digest: ir.digest,
+    tokens: (ir.tokens ?? []).map((t) => ({ name: t.name, kind: t.kind, source: (t.values ?? []).join(" "), light: leaves.light[t.name] ?? null, dark: leaves.dark[t.name] ?? leaves.light[t.name] ?? null })),
+    styles,
+    ...(other.length ? { notes: [`the design has axes: only its light and dark contexts are read (${other.join(", ")} are not)`] } : {}),
+  };
+}
+
+/**
+ * **A design system applied to this app, as Exact's held import** (exact
+ * phase 9; design §13): the DTCG file the CLI wrote — the mapped tokens under
+ * this app's names — handed to the dev loop's design server with `bun
+ * exact.mjs forma import dtcg <file> <url>`, which holds it as a proposal
+ * (Exact's client `import:dtcg`) and writes nothing. The proposal is read
+ * back off the wire's open list and pictured as phase 6 pictures one — a scrub
+ * for a live-class edit, a staged copy for a rebuild-class one. Keep is the
+ * same `accept`.
+ */
+async function systemApply(out, job) {
+  mkdirSync(out, { recursive: true });
+  const started = Date.now();
+  const wire = await wireOf();
+  const file = path.join(out, "system-tokens.json");
+  writeFileSync(file, String(job.dtcg ?? ""));
+  const run = exact(["forma", "import", "dtcg", file, wire.base, "--prefix", ""], { allowFail: true });
+  const said = `${run.stdout}${run.stderr}`.trim();
+  const id = /^proposal (\S+): /m.exec(run.stdout)?.[1] ?? null;
+  if (run.code !== 0 || !id) return { ok: false, said, error: run.code !== 0 ? `Exact's held import refused it: ${said.split("\n").slice(0, 3).join(" — ")}` : `Exact's held import held nothing: ${said.split("\n").at(-1)}` };
+  const listed = await fetch(`${wire.base}/__forma/events`, { method: "POST", headers: { "content-type": "application/json", "x-exact-forma-token": wire.token }, body: JSON.stringify({ client: "isocan-apply", wait: 0 }) }).then((r) => r.json()).catch(() => null);
+  const held = (listed?.proposals ?? []).find((p) => p.proposal === id);
+  if (!held) return { ok: false, proposal: id, said, error: `the wire does not list ${id} as held` };
+  const ops = (held.ops ?? []).map((o) => o.op);
+  const hello = await wire.ask({ method: "hello" });
+  const files = hello.answer?.ok?.files ?? {};
+  const sim = job.ios ? (flag("--sim") && /^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/i.test(flag("--sim")) ? simulator([{ host: "ios" }]) : null) : null;
+  let preview;
+  if (held.class === "live") preview = await scrubPreview(wire, out, { ...job, ops }, files, sim);
+  else {
+    const again = await wire.ask({ method: "propose", ops, files, client: "isocan-apply", texts: true });
+    if (!again.answer?.ok?.texts) return { ok: false, proposal: id, said, error: `the wire would not say what the import writes: ${wireError(again)}` };
+    preview = await stagedPreview(out, job, again.answer.ok.texts, sim);
+  }
+  return {
+    ok: preview.previews.length > 0 && preview.errors.length === 0,
+    proposal: id, client: held.client, class: held.class, changed: held.changed ?? [], diff: held.diff ?? null, files: held.files ?? files,
+    ops, review: held.review ?? null, said, how: preview.how, previews: preview.previews, ms: Date.now() - started,
+    ...(preview.errors.length ? { error: preview.errors.join("; ") } : {}),
+  };
+}
+
+/**
+ * **A persona's path, replayed on the driver** (exact phase 9; journey Scene
+ * 9): the operations the persona chose while it explored the app with
+ * Exact's own `agent`, run again in one cold session at the capture's fixed
+ * facts, a screenshot before the first and after each — the filmstrip — and
+ * each operation's own reply, so a tap on something that is not there is
+ * recorded as the place the path broke, in the driver's words.
+ */
+function personaJob(out, job) {
+  mkdirSync(out, { recursive: true });
+  const host = job.host === "ios" ? "ios" : "web";
+  const url = typeof job.url === "string" && job.url.startsWith("/") ? job.url : "/";
+  const ops = Array.isArray(job.ops) ? job.ops : [];
+  if (ops.length === 0 || ops.length > 20 || ops.some((op) => typeof op !== "string" || !DRIVE_OP.test(op))) fail("a persona's path is 1 to 20 of tap <testId>, type <testId> \"<text>\" and back");
+  checkJob({ host, url, ops: [], shots: [] });
+  const frame = (i) => path.join(out, `frame-${String(i).padStart(2, "0")}.png`);
+  const tail = ["clock settle", `screenshot ${frame(0)}`, ...ops.flatMap((op, i) => [op, "clock settle", `screenshot ${frame(i + 1)}`])];
+  const sim = host === "ios" ? simulator([{ host }]) : null;
+  const started = Date.now();
+  const run = drive(host, url, [], tail, { size: "390x844", sim, allowFail: true });
+  const replies = jsonReplies(run.stdout);
+  const lead = 1 + (host !== "web" && url !== "/" ? 2 : 0) + 2;
+  // The driver's own sentence, not its stack.
+  const said = (run.stderr || run.stdout).trim().split("\n").filter((l) => l.trim() && !l.startsWith("{") && !/^\s+at /.test(l)).at(-1)?.replace(/^Error: /, "") ?? "";
+  let broke = false;
+  const steps = ops.map((op, i) => {
+    const reply = replies[lead + i * 3] ?? null;
+    if (!reply && !broke) { broke = true; const file = frame(i + 1); return { op, ok: false, said: said || "the driver ended the session here", frame: existsSync(file) ? file : null, sha256: null }; }
+    const file = frame(i + 1);
+    const failed = !reply || reply.ok === false || reply.error;
+    return { op, ok: !failed, said: failed ? String(reply?.error?.message ?? reply?.error ?? reply?.message ?? "not run: the path broke before it") : null, frame: existsSync(file) ? file : null, sha256: existsSync(file) ? sha256(readFileSync(file)) : null };
+  });
+  const first = existsSync(frame(0)) ? { frame: frame(0), sha256: sha256(readFileSync(frame(0))) } : null;
+  return { ok: !!first, code: run.code, first, steps, ms: Date.now() - started, ...(first ? {} : { error: said || `agent ${host} exited ${run.code}` }) };
+}
+
+/**
+ * **Make it Exact, as a branch** (exact phase 9): the scaffold's files
+ * written in a worktree of the app's repository of this bridge's own — never
+ * the person's checkout — compiled there (`contract build --json
+ * --errors-only`), and committed on a new branch. A scaffold that does not
+ * build is no branch: the worktree and branch are taken away again.
+ */
+function makeBranch(job) {
+  const branch = String(job.branch ?? "");
+  if (!/^exact\/make-[a-z0-9-]{1,60}$/.test(branch)) fail(`a scaffold's branch is exact/make-<flow>, not ${JSON.stringify(branch)}`);
+  const files = job.files ?? {};
+  for (const rel of Object.keys(files)) if (!/^[A-Za-z0-9._-]+$/.test(rel) || !/\.(contract|ts)$/.test(rel)) fail(`a scaffold writes the app's own .contract and .ts files, not ${JSON.stringify(rel)}`);
+  const top = git(app, ["rev-parse", "--show-toplevel"]);
+  if (!top) fail(`${app} is not in a git repository: a scaffold lands on a branch`);
+  const prefix = git(app, ["rev-parse", "--show-prefix"]) ?? "";
+  if (git(top, ["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`])) fail(`the branch ${branch} is there already: merge it or delete it, then make it again`);
+  const wt = path.join(mkdtempSync(path.join(os.tmpdir(), "isocan-exact-make-")), "wt");
+  const add = spawnSync("git", ["-C", top, "worktree", "add", "-b", branch, wt, "HEAD"], { encoding: "utf8" });
+  if (add.status !== 0) fail(`could not make the branch beside the app: ${(add.stderr || "").trim()}`);
+  const dir = path.join(wt, prefix);
+  const undo = () => { spawnSync("git", ["-C", top, "worktree", "remove", "--force", wt], { encoding: "utf8" }); spawnSync("git", ["-C", top, "branch", "-D", branch], { encoding: "utf8" }); };
+  try {
+    for (const [rel, text] of Object.entries(files)) writeFileSync(path.join(dir, rel), String(text));
+    const built = spawnSync("/bin/sh", [path.join(dir, "exact.mjs"), "contract", "build", "app.contract", "--json", "--errors-only"], { cwd: dir, encoding: "utf8", maxBuffer: 64 << 20 });
+    let diags = [];
+    try { diags = JSON.parse((built.stdout || "[]").trim().split("\n").filter((l) => l.startsWith("[")).at(-1) ?? "[]"); } catch { /* none read */ }
+    const bad = diags.filter((d) => !d.severity || d.severity === "error");
+    if (built.status !== 0 || bad.length) { undo(); return { ok: false, diagnostics: bad.slice(0, 5), error: `the scaffold does not build: ${bad[0] ? `${bad[0].file}:${bad[0].line}:${bad[0].col} ${bad[0].message}` : (built.stderr || "").trim().split("\n").at(-1)}` }; }
+    const rels = Object.keys(files).map((r) => path.join(prefix, r));
+    const added = spawnSync("git", ["-C", wt, "add", "--", ...rels], { encoding: "utf8" });
+    const made = added.status === 0 && spawnSync("git", ["-C", wt, "-c", "user.name=isocan exact make", "-c", "user.email=exact-make@isocan.invalid", "commit", "-q", "-m", String(job.message ?? `Make it Exact: ${branch}`)], { encoding: "utf8" });
+    if (!made || made.status !== 0) { undo(); return { ok: false, error: `could not commit the scaffold: ${((made && made.stderr) || added.stderr || "").trim()}` }; }
+    const commit = git(wt, ["rev-parse", "HEAD"]);
+    spawnSync("git", ["-C", top, "worktree", "remove", "--force", wt], { encoding: "utf8" });
+    return { ok: true, branch, commit, files: Object.keys(files) };
+  } catch (err) {
+    undo();
+    throw err;
+  }
 }
 
 /**
@@ -1530,6 +1732,10 @@ const result =
   : verb === "lane" ? laneOf()
   : verb === "prepare" ? prepareJob()
   : verb === "ship" ? shipJob()
+  : verb === "persona" ? personaJob(path.resolve(flag("--dir") ?? fail("persona needs --dir")), JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("persona needs --job")), "utf8")))
+  : verb === "make-branch" ? makeBranch(JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("make-branch needs --job")), "utf8")))
+  : verb === "system-extract" ? systemExtract()
+  : verb === "system-apply" ? await systemApply(path.resolve(flag("--dir") ?? fail("system-apply needs --dir")), JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("system-apply needs --job")), "utf8")))
   : verb === "propose" ? await proposeJob(path.resolve(flag("--dir") ?? fail("propose needs --dir")), JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("propose needs --job")), "utf8")))
   : verb === "accept" ? await acceptJob(JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("accept needs --job")), "utf8")))
   : verb === "drop" ? await dropJob(JSON.parse(readFileSync(path.resolve(flag("--job") ?? fail("drop needs --job")), "utf8")))

@@ -21,6 +21,19 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 15 November 2026
+
+- **Design systems that travel between Exact apps.** `isocan exact system
+  extract` lifts one app's design onto the canvas as a system you can tune
+  with its token chips; Apply offers it to another app as a proposal, with
+  a table of which token became which and which had no match. Nothing
+  changes until you Keep. For now colours and lengths travel; named styles
+  such as a glass card do not yet.
+- **Make it Exact.** A wireframe flow becomes Contract screens on a branch,
+  with a test drawn from its arrows. **Personas** drive an Exact app toward
+  a goal and leave a filmstrip of their path and a note where they got
+  stuck.
+
 ## 14 November 2026
 
 - **Exact screens can go live (experiment).** Running isocan on your own

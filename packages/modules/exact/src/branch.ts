@@ -30,7 +30,7 @@ import type { Kit } from "./stories.ts";
 /**
  * **Structural changes from an agent's branch, captured beside the current**
  * (exact phase 6; design §10). A new component or a route is Contract an
- * agent writes on a branch, not a Tamber proposal. `isocan exact branch <app>
+ * agent writes on a branch, not a Forma proposal. `isocan exact branch <app>
  * <ref|dir>` stages that branch's tree in a directory of the bridge's own
  * (`git archive`, or a worktree the person named — never their checkout),
  * captures every route there, and posts each screen beside the current one of

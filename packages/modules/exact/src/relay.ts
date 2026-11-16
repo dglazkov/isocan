@@ -18,7 +18,7 @@
  * **A teammate through Exact's relay** (exact phase 8; design §5, §12), the
  * browser half.
  *
- * The machine running `isocan exact live` with a relay has a Tamber wire at
+ * The machine running `isocan exact live` with a relay has a Forma wire at
  * an HTTPS name (`https://<id>-tool.<label>.<relay>`), its TLS ending in that
  * machine's dev loop, and prints a one-use code at `read`. A teammate enters
  * the name and the code on a screen; this browser pairs with the wire through
@@ -28,7 +28,7 @@
  *   the relay's canvas name. Exact's canvas door is framed by its own tool's
  *   origin only (`frame-ancestors`), so the page opens in its own tab — never
  *   a refreshed picture passed off as a frame.
- * - **A token drag** is sent as Tamber's own `scrub`, and the wire answers a
+ * - **A token drag** is sent as Forma's own `scrub`, and the wire answers a
  *   `read` client 403: the refusal is shown in the wire's words. Nothing in
  *   this file decides a scope; the wire does.
  *
@@ -41,21 +41,21 @@
 export const CAPTURED_ONLY = "Captured only, nothing live: this browser has no pairing with the machine running `isocan exact live`.";
 export const RELAY_NOTE = "Live through the relay, read only — Exact's canvas door lets only its own tool frame it, so it opens in a tab of its own.";
 
-/** A Tamber code as the bridge prints it for a teammate: the wire's relay name, then `XXXXX-XXXXX`. */
+/** A Forma code as the bridge prints it for a teammate: the wire's relay name, then `XXXXX-XXXXX`. */
 export function parseRelayCode(text: string): { tool: string; code: string } | null {
   const m = /^\s*(https:\/\/[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?)\/?\s+([0-9A-Za-z]{5})-?([0-9A-Za-z]{5})\s*$/.exec(text);
   if (!m || !/^https:\/\/[a-z0-9]+-tool\./.test(m[1]!)) return null;
   return { tool: m[1]!, code: `${m[2]!.toUpperCase()}-${m[3]!.toUpperCase()}` };
 }
 
-/** The wire's refusal in its own words: `refused on Tamber's wire (403): scrub needs `write` scope; this client has `read``. */
+/** The wire's refusal in its own words: `refused on Forma's wire (403): scrub needs `write` scope; this client has `read``. */
 export function wireRefusal(status: number, text: string): string {
   let message = text.slice(0, 200);
   try {
     const body = JSON.parse(text) as { error?: { message?: string } | string };
     message = typeof body.error === "string" ? body.error : body.error?.message ?? message;
   } catch { /* not JSON: the text as it came */ }
-  return `refused on Tamber's wire (${status}): ${message}`;
+  return `refused on Forma's wire (${status}): ${message}`;
 }
 
 export interface RelayPairing { tool: string; token: string; client: string; scope: string; at: number }
@@ -81,9 +81,9 @@ export function forgetRelay(appId: string): void {
 const CLIENT_DOC = `<!doctype html><script>
 onmessage = async (e) => {
   const { id, url, body, token } = e.data || {};
-  if (typeof url !== "string" || !/^https:\\/\\/[a-z0-9.-]+\\/__tamber(\\/pair)?$/.test(url)) return parent.postMessage({ id, status: 0, text: "not a wire address" }, "*");
+  if (typeof url !== "string" || !/^https:\\/\\/[a-z0-9.-]+\\/__forma(\\/pair)?$/.test(url)) return parent.postMessage({ id, status: 0, text: "not a wire address" }, "*");
   try {
-    const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json", ...(token ? { "x-exact-tamber-token": token } : {}) }, body: JSON.stringify(body), credentials: "omit", referrerPolicy: "no-referrer" });
+    const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json", ...(token ? { "x-exact-forma-token": token } : {}) }, body: JSON.stringify(body), credentials: "omit", referrerPolicy: "no-referrer" });
     parent.postMessage({ id, status: r.status, text: await r.text() }, "*");
   } catch (err) {
     parent.postMessage({ id, status: 0, text: String(err) }, "*");
@@ -118,7 +118,7 @@ function client(): Promise<HTMLIFrameElement> {
 }
 
 /** One call to the wire through the relay, from the sandboxed client. */
-async function wire(tool: string, path: "/__tamber" | "/__tamber/pair", body: unknown, token?: string): Promise<{ status: number; text: string }> {
+async function wire(tool: string, path: "/__forma" | "/__forma/pair", body: unknown, token?: string): Promise<{ status: number; text: string }> {
   const f = await client();
   const id = ++next;
   return new Promise((resolve) => {
@@ -130,7 +130,7 @@ async function wire(tool: string, path: "/__tamber" | "/__tamber/pair", body: un
 
 /** Pair with the wire through the relay, by the code its owner's bridge printed; kept for this app in this browser. */
 export async function relayPair(appId: string, tool: string, code: string): Promise<RelayPairing> {
-  const r = await wire(tool, "/__tamber/pair", { code, name: "teammate" });
+  const r = await wire(tool, "/__forma/pair", { code, name: "teammate" });
   if (r.status !== 200) throw new Error(r.status === 0 ? `the relay could not be reached: ${r.text}` : wireRefusal(r.status, r.text));
   const answer = JSON.parse(r.text) as { ok?: { token: string; client: string; scope: string }; token?: string; client?: string; scope?: string };
   const ok = answer.ok ?? (answer as { token: string; client: string; scope: string });
@@ -148,7 +148,7 @@ export async function relayOpenLive(appId: string): Promise<string> {
   const p = relayPairing(appId);
   if (!p) throw new Error("not paired with this app's relay");
   const tab = window.open("about:blank", "_blank");
-  const r = await wire(p.tool, "/__tamber", { method: "canvas" }, p.token);
+  const r = await wire(p.tool, "/__forma", { method: "canvas" }, p.token);
   if (r.status === 401) { forgetRelay(appId); tab?.close(); throw new Error("the wire no longer knows this pairing (revoked, expired, or the loop restarted): pair again"); }
   if (r.status !== 200) { tab?.close(); throw new Error(r.status === 0 ? `the relay could not be reached: ${r.text}` : wireRefusal(r.status, r.text)); }
   const grant = (JSON.parse(r.text) as { ok: { url: string; grant: string } }).ok;
@@ -157,13 +157,13 @@ export async function relayOpenLive(appId: string): Promise<string> {
   return new URL(grant.url).host;
 }
 
-/** A token drag as Tamber's own scrub through the relay: the wire's answer, in its words. */
+/** A token drag as Forma's own scrub through the relay: the wire's answer, in its words. */
 export async function relayScrub(appId: string, name: string, value: string): Promise<{ ok: boolean; said: string }> {
   const p = relayPairing(appId);
   if (!p) return { ok: false, said: "not paired with this app's relay" };
-  const hello = await wire(p.tool, "/__tamber", { method: "hello" }, p.token);
+  const hello = await wire(p.tool, "/__forma", { method: "hello" }, p.token);
   if (hello.status !== 200) return { ok: false, said: hello.status === 0 ? `the relay could not be reached: ${hello.text}` : wireRefusal(hello.status, hello.text) };
   const files = (JSON.parse(hello.text) as { ok?: { files?: Record<string, string> } }).ok?.files ?? {};
-  const r = await wire(p.tool, "/__tamber", { method: "scrub", client: p.client, files, ops: [{ op: "set-token", name, value }] }, p.token);
+  const r = await wire(p.tool, "/__forma", { method: "scrub", client: p.client, files, ops: [{ op: "set-token", name, value }] }, p.token);
   return r.status === 200 ? { ok: true, said: `the wire took the scrub at ${p.scope} scope` } : { ok: false, said: wireRefusal(r.status, r.text) };
 }

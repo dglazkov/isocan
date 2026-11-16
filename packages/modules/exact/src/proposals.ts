@@ -25,7 +25,7 @@ import { DEVICES, type Device } from "./map.ts";
 import type { Kit } from "./stories.ts";
 import {
   opsFromFlags, parseAcceptAnswer, parseProposalRecord, parseProposeAnswer, parseProposeAsk, proposalTitle, scopeFor, grantedWrite,
-  type AcceptAnswer, type PreviewCell, type ProposalRecord, type ProposeAnswer, type ProposeAsk, type TamberOp,
+  type AcceptAnswer, type PreviewCell, type ProposalRecord, type ProposeAnswer, type ProposeAsk, type FormaOp,
 } from "./proposal.ts";
 
 /**
@@ -37,13 +37,13 @@ import {
  * - `isocan exact live` answers it: the asker's scope from isocan's roles (an
  *   enrolled agent `propose`, the machine's owner and the people it granted
  *   `write`, any other person `read` — exact phase 8 — whose ask the wire refuses),
- *   the proposal held on the dev loop's Tamber wire by a client of that scope,
+ *   the proposal held on the dev loop's Forma wire by a client of that scope,
  *   pictured before and after on every device, scheme and host this session
  *   captures — a scrub for a live-class edit, staged copies for a rebuild-class
  *   one — and posted as a core proposal item under the screen.
  * - A **Keep** (core's choose, a person's) folds the proposal's picture into
  *   the screen and takes the proposal away; `settleKept` reads that off the op
- *   log and only then sends Tamber's `accept`. A proposal taken away without a
+ *   log and only then sends Forma's `accept`. A proposal taken away without a
  *   Keep is dropped on the wire.
  *
  * Nothing here spawns: the wire and Exact are reached in `scripts/exact-bridge.mjs`.
@@ -54,7 +54,7 @@ const P = () => core.EXACT_PROPS;
 const currentVersion = (item: Item) => item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions.at(-1);
 const LOOP = /^http:\/\/127\.0\.0\.1:\d+$/;
 
-interface ProposeReport {
+export interface ProposeReport {
   ok: boolean;
   proposal?: string; client?: string; scope?: "read" | "propose" | "write"; class?: "live" | "rebuild";
   changed?: Array<{ file: string; token: string }>; files?: Record<string, string>;
@@ -82,7 +82,7 @@ export async function proposeVerb(host: CliHost, ref: string, opts: ProposeOptio
   const snapshot = await ctx.client.snapshot(canvas.id);
   const screen = host.resolveItem(snapshot, ref);
   if (!screen.properties?.[P().route] || !core.appIdOf(screen)) throw new Error(`${screen.title} is not an Exact screen — propose on a screen \`isocan exact open\` posted (it carries exact.route)`);
-  const ops: TamberOp[] = opsFromFlags(opts.token ?? [], opts.row ?? [], opts.op ?? []);
+  const ops: FormaOp[] = opsFromFlags(opts.token ?? [], opts.row ?? [], opts.op ?? []);
   const why = (opts.why ?? "").trim();
   if (!why) throw new Error("a proposal says why, in design words: --why \"…\" (two sentences at most)");
   if ((why.match(/[.!?](\s|$)/g) ?? []).length > 2) throw new Error("the why is two sentences at most; say the rest in a comment");
@@ -145,13 +145,12 @@ export function pendingProposes(entries: readonly LogEntry[], snapshot: CanvasSn
 export async function answerPropose(kit: Kit, host: CliHost, ctx: Ctx, canvasId: string, app: string, opts: { hosts: readonly string[]; sim: string | null }, pending: { item: Item; ask: ProposeAsk; seq: number; actor: Actor }): Promise<ProposeAnswer> {
   const { item: screen, ask, seq: askSeq, actor } = pending;
   const started = Date.now();
-  let snapshot = await ctx.client.snapshot(canvasId);
+  const snapshot = await ctx.client.snapshot(canvasId);
   const isAgent = !!snapshot.canvas.agents?.[actor.id];
   const scope = scopeFor(isAgent, grantedWrite(actor, ctx.actor, process.env.ISOCAN_EXACT_GRANT));
   const refused = (error: string, extra: Partial<ProposeAnswer> = {}): ProposeAnswer => ({ seq: ask.seq, ok: false, itemId: null, proposal: null, class: null, scope, client: null, how: null, previews: 0, scopeCheck: null, ms: Date.now() - started, error, ...extra });
   const loop = process.env.ISOCAN_EXACT_LOOP;
-  if (!loop || !LOOP.test(loop)) return refused("a proposal is held by the dev loop's Tamber wire, and this `isocan exact live` runs none (--no-frames): start it without --no-frames");
-  const route = screen.properties[P().route]!;
+  if (!loop || !LOOP.test(loop)) return refused("a proposal is held by the dev loop's Forma wire, and this `isocan exact live` runs none (--no-frames): start it without --no-frames");
   const shots = screen.properties[P().reached] ?? screen.properties[P().shots] ?? `at "${screen.properties[P().url] ?? "/"}"`;
   const ios = opts.hosts.includes("ios") && !!opts.sim;
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-exact-propose-"));
@@ -174,85 +173,110 @@ export async function answerPropose(kit: Kit, host: CliHost, ctx: Ctx, canvasId:
       if (r.proposal) await dropOnWire(kit, host, app, loop, r.proposal);
       return refused(r.error ?? "the proposal was not pictured", base);
     }
-    // Every picture, put once; each a version of the proposal item.
-    const blobs = new Map<string, { blobHash: string; size: number }>();
-    const put = async (file: string, sha: string) => {
-      const known = blobs.get(sha);
-      if (known) return known;
-      const b = await ctx.client.uploadBlob(canvasId, await fs.readFile(file), "image/png", path.basename(file));
-      const v = { blobHash: b.blobHash, size: b.size };
-      blobs.set(sha, v);
-      return v;
-    };
-    const versions: NewVersion[] = [];
-    const cells: PreviewCell[] = [];
-    const version = async (file: string, sha: string, name: string) => {
-      const b = await put(file, sha);
-      const v: NewVersion = { id: id("ver"), blobHash: b.blobHash, mimeType: "image/png", filename: name, size: b.size };
-      versions.push(v);
-      return v.id;
-    };
-    for (const p of r.previews) {
-      const stem = `${route}-${p.host}-${p.device}-${p.scheme}`;
-      const before = await version(p.before, p.beforeSha256, `${stem}-before.png`);
-      const after = await version(p.after, p.afterSha256, `${stem}-proposed.png`);
-      cells.push({ host: p.host, device: p.device, scheme: p.scheme, before, after, restored: p.restored });
-    }
-    const host_ = screen.properties[P().host] ?? "web", device = screen.properties[P().device] ?? "phone", scheme = screen.properties[P().scheme] ?? "light";
-    const own = r.previews.find((p) => p.host === host_ && p.device === device && p.scheme === scheme);
-    if (!own) {
+    const posted = await postProposalItem(host, ctx, canvasId, screen, r as ProposeReport & { proposal: string; previews: NonNullable<ProposeReport["previews"]> }, {
+      seq: ask.seq, askSeq, asker: { id: actor.id, name: actor.name, kind: isAgent ? "agent" : "person" }, scope: scope === "propose" ? "propose" : "write",
+      ops: ask.ops, why: ask.why, cites: ask.cites, in: ask.in, title: proposalTitle(actor.name, ask.ops),
+    });
+    if ("error" in posted) {
       await dropOnWire(kit, host, app, loop, r.proposal);
-      return refused(`this session pictures ${[...new Set(r.previews.map((p) => p.host))].join(", ")}; ${screen.title} is a ${host_} screen — propose on a screen this \`isocan exact live\` captures`, base);
+      return refused(posted.error, base);
     }
-    // Last, so it is current: the screen as the proposal draws it — what a Keep folds into the screen.
-    await version(own.after, own.afterSha256, `${route}-${host_}-${device}-${scheme}.png`);
-    const record: ProposalRecord = {
-      seq: ask.seq, route, asker: { id: actor.id, name: actor.name, kind: isAgent ? "agent" : "person" }, scope: scope === "propose" ? "propose" : "write", client: r.client!, proposal: r.proposal,
-      class: r.class!, how: r.how!, ops: ask.ops, files: r.files ?? {}, changed: r.changed ?? [], previews: cells, at: new Date().toISOString(),
-    };
-    snapshot = await ctx.client.snapshot(canvasId);
-    const size = { width: 1080, height: 300 + 280 * new Set(cells.map((c) => `${c.host}/${c.device}`)).size };
-    const area = ask.in ? snapshot.canvas.items[ask.in] : null;
-    // Under the screen it changes; in a design-competition lane when the ask names one (the lane's fighter hands it in).
-    const placement: Placement = area
-      ? (host.placementFor(snapshot, { in: area.id }, size) as Placement)
-      : { x: Math.round(screen.x), y: Math.round(screen.y + screen.height + 80) };
-    const itemId = id("itm");
-    const [first, ...rest] = versions;
-    const group = id("exact-proposal");
-    const add: Operation = {
-      type: "item.add",
-      itemId,
-      version: first!,
-      width: size.width,
-      height: size.height,
-      placement,
-      title: proposalTitle(actor.name, ask.ops),
-      // Core's proposal, by its own keys (`packages/core/src/proposal.ts`): hung beneath the screen it changes, citing the ask.
-      properties: {
-        proposal: "sure",
-        parent: screen.id,
-        proposalCites: JSON.stringify([{ kind: "op", ref: String(askSeq) }, ...ask.cites]),
-        proposalWhy: ask.why,
-        [P().app]: JSON.stringify({ id: core.appIdOf(screen) }),
-        [P().proposal]: JSON.stringify(record),
-      },
-      ...(snapshot.project.groupMode === "groups" && !area ? { containerId: null, groupPlacement: "exact" as const } : {}),
-    } as Operation;
-    try {
-      await host.sendOp(ctx, canvasId, add, group);
-      for (const v of rest) await host.sendOp(ctx, canvasId, { type: "item.addVersion", itemId, version: v }, group);
-    } catch (err) {
-      await dropOnWire(kit, host, app, loop, r.proposal);
-      return refused((err as Error).message, base);
-    }
-    return { seq: ask.seq, ok: true, itemId, ...base, scope, previews: cells.length, ms: Date.now() - started };
+    return { seq: ask.seq, ok: true, itemId: posted.itemId, ...base, scope, previews: posted.cells, ms: Date.now() - started };
   } finally {
     await fs.rm(dir, { recursive: true, force: true });
   }
 }
 
-async function dropOnWire(kit: Kit, host: CliHost, app: string, loop: string, proposal: string): Promise<void> {
+/** Who asked, at what scope, for what — what a proposal item records beside its pictures. */
+export interface ProposalMeta {
+  seq: number; askSeq: number; asker: ProposalRecord["asker"]; scope: ProposalRecord["scope"];
+  ops: FormaOp[]; why: string; cites: Array<{ kind: string; ref: string }>; in: string | null; title: string;
+  /** Extra properties the item wears (`exact.*` only). */
+  properties?: Record<string, string>;
+}
+
+/**
+ * **A held proposal's pictures, posted as a core proposal item** under the
+ * screen it changes (phase 6's, shared with phase 9's applied systems). Each
+ * picture is a version of the item (so garbage collection keeps every one
+ * while the proposal stands), and its current version — last — is the screen
+ * as the proposal would draw it: what a Keep folds in.
+ */
+export async function postProposalItem(host: CliHost, ctx: Ctx, canvasId: string, screen: Item, r: ProposeReport & { proposal: string; previews: NonNullable<ProposeReport["previews"]> }, meta: ProposalMeta): Promise<{ itemId: string; cells: number } | { error: string }> {
+  const route = screen.properties[P().route]!;
+  // Every picture, put once; each a version of the proposal item.
+  const blobs = new Map<string, { blobHash: string; size: number }>();
+  const put = async (file: string, sha: string) => {
+    const known = blobs.get(sha);
+    if (known) return known;
+    const b = await ctx.client.uploadBlob(canvasId, await fs.readFile(file), "image/png", path.basename(file));
+    const v = { blobHash: b.blobHash, size: b.size };
+    blobs.set(sha, v);
+    return v;
+  };
+  const versions: NewVersion[] = [];
+  const cells: PreviewCell[] = [];
+  const version = async (file: string, sha: string, name: string) => {
+    const b = await put(file, sha);
+    const v: NewVersion = { id: id("ver"), blobHash: b.blobHash, mimeType: "image/png", filename: name, size: b.size };
+    versions.push(v);
+    return v.id;
+  };
+  for (const p of r.previews) {
+    const stem = `${route}-${p.host}-${p.device}-${p.scheme}`;
+    const before = await version(p.before, p.beforeSha256, `${stem}-before.png`);
+    const after = await version(p.after, p.afterSha256, `${stem}-proposed.png`);
+    cells.push({ host: p.host, device: p.device, scheme: p.scheme, before, after, restored: p.restored });
+  }
+  const host_ = screen.properties[P().host] ?? "web", device = screen.properties[P().device] ?? "phone", scheme = screen.properties[P().scheme] ?? "light";
+  const own = r.previews.find((p) => p.host === host_ && p.device === device && p.scheme === scheme);
+  if (!own) return { error: `this session pictures ${[...new Set(r.previews.map((p) => p.host))].join(", ")}; ${screen.title} is a ${host_} screen — propose on a screen this \`isocan exact live\` captures` };
+  // Last, so it is current: the screen as the proposal draws it — what a Keep folds into the screen.
+  await version(own.after, own.afterSha256, `${route}-${host_}-${device}-${scheme}.png`);
+  const record: ProposalRecord = {
+    seq: meta.seq, route, asker: meta.asker, scope: meta.scope, client: r.client!, proposal: r.proposal,
+    class: r.class!, how: r.how!, ops: meta.ops, files: r.files ?? {}, changed: r.changed ?? [], previews: cells, at: new Date().toISOString(),
+  };
+  const snapshot = await ctx.client.snapshot(canvasId);
+  const size = { width: 1080, height: 300 + 280 * new Set(cells.map((c) => `${c.host}/${c.device}`)).size };
+  const area = meta.in ? snapshot.canvas.items[meta.in] : null;
+  // Under the screen it changes; in a design-competition lane when the ask names one (the lane's fighter hands it in).
+  const placement: Placement = area
+    ? (host.placementFor(snapshot, { in: area.id }, size) as Placement)
+    : { x: Math.round(screen.x), y: Math.round(screen.y + screen.height + 80) };
+  const itemId = id("itm");
+  const [first, ...rest] = versions;
+  const group = id("exact-proposal");
+  const add: Operation = {
+    type: "item.add",
+    itemId,
+    version: first!,
+    width: size.width,
+    height: size.height,
+    placement,
+    title: meta.title,
+    // Core's proposal, by its own keys (`packages/core/src/proposal.ts`): hung beneath the screen it changes, citing the ask.
+    properties: {
+      proposal: "sure",
+      parent: screen.id,
+      proposalCites: JSON.stringify([{ kind: "op", ref: String(meta.askSeq) }, ...meta.cites]),
+      proposalWhy: meta.why,
+      [P().app]: JSON.stringify({ id: core.appIdOf(screen) }),
+      [P().proposal]: JSON.stringify(record),
+      ...meta.properties,
+    },
+    ...(snapshot.project.groupMode === "groups" && !area ? { containerId: null, groupPlacement: "exact" as const } : {}),
+  } as Operation;
+  try {
+    await host.sendOp(ctx, canvasId, add, group);
+    for (const v of rest) await host.sendOp(ctx, canvasId, { type: "item.addVersion", itemId, version: v }, group);
+  } catch (err) {
+    return { error: (err as Error).message };
+  }
+  return { itemId, cells: cells.length };
+}
+
+export async function dropOnWire(kit: Kit, host: CliHost, app: string, loop: string, proposal: string): Promise<void> {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-exact-drop-"));
   try {
     const job = path.join(dir, "job.json");

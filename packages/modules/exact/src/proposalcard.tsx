@@ -51,10 +51,10 @@ export function ProposalCard(facts: RendererFacts) {
       <div className="exact-proposal-head">
         <strong>{asker}</strong>
         <span className="exact-note">
-          {record.class === "live" ? "live: pictured as a Tamber scrub, cancelled" : "rebuild: pictured in a staged copy"} · held on the wire as {record.proposal} ({record.client})
+          {record.class === "live" ? "live: pictured as a Forma scrub, cancelled" : "rebuild: pictured in a staged copy"} · held on the wire as {record.proposal} ({record.client})
         </span>
         <ul className="exact-proposal-ops">{record.ops.map((op, i) => <li key={i}><code>{opWords(op)}</code></li>)}</ul>
-        <span className="exact-note">Nothing is written until a person keeps it: Keep is Tamber's accept.</span>
+        <span className="exact-note">Nothing is written until a person keeps it: Keep is Forma's accept.</span>
       </div>
       <table className="exact-proposal-grid">
         <thead>

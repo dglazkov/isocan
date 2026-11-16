@@ -77,7 +77,7 @@ export interface SymbolRef {
 
 const own = (d: { file: string }) => d.file.endsWith(".contract") && !d.file.includes(":");
 const indentOf = (line: string) => line.length - line.trimStart().length;
-const blank = (line: string) => line.trim() === "" || line.trim().startsWith("//");
+const blank = (line: string | undefined) => (line ?? "").trim() === "" || (line ?? "").trim().startsWith("//");
 
 /** The innermost-first chain of `( … )` groups around a column, and the line itself last. */
 function groupsAround(text: string, col0: number): Array<{ start: number; end: number }> {
@@ -413,7 +413,7 @@ function isRouterState(defs: readonly SymbolDef[], name: string): boolean {
 
 // ---------------------------------------------------------------- the design
 
-export interface TamberToken {
+export interface FormaToken {
   name: string;
   kind: string;
   role: string | null;
@@ -421,12 +421,12 @@ export interface TamberToken {
   fallback: string[] | null;
 }
 
-export interface TamberIr {
+export interface FormaIr {
   format: number;
   digest: string;
   name: string;
   axes: unknown[];
-  tokens: TamberToken[];
+  tokens: FormaToken[];
 }
 
 export interface TokenUse {
@@ -439,7 +439,7 @@ export interface TokenUse {
 }
 
 export interface DesignReading {
-  ir: TamberIr;
+  ir: FormaIr;
   /** `uses` per token, from the design server's wire. */
   uses: Record<string, { sites: TokenUse[]; aliases: string[] } | { error: string }>;
 }

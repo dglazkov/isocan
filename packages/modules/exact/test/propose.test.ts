@@ -27,7 +27,7 @@ import type { Kit } from "../src/stories.ts";
 
 /**
  * Exact phase 6: agents propose. The pure half (scopes, the closed list of
- * Tamber operations, the preview grid, the design system's tokens) and the
+ * Forma operations, the preview grid, the design system's tokens) and the
  * acting half's two log readers: which asks wait, and what a Keep or a Delete
  * of a proposal sends to the wire. The wire itself is exercised by the walk
  * (`scratchpad/p6/walk.mjs`), against Acme Market's real dev loop.
@@ -54,7 +54,7 @@ describe("scopes from isocan's roles (design §10)", () => {
 });
 
 describe("the operations a proposal may carry", () => {
-  it("reads --token, --row and --op as Tamber spells them", () => {
+  it("reads --token, --row and --op as Forma spells them", () => {
     expect(opsFromFlags(["radius.card=12px"], ["Price.background-color=-exact-tertiary-background", "Price.opacity=0.9"], ['{"op":"set-state","style":"Price","state":"hover","row":"color","value":"brand.ink"}'])).toEqual([
       { op: "set-token", name: "radius.card", value: "12px" },
       { op: "set-row", style: "Price", row: "background-color", value: "-exact-tertiary-background" },

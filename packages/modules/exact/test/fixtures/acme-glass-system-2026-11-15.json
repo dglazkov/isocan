@@ -1,0 +1,698 @@
+{
+ "from": {
+  "id": "dev.acme.glass",
+  "name": "Acme Glass",
+  "dir": "acme-glass",
+  "commit": "a54f4234f8452deb46aaca7975f76f26f3f42923"
+ },
+ "digest": "15ed1f67c6c60b69",
+ "tokens": [
+  {
+   "name": "surface.page",
+   "kind": "color",
+   "source": "light-dark(oklch(0.97 0.012 250), oklch(0.18 0.02 260))",
+   "light": {
+    "$extensions": {
+     "exact": {
+      "source": "light-dark(oklch(0.97 0.012 250), oklch(0.18 0.02 260))"
+     }
+    },
+    "$type": "color",
+    "$value": {
+     "colorSpace": "oklch",
+     "components": [
+      0.97,
+      0.012,
+      250
+     ],
+     "hex": "#eff6fd"
+    }
+   },
+   "dark": {
+    "$extensions": {
+     "exact": {
+      "source": "light-dark(oklch(0.97 0.012 250), oklch(0.18 0.02 260))"
+     }
+    },
+    "$type": "color",
+    "$value": {
+     "colorSpace": "oklch",
+     "components": [
+      0.18,
+      0.02,
+      260
+     ],
+     "hex": "#0c121a"
+    }
+   }
+  },
+  {
+   "name": "ink",
+   "kind": "color",
+   "source": "light-dark(oklch(0.22 0.03 260), oklch(0.95 0.01 250))",
+   "light": {
+    "$extensions": {
+     "exact": {
+      "source": "light-dark(oklch(0.22 0.03 260), oklch(0.95 0.01 250))"
+     }
+    },
+    "$type": "color",
+    "$value": {
+     "colorSpace": "oklch",
+     "components": [
+      0.22,
+      0.03,
+      260
+     ],
+     "hex": "#121b29"
+    }
+   },
+   "dark": {
+    "$extensions": {
+     "exact": {
+      "source": "light-dark(oklch(0.22 0.03 260), oklch(0.95 0.01 250))"
+     }
+    },
+    "$type": "color",
+    "$value": {
+     "colorSpace": "oklch",
+     "components": [
+      0.95,
+      0.01,
+      250
+     ],
+     "hex": "#eaeff5"
+    }
+   }
+  },
+  {
+   "name": "ink.muted",
+   "kind": "color",
+   "source": "light-dark(oklch(0.48 0.03 255), oklch(0.74 0.02 250))",
+   "light": {
+    "$extensions": {
+     "exact": {
+      "source": "light-dark(oklch(0.48 0.03 255), oklch(0.74 0.02 250))"
+     }
+    },
+    "$type": "color",
+    "$value": {
+     "colorSpace": "oklch",
+     "components": [
+      0.48,
+      0.03,
+      255
+     ],
+     "hex": "#525f6f"
+    }
+   },
+   "dark": {
+    "$extensions": {
+     "exact": {
+      "source": "light-dark(oklch(0.48 0.03 255), oklch(0.74 0.02 250))"
+     }
+    },
+    "$type": "color",
+    "$value": {
+     "colorSpace": "oklch",
+     "components": [
+      0.74,
+      0.02,
+      250
+     ],
+     "hex": "#a2acb7"
+    }
+   }
+  },
+  {
+   "name": "surface.glass",
+   "kind": "color",
+   "source": "light-dark(oklch(1 0 0 / 0.55), oklch(0.32 0.02 260 / 0.45))",
+   "light": {
+    "$extensions": {
+     "exact": {
+      "source": "light-dark(oklch(1 0 0 / 0.55), oklch(0.32 0.02 260 / 0.45))"
+     }
+    },
+    "$type": "color",
+    "$value": {
+     "alpha": 0.55,
+     "colorSpace": "oklch",
+     "components": [
+      1,
+      0,
+      0
+     ],
+     "hex": "#ffffff"
+    }
+   },
+   "dark": {
+    "$extensions": {
+     "exact": {
+      "source": "light-dark(oklch(1 0 0 / 0.55), oklch(0.32 0.02 260 / 0.45))"
+     }
+    },
+    "$type": "color",
+    "$value": {
+     "alpha": 0.45,
+     "colorSpace": "oklch",
+     "components": [
+      0.32,
+      0.02,
+      260
+     ],
+     "hex": "#2d333d"
+    }
+   }
+  },
+  {
+   "name": "brand.primary",
+   "kind": "color",
+   "source": "light-dark(oklch(0.55 0.17 255), oklch(0.72 0.14 250))",
+   "light": {
+    "$extensions": {
+     "exact": {
+      "source": "light-dark(oklch(0.55 0.17 255), oklch(0.72 0.14 250))"
+     }
+    },
+    "$type": "color",
+    "$value": {
+     "colorSpace": "oklch",
+     "components": [
+      0.55,
+      0.17,
+      255
+     ],
+     "hex": "#1570d1"
+    }
+   },
+   "dark": {
+    "$extensions": {
+     "exact": {
+      "source": "light-dark(oklch(0.55 0.17 255), oklch(0.72 0.14 250))"
+     }
+    },
+    "$type": "color",
+    "$value": {
+     "colorSpace": "oklch",
+     "components": [
+      0.72,
+      0.14,
+      250
+     ],
+     "hex": "#59aaf8"
+    }
+   }
+  },
+  {
+   "name": "brand.accent",
+   "kind": "color",
+   "source": "light-dark(oklch(0.7 0.15 35), oklch(0.78 0.13 40))",
+   "light": {
+    "$extensions": {
+     "exact": {
+      "source": "light-dark(oklch(0.70 0.15 35), oklch(0.78 0.13 40))"
+     }
+    },
+    "$type": "color",
+    "$value": {
+     "colorSpace": "oklch",
+     "components": [
+      0.7,
+      0.15,
+      35
+     ],
+     "hex": "#ec785b"
+    }
+   },
+   "dark": {
+    "$extensions": {
+     "exact": {
+      "source": "light-dark(oklch(0.70 0.15 35), oklch(0.78 0.13 40))"
+     }
+    },
+    "$type": "color",
+    "$value": {
+     "colorSpace": "oklch",
+     "components": [
+      0.78,
+      0.13,
+      40
+     ],
+     "hex": "#fd9976"
+    }
+   }
+  },
+  {
+   "name": "border.hairline",
+   "kind": "color",
+   "source": "light-dark(oklch(0.22 0.03 260 / 0.12), oklch(1 0 0 / 0.14))",
+   "light": {
+    "$extensions": {
+     "exact": {
+      "source": "light-dark(oklch(0.22 0.03 260 / 0.12), oklch(1 0 0 / 0.14))"
+     }
+    },
+    "$type": "color",
+    "$value": {
+     "alpha": 0.12,
+     "colorSpace": "oklch",
+     "components": [
+      0.22,
+      0.03,
+      260
+     ],
+     "hex": "#121b29"
+    }
+   },
+   "dark": {
+    "$extensions": {
+     "exact": {
+      "source": "light-dark(oklch(0.22 0.03 260 / 0.12), oklch(1 0 0 / 0.14))"
+     }
+    },
+    "$type": "color",
+    "$value": {
+     "alpha": 0.14,
+     "colorSpace": "oklch",
+     "components": [
+      1,
+      0,
+      0
+     ],
+     "hex": "#ffffff"
+    }
+   }
+  },
+  {
+   "name": "edge.highlight",
+   "kind": "color",
+   "source": "light-dark(oklch(1 0 0 / 0.9), oklch(1 0 0 / 0.28))",
+   "light": {
+    "$extensions": {
+     "exact": {
+      "source": "light-dark(oklch(1 0 0 / 0.9), oklch(1 0 0 / 0.28))"
+     }
+    },
+    "$type": "color",
+    "$value": {
+     "alpha": 0.9,
+     "colorSpace": "oklch",
+     "components": [
+      1,
+      0,
+      0
+     ],
+     "hex": "#ffffff"
+    }
+   },
+   "dark": {
+    "$extensions": {
+     "exact": {
+      "source": "light-dark(oklch(1 0 0 / 0.9), oklch(1 0 0 / 0.28))"
+     }
+    },
+    "$type": "color",
+    "$value": {
+     "alpha": 0.28,
+     "colorSpace": "oklch",
+     "components": [
+      1,
+      0,
+      0
+     ],
+     "hex": "#ffffff"
+    }
+   }
+  },
+  {
+   "name": "wash.sky",
+   "kind": "color",
+   "source": "light-dark(oklch(0.9 0.05 230), oklch(0.3 0.06 250))",
+   "light": {
+    "$extensions": {
+     "exact": {
+      "source": "light-dark(oklch(0.90 0.05 230), oklch(0.30 0.06 250))"
+     }
+    },
+    "$type": "color",
+    "$value": {
+     "colorSpace": "oklch",
+     "components": [
+      0.9,
+      0.05,
+      230
+     ],
+     "hex": "#bde5f9"
+    }
+   },
+   "dark": {
+    "$extensions": {
+     "exact": {
+      "source": "light-dark(oklch(0.90 0.05 230), oklch(0.30 0.06 250))"
+     }
+    },
+    "$type": "color",
+    "$value": {
+     "colorSpace": "oklch",
+     "components": [
+      0.3,
+      0.06,
+      250
+     ],
+     "hex": "#142f4b"
+    }
+   }
+  },
+  {
+   "name": "wash.rose",
+   "kind": "color",
+   "source": "light-dark(oklch(0.92 0.04 10), oklch(0.3 0.05 350))",
+   "light": {
+    "$extensions": {
+     "exact": {
+      "source": "light-dark(oklch(0.92 0.04 10), oklch(0.30 0.05 350))"
+     }
+    },
+    "$type": "color",
+    "$value": {
+     "colorSpace": "oklch",
+     "components": [
+      0.92,
+      0.04,
+      10
+     ],
+     "hex": "#fedade"
+    }
+   },
+   "dark": {
+    "$extensions": {
+     "exact": {
+      "source": "light-dark(oklch(0.92 0.04 10), oklch(0.30 0.05 350))"
+     }
+    },
+    "$type": "color",
+    "$value": {
+     "colorSpace": "oklch",
+     "components": [
+      0.3,
+      0.05,
+      350
+     ],
+     "hex": "#412331"
+    }
+   }
+  },
+  {
+   "name": "shade",
+   "kind": "color",
+   "source": "light-dark(oklch(0.22 0.03 260 / 0.14), oklch(0 0 0 / 0.45))",
+   "light": {
+    "$extensions": {
+     "exact": {
+      "source": "light-dark(oklch(0.22 0.03 260 / 0.14), oklch(0 0 0 / 0.45))"
+     }
+    },
+    "$type": "color",
+    "$value": {
+     "alpha": 0.14,
+     "colorSpace": "oklch",
+     "components": [
+      0.22,
+      0.03,
+      260
+     ],
+     "hex": "#121b29"
+    }
+   },
+   "dark": {
+    "$extensions": {
+     "exact": {
+      "source": "light-dark(oklch(0.22 0.03 260 / 0.14), oklch(0 0 0 / 0.45))"
+     }
+    },
+    "$type": "color",
+    "$value": {
+     "alpha": 0.45,
+     "colorSpace": "oklch",
+     "components": [
+      0,
+      0,
+      0
+     ],
+     "hex": "#000000"
+    }
+   }
+  },
+  {
+   "name": "shadow.glass",
+   "kind": "box-shadow",
+   "source": "0px 1px 2px light-dark(oklch(0.22 0.03 260 / 0.14), oklch(0 0 0 / 0.45)), 0px 8px 24px light-dark(oklch(0.22 0.03 260 / 0.14), oklch(0 0 0 / 0.45))",
+   "light": {
+    "$extensions": {
+     "exact": {
+      "source": "0 1px 2px shade, 0 8px 24px shade"
+     }
+    },
+    "$type": "shadow",
+    "$value": [
+     {
+      "blur": {
+       "unit": "px",
+       "value": 2
+      },
+      "color": {
+       "alpha": 0.14,
+       "colorSpace": "oklch",
+       "components": [
+        0.22,
+        0.03,
+        260
+       ],
+       "hex": "#121b29"
+      },
+      "offsetX": {
+       "unit": "px",
+       "value": 0
+      },
+      "offsetY": {
+       "unit": "px",
+       "value": 1
+      },
+      "spread": {
+       "unit": "px",
+       "value": 0
+      }
+     },
+     {
+      "blur": {
+       "unit": "px",
+       "value": 24
+      },
+      "color": {
+       "alpha": 0.14,
+       "colorSpace": "oklch",
+       "components": [
+        0.22,
+        0.03,
+        260
+       ],
+       "hex": "#121b29"
+      },
+      "offsetX": {
+       "unit": "px",
+       "value": 0
+      },
+      "offsetY": {
+       "unit": "px",
+       "value": 8
+      },
+      "spread": {
+       "unit": "px",
+       "value": 0
+      }
+     }
+    ]
+   },
+   "dark": {
+    "$extensions": {
+     "exact": {
+      "source": "0 1px 2px shade, 0 8px 24px shade"
+     }
+    },
+    "$type": "shadow",
+    "$value": [
+     {
+      "blur": {
+       "unit": "px",
+       "value": 2
+      },
+      "color": {
+       "alpha": 0.45,
+       "colorSpace": "oklch",
+       "components": [
+        0,
+        0,
+        0
+       ],
+       "hex": "#000000"
+      },
+      "offsetX": {
+       "unit": "px",
+       "value": 0
+      },
+      "offsetY": {
+       "unit": "px",
+       "value": 1
+      },
+      "spread": {
+       "unit": "px",
+       "value": 0
+      }
+     },
+     {
+      "blur": {
+       "unit": "px",
+       "value": 24
+      },
+      "color": {
+       "alpha": 0.45,
+       "colorSpace": "oklch",
+       "components": [
+        0,
+        0,
+        0
+       ],
+       "hex": "#000000"
+      },
+      "offsetX": {
+       "unit": "px",
+       "value": 0
+      },
+      "offsetY": {
+       "unit": "px",
+       "value": 8
+      },
+      "spread": {
+       "unit": "px",
+       "value": 0
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "radius.card",
+   "kind": "length",
+   "source": "16px",
+   "light": {
+    "$type": "dimension",
+    "$value": {
+     "unit": "px",
+     "value": 16
+    }
+   },
+   "dark": {
+    "$type": "dimension",
+    "$value": {
+     "unit": "px",
+     "value": 16
+    }
+   }
+  },
+  {
+   "name": "space.note",
+   "kind": "number",
+   "source": "6",
+   "light": {
+    "$type": "number",
+    "$value": 6
+   },
+   "dark": {
+    "$type": "number",
+    "$value": 6
+   }
+  }
+ ],
+ "styles": [
+  {
+   "name": "Price",
+   "file": "app.contract",
+   "line": 238,
+   "rows": [
+    {
+     "row": "font",
+     "value": "-exact-title3"
+    },
+    {
+     "row": "color",
+     "value": "brand.primary"
+    },
+    {
+     "row": "padding",
+     "value": "12px 16px"
+    },
+    {
+     "row": "background-color",
+     "value": "surface.glass"
+    },
+    {
+     "row": "border-radius",
+     "value": "radius.card"
+    },
+    {
+     "row": "border",
+     "value": "1px solid border.hairline"
+    },
+    {
+     "row": "border-top-color",
+     "value": "edge.highlight"
+    },
+    {
+     "row": "box-shadow",
+     "value": "shadow.glass"
+    },
+    {
+     "row": "backgroundMaterial",
+     "value": "ultra-thin"
+    }
+   ]
+  },
+  {
+   "name": "Glass",
+   "file": "app.contract",
+   "line": 245,
+   "rows": [
+    {
+     "row": "background-color",
+     "value": "surface.glass"
+    },
+    {
+     "row": "border-radius",
+     "value": "radius.card"
+    },
+    {
+     "row": "border",
+     "value": "1px solid border.hairline"
+    },
+    {
+     "row": "border-top-color",
+     "value": "edge.highlight"
+    },
+    {
+     "row": "box-shadow",
+     "value": "shadow.glass"
+    },
+    {
+     "row": "backgroundMaterial",
+     "value": "ultra-thin"
+    }
+   ]
+  }
+ ],
+ "recorded": {
+  "at": "2026-11-15",
+  "exact": "a54f4234f8452deb46aaca7975f76f26f3f42923",
+  "how": "scripts/exact-bridge.mjs system-extract on the synthetic Acme Glass"
+ }
+}

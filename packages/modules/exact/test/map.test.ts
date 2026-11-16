@@ -42,7 +42,7 @@ import { DEVICES, flowEdges, mapLayout, parseShots, routeCondition, rowOffset, s
  * The readings `scripts/exact-bridge.mjs read` printed for the grown Acme
  * Market (exact phase 1): a ShippingNote drawn on the places list and a
  * place's page only, a Browse button on the empty Saved tab whose action
- * pushes savedPlace, three Tamber tokens and the test file compiled.
+ * pushes savedPlace, three Forma tokens and the test file compiled.
  * Recorded 13 Nov 2026 against Exact cbe553f6.
  */
 const fixture = JSON.parse(readFileSync(new URL("./fixtures/acme-market-map-2026-11-13.json", import.meta.url), "utf8")) as {

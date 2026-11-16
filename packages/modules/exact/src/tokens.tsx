@@ -24,9 +24,9 @@ import { relayPairing, relayScrub } from "./relay.ts";
 
 /**
  * **Token scrubbing on the design-system item** (exact phase 6; design §10,
- * journey Scene 6). Select the app's design system (`app.tamber`), and each
+ * journey Scene 6). Select the app's design system (`app.forma`), and each
  * length token is a chip: drag it sideways and the value moves, sent to the
- * paired bridge as a Tamber scrub — every build on the dev loop's live table
+ * paired bridge as a Forma scrub — every build on the dev loop's live table
  * shows it at once with no reload, the live frames and an iOS app joined to
  * the loop alike — until you let go, when the bridge cancels the scrub and
  * every build is back on what is written. Nothing is written by a drag: the
@@ -108,7 +108,7 @@ function TokenChip({ token, appId, host, canvas }: { token: DesignToken; appId: 
     if (!door || door.shut) { setState("failed"); setSaid(door?.shut ?? "token scrubbing runs on your machine: it needs live frames on and `isocan exact live` paired"); return; }
     const bridge = await exactBridge(door, appId);
     if (!bridge) {
-      // A teammate paired through the relay (exact phase 8): the drag goes to the wire as Tamber's own scrub, and the
+      // A teammate paired through the relay (exact phase 8): the drag goes to the wire as Forma's own scrub, and the
       // wire answers for the scope — this page refuses nothing itself.
       if (relayPairing(appId)) {
         setState("scrubbing");

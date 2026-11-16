@@ -447,6 +447,12 @@ itself; Exact's held import and Keep do. And the mapping from source token
 names to target token names is shown before anything is held, with each
 unmatched token named, because a silent best guess is a facade.
 
+**Built in part, 15 Nov 2026 (exact phase 9):** `isocan exact system
+extract` and `apply` (and an Apply button on the system item); apply holds
+the mapped tokens through `forma import dtcg` and pictures the held proposal
+as phase 6 does. Named styles and role overrides do not travel yet
+(phases.md, phase 9's Open entries).
+
 ## 14. Following a moving target
 
 Exact changes daily and promises nothing. So:

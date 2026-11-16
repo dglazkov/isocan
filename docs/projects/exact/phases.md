@@ -41,11 +41,17 @@ dry-run classification as a card; Ship, Promote and Roll back are a
 person's, confirmed, signed with the keys on the machine. Phase 8 is
 PART-DONE: a teammate pairs at `read` through Exact's relay (proven against
 a relay on this Mac) and the wire refuses their drag, proposal, Keep and
-ship; a viewer sees captures only; the wall lays out on a phone. Next:
-**exact phase 9**. Waiting on a person: the real-iPhone walk of phase 7; a
+ship; a viewer sees captures only; the wall lays out on a phone. Phase 9
+is PART-DONE: the module follows Exact's rename of Tamber to Forma; a
+wireframe flow becomes a Contract scaffold on a branch whose generated
+test passes on web and iOS; personas drive the app and leave filmstrips
+and notes; a design system is extracted from one app and applied to
+another as Exact's held import, with the token mapping, landing on Keep.
+Only tokens travel yet. Next: **exact phase 10**. Waiting on a person: the real-iPhone walk of phase 7; a
 yes to AppDrop (a hosted service and an Apple ID); hosting the relay for
 isocan.io (DNS, a certificate, a VM) and a second machine for phase 8.
-Waiting on Exact: its relay canvas page is blank and cannot be framed.
+Waiting on Exact: its relay canvas page is blank and cannot be framed
+(a fix was sent); named styles and role overrides through its held import.
 ---
 
 ## Phase 0 — The bridge, the index, and the three doors
@@ -341,7 +347,13 @@ installs the build from the QR.
 
 ## Phase 9 — From intent to Contract, and personas
 
-**Status: NOT STARTED.**
+**Status: PART-DONE, 15 Nov 2026.** Three wireframes became a Contract
+scaffold on a branch whose generated test passed on web and iOS (a
+mis-wired copy failed); two personas reached their goals and one stopped at
+a deliberate dead end, each with a filmstrip; a synthetic glass system was
+extracted and applied to Acme Market as Exact's held import, pictured on
+web and iOS with its mapping, files unchanged until Keep and changed only in
+`app.forma` after. The glass look itself did not travel: only tokens do.
 
 - **Make it Exact**: a wireframe flow → a Contract scaffold (route,
   components on the app's tokens, a shape, a stub source, a test from the
@@ -369,6 +381,15 @@ one synthetic app (translucent cards, a hairline border, a soft shadow) and
 applied to Acme Market shows Acme's screens in that style as proposals on
 web and iOS, with the token mapping, Acme's files unchanged until Keep and
 changed after it.
+
+### Trajectory
+
+- **2026-11-15** — Exact renamed Tamber to Forma: the verb, the design file, the wire path and its token header, all refused under the old names at once. The module follows Forma's CLI and wire; `exact.*` keys are unchanged, and the Acme fixture's design file was renamed in one commit.
+- **2026-11-15** — Applying a design system moves tokens only. Exact's held import refuses role overrides the target lacks, and `ir` carries no named styles, so "in that style" means colours and lengths for now; the mapping card and the CLI say so.
+- **2026-11-15** — Make it Exact is a deterministic generator from `isocan wire links --json`, not a model's turn: the same flow gives the same bytes, so its test means something. It wires routes into Exact's `tabs` app shape and refuses other shapes with a sentence.
+- **2026-11-15** — A persona explores with Exact's own `agent`, then its chosen path is replayed on the driver for the filmstrip; where a tap finds nothing is the place it got stuck, in the driver's words, beside the persona's own note.
+- **2026-11-15** — Open: the glass look (translucent cards, hairline border, soft shadow) between apps. Waits on Exact carrying named styles and role overrides through its held import.
+- **2026-11-15** — Open: motion items to Contract `keyframes`, moodboard tokens to `import dtcg`, and a critique lead's summary of persona runs (the summary is mechanical today). Not built; waits on work.
 
 ## Phase 10 — The diary goes home
 

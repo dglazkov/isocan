@@ -36,7 +36,7 @@ import { CAPTURED_ONLY, RELAY_NOTE, parseRelayCode, relayOpenLive, relayPair, re
  * its capture.
  *
  * Pointing: hold Alt over the live frames and click — the bridge turns on
- * Tamber's inspect mode in every running build, the page selects what the
+ * Forma's inspect mode in every running build, the page selects what the
  * press lands on, and the selection comes back joined to source (file, line,
  * component, the style a row came from). The panel on the right says where,
  * outlines it in every live frame, and offers Open in editor, Comment on
@@ -45,7 +45,7 @@ import { CAPTURED_ONLY, RELAY_NOTE, parseRelayCode, relayOpenLive, relayPair, re
 
 // ---------------------------------------------------------------- shared state
 
-interface Hello { app: { id: string; name: string }; dir: string; frames: number | null; loop: string; tamber: boolean; design: { port: number; up: boolean }; drive?: { hosts: string[] }; scrub?: boolean; native?: string[]; seq: number }
+interface Hello { app: { id: string; name: string }; dir: string; frames: number | null; loop: string; forma: boolean; design: { port: number; up: boolean }; drive?: { hosts: string[] }; scrub?: boolean; native?: string[]; seq: number }
 
 interface Selection {
   /** The bridge it came from, or null: pointed at on a capture, from the screen's own `exact.points`, with no bridge asked. */
@@ -66,7 +66,7 @@ const state = {
   selection: null as Selection | null,
   /** The shields are down: Alt is held, so a press reaches the page, which is in inspect mode. */
   pointing: false,
-  /** Tamber's inspect mode is on, on these bridges (it stays on while a selection is shown, so outlines draw). */
+  /** Forma's inspect mode is on, on these bridges (it stays on while a selection is shown, so outlines draw). */
   inspecting: new Set<number>(),
   /** The frame a press last went into — `document.activeElement` when the window lost focus to it. */
   pointed: null as FrameRecord | null,
@@ -203,7 +203,7 @@ function installKeys(): void {
     if (e.key !== "Alt" || e.repeat || state.screens === 0) return;
     state.pointing = true;
     state.pointed = null;
-    // Live frames take Tamber's inspect mode; captures answer from their own `exact.points`, asking nothing.
+    // Live frames take Forma's inspect mode; captures answer from their own `exact.points`, asking nothing.
     if (state.frames.size > 0 && state.door && !state.door.shut) inspect(true);
     else changed();
   });

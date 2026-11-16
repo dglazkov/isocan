@@ -18,13 +18,13 @@
  * **Agents propose, the facts both surfaces share** (exact phase 6;
  * `docs/projects/exact/design.md` §10). Pure: no keys, no network, no node.
  *
- * - **Scopes from isocan's roles.** Tamber's wire orders `read` < `propose` <
+ * - **Scopes from isocan's roles.** Forma's wire orders `read` < `propose` <
  *   `write`. A viewer never reaches the bridge at all (the canvas refuses its
  *   writes); an enrolled agent — a standing agent on the canvas — proposes and
  *   never writes; anybody else whose write the canvas accepted may edit it, so
  *   is `write`. The bridge pairs the agent with the wire at `propose`, and the
  *   wire itself refuses that client an `accept`.
- * - **An ask** (`exact.propose` on a screen): Tamber operations from a closed
+ * - **An ask** (`exact.propose` on a screen): Forma operations from a closed
  *   list, and why. `isocan exact live` holds it on the dev loop's wire,
  *   pictures it before and after on every device and scheme, and posts a core
  *   proposal item under the screen whose current version is the screen as the
@@ -33,8 +33,8 @@
  *   `accept` it and the files change.
  */
 
-/** A Tamber operation a proposal may carry (`docs/tamber-protocol.md`, Operations): a closed list. */
-export type TamberOp =
+/** A Forma operation a proposal may carry (`docs/forma-protocol.md`, Operations): a closed list. */
+export type FormaOp =
   | { op: "set-token"; name: string; value: string; when?: Array<{ axis: string; value: string }>; comment?: string }
   | { op: "set-row"; row: string; value: string | number; style?: string; file?: string; at?: { line: number; col: number }; sha256?: string; state?: string }
   | { op: "set-state"; style: string; state: string; row: string; value: string | number; file?: string };
@@ -59,7 +59,7 @@ export function grantedWrite(actor: { id: string; name: string }, owner: { id: s
 }
 
 /** What `exact.propose` asks: the operations, why, what prompted it, and the area to hang it in (a design-competition lane). */
-export interface ProposeAsk { seq: number; by: string | null; ops: TamberOp[]; why: string; cites: Array<{ kind: string; ref: string }>; in: string | null }
+export interface ProposeAsk { seq: number; by: string | null; ops: FormaOp[]; why: string; cites: Array<{ kind: string; ref: string }>; in: string | null }
 
 /** The answer (`exact.proposed`): the proposal item, the wire's id and class, the asker's scope, or why not. */
 export interface ProposeAnswer {
@@ -83,7 +83,7 @@ export interface ProposalRecord {
   proposal: string;
   class: "live" | "rebuild";
   how: "scrub" | "staged";
-  ops: TamberOp[];
+  ops: FormaOp[];
   /** The design files' digests the wire planned against: a Keep after a file moved is refused by the wire. */
   files: Record<string, string>;
   changed: Array<{ file: string; token: string }>;
@@ -129,11 +129,11 @@ export function opProblem(op: unknown): string | null {
 /**
  * The operations a terminal asks for: `--token radius.card=12px` (set-token),
  * `--row Price.background-color=-exact-tertiary-background` (set-row on a
- * style), `--op '<json>'` (any operation of the closed list, as Tamber spells
+ * style), `--op '<json>'` (any operation of the closed list, as Forma spells
  * it). A malformed one is a sentence.
  */
-export function opsFromFlags(tokens: readonly string[], rows: readonly string[], raw: readonly string[]): TamberOp[] {
-  const ops: TamberOp[] = [];
+export function opsFromFlags(tokens: readonly string[], rows: readonly string[], raw: readonly string[]): FormaOp[] {
+  const ops: FormaOp[] = [];
   for (const t of tokens) {
     const at = t.indexOf("=");
     if (at <= 0) throw new Error(`--token takes name=value, not ${JSON.stringify(t)}`);
@@ -147,8 +147,8 @@ export function opsFromFlags(tokens: readonly string[], rows: readonly string[],
   }
   for (const j of raw) {
     let op: unknown;
-    try { op = JSON.parse(j); } catch { throw new Error(`--op takes one Tamber operation as JSON, not ${JSON.stringify(j.slice(0, 80))}`); }
-    ops.push(op as TamberOp);
+    try { op = JSON.parse(j); } catch { throw new Error(`--op takes one Forma operation as JSON, not ${JSON.stringify(j.slice(0, 80))}`); }
+    ops.push(op as FormaOp);
   }
   if (ops.length === 0) throw new Error("a proposal says what it changes: --token name=value, --row Style.row=value or --op '<json>'");
   if (ops.length > 32) throw new Error("a proposal carries at most 32 operations");
@@ -157,7 +157,7 @@ export function opsFromFlags(tokens: readonly string[], rows: readonly string[],
 }
 
 /** One line per operation, as a person reads it. */
-export function opWords(op: TamberOp): string {
+export function opWords(op: FormaOp): string {
   if (op.op === "set-token") return `${op.name} → ${op.value}`;
   if (op.op === "set-state") return `${op.style}:${op.state} ${op.row} → ${op.value}`;
   return `${op.style ?? `${op.file}:${op.at?.line}`} ${op.row} → ${op.value}`;
@@ -214,7 +214,7 @@ export function previewRows(cells: readonly PreviewCell[]): Array<{ host: string
 }
 
 /** The proposal item's title: who, and what, in a line. */
-export function proposalTitle(asker: string, ops: readonly TamberOp[]): string {
+export function proposalTitle(asker: string, ops: readonly FormaOp[]): string {
   const what = ops.slice(0, 2).map(opWords).join("; ") + (ops.length > 2 ? ` and ${ops.length - 2} more` : "");
   return `Proposed by ${asker}: ${what}`.slice(0, 160);
 }

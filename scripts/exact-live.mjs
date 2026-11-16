@@ -16,7 +16,7 @@
  *   `frame-ancestors` rewritten to name the canvas pages that paired, and the
  *   page's own requests' `Origin` rewritten to the loop's (exact phase 0,
  *   fact 1: without that the page's registration is refused 421);
- * - **the bridge API** — pairing, Tamber's `inspect` and `outline` through
+ * - **the bridge API** — pairing, Forma's `inspect` and `outline` through
  *   the loop's local token, the `selection` events relayed with the file's
  *   digest, and *Open in editor*. Loopback only; every request but `/pair`
  *   carries a token a pairing minted, kept in memory (a restart revokes it);
@@ -38,7 +38,7 @@
  *   and answers the report with each frame's bytes; the paired browser keeps
  *   it as the storyboard's next version.
  * - **token scrubbing** (exact phase 6; design §10) — `/scrub` sends a
- *   paired page's drag of a design token as Tamber's own scrub, through the
+ *   paired page's drag of a design token as Forma's own scrub, through the
  *   loop's local token: every build registered on the loop's live table (the
  *   live frames, and an iOS app joined to the loop) shows it with no reload,
  *   and no file is written; `/scrub-cancel`, on release, gives every build the
@@ -51,7 +51,7 @@
  * - **a teammate through Exact's relay** (exact phase 8; design §5, §12) —
  *   with `--relay <host[:port]> --relay-account <label>` the dev loop dials out
  *   to Exact's relay (`EXACT-RELAY/1`) with Exact's own connector, so its
- *   Tamber wire and its canvas gateway have HTTPS names a browser on another
+ *   Forma wire and its canvas gateway have HTTPS names a browser on another
  *   machine can reach, every client's TLS ending in the loop (`--relay-cert`
  *   and `--relay-key` for names of your own; else Exact gets them by ACME). The
  *   bridge mints the teammate's code on that wire at `read` — a person this
@@ -178,37 +178,37 @@ for (let i = 0; ; i++) {
   await sleep(250);
 }
 
-// ---------------------------------------------------------------- Tamber, through the loop's local token
+// ---------------------------------------------------------------- Forma, through the loop's local token
 
-let tamberToken = null;
+let formaToken = null;
 try {
-  const r = await fetch(`${loopBase}/__tamber/token`, { redirect: "error" });
-  if (r.ok) tamberToken = (await r.json()).token;
+  const r = await fetch(`${loopBase}/__forma/token`, { redirect: "error" });
+  if (r.ok) formaToken = (await r.json()).token;
 } catch { /* an app with no design mounts no wire */ }
 const CLIENT = "isocan";
 
-async function tamber(body) {
-  if (!tamberToken) return { status: 503, answer: { error: { message: "this app has no app.tamber, so its dev loop mounts no Tamber wire: inspect and outline need one" } } };
-  const r = await fetch(`${loopBase}/__tamber`, { method: "POST", headers: { "content-type": "application/json", "x-exact-tamber-token": tamberToken }, body: JSON.stringify(body) });
+async function forma(body) {
+  if (!formaToken) return { status: 503, answer: { error: { message: "this app has no app.forma, so its dev loop mounts no Forma wire: inspect and outline need one" } } };
+  const r = await fetch(`${loopBase}/__forma`, { method: "POST", headers: { "content-type": "application/json", "x-exact-forma-token": formaToken }, body: JSON.stringify(body) });
   return { status: r.status, answer: await r.json().catch(() => null) };
 }
 
 /**
- * **A teammate's code** (exact phase 8): Tamber's own pairing on the loop's
+ * **A teammate's code** (exact phase 8): Forma's own pairing on the loop's
  * wire, at `read` — the scope of a person who can see the canvas but whom this
  * machine's owner has not granted write. Entered on their canvas with the
  * wire's relay name; one use; minted again when it lapses.
  */
 let teammate = null;
 async function teammateCode() {
-  if (!relay || !tamberToken || stopping) return;
-  const r = await tamber({ method: "pair-code", scope: "read", name: "teammate" });
+  if (!relay || !formaToken || stopping) return;
+  const r = await forma({ method: "pair-code", scope: "read", name: "teammate" });
   const ok = r.answer?.ok;
   if (!ok?.code) { say(`relay: no teammate code — ${JSON.stringify(r.answer?.error ?? r.status).slice(0, 200)}`); return; }
   teammate = { code: ok.code, expires: Date.parse(ok.expires) || Date.now() + 120_000 };
   say(`a teammate pairs through the relay (read: sees this loop live, changes nothing): on an Exact screen press Pair… and enter  ${relay.tool} ${ok.code}  (one use, until ${new Date(teammate.expires).toISOString().slice(11, 19)})`, { teammate: { tool: relay.tool, code: ok.code, expires: teammate.expires, scope: ok.scope } });
 }
-setInterval(() => { if (relay && tamberToken && (!teammate || teammate.expires < Date.now())) void teammateCode(); }, 2_000).unref();
+setInterval(() => { if (relay && formaToken && (!teammate || teammate.expires < Date.now())) void teammateCode(); }, 2_000).unref();
 
 /** What the browsers read, in order: selections and inspect mode as they move. */
 const queue = [];
@@ -226,14 +226,14 @@ const sha256File = (rel) => {
   return createHash("sha256").update(readFileSync(abs)).digest("hex");
 };
 
-/** Presence and the change stream: a long poll naming our client, as Tamber's long-poll clients hold the wire. */
+/** Presence and the change stream: a long poll naming our client, as Forma's long-poll clients hold the wire. */
 async function follow() {
   let cursor = null;
-  while (!stopping && tamberToken) {
+  while (!stopping && formaToken) {
     try {
       const r = cursor
-        ? await fetch(`${loopBase}/__tamber/events?after=${encodeURIComponent(cursor)}&client=${CLIENT}`, { headers: { "x-exact-tamber-token": tamberToken } })
-        : await fetch(`${loopBase}/__tamber/events`, { method: "POST", headers: { "content-type": "application/json", "x-exact-tamber-token": tamberToken }, body: JSON.stringify({ client: CLIENT }) });
+        ? await fetch(`${loopBase}/__forma/events?after=${encodeURIComponent(cursor)}&client=${CLIENT}`, { headers: { "x-exact-forma-token": formaToken } })
+        : await fetch(`${loopBase}/__forma/events`, { method: "POST", headers: { "content-type": "application/json", "x-exact-forma-token": formaToken }, body: JSON.stringify({ client: CLIENT }) });
       if (r.status === 204) continue;
       const answer = await r.json().catch(() => null);
       if (!answer) { await sleep(500); continue; }
@@ -467,17 +467,17 @@ let scrubbing = null; // { id, files, ops }
 
 /** Open the scrub, or move it: each update is the whole gesture's edit, on the files as the scrub opened on them. */
 async function scrubTo(ops) {
-  if (!tamberToken) return { status: 503, answer: { error: "this app's dev loop mounts no Tamber wire (no app.tamber)" } };
+  if (!formaToken) return { status: 503, answer: { error: "this app's dev loop mounts no Forma wire (no app.forma)" } };
   if (!scrubbing) {
-    const h = await tamber({ method: "hello" });
+    const h = await forma({ method: "hello" });
     if (!h.answer?.ok) return h;
     scrubbing = { id: null, files: h.answer.ok.files, ops };
   }
   scrubbing.ops = ops;
-  const r = await tamber({ method: "scrub", client: CLIENT, ops, files: scrubbing.files, ...(scrubbing.id ? { scrub: scrubbing.id } : {}) });
+  const r = await forma({ method: "scrub", client: CLIENT, ops, files: scrubbing.files, ...(scrubbing.id ? { scrub: scrubbing.id } : {}) });
   if (r.answer?.ok?.scrub) scrubbing.id = r.answer.ok.scrub;
   else if (!r.answer?.ok?.superseded) scrubbing = null;
-  // Nothing here keeps a scrub open: a held drag re-sends its value, and a page that went away leaves Tamber's 30 s
+  // Nothing here keeps a scrub open: a held drag re-sends its value, and a page that went away leaves Forma's 30 s
   // idle end to give every build the committed design back.
   if (scrubbing) say(`scrub: ${ops.map((o) => `${o.name}=${o.value}`).join(", ")} on every build of the loop`);
   return { status: r.status, answer: { ...(r.answer ?? {}), builds: await buildCount() } };
@@ -485,14 +485,14 @@ async function scrubTo(ops) {
 
 async function scrubEnd() {
   if (!scrubbing?.id) { scrubbing = null; return { status: 200, answer: { ok: { cancelled: null } } }; }
-  const r = await tamber({ method: "scrub-cancel", client: CLIENT, scrub: scrubbing.id });
+  const r = await forma({ method: "scrub-cancel", client: CLIENT, scrub: scrubbing.id });
   say("scrub let go: every build back on the committed design, nothing written");
   scrubbing = null;
   return r;
 }
 
 async function buildCount() {
-  const h = await tamber({ method: "hello" });
+  const h = await forma({ method: "hello" });
   return (h.answer?.ok?.builds ?? []).map((b) => ({ id: b.id, host: b.host ?? b.target ?? null }));
 }
 
@@ -612,7 +612,7 @@ const api = http.createServer(async (req, res) => {
   if (!auth || !tokens.has(auth)) return answer(401, { error: "not paired with this bridge (a bridge that restarted forgets its pairings)" });
 
   if (url.pathname === "/hello" && req.method === "GET") {
-    return answer(200, { app: appInfo, dir: app, frames: framesPort, loop: loopBase, tamber: !!tamberToken, design: { port: designPort, up: await designUp() }, drive: { hosts: driveHosts.filter((h) => h !== "ios" || sim) }, scrub: !!tamberToken, native: driveHosts.includes("ios") && sim ? ["ios"] : [], relay: relay ? { tool: relay.tool, canvas: relay.canvas } : null, seq });
+    return answer(200, { app: appInfo, dir: app, frames: framesPort, loop: loopBase, forma: !!formaToken, design: { port: designPort, up: await designUp() }, drive: { hosts: driveHosts.filter((h) => h !== "ios" || sim) }, scrub: !!formaToken, native: driveHosts.includes("ios") && sim ? ["ios"] : [], relay: relay ? { tool: relay.tool, canvas: relay.canvas } : null, seq });
   }
   if (url.pathname === "/scrub" && req.method === "POST") {
     const body = await readBody(req);
@@ -656,13 +656,13 @@ const api = http.createServer(async (req, res) => {
   }
   if (url.pathname === "/inspect" && req.method === "POST") {
     const body = await readBody(req);
-    const r = await tamber({ method: "inspect", client: CLIENT, on: body?.on === true });
+    const r = await forma({ method: "inspect", client: CLIENT, on: body?.on === true });
     return answer(r.status, r.answer);
   }
   if (url.pathname === "/outline" && req.method === "POST") {
     const body = await readBody(req);
     const at = Array.isArray(body?.at) ? body.at.filter((a) => typeof a?.file === "string" && Number.isInteger(a.line) && Number.isInteger(a.col)).slice(0, 16) : [];
-    const r = await tamber(at.length ? { method: "outline", client: CLIENT, at } : { method: "outline", client: CLIENT, at: [] });
+    const r = await forma(at.length ? { method: "outline", client: CLIENT, at } : { method: "outline", client: CLIENT, at: [] });
     return answer(r.status, r.answer);
   }
   if (url.pathname === "/open" && req.method === "POST") {
@@ -768,7 +768,7 @@ await new Promise((r) => api.listen(bridgePort, "127.0.0.1", r));
 say(framesPort
   ? `live: ${appInfo.name}'s dev loop at ${loopBase}, framed through http://127.0.0.1:${framesPort}; the bridge is http://127.0.0.1:${bridgePort}`
   : `live, no frames: ${appInfo.name}'s dev loop at ${loopBase}; the bridge is http://127.0.0.1:${bridgePort} (pointing and the editor only)`,
-  { live: { app: appInfo, loop: loopBase, frames: framesPort, bridge: bridgePort, tamber: !!tamberToken } });
+  { live: { app: appInfo, loop: loopBase, frames: framesPort, bridge: bridgePort, forma: !!formaToken } });
 say(`open in Exact Design: ${designLink("")}  (start it with \`bun run dev\` in its checkout)`, { design: { link: designLink(""), port: designPort } });
 mint();
 setInterval(() => { if (code && code.expires < Date.now()) mint(); }, 5_000).unref();

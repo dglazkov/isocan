@@ -20,7 +20,7 @@ import { relayArgs } from "../src/cli-run.ts";
 import { CAPTURED_ONLY, parseRelayCode, wireRefusal } from "../src/relay.ts";
 
 describe("a teammate's code through the relay (exact phase 8)", () => {
-  it("reads the wire's relay name and Tamber's code as the bridge prints them", () => {
+  it("reads the wire's relay name and Forma's code as the bridge prints them", () => {
     expect(parseRelayCode("https://2bfc6f1d264b-tool.acme.relay.localhost MYK0F-NHTFG")).toEqual({ tool: "https://2bfc6f1d264b-tool.acme.relay.localhost", code: "MYK0F-NHTFG" });
     expect(parseRelayCode("  https://ab12-tool.acme.relay.example.com/  myk0fnhtfg ")).toEqual({ tool: "https://ab12-tool.acme.relay.example.com", code: "MYK0F-NHTFG" });
   });
@@ -34,8 +34,8 @@ describe("a teammate's code through the relay (exact phase 8)", () => {
 
   it("quotes the wire's refusal in its own words", () => {
     expect(wireRefusal(403, JSON.stringify({ error: { message: "scrub needs `write` scope; this client has `read`", scope: "read", needs: "write" } })))
-      .toBe("refused on Tamber's wire (403): scrub needs `write` scope; this client has `read`");
-    expect(wireRefusal(502, "bad gateway")).toBe("refused on Tamber's wire (502): bad gateway");
+      .toBe("refused on Forma's wire (403): scrub needs `write` scope; this client has `read`");
+    expect(wireRefusal(502, "bad gateway")).toBe("refused on Forma's wire (502): bad gateway");
   });
 
   it("says captured only in one sentence", () => {

@@ -38,7 +38,7 @@ function register(host: CliHost): void {
 
   exact
     .command("doctor [app]")
-    .description("This machine's Exact for an app: checkout, commit, Bun, setup --check, Tamber's protocol")
+    .description("This machine's Exact for an app: checkout, commit, Bun, setup --check, Forma's protocol")
     .option("--hosts <list>", "the hosts to check setup for, comma-separated", "web")
     .action(host.run(async (app: string | undefined, opts: { hosts?: string }, cmd: Command) => (await run()).doctor(host, app, opts, cmd)));
 
@@ -125,7 +125,7 @@ function register(host: CliHost): void {
     .description("Propose a look change to a screen; only a person's Keep writes it")
     .option("--token <name=value>", "set a token (repeatable)", repeat)
     .option("--row <Style.row=value>", "set a style's row (repeatable)", repeat)
-    .option("--op <json>", "a Tamber set-token, set-row or set-state (repeatable)", repeat)
+    .option("--op <json>", "a Forma set-token, set-row or set-state (repeatable)", repeat)
     .option("--why <words>", "why, two sentences at most")
     .option("--cites <kind:ref>", "what prompted it (repeatable)", repeat)
     .option("--in <area>", "hang it in this area (a competition lane)")
@@ -142,6 +142,23 @@ function register(host: CliHost): void {
     .option("--devices <list>", "", "phone")
     .option("--schemes <list>", "", "light")
     .action(host.run(async (app: string, ref: string, opts: import("./branch.ts").BranchOptions, cmd: Command) => (await run()).branch(host, app, ref, opts, cmd)));
+
+  // Exact phase 9: a design system between apps (`systems.ts`), Make it Exact (`makes.ts`), persona runs (`personas.ts`).
+  exact.command("system <verb> <args...>").description("extract <app> | apply <system> <app>: a design system between apps")
+    .option("--map <src=dst>", "", repeat).option("--wait <seconds>").option("--canvas <canvas>")
+    .action(host.run(async (verb: string, args: string[], opts: import("./systems.ts").ApplyOptions, cmd: Command) => {
+      if (verb !== "extract" && verb !== "apply") throw new Error(`isocan exact system extract|apply, not ${verb}`);
+      return (await run()).system(host, verb, args, opts, cmd);
+    }));
+
+  exact.command("make <app> <flow>").description("A wireframe flow as a Contract scaffold on a branch")
+    .option("--canvas <canvas>").option("--hosts <list>", "", "web").option("--sim <udid>")
+    .action(host.run(async (app: string, flow: string, opts: import("./makes.ts").MakeOptions, cmd: Command) => (await run()).make(host, app, flow, opts, cmd)));
+
+  exact.command("persona <app> <name>").description("A persona's path, replayed as a filmstrip with its note")
+    .option("--goal <words>").option("--do <op>", "", repeat).option("--reached").option("--stuck").option("--note <words>")
+    .option("--at <path>", "", "/").option("--host <host>", "", "web").option("--sim <udid>").option("--canvas <canvas>")
+    .action(host.run(async (app: string, name: string, opts: import("./personas.ts").PersonaOptions, cmd: Command) => (await run()).persona(host, app, name, opts, cmd)));
 
   // Ship (exact phase 7): the dry run as a card; a person's ship, promote and roll back (`ship.ts`).
   exact.command("prepare <app>").description("Exact's dry run as a release card")

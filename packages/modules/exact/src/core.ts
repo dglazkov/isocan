@@ -77,7 +77,7 @@ export const EXACT_PROPS = {
   edges: "exact.edges",
   /** On an anatomy card: the Contract file it describes. */
   file: "exact.file",
-  /** On the design-system item: the Tamber IR digest it was written from. */
+  /** On the design-system item: the Forma IR digest it was written from. */
   tamber: "exact.tamber",
   /** On the index: counts for `isocan context`, which cannot read the index's bytes. */
   summary: "exact.summary",
@@ -141,6 +141,13 @@ export const EXACT_PROPS = {
   shipped: "exact.shipped",
   classification: "exact.classification",
   release: "exact.release",
+  /** Exact phase 9 (`system.ts`): a design system of no app, an Apply asked and answered, and its mapping card. */
+  system: "exact.system",
+  apply: "exact.apply",
+  applied: "exact.applied",
+  mapping: "exact.mapping",
+  /** A persona's run (`persona.ts`), or `summary` on the app's personas card. */
+  persona: "exact.persona",
 } as const;
 
 /** One visible node of a capture: its box in the capture's CSS pixels, the line that drew it, and the styles that line names. */
@@ -316,7 +323,7 @@ export interface ExactIndex {
   anatomy: AnatomyFile[];
   /** `app.ts`'s `export const grants`, as written; null when it exports none. */
   grants: string | null;
-  /** `tamber ir` with each token's `uses`, or null for an app with no design. */
+  /** `forma ir` with each token's `uses`, or null for an app with no design. */
   design: IndexDesign | null;
   /** A digest of everything a capture depends on: the app's own files and the Exact commit. */
   inputs: string | null;
@@ -416,7 +423,7 @@ export interface Readings {
   grants?: string | null;
   /** Each `*.test.contract`'s text, by file (exact phase 5): what a storyboard's steps read and a recording appends to. */
   testSources?: Record<string, string>;
-  /** `tamber ir` and the wire's `uses` per token. */
+  /** `forma ir` and the wire's `uses` per token. */
   design?: DesignReading | null;
   inputs?: string | null;
 }
