@@ -89,8 +89,10 @@ function StateRows({ frame, before }: { frame: FrameState | undefined; before: F
 export function FilmStrip(facts: RendererFacts) {
   const { item, url, blobHash, filename } = facts;
   useExactStore();
-  const film = useMemo(() => parseFilm(item?.properties?.[EXACT_PROPS.film]), [item?.properties?.[EXACT_PROPS.film]]);
-  const frames = useMemo(() => parseFrames(item?.properties?.[EXACT_PROPS.frames]), [item?.properties?.[EXACT_PROPS.frames]]);
+  const filmProperty = item?.properties?.[EXACT_PROPS.film];
+  const framesProperty = item?.properties?.[EXACT_PROPS.frames];
+  const film = useMemo(() => parseFilm(filmProperty), [filmProperty]);
+  const frames = useMemo(() => parseFrames(framesProperty), [framesProperty]);
   const strip = useStrip(blobHash, url);
   const itemId = item?.id ?? "";
   const scrubbed = useScrub(itemId);
