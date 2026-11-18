@@ -17,16 +17,22 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { eagerWebFiles } from "./cssuse.ts";
 
 /**
  * The panel is small; what matters about it is the two judgements it encodes.
  */
-const src = readFileSync(
-  fileURLToPath(new URL("../src/components/WhatsNew.tsx", import.meta.url)),
-  "utf8",
-);
+const src = ["../src/lib/news.ts", "../src/components/NewsDialog.tsx"]
+  .map((file) => readFileSync(fileURLToPath(new URL(file, import.meta.url)), "utf8"))
+  .join("\n");
 
 describe("what's new", () => {
+  it("keeps the unread indicator eager and the unopened dialog out of first paint", () => {
+    const eager = eagerWebFiles();
+    expect(eager.has("packages/web/src/lib/news.ts")).toBe(true);
+    expect(eager.has("packages/web/src/components/NewsDialog.tsx")).toBe(false);
+  });
+
   it("folds with core, so the CLI lists the same days", () => {
     expect(src).toContain("unseen(");
     expect(src).toContain("newestDay(");
