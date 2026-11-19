@@ -122,12 +122,20 @@ export function evaluateTimeEvidence({measure,runs=[],stallsReceipts=[],localWor
     } else if(measure==='critical_file') {
       if(!completeSuite(r))continue;
       for(const file of r.suite.expectedFiles) {const id=identityOf(r,{file});if(id)entries.push({r,identity:id,value:r.suite.observedSummaries.find(s=>s.file===file).durationMs/r.suite.aggregate.durationMs});}
-    } else for(const test of r.tests??[]) {
-      if(!safeFile(test.file)||typeof test.name!=='string'||test.name.length>1000)continue;
-      if((r.tests??[]).filter(t=>t.file===test.file&&t.name===test.name&&(t.describe===true)===(test.describe===true)).length!==1)continue;
-      if(measure==='time_creep'&&(test.outcome!=='pass'||!finite(test.ms)))continue;
-      if(measure==='inconclusive_share'&&!['pass','fail','inconclusive'].includes(test.outcome))continue;
-      const id=identityOf(r,{file:test.file,name:test.name,describe:test.describe===true});if(id)entries.push({r,identity:id,value:test.ms,outcome:test.outcome});
+    } else {
+      const identity=identityOf(r,null); if(!identity)continue;
+      const testKey=t=>JSON.stringify([t.file,t.name,t.describe===true]), counts=new Map();
+      for(const test of r.tests??[]) {
+        if(!safeFile(test.file)||typeof test.name!=='string'||test.name.length>1000)continue;
+        const key=testKey(test);counts.set(key,(counts.get(key)??0)+1);
+      }
+      for(const test of r.tests??[]) {
+        if(!safeFile(test.file)||typeof test.name!=='string'||test.name.length>1000)continue;
+        if(counts.get(testKey(test))!==1)continue;
+        if(measure==='time_creep'&&(test.outcome!=='pass'||!finite(test.ms)))continue;
+        if(measure==='inconclusive_share'&&!['pass','fail','inconclusive'].includes(test.outcome))continue;
+        const id={...identity,target:{file:test.file,name:test.name,describe:test.describe===true}};entries.push({r,identity:id,value:test.ms,outcome:test.outcome});
+      }
     }
   }
   const results=[];

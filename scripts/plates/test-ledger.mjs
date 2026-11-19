@@ -599,14 +599,24 @@ export function slower(runs, { window = DEFAULTS.window, factor = DEFAULTS.facto
   if (!current || busyState(current) === 'busy') return [];
   const machine = machineClass(current.machine);
   const before = comparable(runs, current).filter(r => busyState(r) !== 'busy');
+  const durations = new Map();
+  for (let i = before.length - 1; i >= 0; i--) {
+    const seen = new Set();
+    for (const p of before[i].tests ?? []) {
+      const k = key(p);
+      // Match find's first occurrence, even when it failed or has no duration.
+      if (seen.has(k)) continue;
+      seen.add(k);
+      if (p.outcome !== 'pass' || !Number.isFinite(p.ms)) continue;
+      const past = durations.get(k) ?? [];
+      if (past.length < window) past.push(p.ms);
+      durations.set(k, past);
+    }
+  }
   const out = [];
   for (const t of current.tests ?? []) {
     if (t.outcome !== 'pass' || !Number.isFinite(t.ms) || t.ms < 0) continue;
-    const past = [];
-    for (let i = before.length - 1; i >= 0 && past.length < window; i--) {
-      const p = before[i].tests?.find(x => key(x) === key(t));
-      if (p?.outcome === 'pass' && Number.isFinite(p.ms)) past.push(p.ms);
-    }
+    const past = durations.get(key(t)) ?? [];
     if (past.length < window) continue;
     const m = median(past);
     if (t.ms > factor * m && t.ms - m > floorMs) out.push({ file: t.file ?? null, name: t.name, ...suiteOf(t), ms: t.ms, median: Math.round(m), over: Math.round(t.ms - m), window, machine, ...seenUnder(current) });
@@ -734,12 +744,24 @@ export function failureMemory(runs) {
   const current = runs.filter(r => r.kind !== 'gate').at(-1);
   if (!current || current.dirty !== false || !current.tree) return [];
   const history = runs.filter(r => r !== current && r.dirty === false && r.tree === current.tree && laneOf(r) === laneOf(current) && machineClass(r.machine) === machineClass(current.machine));
+  const priorByTest = new Map();
+  for (const r of history) {
+    if (!(r.date <= current.date)) continue;
+    for (const p of r.tests) {
+      if (!['pass', 'fail'].includes(p.outcome)) continue;
+      const k = key(p), prior = priorByTest.get(k) ?? [];
+      prior.push({ date: r.date, outcome: p.outcome, error: p.error, busy: r.busy ?? null });
+      priorByTest.set(k, prior);
+    }
+  }
+  let flakes;
   return (current.tests ?? []).flatMap(t => {
     if (!['pass', 'fail'].includes(t.outcome)) return [];
-    const prior = history.filter(r => r.date <= current.date).flatMap(r => r.tests.filter(p => key(p) === key(t) && ['pass', 'fail'].includes(p.outcome)).map(p => ({ date: r.date, outcome: p.outcome, error: p.error, busy: r.busy ?? null })));
+    const k = key(t), prior = priorByTest.get(k) ?? [];
     const different = prior.some(p => p.outcome !== t.outcome);
     if (!different) return [];
-    const knownFlake = flaky([...history, current]).some(f => key(f) === key(t));
+    flakes ??= new Set(flaky([...history, current]).map(key));
+    const knownFlake = flakes.has(k);
     const repeat = knownFlake && t.outcome === 'fail' && Boolean(t.error) && prior.some(p => p.outcome === 'fail' && p.error === t.error);
     return [{ file: t.file, name: t.name, ...seenUnder(current), machine: machineClass(current.machine), repeat, runs: [...prior, { date: current.date, outcome: t.outcome, error: t.error, busy: current.busy ?? null }],
       message: `${named(t)}: ${repeat ? 'matches an earlier failure on a flaky test; ' : ''}different outcomes on an identical clean tree: decided by something besides the files; load ${[...prior.map(p => busyDescription({ busy: p.busy })), busyDescription(current)].join(', ')}` }];

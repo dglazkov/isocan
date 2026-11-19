@@ -30,16 +30,17 @@ export const DRAFT_QUERY = `query($owner:String!,$name:String!) {
   }
 }`;
 const MAX_DRAFT_BYTES = 1024 * 1024;
-const command = (bin, args, { input, rejectStderr = false, filterTree = false, ...opts } = {}) => new Promise((resolve, reject) => {
+const command = (bin, args, { input, rejectStderr = false, filterTree = false, encoding = 'utf8', ...opts } = {}) => new Promise((resolve, reject) => {
   let deadline;
   const grouped = filterTree && process.platform !== 'win32';
   const stopFilters = () => { if (grouped && child.pid) try { process.kill(-child.pid, 'SIGKILL'); } catch { /* process group already exited */ } };
-  const child = execFile(bin, args, { encoding: 'utf8', timeout: 15000, maxBuffer: MAX_DRAFT_BYTES, ...opts, ...(grouped ? {detached:true} : {}) },
+  const child = execFile(bin, args, { encoding, timeout: 15000, maxBuffer: MAX_DRAFT_BYTES, ...opts, ...(grouped ? {detached:true} : {}) },
     (error, stdout, stderr) => {
       clearTimeout(deadline);
       stopFilters();
-      if (error || (rejectStderr && stderr.trim())) {
-        const e = new Error(String(stderr || error?.message).trim().slice(0, 500));
+      const errText = Buffer.isBuffer(stderr) ? stderr.toString('utf8') : String(stderr ?? '');
+      if (error || (rejectStderr && errText.trim())) {
+        const e = new Error(String(errText || error?.message).trim().slice(0, 500));
         e.stdout = stdout;
         reject(e);
       } else resolve(stdout);
@@ -179,16 +180,22 @@ export function largestSections(text) {
     .sort((a, b) => b.lines - a.lines || a.start - b.start).slice(0, 5);
 }
 
-// Never follow a symlink component, including a replaced parent directory.
-async function localBytes(root, path, max) {
+// Never follow a symlink component, including a replaced parent directory. Every component is lstat'd again before
+// each read, so a parent swapped for a symlink mid-scan is refused. Under a canonical root, real directories and a
+// non-symlink file make a canonical path; a directory's realpath is still confirmed once per scan (`canonicalDirs`).
+async function localBytes(root, path, max, canonicalDirs) {
   let full = root;
   const parts = path.split('/');
   for (let i = 0; i < parts.length; i++) {
     full = join(full, parts[i]);
     const s = await lstat(full);
     if (s.isSymbolicLink() || (i < parts.length - 1 && !s.isDirectory())) throw new Error('symlink or non-directory source component');
+    if (i < parts.length - 1 && canonicalDirs && !canonicalDirs.has(full)) {
+      if (await realpath(full) !== full) throw new Error('source escaped canonical root');
+      canonicalDirs.add(full);
+    }
   }
-  if (await realpath(full) !== full) throw new Error('source escaped canonical root');
+  if (!canonicalDirs && await realpath(full) !== full) throw new Error('source escaped canonical root');
   const file = await open(full, constants.O_RDONLY | constants.O_NOFOLLOW);
   try {
     const before = await file.stat();
@@ -223,13 +230,14 @@ export async function longFiles({ root, config = {}, env = process.env, now = Da
   const cap = { ...LONG_FILE_LIMITS, ...limits }, start = Date.now();
   const facts = { schema: 1, observedAt: new Date(now).toISOString(), longFileLines, source: 'tracked canonical working-tree source', sectionMethod: 'column-zero declarations and section comments; heuristic, not a parser', files: [], coverage: { complete: false, gaps: [], tracked: 0, scanned: 0, excluded: 0, bytes: 0 }, limits: cap };
   const gaps = facts.coverage.gaps;
-  const git = (args, maxBuffer = cap.listBytes) => {
+  const git = (args, maxBuffer = cap.listBytes, extra = {}) => {
     const remaining = cap.ms - (Date.now() - start);
     if (remaining <= 0) throw new Error('long-file observation reached time bound');
-    return command(environmentValue('variable:KEEL_GIT', env) ?? 'git', args, { cwd: root, env, timeout: Math.max(1, Math.min(3000, remaining)), maxBuffer });
+    return command(environmentValue('variable:KEEL_GIT', env) ?? 'git', args, { cwd: root, env, timeout: Math.max(1, Math.min(3000, remaining)), maxBuffer, ...extra });
   };
   try {
     root = await realpath(root);
+    const canonicalDirs = new Set();
     const top = (await git(['rev-parse', '--show-toplevel'])).trim();
     if (await realpath(top) !== root) throw new Error('project root is not its own Git worktree; parent Git is not a source');
     facts.head = (await git(['rev-parse', '--verify', 'HEAD'])).trim();
@@ -241,7 +249,7 @@ export async function longFiles({ root, config = {}, env = process.env, now = Da
     if (entries.length > cap.files) throw new Error('tracked file count exceeds bound');
     let managed = new Set();
     try {
-      const lock = JSON.parse((await localBytes(root, '.plates/lock.json', cap.fileBytes)).toString('utf8'));
+      const lock = JSON.parse((await localBytes(root, '.plates/lock.json', cap.fileBytes, canonicalDirs)).toString('utf8'));
       if (!lock?.files || typeof lock.files !== 'object' || Array.isArray(lock.files)) throw new Error('malformed managed file inventory');
       managed = new Set(Object.keys(lock.files));
     } catch (e) { if (e.code !== 'ENOENT') throw new Error(`managed file inventory unavailable: ${e.message}`); }
@@ -255,7 +263,7 @@ export async function longFiles({ root, config = {}, env = process.env, now = Da
       if (stage !== '0' || seen.has(path)) { gaps.push(`${path}: unmerged or duplicate index entry`); continue; }
       seen.add(path);
       try {
-        const bytes = await localBytes(root, path, Math.min(cap.fileBytes, cap.totalBytes - facts.coverage.bytes));
+        const bytes = await localBytes(root, path, Math.min(cap.fileBytes, cap.totalBytes - facts.coverage.bytes), canonicalDirs);
         facts.coverage.bytes += bytes.length;
         if (bytes.includes(0)) { facts.coverage.excluded++; continue; }
         const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
@@ -272,33 +280,79 @@ export async function longFiles({ root, config = {}, env = process.env, now = Da
     facts.files.sort((a, b) => b.lines - a.lines || a.path.localeCompare(b.path));
     let shallow = true;
     try { shallow = (await git(['rev-parse', '--is-shallow-repository'])).trim() !== 'false'; } catch { /* history remains explicitly incomplete */ }
+    const historyTargets = [], batchItems = [];
     for (const [i, file] of facts.files.entries()) {
       if (i >= cap.historyFiles) { file.history.gaps = ['history file count bound']; continue; }
       const history = { complete: false, gaps: [], entries: [] };
       file.history = history;
-      try {
-        const log = await git(['log', `-n${cap.historyCommits + 1}`, '--format=%H%x09%cI', facts.head, '--', file.path], 64 * 1024);
-        const records = log.trim() ? log.trim().split('\n') : [];
-        if (shallow) history.gaps.push('shallow history');
-        if (records.length > cap.historyCommits) history.gaps.push(`history truncated to ${cap.historyCommits} revisions`);
-        if (!records.length) history.gaps.push('no committed history for this path');
-        for (const row of records.slice(0, cap.historyCommits)) {
-          const [commit, date] = row.split('\t');
-          if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(commit) || !Number.isFinite(Date.parse(date))) throw new Error('malformed history revision');
-          const r = { commit, date, blob: null, lines: null };
-          history.entries.push(r);
-          try {
-            // cat-file addresses an immutable object; no filesystem symlink traversal.
-            const identity = (await git(['rev-parse', '--verify', `${commit}:${file.path}`], 1024)).trim();
-            if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(identity)) throw new Error('history blob identity unavailable');
-            r.blob = identity;
-            const bytes = await git(['cat-file', 'blob', identity], cap.fileBytes);
-            r.lines = lineCount(bytes);
-          } catch (e) { history.gaps.push(`${commit}: ${e.message}`); }
-        }
-        history.complete = !history.gaps.length;
-      } catch (e) { history.gaps.push(e.message); }
+      historyTargets.push({ file, history });
     }
+    let logCursor = 0;
+    await Promise.all(Array.from({ length: Math.min(4, historyTargets.length) }, async () => {
+      while (logCursor < historyTargets.length) {
+        const { file, history } = historyTargets[logCursor++];
+        try {
+          const log = await git(['log', `-n${cap.historyCommits + 1}`, '--format=%H%x09%cI', facts.head, '--', file.path], 64 * 1024);
+          const records = log.trim() ? log.trim().split('\n') : [];
+          if (shallow) history.gaps.push('shallow history');
+          if (records.length > cap.historyCommits) history.gaps.push(`history truncated to ${cap.historyCommits} revisions`);
+          if (!records.length) history.gaps.push('no committed history for this path');
+          for (const row of records.slice(0, cap.historyCommits)) {
+            const [commit, date] = row.split('\t');
+            if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(commit) || !Number.isFinite(Date.parse(date))) throw new Error('malformed history revision');
+            history.entries.push({ commit, date, blob: null, lines: null });
+          }
+        } catch (e) { history.gaps.push(e.message); }
+      }
+    }));
+    for (const { file, history } of historyTargets) {
+      for (const entry of history.entries) batchItems.push({ history, entry, spec: `${entry.commit}:${file.path}` });
+    }
+    if (batchItems.length) {
+      // cat-file --batch-check / --batch addresses immutable objects in one stream; no filesystem symlink traversal.
+      try {
+        const checked = await git(['cat-file', '--batch-check'], Math.max(64 * 1024, batchItems.length * 256), { input: batchItems.map(b => `${b.spec}\n`).join('') });
+        const checkLines = checked.endsWith('\n') ? checked.slice(0, -1).split('\n') : checked ? checked.split('\n') : [];
+        if (checkLines.length !== batchItems.length) throw new Error('history blob batch check incomplete');
+        const toRead = [], unique = new Map();
+        for (const [idx, item] of batchItems.entries()) {
+          const m = /^([a-f0-9]{40}|[a-f0-9]{64}) (\S+) (\d+)$/.exec(checkLines[idx]);
+          if (!m || m[2] !== 'blob') { item.history.gaps.push(`${item.entry.commit}: history blob identity unavailable`); continue; }
+          const size = Number(m[3]);
+          item.entry.blob = m[1];
+          if (size > cap.fileBytes) { item.history.gaps.push(`${item.entry.commit}: history blob exceeds file byte bound`); continue; }
+          toRead.push(item);
+          if (!unique.has(m[1])) unique.set(m[1], size);
+        }
+        const blobLines = new Map(), pairs = [...unique.entries()];
+        for (let at = 0; at < pairs.length;) {
+          const chunk = [];
+          let chunkBytes = 0;
+          const limitBytes = Math.max(cap.fileBytes, 8 * 1024 * 1024);
+          while (at < pairs.length && (!chunk.length || chunkBytes + pairs[at][1] <= limitBytes)) {
+            chunk.push(pairs[at]);
+            chunkBytes += pairs[at][1];
+            at++;
+          }
+          const buf = await git(['cat-file', '--batch'], chunkBytes + chunk.length * 128 + 4096, { input: chunk.map(([oid]) => `${oid}\n`).join(''), encoding: 'buffer' });
+          let offset = 0;
+          for (const [oid] of chunk) {
+            const nl = buf.indexOf(10, offset);
+            if (nl < 0) throw new Error('truncated history blob header');
+            const hm = /^([a-f0-9]{40}|[a-f0-9]{64}) blob (\d+)$/.exec(buf.subarray(offset, nl).toString('utf8'));
+            if (!hm || hm[1] !== oid) throw new Error('unexpected history blob header');
+            const size = Number(hm[2]), bodyStart = nl + 1, bodyEnd = bodyStart + size;
+            if (bodyEnd + 1 > buf.length || buf[bodyEnd] !== 10) throw new Error('truncated history blob content');
+            blobLines.set(oid, lineCount(buf.subarray(bodyStart, bodyEnd).toString('utf8')));
+            offset = bodyEnd + 1;
+          }
+        }
+        for (const item of toRead) item.entry.lines = blobLines.get(item.entry.blob) ?? null;
+      } catch (e) {
+        for (const item of batchItems) if (item.entry.lines === null) item.history.gaps.push(`${item.entry.commit}: ${e.message}`);
+      }
+    }
+    for (const { history } of historyTargets) history.complete = !history.gaps.length;
     facts.coverage.complete = !gaps.length;
     if (gaps.length) return { na: `long-file coverage incomplete: ${gaps.join('; ')}`, facts };
     return { value: facts.files.length, detail: `${facts.files.length} tracked source files over ${longFileLines} lines; ${facts.files.slice(0, 5).map(f => `${f.path} (${f.lines})`).join(', ') || 'none'}; split points are heuristics; ${facts.files.filter(f => !f.history.complete).length} histories incomplete`, facts };

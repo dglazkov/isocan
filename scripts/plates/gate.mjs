@@ -249,14 +249,23 @@ function ghDownload(repo, env) {
   };
 }
 
-/** readCiGate's verify: the run's one plates-test-runs artifact, read in bounds, then ledgerEvidence. */
+/** readCiGate's verify: the latest attempt's ledger artifact, then ledgerEvidence. */
 function ledgerVerifier({ repo, sha, tree, command, download }) {
-  return async ({ client, run }) => {
+  return async ({ client, run, jobs }) => {
     if (run.conclusion !== 'success') return { reason: `CI's run on ${sha.slice(0, 7)} concluded ${run.conclusion}: only a success is reused` };
     try {
       const listed = await client.pages(`repos/${repo}/actions/runs/${run.id}/artifacts`, 'artifacts', 'runPages');
       if (!client.coverage.complete) return { reason: "the CI run's artifact list is incomplete" };
-      const { matches: named } = selectArtifacts(listed, 'artifact:keel-test-runs');
+      let { matches: named } = selectArtifacts(listed, 'artifact:keel-test-runs');
+      if (run.run_attempt > 1) {
+        // Artifacts have no REST run_attempt field. readCiGate fetched jobs from
+        // /attempts/<run_attempt>/jobs and checked their attempt identity. Bind
+        // uploads to those jobs' execution windows, never to list order, artifact
+        // IDs or the workflow's updated_at (which changes again on a rerun).
+        const executed = jobs.filter(j => j.conclusion !== 'skipped');
+        if (executed.some(j => j.conclusion !== 'success') || named.some(a => !Number.isFinite(Date.parse(a.created_at)))) return { reason: `the ${LEDGER_ARTIFACT} artifacts cannot be bound to successful attempt ${run.run_attempt}` };
+        named = named.filter(a => executed.some(j => Date.parse(a.created_at) >= Date.parse(j.started_at) && Date.parse(a.created_at) <= Date.parse(j.completed_at)));
+      }
       if (named.length !== 1) return { reason: named.length ? `the CI run kept ${named.length} ${LEDGER_ARTIFACT} artifacts: which is the gate's cannot be told` : `the CI run kept no ${LEDGER_ARTIFACT} artifact (its workflow needs the test ledger's upload step)` };
       const a = named[0];
       if (a.expired !== false || a.workflow_run?.id !== run.id || a.workflow_run?.head_sha !== sha || !Number.isSafeInteger(a.size_in_bytes) || a.size_in_bytes < 1 || a.size_in_bytes > MAX_BYTES) return { reason: `the ${LEDGER_ARTIFACT} artifact is expired, oversized or not this run's` };
