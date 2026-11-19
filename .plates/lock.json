@@ -11,15 +11,15 @@
     },
     ".github/workflows/plates-loop.yml": {
       "practice": "loop",
-      "sha256": "1c7570ac68c74229bb849dda2068876a393ebc0b773f559514e593e451e6fef4"
+      "sha256": "295b835b7a0b0a4d69db22290f8d0c44674103ffdf93e79e516074a10af628d3"
     },
     ".github/workflows/plates-morning.yml": {
       "practice": "night",
-      "sha256": "dbfa26c2ed799fe0e5f9c7c42f32878d7758ccb83149da4a5a31f5b0f54fe5eb"
+      "sha256": "fc2200fbd0a2e21710fdd59aebc9a3c2118250db83e22802859b76bd8c5c2180"
     },
     ".github/workflows/plates-night.yml": {
       "practice": "night",
-      "sha256": "c1e2836fc459bf5221d9063c7132af37b3a88e2799f9b70171bcf1569ab9635a"
+      "sha256": "4539f07d5ef18b30b991554425996077fcba8607e8c54f47f530e1f9065839c9"
     },
     "AGENTS.md#agents-md": {
       "practice": "agents-md",
