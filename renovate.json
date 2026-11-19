@@ -18,6 +18,8 @@
     "enabled": true
   },
   "rangeStrategy": "bump",
+  "minimumReleaseAge": "3 days",
+  "internalChecksFilter": "strict",
   "labels": [
     "dependencies"
   ],
@@ -85,6 +87,17 @@
       "schedule": [
         "before 6am on monday"
       ],
+      "automerge": false
+    },
+    {
+      "description": "A package's engines floor is a promise about which Node versions it supports, so it rises by a person's decision, never by Renovate: a newer Node already satisfies a >= floor, and \"replace\" leaves a satisfied range alone. The Node lane sets no range strategy, so this holds beside it.",
+      "matchManagers": [
+        "npm"
+      ],
+      "matchDepTypes": [
+        "engines"
+      ],
+      "rangeStrategy": "replace",
       "automerge": false
     },
     {

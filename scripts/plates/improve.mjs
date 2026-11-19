@@ -80,13 +80,13 @@ import {
   shapeOf, readProjectRecords, climbLine, readClimbNight, tendLine, readTendPass, climbRetiring, retireLine, budgetPasses, budgetUse, budgetLine, budgetOf, budgetRaw, budgetSince, BUDGET_RUNS, BUDGET_EXAMINE, BUDGET_HISTORY, recordsDisagree, statusUnknown, changelogGaps, issuesNamed, frontMatter, addDays, walk, gateWorkflowOf, gateWorkflowIn,
   reviewConfigOf, repoReviewArgs, prReviewArgs, graphqlData, readRepoReviews, unansweredPrs, windowPrs, sameLogin, IncompleteRead, REVIEW_DAYS, REVIEW_PRS, REVIEW_PAGES,
 } from './lib.mjs';
-import { RUNS, readRuns, readRetention, readStalls, timedCommand, busyState, busyCoverage, busyNote, testsConfigOf, flaky, slower, comparable, machineClass, lastOutcome, aloneCommand, nightOnly, NIGHT_ONLY } from './test-ledger.mjs';
+import { RUNS, readRuns, readRetention, timedCommand, busyState, busyCoverage, busyNote, testsConfigOf, flaky, slower, comparable, machineClass, lastOutcome, aloneCommand, nightOnly, NIGHT_ONLY } from './test-ledger.mjs';
 
 import { evaluateTimeEvidence, TIME_MEASURES } from './time-measures.mjs';
 import { makeTimeProposal, formatTimeProposal, readTimeProposals, selectableTimeProposal, writeHealthReport, withTimeProposal } from './time-proposals.mjs';
 import { remeasureTimeProposal } from './time-proposal-remeasurement.mjs';
 import { plainProposal, formatPlain } from './plain-proposal.mjs';
-import { digest } from './time-receipts.mjs';
+import { digest, isStallsReceipt } from './time-receipts.mjs';
 import { PLAN, readPlan, writePlan, writeRecord, tickMeasures, planSection, NightPlanError } from './night-plan.mjs';
 
 export const BOUNDS = '.plates/bounds.json';
@@ -321,7 +321,12 @@ const gateRun = ctx => once(ctx, 'gate', async () => {
     if (reuse.reused) return { command, ...reuse };
   }
   // Never a test runner's context (lesson 14); the project's .plates/plates.json `env` over it.
-  const r = await timedCommand(command, { cwd: ctx.root, env: gateEnv(ctx.env, ctx.config), preparedEnv: true, configured: true });
+  let r;
+  try {
+    r = await timedCommand(command, { cwd: ctx.root, env: gateEnv(ctx.env, ctx.config), preparedEnv: true, configured: true });
+  } finally {
+    ctx.ledgerEpoch++;
+  }
   const execution = { command, source: 'local-command', reused: false, reuseUnavailable: reuse.reason,
     status: r.status, signal: r.signal, ms: r.ms, execution: r.execution, diagnostics: r.diagnostics };
   if (r.error || r.status === null) {
@@ -441,8 +446,15 @@ async function gateWorkflow(ctx) {
   return found?.name ?? null;
 }
 
+const allLedgerRuns = ctx => once(ctx, `ledger-all:${ctx.ledgerEpoch}`, () => readRuns(ctx.root, undefined, { gates: true, stalls: true }));
+const ledgerRuns = ctx => once(ctx, `ledger-runs:${ctx.ledgerEpoch}`, async () => {
+  const all = await allLedgerRuns(ctx);
+  const runs = all.runs.filter(r => r.kind !== 'gate' && r.kind !== 'gate-skip' && r.kind !== 'stalls');
+  if (all.skipped > 0 && runs.length < all.runs.length) return readRuns(ctx.root); // a cap may have dropped runs the narrower read keeps
+  return { runs, skipped: all.skipped };
+});
 /** The test ledger's history and settings, read once; a bad .plates/plates.json "tests" is a broken instrument. */
-const ledgerHistory = ctx => once(ctx, 'ledger', async () => { const history = await readRuns(ctx.root); return { opts: testsConfigOf(ctx.config), ...history, runs: history.runs.filter(r => r.kind !== 'gate') }; });
+const ledgerHistory = ctx => once(ctx, `ledger:${ctx.ledgerEpoch}`, async () => { const opts = testsConfigOf(ctx.config), history = await ledgerRuns(ctx); return { opts, ...history }; });
 const tooFew = (n, window, what = `recorded runs in ${RUNS}`) => `${what}: ${n}, fewer than the window of ${window}; n/a until there are ${window} (the gate's own runs and CI's plates-test-runs artifacts fill it), never a zero`;
 const named = t => `${t.file} "${t.name}"`;
 /** The ledger measures' note when the history is the nights' own: CI's check does not keep its runs. */
@@ -764,14 +776,23 @@ export const CROSS_REVIEW_VALID = Object.freeze({
 
 const timingEvidence = ctx => once(ctx, 'time-evidence', async () => {
   if (ctx.timeEvidence) return ctx.timeEvidence;
-  const history = await readRuns(ctx.root, undefined, {gates:true});
-  const retention = await readRetention(ctx.root), stalls = await readStalls(ctx.root);
+  const all = await allLedgerRuns(ctx);
+  const gateRuns = all.runs.filter(r => r.kind !== 'stalls');
+  const history = all.skipped > 0 && gateRuns.length < all.runs.length
+    ? await readRuns(ctx.root, undefined, { gates: true })
+    : { runs: gateRuns, skipped: all.skipped };
+  const retention = await readRetention(ctx.root);
+  const stallsReceipts = [], stallsGaps = all.skipped ? [`${all.skipped} ledger records unreadable`] : [];
+  for (const r of all.runs.filter(r => r.kind === 'stalls')) {
+    if (r.version !== 1 || !Array.isArray(r.stallsReceipts) || r.stallsReceipts.length > 2000 || !r.stallsReceipts.every(isStallsReceipt)) { stallsGaps.push('invalid typed stalls record'); continue; }
+    stallsReceipts.push(...r.stallsReceipts);
+  }
   let recovery;
   try { recovery = await (await import('./test-history.mjs')).readTestHistory(ctx.root); }
   catch { recovery = {complete:false,gaps:[{detail:'artifact recovery coverage unavailable'}]}; }
   const localWorkarounds = ctx.plates?.localWorkarounds ? await ctx.plates.localWorkarounds({root:ctx.root,env:ctx.env,since:ctx.now-7*86400000,now:ctx.now}) : null;
-  return {runs:history.runs,stallsReceipts:stalls.receipts,localWorkarounds,retention,recovery,
-    gaps:[...(history.skipped?[`${history.skipped} ledger records unreadable`]:[]),...stalls.gaps,...(retention.gaps??[]),...(recovery.gaps??[]).map(g=>typeof g==='string'?g:g.detail)]};
+  return {runs:history.runs,stallsReceipts,localWorkarounds,retention,recovery,
+    gaps:[...(history.skipped?[`${history.skipped} ledger records unreadable`]:[]),...stallsGaps,...(retention.gaps??[]),...(recovery.gaps??[]).map(g=>typeof g==='string'?g:g.detail)]};
 });
 export const MEASURES = [
   {
@@ -999,7 +1020,7 @@ export const MEASURES = [
       if (off) return { na: off };
       const { parsePhase, DONE } = await roadmapModule(ctx);
       const found = [];
-      const { runs } = await readRuns(ctx.root);
+      const { runs } = await ledgerRuns(ctx);
       const unrun = [];
       // Each file on its own, not the roadmap's collect: a missing evidence file is what this measure names, where collect would stop.
       for (const file of (await notes(ctx, 'docs/phases')) ?? []) {
@@ -1361,7 +1382,7 @@ const margin = r => (r.better === 'higher' ? r.bound - r.value : r.value - r.bou
 
 /** Run every measure; never throws for a measure, which becomes `broken`. */
 export async function measure({ root, config, env = process.env, transcripts, date = today(), bounds = {}, measures = MEASURES, plates, now = Date.now(), timeEvidence }) {
-  const ctx = { root, config, env, transcripts, date, plates, now, bounds, timeEvidence, cache: new Map() };
+  const ctx = { root, config, env, transcripts, date, plates, now, bounds, timeEvidence, ledgerEpoch: 0, cache: new Map() };
   // Capture the validated immutable result before any measure launches project commands.
   if (env.PLATES_RECONCILE_REQUIRED === '1') {
     try {

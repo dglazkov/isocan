@@ -1,5 +1,5 @@
 {
-  "practice": "0.8.38",
+  "practice": "0.9.0",
   "files": {
     ".agents/skills/plates/SKILL.md": {
       "practice": "agents-md",
@@ -43,11 +43,11 @@
     },
     "docs/plates-lessons.md": {
       "practice": "lessons",
-      "sha256": "8516f0329885593d56da2b359c3e8a1bcdc5c0f09c145bebd2a4dc5f29b22a05"
+      "sha256": "74bffd7a4b2c91cf2d7b8846cdfec40cb68caf536332d879f1923aa50f64d24a"
     },
     "renovate.json": {
       "practice": "renovate",
-      "sha256": "e46373a8cd62a321f0cee3dfab16f573789b68e6179b149d8ad8775b56fcf745"
+      "sha256": "690339a11baf047d92a897a06638ec5da8b4c8114fcc2430a1ca40434e298857"
     },
     "scripts/loop.mjs": {
       "practice": "loop",
@@ -67,19 +67,23 @@
     },
     "scripts/plates/ci.mjs": {
       "practice": "night",
-      "sha256": "f971394c913bc36cee493a02521d5d7e6f4727d6b85f00a62eb39f6a73c6c1ba"
+      "sha256": "d9f757ab58acb63d2fff2386a0a499bf0f26c2e318dff79302c1571082e379de"
     },
     "scripts/plates/drain.mjs": {
       "practice": "night",
       "sha256": "7e09f5990b0369b0aea6a9f72be45d3e756a08ef2b15891563ef3316e6ef13d4"
     },
+    "scripts/plates/finding-score.mjs": {
+      "practice": "night",
+      "sha256": "2a9fe6c054198679d00fbb36a2011772192d1f5a06e7aafd3322a785b4a9f215"
+    },
     "scripts/plates/gate.mjs": {
       "practice": "night",
-      "sha256": "1f9de1a31b2d1c08b6a6e7bc58fc546f95403e2b38f5eaf3d0da5719c475c2ee"
+      "sha256": "b5c82e103e7cb984b59952629cbcab6bf27f1253f7a41a664d4d648997b69407"
     },
     "scripts/plates/hygiene-measures.mjs": {
       "practice": "night",
-      "sha256": "5911b8c23e2661156c1b4f71c17bf3b773969682046bc2bcd5db6822ca045796"
+      "sha256": "5b00b306f21a74ba845cc5c052420f9cc575fc4e3cf2ef3d99d08286a4e77937"
     },
     "scripts/plates/hygiene-proposals.mjs": {
       "practice": "night",
@@ -87,11 +91,11 @@
     },
     "scripts/plates/improve.mjs": {
       "practice": "night",
-      "sha256": "9f247df8ad5b6d29fbbe3016d3b45c461086df256d9ae619873fd0f6f3843c79"
+      "sha256": "fd5ddf2c40c20b3d41664121bf3ef465f3fadfc6acf255a34c9abcfab4f8c632"
     },
     "scripts/plates/lib.mjs": {
       "practice": "night",
-      "sha256": "2c71c6f9efa480f1533359359dbc88f44118e8f99f9f4c731106e0e607bed4c3"
+      "sha256": "032087833d7b5c9f7ae751930ee1435f6620a4cb94eb136e972cba010b2303d5"
     },
     "scripts/plates/milestones.mjs": {
       "practice": "night",
@@ -99,7 +103,7 @@
     },
     "scripts/plates/morning.mjs": {
       "practice": "night",
-      "sha256": "a66aa9d00e4109c7cd23f13513e0a528480559d80a7c561b11d316e3a7c8cd9a"
+      "sha256": "1cd9d9767dd6336b21dd8ad0b644a1a1c321ea58835803f46d0862dcba826822"
     },
     "scripts/plates/names-environment.d.mts": {
       "practice": "night",
@@ -109,13 +113,17 @@
       "practice": "night",
       "sha256": "edbbf5138d1128c2b3f852e1786808f42e5cdc833d6c36e9083c3d7738f1dee2"
     },
+    "scripts/plates/names-observation.mjs": {
+      "practice": "night",
+      "sha256": "f3b5ffcbad0aeeead12180d416eb1384d5e46db572b53ec25a01f39a5f8a1be3"
+    },
     "scripts/plates/names.mjs": {
       "practice": "night",
       "sha256": "85bd78c0d678239a9fbdb621ca16e0d961491b0a673a3642a4eb9cb343439fc0"
     },
     "scripts/plates/night-plan.mjs": {
       "practice": "night",
-      "sha256": "9d14c74e6d450e8ffc7c86ff955b1903f8f15b07a02291ba523d2f17dd81411e"
+      "sha256": "c2c6e9e0ffa5f5b5dd14c522e484a1a0b890e7c1bbe75e64b9ad5d7432ea88b3"
     },
     "scripts/plates/plain-proposal.mjs": {
       "practice": "night",
@@ -163,15 +171,15 @@
     },
     "scripts/plates/test-history.mjs": {
       "practice": "night",
-      "sha256": "2cf60a228b3534b4ca1b9e194ef493eeb054b2e076449bae2391ab6de8672d25"
+      "sha256": "181649e1c67b7b81ed21b3b5d7b0e163a30585bcfef6f172370846ba81492feb"
     },
     "scripts/plates/test-ledger.mjs": {
       "practice": "night",
-      "sha256": "429371ccdfc9ab7c3c11c09042ad5d7e7105c8f895e55baa29f4528631566422"
+      "sha256": "9dbdf50cb7fae83b0a4a9e44f491f9a97090c161b8fdc4dfc0e467137c143c4e"
     },
     "scripts/plates/time-measures.mjs": {
       "practice": "night",
-      "sha256": "912c3deac5440efcd3de459fb51e02346d6bbdb7e1ba6e62e340a416ebcc1aac"
+      "sha256": "320b5336400def08cd9573e5d829ea4706b265cc82ad3e996bfe2d7e42070c0b"
     },
     "scripts/plates/time-proposal-remeasurement.mjs": {
       "practice": "night",

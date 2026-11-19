@@ -2,7 +2,7 @@ import { environmentValue, writeName } from './names.mjs';
 // Actions usage estimates, not invoices. Zero dependencies; read-only REST via gh.
 // Job timing excludes queue time. Defaults are project weighting assumptions
 // dated 2026-10-09, not a universal GitHub price schedule.
-import { spawnSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 
 export const CI_LOGICAL_RUN_BASIS = 'all-attempts-in-window-v1';
 export const CI_WEIGHTS = Object.freeze({ linux: 1, windows: 2, macos: 10 });
@@ -35,26 +35,26 @@ export function actionsClient({ repo, env = process.env, limits = {}, request } 
     if (coverage.requests >= caps.requests) throw new Error('Actions request budget exhausted');
     coverage.requests++;
     if (request) return request(path);
-    const r = spawnSync((environmentValue('variable:KEEL_GH', env) ?? 'gh'), ['api', path], { env, encoding: 'utf8', timeout: 15000, maxBuffer: 16 * 1024 * 1024 });
-    if (r.error || r.status !== 0) throw new Error('Actions API unavailable');
-    try { return JSON.parse(r.stdout); } catch { throw new Error('Actions API returned invalid JSON'); }
+    const stdout = await new Promise((resolve, reject) => execFile((environmentValue('variable:KEEL_GH', env) ?? 'gh'), ['api', path], { env, encoding: 'utf8', timeout: 15000, maxBuffer: 16 * 1024 * 1024 },
+      (error, stdout) => error ? reject(new Error('Actions API unavailable')) : resolve(stdout)));
+    try { return JSON.parse(stdout); } catch { throw new Error('Actions API returned invalid JSON'); }
   };
-  const pages = async (path, key, kind) => {
+  const pages = async (path, key, kind, reportGap = gap) => {
     const rows = [], seen = new Set();
     for (let page = 1; page <= caps[kind]; page++) {
       let data;
       try { data = await get(`${path}${path.includes('?') ? '&' : '?'}per_page=${caps.perPage}&page=${page}`); }
-      catch (error) { gap(`${key}: ${error.message}`); return rows; }
+      catch (error) { reportGap(`${key}: ${error.message}`); return rows; }
       coverage[kind]++;
-      if (!Array.isArray(data?.[key]) || !Number.isInteger(data.total_count) || data.total_count < 0 || data[key].length > caps.perPage) { gap(`${key}: malformed page`); return rows; }
+      if (!Array.isArray(data?.[key]) || !Number.isInteger(data.total_count) || data.total_count < 0 || data[key].length > caps.perPage) { reportGap(`${key}: malformed page`); return rows; }
       for (const row of data[key]) {
-        if (!Number.isSafeInteger(row?.id) || row.id < 1) { gap(`${key}: missing identity`); continue; }
+        if (!Number.isSafeInteger(row?.id) || row.id < 1) { reportGap(`${key}: missing identity`); continue; }
         if (!seen.has(row.id)) { rows.push(row); seen.add(row.id); }
       }
       if (seen.size >= data.total_count) return rows;
-      if (data[key].length < caps.perPage) { gap(`${key}: page ended before total_count`); return rows; }
+      if (data[key].length < caps.perPage) { reportGap(`${key}: page ended before total_count`); return rows; }
     }
-    gap(`${key}: page limit reached`);
+    reportGap(`${key}: page limit reached`);
     return rows;
   };
   return { get, pages, gap, coverage, repo, caps };
@@ -111,69 +111,84 @@ export async function readCiUsage({ repo, env, config = {}, now = Date.now(), da
   let runPagesComplete = coverage.complete;
   coverage.runs = runs.length; coverage.jobs = 0; coverage.attempts = 0; coverage.excludedJobs = 0; coverage.unknownJobs = 0; coverage.unfinishedJobs = 0; coverage.queuedAttemptsWithoutJobs = 0; coverage.unfinishedWeightedMinutes = null;
   const groups = new Map(), jobIds = new Set();
-  for (const run of runs) {
-    // updated_at changes on a rerun. Only positively old, completed runs can be skipped.
-    if (run.status === 'completed' && Number.isFinite(Date.parse(run.updated_at)) && Date.parse(run.updated_at) < since) continue;
-    const path = typeof run.path === 'string' ? run.path.split('@')[0] : null;
-    if (!path || !Number.isSafeInteger(run.run_attempt) || run.run_attempt < 1) { gap('run missing workflow path or attempt count'); runPagesComplete = false; continue; }
-    const group = groups.get(path) ?? { path, name: run.name ?? path, plates: owned.has(path), platesNamed: /\/plates-[^/]+\.ya?ml$/.test(path), observedWeightedMinutes: 0, weightedMinutes: null, jobs: [], runs: [], complete: runPagesComplete };
-    groups.set(path, group);
-    let runComplete = run.status === 'completed';
-    const runGaps = coverage.failures ?? 0;
-    const logicalRows = [];
-    if (run.run_attempt > client.caps.attempts) { gap('run attempt limit reached'); group.complete = false; }
-    for (let attempt = 1; attempt <= Math.min(run.run_attempt, client.caps.attempts); attempt++) {
-      coverage.attempts++;
-      const gaps = coverage.failures ?? 0;
-      const jobs = await pages(`repos/${repo}/actions/runs/${run.id}/attempts/${attempt}/jobs`, 'jobs', 'jobPages');
-      // A successful total_count:0 response for the current queued attempt
-      // positively places it outside the completion window. Earlier attempts
-      // still need observable jobs; an empty failed read is never authoritative.
-      if (!jobs.length && (coverage.failures ?? 0) === gaps && attempt === run.run_attempt && run.status === 'queued' && run.conclusion == null) {
-        coverage.queuedAttemptsWithoutJobs++;
-        continue;
+  // Fetch at most four runs at a time. Account for them in discovery order so
+  // shared-job deduplication and report ordering do not depend on API latency.
+  // Page failures travel with their attempt, never via a concurrent global delta.
+  const eligible = runs.filter(run => !(run.status === 'completed' && Number.isFinite(Date.parse(run.updated_at)) && Date.parse(run.updated_at) < since));
+  for (let offset = 0; offset < eligible.length; offset += 4) {
+    const batch = await Promise.all(eligible.slice(offset, offset + 4).map(async run => {
+      const attempts = [];
+      if (typeof run.path !== 'string' || !run.path.split('@')[0] || !Number.isSafeInteger(run.run_attempt) || run.run_attempt < 1) return { run, attempts };
+      for (let attempt = 1; attempt <= Math.min(run.run_attempt, client.caps.attempts); attempt++) {
+        const gaps = [];
+        const jobs = await pages(`repos/${repo}/actions/runs/${run.id}/attempts/${attempt}/jobs`, 'jobs', 'jobPages', message => gaps.push(message));
+        attempts.push({ jobs, gaps });
       }
-      if ((coverage.failures ?? 0) !== gaps || !jobs.length) { group.complete = false; if (!jobs.length) gap('attempt has no observable jobs'); }
-      const observed = { id: run.id, attempt, event: run.event ?? 'unknown', weightedMinutes: 0, complete: group.complete, jobs: 0 };
-      for (const job of jobs) {
-        if (job.run_id !== run.id || !attemptMatches(job, attempt) || (run.head_sha && job.head_sha !== run.head_sha)) { gap('job run/attempt/SHA mismatch'); group.complete = observed.complete = false; coverage.unknownJobs++; continue; }
-        if (jobIds.has(job.id)) continue; // carried-forward jobs on partial reruns are charged once
-        jobIds.add(job.id); coverage.jobs++;
-        // A completion-window total excludes positively unfinished jobs. Their
-        // eventual cost is unknown, not zero; contradictory completion metadata
-        // still goes through timing validation below.
-        if (['queued', 'in_progress'].includes(job.status) && job.completed_at == null && job.conclusion == null) {
-          coverage.excludedJobs++; coverage.unfinishedJobs++;
-          observed.complete = false; // not a complete attempt for per-run means
-          runComplete = false;
+      return { run, attempts };
+    }));
+    for (const { run, attempts } of batch) {
+      const path = typeof run.path === 'string' ? run.path.split('@')[0] : null;
+      if (!path || !Number.isSafeInteger(run.run_attempt) || run.run_attempt < 1) { gap('run missing workflow path or attempt count'); runPagesComplete = false; continue; }
+      const group = groups.get(path) ?? { path, name: run.name ?? path, plates: owned.has(path), platesNamed: /\/plates-[^/]+\.ya?ml$/.test(path), observedWeightedMinutes: 0, weightedMinutes: null, jobs: [], runs: [], complete: runPagesComplete };
+      groups.set(path, group);
+      let runComplete = run.status === 'completed';
+      const runGaps = coverage.failures ?? 0;
+      const logicalRows = [];
+      if (run.run_attempt > client.caps.attempts) { gap('run attempt limit reached'); group.complete = false; }
+      for (let attempt = 1; attempt <= Math.min(run.run_attempt, client.caps.attempts); attempt++) {
+        coverage.attempts++;
+        const gaps = coverage.failures ?? 0;
+        const fetched = attempts[attempt - 1], jobs = fetched.jobs;
+        for (const message of fetched.gaps) gap(message);
+        // A successful total_count:0 response for the current queued attempt
+        // positively places it outside the completion window. Earlier attempts
+        // still need observable jobs; an empty failed read is never authoritative.
+        if (!jobs.length && (coverage.failures ?? 0) === gaps && attempt === run.run_attempt && run.status === 'queued' && run.conclusion == null) {
+          coverage.queuedAttemptsWithoutJobs++;
           continue;
         }
-        const start = Date.parse(job.started_at), end = Date.parse(job.completed_at);
-        if (job.status === 'completed' && job.conclusion === 'skipped' && ((!Number.isFinite(start) && !Number.isFinite(end)) || (Number.isFinite(start) && start === end && end <= now))) {
-          coverage.excludedJobs++;
-          // Known zero execution is an observation only with dated membership.
-          // Undated/old skips cannot create an in-window logical-run sample.
-          if (Number.isFinite(end) && end >= since) observed.jobs++;
-          continue;
+        if ((coverage.failures ?? 0) !== gaps || !jobs.length) { group.complete = false; if (!jobs.length) gap('attempt has no observable jobs'); }
+        const observed = { id: run.id, attempt, event: run.event ?? 'unknown', weightedMinutes: 0, complete: group.complete, jobs: 0 };
+        for (const job of jobs) {
+          if (job.run_id !== run.id || !attemptMatches(job, attempt) || (run.head_sha && job.head_sha !== run.head_sha)) { gap('job run/attempt/SHA mismatch'); group.complete = observed.complete = false; coverage.unknownJobs++; continue; }
+          if (jobIds.has(job.id)) continue; // carried-forward jobs on partial reruns are charged once
+          jobIds.add(job.id); coverage.jobs++;
+          // A completion-window total excludes positively unfinished jobs. Their
+          // eventual cost is unknown, not zero; contradictory completion metadata
+          // still goes through timing validation below.
+          if (['queued', 'in_progress'].includes(job.status) && job.completed_at == null && job.conclusion == null) {
+            coverage.excludedJobs++; coverage.unfinishedJobs++;
+            observed.complete = false; // not a complete attempt for per-run means
+            runComplete = false;
+            continue;
+          }
+          const start = Date.parse(job.started_at), end = Date.parse(job.completed_at);
+          if (job.status === 'completed' && job.conclusion === 'skipped' && ((!Number.isFinite(start) && !Number.isFinite(end)) || (Number.isFinite(start) && start === end && end <= now))) {
+            coverage.excludedJobs++;
+            // Known zero execution is an observation only with dated membership.
+            // Undated/old skips cannot create an in-window logical-run sample.
+            if (Number.isFinite(end) && end >= since) observed.jobs++;
+            continue;
+          }
+          if (Number.isFinite(end) && end < since) { coverage.excludedJobs++; runComplete = false; continue; }
+          if (end > now) { gap('future job completion excluded'); group.complete = observed.complete = false; coverage.unknownJobs++; continue; }
+          if (job.status !== 'completed' || !Number.isFinite(start) || !Number.isFinite(end) || end < start) { gap('job timing unavailable or unfinished'); group.complete = observed.complete = false; coverage.unknownJobs++; continue; }
+          const runner = runnerUsage(job, report.visibility, options), minutes = Math.ceil((end - start) / 60000);
+          if (runner.weight === null) { gap('unknown runner weighting'); group.complete = observed.complete = false; coverage.unknownJobs++; }
+          const weightedMinutes = runner.weight === null ? null : minutes * runner.weight;
+          group.jobs.push({ id: job.id, runId: run.id, attempt: job.run_attempt ?? attempt, conclusion: job.conclusion, startedAt: job.started_at, completedAt: job.completed_at, minutes, weightedMinutes, runner });
+          observed.jobs++; observed.weightedMinutes += weightedMinutes ?? 0;
+          group.observedWeightedMinutes += weightedMinutes ?? 0;
         }
-        if (Number.isFinite(end) && end < since) { coverage.excludedJobs++; runComplete = false; continue; }
-        if (end > now) { gap('future job completion excluded'); group.complete = observed.complete = false; coverage.unknownJobs++; continue; }
-        if (job.status !== 'completed' || !Number.isFinite(start) || !Number.isFinite(end) || end < start) { gap('job timing unavailable or unfinished'); group.complete = observed.complete = false; coverage.unknownJobs++; continue; }
-        const runner = runnerUsage(job, report.visibility, options), minutes = Math.ceil((end - start) / 60000);
-        if (runner.weight === null) { gap('unknown runner weighting'); group.complete = observed.complete = false; coverage.unknownJobs++; }
-        const weightedMinutes = runner.weight === null ? null : minutes * runner.weight;
-        group.jobs.push({ id: job.id, runId: run.id, attempt: job.run_attempt ?? attempt, conclusion: job.conclusion, startedAt: job.started_at, completedAt: job.completed_at, minutes, weightedMinutes, runner });
-        observed.jobs++; observed.weightedMinutes += weightedMinutes ?? 0;
-        group.observedWeightedMinutes += weightedMinutes ?? 0;
+        if (observed.jobs) { group.runs.push(observed); logicalRows.push(observed); }
       }
-      if (observed.jobs) { group.runs.push(observed); logicalRows.push(observed); }
+      // Completion-window coverage is distinct from a whole logical run's cost.
+      // Every non-skipped job across every attempt must contribute: unfinished
+      // or out-of-window jobs, missing pages, and invalid metadata disqualify all
+      // rows, even when the omitted attempt produced no in-window row itself.
+      runComplete &&= (coverage.failures ?? 0) === runGaps;
+      for (const observed of logicalRows) observed.runComplete = runComplete;
     }
-    // Completion-window coverage is distinct from a whole logical run's cost.
-    // Every non-skipped job across every attempt must contribute: unfinished
-    // or out-of-window jobs, missing pages, and invalid metadata disqualify all
-    // rows, even when the omitted attempt produced no in-window row itself.
-    runComplete &&= (coverage.failures ?? 0) === runGaps;
-    for (const observed of logicalRows) observed.runComplete = runComplete;
   }
   report.workflows = [...groups.values()];
   for (const group of report.workflows) {
