@@ -14,7 +14,7 @@
   "phases": {
     "shape": "projects"
   },
-  "practice": "0.8.38",
+  "practice": "0.9.0",
   "practices": [
     "base",
     "agents-md",
@@ -101,5 +101,12 @@
       ".github/workflows/plates-morning.yml",
       ".github/workflows/plates-loop.yml"
     ]
-  }
+  },
+  "migrationsSkipped": [
+    "0001-milestone-to-goal",
+    "0002-projects-run-on-their-own",
+    "0003-phases-gain-goals",
+    "0006-lived-in-kept",
+    "0007-phase-guard-reach"
+  ]
 }
