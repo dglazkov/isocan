@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "date": "2026-11-18",
+  "date": "2026-11-19",
   "shapedBy": "default",
   "readyBy": null,
   "willNotTouch": [],
@@ -19,8 +19,8 @@
       "budget": null,
       "status": "done",
       "result": {
-        "note": "10 ok, 13 outside, 18 n/a, 0 broken",
-        "link": "docs/practice/2026-11-18.md"
+        "note": "11 ok, 12 outside, 18 n/a, 0 broken",
+        "link": "docs/practice/2026-11-19.md"
       }
     },
     {
