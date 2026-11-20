@@ -19,10 +19,12 @@ import type { CanvasContents, Item } from "../src/model.ts";
 import {
   SLIDE_PROP,
   deck,
+  deckJump,
   deckStep,
   isSlide,
   readingOrder,
   slides,
+  type SlideDigit,
 } from "../src/slides.ts";
 import { slideIntent, slidePatch } from "../src/slidewrites.ts";
 
@@ -144,6 +146,78 @@ describe("flipping", () => {
 
   it("an empty canvas has nowhere to go", () => {
     expect(deckStep(canvasOf([]), "a", 1)).toBeNull();
+  });
+});
+
+describe("jumping by number (1–8 and 9, like Chrome's tabs)", () => {
+  it("1–8 jump to those slides in reading order, skipping unmarked items, and say which way", () => {
+    const ten = canvasOf([
+      item("unmarked", { x: 50, y: 0 }),
+      ...Array.from({ length: 10 }, (_, i) => item(`s${i + 1}`, { x: (i + 1) * 150, y: 0 }, asSlide)),
+    ]);
+    for (const digit of [1, 2, 3, 4, 5, 6, 7, 8] as const) {
+      expect(deckJump(ten, "s10", digit)).toEqual({
+        item: expect.objectContaining({ id: `s${digit}` }),
+        forward: false,
+      });
+    }
+    expect(deckJump(ten, "s1", 4)).toEqual({
+      item: expect.objectContaining({ id: "s4" }),
+      forward: true,
+    });
+  });
+
+  it("1–8 past the end of a shorter deck stay put rather than clamping to the last", () => {
+    const three = canvasOf([
+      item("s1", { x: 0, y: 0 }, asSlide),
+      item("s2", { x: 150, y: 0 }, asSlide),
+      item("s3", { x: 300, y: 0 }, asSlide),
+    ]);
+    for (const digit of [4, 5, 6, 7, 8] as SlideDigit[]) {
+      expect(deckJump(three, "s1", digit), String(digit)).toBeNull();
+    }
+  });
+
+  it("9 always jumps to the last slide — whether there are three, nine, or twelve", () => {
+    for (const count of [3, 9, 12]) {
+      const c = canvasOf(
+        Array.from({ length: count }, (_, i) => item(`s${i + 1}`, { x: i * 150, y: 0 }, asSlide)),
+      );
+      expect(deckJump(c, "s1", 9), `${count} slides`).toEqual({
+        item: expect.objectContaining({ id: `s${count}` }),
+        forward: true,
+      });
+    }
+  });
+
+  it("stays put when already on that slide, or on an empty canvas", () => {
+    const three = canvasOf([
+      item("s1", { x: 0, y: 0 }, asSlide),
+      item("s2", { x: 150, y: 0 }, asSlide),
+      item("s3", { x: 300, y: 0 }, asSlide),
+    ]);
+    expect(deckJump(three, "s1", 1)).toBeNull();
+    expect(deckJump(three, "s2", 2)).toBeNull();
+    expect(deckJump(three, "s3", 9)).toBeNull();
+    expect(deckJump(canvasOf([item("only", { x: 0, y: 0 }, asSlide)]), "only", 9)).toBeNull();
+    expect(deckJump(canvasOf([]), "s1", 1)).toBeNull();
+    expect(deckJump(canvasOf([]), "s1", 9)).toBeNull();
+  });
+
+  it("steps into the deck when standing on an unmarked item outside it", () => {
+    const c = canvasOf([
+      item("s1", { x: 0, y: 0 }, asSlide),
+      item("outside", { x: 150, y: 0 }),
+      item("s2", { x: 300, y: 0 }, asSlide),
+    ]);
+    expect(deckJump(c, "outside", 1)).toEqual({
+      item: expect.objectContaining({ id: "s1" }),
+      forward: true,
+    });
+    expect(deckJump(c, "outside", 9)).toEqual({
+      item: expect.objectContaining({ id: "s2" }),
+      forward: true,
+    });
   });
 });
 

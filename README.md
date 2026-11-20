@@ -586,7 +586,8 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   to Hand, Comment and More with larger primary targets.
 - **Nudging**: arrow keys move the selection a world unit at a time, `⇧` ten.
 - **The slide deck** (#87): full screen (`Enter`) is the projector — bare
-  arrows and a clicker's Page Up/Down flip from item to item, each filling
+  arrows and a clicker's Page Up/Down flip from item to item, `1`–`8` jump to
+  those slides and `9` jumps to the last one, each filling
   the window, the chrome resting while you present. Mark items as slides
   (right-click → *Make this a slide*, or `isocan slides add`) and the flip
   stops only at those, in reading order — rows top to bottom, left to right;

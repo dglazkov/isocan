@@ -128,6 +128,31 @@ describe("bare arrows flip the deck", () => {
   });
 });
 
+describe("1–8 and 9 jump straight to a slide, or the last", () => {
+  it("the cover keeps 0–9 from the canvas underneath", () => {
+    for (const key of ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]) {
+      expect(crossesCover({ key }), key).toBe(false);
+    }
+  });
+
+  it("both presentation faces ask core's deckJump and presenting's slideDigitFromKey, ignoring key repeat", () => {
+    for (const face of ["FullScreen.tsx", "Viewer.tsx"]) {
+      const text = readFileSync(fileURLToPath(new URL(`../src/components/${face}`, import.meta.url)), "utf8");
+      expect(text, face).toMatch(/import \{[^}]*\bdeckJump\b[^}]*\} from "@isocan\/core"/);
+      expect(text, face).toMatch(/import \{[^}]*\bslideDigitFromKey\b[^}]*\} from "\.\.\/lib\/presenting\.ts"/);
+      const branch = text.slice(text.indexOf("const digit = slideDigitFromKey(e);"));
+      expect(branch.slice(0, 320), `${face} repeat guard`).toContain("if (e.repeat) return;");
+      expect(branch.slice(0, 320), `${face} calls deckJump`).toContain("deckJump(");
+    }
+  });
+
+  it("is registered in the help panel", () => {
+    const entry = SHORTCUTS.find((s) => s.keys.includes("1–8") && s.keys.includes("9"));
+    expect(entry).toBeDefined();
+    expect(entry!.does).toMatch(/^Jump /);
+  });
+});
+
 /**
  * **The menu entry works on a selection**, which is how a deck is actually
  * made: ten screens in one gesture, not ten gestures. It used to be
