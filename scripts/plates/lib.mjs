@@ -88,7 +88,7 @@ import { environmentValue, markerHeader, markerLines, remoteLabelReceipt, reposi
 //   main(meta, fn)           run a script: --json or text, and its exit code
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
-import { readFile, readdir, lstat, readlink } from 'node:fs/promises';
+import { readFile, readdir, lstat, readlink, open } from 'node:fs/promises';
 import { existsSync, realpathSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -1291,13 +1291,14 @@ export const CLIMB_NIGHT = '.plates/climb/night.json';
 export function climbLine(config, night) {
   if (config?.climb === undefined || night === undefined || night === null) return null;
   if (typeof night !== 'object' || !Array.isArray(night.tried) || typeof night.job !== 'string' || typeof night.date !== 'string') return `Climb: the newest record (${CLIMB_NIGHT}) is unreadable; see the last plates-climb run.`;
-  if (night.admission?.state === 'blocked') return `Climb: ${night.date} ${night.job}: blocked before model launch; ${night.admission.reason}; ${night.admission.nextAction}`;
+  const target = typeof night.target?.file === 'string' ? ` (${night.target.file.replace(/[\r\n|]/g, " ")})` : '';
+  if (night.admission?.state === 'blocked') return `Climb: ${night.date} ${night.job}${target}: blocked before model launch; ${night.admission.reason}; ${night.admission.nextAction}`;
   const kept = night.tried.filter(a => a?.verdict === 'keep').length;
-  if (kept) return `Climb: ${night.date} ${night.job}: kept ${kept}, ${Number.isInteger(night.pr) ? `PR #${night.pr}` : `no PR opened${night.gate ? '' : ' (the guard did not pass)'}`}.`;
+  if (kept) return `Climb: ${night.date} ${night.job}${target}: kept ${kept}, ${Number.isInteger(night.pr) ? `PR #${night.pr}` : `no PR opened${night.gate ? '' : ' (the guard did not pass)'}`}.`;
   const none = night.job === 'hygiene' ? 'none proven steady' : `none beat the noise${Number.isFinite(night.margin) ? ` (margin ${Math.round(night.margin * 100)}%)` : ''}`;
   const why = night.tried.length ? `${night.tried.length} tried, ${none}` : 'no measured attempts recorded';
   const unsettled = night.settlements?.length ? '; incomplete: unmeasured work recorded at settlement' : '';
-  return `Climb: ${night.date} ${night.job}: kept nothing (${why}${unsettled}).`;
+  return `Climb: ${night.date} ${night.job}${target}: kept nothing (${why}${unsettled}).`;
 }
 
 /** A climb job's PR branch prefix. */
@@ -1478,13 +1479,18 @@ export function stepUse(jobs, { step, check, minutes }) {
   for (const job of Array.isArray(jobs) ? jobs : []) {
     const steps = Array.isArray(job?.steps) ? job.steps : [];
     if (check && steps.some(s => s?.name === check && s.conclusion === 'failure')) return null;
+    // Every one of the pass's agent steps that ran, summed: after a provider could not start, its fallback (same name)
+    // ran in what was left of the one budget, so the operation used both, measured against that original budget.
+    let seconds = 0, ran = false, stopped = false;
     for (const s of steps) {
       if (s?.name !== step || s.conclusion === 'skipped') continue;
       const from = stamp(s, 'started_at', 'startedAt'), to = stamp(s, 'completed_at', 'completedAt');
       if (!Number.isFinite(from) || !Number.isFinite(to) || to < from) continue;
-      const seconds = (to - from) / 1000;
-      return { seconds, ranOut: s.conclusion === 'cancelled' || s.conclusion === 'timed_out' || seconds >= (minutes - 1) * 60 };
+      seconds += (to - from) / 1000;
+      ran = true;
+      if (s.conclusion === 'cancelled' || s.conclusion === 'timed_out') stopped = true;
     }
+    if (ran) return { seconds, ranOut: stopped || seconds >= (minutes - 1) * 60 };
   }
   return null;
 }
@@ -2219,7 +2225,13 @@ export function gateEnv(env, config) {
   // Both spellings belong to climb (phase 47); leaving the legacy alias lets
   // child compatibility recreate the override and redirect a gate's Git calls.
   const base = Object.fromEntries(Object.entries(env).filter(([k]) => !k.startsWith('NODE_TEST_') && !['PLATES_AGENT_GIT', 'KEEL_AGENT_GIT'].includes(k)));
-  return { ...base, ...(config?.env ?? {}) };
+  const result = { ...base, ...(config?.env ?? {}) };
+  // Hosted measures need GitHub reads, but dependency/build/gate children do not.
+  // Strip after config overlay so a configured environment cannot restore them.
+  if (env.GITHUB_ACTIONS === 'true') {
+    for (const key of ['GH_TOKEN', 'GITHUB_TOKEN', 'STITCH_API_KEY', 'VERCEL_TOKEN', 'VERCEL_API_TOKEN']) delete result[key];
+  }
+  return result;
 }
 
 // ---- running a script --------------------------------------------------------
@@ -2591,6 +2603,113 @@ export function crossReviewerProblems(config, { agents = AGENTS } = {}) {
   return out;
 }
 
+// ---- did the agent run? (one implementation: climb.mjs and cross-review.mjs import it) ----
+
+/** The most execution evidence read: past it, execution cannot be verified. */
+export const EVIDENCE_BYTES = 8 * 1024 * 1024;
+export const OVERSIZED_EVIDENCE = 'blocked: execution evidence exceeds the 8 MiB limit; execution cannot be verified. Nothing is judged or pushed.';
+
+/**
+ * A provider's execution file, read within EVIDENCE_BYTES even if it grows while it is
+ * read: { text, evidence } with evidence missing, empty, complete, oversized (no text:
+ * unavailable, never success) or unreadable (the caller says so in its own error).
+ */
+export async function readAgentEvidence(file) {
+  if (!file) return { text: null, evidence: 'missing' };
+  let handle;
+  try {
+    handle = await open(file, 'r');
+    const buffer = Buffer.alloc(EVIDENCE_BYTES + 1);
+    let offset = 0;
+    while (offset < buffer.length) {
+      const { bytesRead } = await handle.read(buffer, offset, buffer.length - offset, offset);
+      if (bytesRead === 0) break;
+      offset += bytesRead;
+    }
+    if (offset === buffer.length) return { text: null, evidence: 'oversized' };
+    const text = buffer.subarray(0, offset).toString('utf8');
+    return { text, evidence: text.trim() ? 'complete' : 'empty' };
+  } catch (e) { return { text: null, evidence: e?.code === 'ENOENT' ? 'missing' : 'unreadable' }; }
+  finally { await handle?.close(); }
+}
+
+/** The last `"type": "result"` message of claude-code-action's execution file (a JSON array, or one JSON per line), or null. */
+export function lastResult(text) {
+  if (typeof text !== 'string' || !text.trim()) return null;
+  let msgs = null;
+  try { const v = JSON.parse(text); msgs = Array.isArray(v) ? v : [v]; }
+  catch { msgs = text.split('\n').map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean); }
+  return msgs.filter(m => m && typeof m === 'object' && m.type === 'result').at(-1) ?? null;
+}
+
+/** Claude's result from read evidence: complete text with no valid result is no-valid-result, never success. */
+export function claudeEvidence({ text, evidence }) {
+  const result = lastResult(text);
+  return { result, evidence: evidence === 'complete' && typeof result?.is_error !== 'boolean' ? 'no-valid-result' : evidence };
+}
+
+/** The fields of a result that are kept in a verdict, each validated; null when there is none. */
+export function agentResult(result) {
+  return result ? { is_error: Boolean(result.is_error), num_turns: Number.isSafeInteger(result.num_turns) ? result.num_turns : null, duration_ms: Number.isFinite(result.duration_ms) ? result.duration_ms : null, subtype: ['success', 'error_max_turns', 'error_during_execution'].includes(result.subtype) ? result.subtype : null } : null;
+}
+
+/**
+ * Whether the agent step did its work, pure: { ok, line }. Red (ok: false)
+ * when the step failed, or its result is an error, before the budget ran out:
+ * an agent that never started is not a quiet night (lesson 29). Running out
+ * the budget or turns still requires a valid result (and, when the caller
+ * passes `denials`, none recorded: climb's builder blocks on them).
+ * A timeout with missing/invalid evidence is blocked, even if work may have run.
+ * Ran out means a failed step past the larger of the budget less a minute and
+ * nine tenths of it (and past 0 s): the slack never swallows a short budget,
+ * so a failure at the start of a one-minute box is red (Codex on duo#83).
+ * The provider's raw error text is never in the line: only its cause.
+ */
+export function agentVerdict({ outcome, result, elapsedSec, minutes, evidence, denials = null }) {
+  const secs = r => `${Number.isFinite(r) && r >= 0 ? Math.round(r / 1000) : '?'} s`;
+  if (denials?.count) return { ok: false, state: 'blocked', denials, line: `blocked: the agent recorded ${denials.count} permission denials; nothing is judged or pushed` };
+  const budget = minutes * 60;
+  if (result && typeof result.is_error === 'boolean' && outcome !== 'success' && Number.isFinite(elapsedSec) && Number.isFinite(budget) && elapsedSec > 0 && elapsedSec >= Math.max(budget - 60, budget * 0.9)) return { ok: true, timedOut: true, line: `the agent ran out its budget (${minutes} min, ${Math.round(elapsedSec)} s elapsed): what it kept is judged` };
+  if (typeof result?.is_error === 'boolean' && result?.subtype === 'error_max_turns') return { ok: true, line: `the agent ran out its turns (${Number.isSafeInteger(result.num_turns) ? result.num_turns : '?'}) in ${secs(result.duration_ms)}: what it kept is judged` };
+  if (outcome === 'success' && result?.is_error === false) return { ok: true, line: `the agent ran: ${Number.isSafeInteger(result.num_turns) ? result.num_turns : '?'} turns in ${secs(result.duration_ms)}` };
+  if (result && typeof result.is_error === 'boolean') {
+    const turns = Number.isSafeInteger(result.num_turns) && result.num_turns >= 0 ? result.num_turns : 0;
+    const head = turns <= 1 ? 'Claude did not start' : 'Claude stopped with an error';
+    const said = errorText(result);
+    return { ok: false, line: `${head}: is_error after ${turns} turn${turns === 1 ? '' : 's'} in ${secs(result.duration_ms)}${['success', 'error_max_turns', 'error_during_execution'].includes(result.subtype) ? ` (${result.subtype})` : ''}, before its ${minutes}-minute budget; ${errorCause(said)}. Nothing is judged or pushed.` };
+  }
+  const unavailable = evidence === 'missing' ? 'is missing' : evidence === 'empty' ? 'is empty' : 'has no valid result';
+  return { ok: false, state: 'blocked', line: `blocked: Claude execution evidence ${unavailable}; the step ended ${outcome || 'without an outcome'} after ${Number.isFinite(elapsedSec) ? `${Math.round(elapsedSec)} s` : 'an unknown time'} (budget ${minutes} min). Execution cannot be verified, including at timeout. Nothing is judged or pushed.` };
+}
+
+/**
+ * The error text of a failed result, and only that: its `result` field (and an
+ * `error` or `message` field), one line, at most ERROR_CHARS. Never the
+ * session's messages: plates's logs are public.
+ */
+export const ERROR_CHARS = 300;
+export function errorText(result) {
+  const pick = v => (typeof v === 'string' ? v : v && typeof v === 'object' && typeof v.message === 'string' ? v.message : null);
+  // The SDK's error result (error_during_execution) carries its text in `errors: string[]`: read a bounded few of them too.
+  const errors = Array.isArray(result?.errors) ? result.errors.slice(0, 8).map(pick) : [];
+  const parts = [pick(result?.result), pick(result?.error), pick(result?.message), ...errors].filter(x => x && x.trim());
+  const text = [...new Set(parts.map(x => x.replace(/\s+/g, ' ').trim()))].join(' | ');
+  return text.length > ERROR_CHARS ? `${text.slice(0, ERROR_CHARS - 1)}…` : text;
+}
+
+/**
+ * Which cause the error text names (startFailureKind), so the owner knows what to do:
+ * credit (top up), a rate limit (wait), the secret (rotate), the model, or (unnamed) both to check.
+ */
+export function errorCause(text) {
+  const kind = startFailureKind(text);
+  if (kind === 'credit') return 'its credit, billing or quota ran out: top up the account behind CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY (the secret itself was accepted)';
+  if (kind === 'rate') return 'it was rate-limited or overloaded at the start: wait, or raise the account\'s rate limit';
+  if (kind === 'auth') return 'the secret was refused: check CLAUDE_CODE_OAUTH_TOKEN (claude setup-token) or ANTHROPIC_API_KEY';
+  if (kind === 'model') return 'the model was refused: check the model the action asks for (none is pinned here; the action\'s default)';
+  return 'check the secret / model';
+}
+
 /**
  * Whether a Codex agent step did its work, pure: { ok, line }. codex-action
  * writes no execution log plates can read, so its outcome and its final message
@@ -2609,6 +2728,127 @@ export function codexVerdict({ outcome, message, elapsedSec, minutes }) {
   const check = 'check OPENAI_API_KEY, the model, and that the run\'s actor has write access (codex-action refuses anyone else)';
   if (outcome === 'success') return { ok: false, line: `Codex did not start: the agent step succeeded after ${took} with no final message, before its ${minutes}-minute budget; ${check}. Nothing is judged or posted.` };
   return { ok: false, line: `Codex ${said ? 'stopped with an error' : 'did not start'}: the agent step ended ${outcome || 'without an outcome'} after ${took}, before its ${minutes}-minute budget, ${said ? 'with a final message' : 'with no final message'}; ${check}. Nothing is judged or posted.` };
+}
+
+// ---- a provider that could not start, and who runs instead ------------------------
+//
+// The owner's rule (2026-11-08): when a provider cannot run because its credit is low or
+// its secret is refused, another listed provider with its secret runs the job instead
+// of failing it. One classifier and one choice, shared by every agent job.
+
+/**
+ * Why a provider's error text says it refused to start, pure: 'credit' (its credit,
+ * billing or quota: top it up), 'rate' (a rate limit or an overload: wait, or raise
+ * it), 'auth' (the secret itself was refused: rotate it), 'model' (the model was
+ * refused), or null (none of these: a real error, which another provider would not
+ * fix). Credit before auth: a billing refusal often says 401 or 403 as well, and the
+ * owner's fix is a top-up, not a new secret.
+ */
+export function startFailureKind(text) {
+  const t = String(text ?? '');
+  if (/credit[ _-]?balance|insufficient[ _-]?(?:quota|credits?|funds)|\bquota\b|billing|payment[ _-]?required|\b402\b|out of credits?|usage[ _-]?limit|spend(?:ing)?[ _-]?limit/i.test(t)) return 'credit';
+  if (/\b429\b|rate[ _-]?limit|too many requests|overloaded|\b529\b/i.test(t)) return 'rate';
+  if (/\b(?:401|403)\b|auth|token|credential|api[ _-]?key|oauth|unauthori[sz]ed|forbidden|permission|login/i.test(t)) return 'auth';
+  if (/\bmodel\b|not[ _]found|\b404\b/i.test(t)) return 'model';
+  return null;
+}
+
+/** What each start failure means for the owner: what happened, and what to do. */
+export const START_FAILURES = Object.freeze({
+  credit: Object.freeze({ said: 'its credit, billing or quota ran out', fix: 'top up its account; the secret itself was accepted' }),
+  rate: Object.freeze({ said: 'it was rate-limited or overloaded at the start', fix: 'wait, or raise its rate limit' }),
+  auth: Object.freeze({ said: 'its secret was refused', fix: 'rotate the secret' }),
+  unread: Object.freeze({ said: 'its step ended at once, and nothing plates can read says why', fix: 'check its secret and its credit' }),
+});
+
+/**
+ * Whether an agent step could not start, and why, pure: { kind, said, fix } or null.
+ * Only a start failure counts, never a real error: Claude's result is_error within its
+ * first turn and its text names credit, a rate limit or the secret (errorText's
+ * `text`), or a failed step with no result at all; Codex's step ended with no final
+ * message (codex-action writes nothing else plates can read, so its kind is unread).
+ * A run past its budget, out of its turns, stopped after it started, refusing the
+ * model (the next provider has its own; the owner's fix is the config) or recording
+ * a permission denial (a block another provider must not bypass) is null.
+ */
+export function startFailure({ agent, outcome, result = null, text = '', message = null, elapsedSec, minutes }) {
+  const budget = minutes * 60;
+  if (Number.isFinite(elapsedSec) && Number.isFinite(budget) && elapsedSec > 0 && elapsedSec >= Math.max(budget - 60, budget * 0.9)) return null;
+  const of = kind => ({ kind, ...START_FAILURES[kind] });
+  if (agent === 'codex') return String(message ?? '').trim() ? null : of('unread');
+  if (!result) return outcome === 'success' ? null : of('unread');
+  // A recorded permission denial blocks, never hands over: another provider would bypass it.
+  if ((Array.isArray(result.permission_denials) && result.permission_denials.length) || Number(result.permission_denials_count) > 0) return null;
+  if (!result.is_error || Number(result.num_turns ?? 0) > 1 || result.subtype === 'error_max_turns') return null;
+  if (!String(text ?? '').trim()) return of('unread');
+  const kind = startFailureKind(text);
+  return kind && kind !== 'model' ? of(kind) : null;
+}
+
+/** AGY requires positive pre-work failure evidence; legacy unread fallback is not proof. */
+export function reviewStartFailure(args) {
+  if (args.outcome !== 'failure' || !Number.isFinite(args.elapsedSec) || args.elapsedSec < 0) return null;
+  if (typeof args.raw !== 'string' || Buffer.byteLength(args.raw) > EVIDENCE_BYTES) return null;
+  let events;
+  try { const v = JSON.parse(args.raw); events = Array.isArray(v) ? v : [v]; }
+  catch { try { events = String(args.raw).trim().split('\n').map(l => JSON.parse(l)); } catch { return null; } }
+  if (!events.length || events.at(-1)?.type !== 'result' || events.filter(e => e?.type === 'result').length !== 1
+    || events.some(e => e?.type !== 'result' && !(e?.type === 'system' && e.subtype === 'init'))) return null;
+  // Codex action exposes only a final message, not a trustworthy pre-work receipt.
+  if (args.agent !== 'claude' || !args.result || args.result.is_error !== true || !Number.isInteger(args.result.num_turns) || args.result.num_turns < 0 || args.result.num_turns > 1) return null;
+  // Admission reads all bounded evidence, including init and nested diagnostics.
+  // errorText is display-only: its character/error-count limits can hide a denial.
+  const pending = [...events];
+  while (pending.length) {
+    const value = pending.pop();
+    if (typeof value === 'string') {
+      if (/permission[\s_-]*den(?:ied|ial)|\bdenied\b|\bdeny\b|sandbox|approval|not[\s_-]+allowed/i.test(value)) return null;
+    } else if (value && typeof value === 'object') {
+      for (const [key, item] of Object.entries(value)) {
+        // Only explicit empty/zero/false denial fields are harmless. Unknown
+        // structured forms fail closed rather than being coerced to no denial.
+        if (/denial|denied/i.test(key) && item !== false && item !== 0 && !(Array.isArray(item) && item.length === 0)) return null;
+        pending.push(item);
+      }
+    }
+  }
+  const failure = startFailure(args);
+  return failure && failure.kind !== 'unread' ? failure : null;
+}
+
+/** The fewest whole minutes worth handing to a fallback: less than this left and the job stays red with its provider. */
+export const FALLBACK_MIN_MINUTES = 2;
+
+/**
+ * How many whole minutes a fallback gets, pure: what is left of the first provider's
+ * budget (the handoff keeps the original deadline, never a fresh budget), or null when
+ * fewer than FALLBACK_MIN_MINUTES are left or the time already spent is unknown.
+ */
+export function fallbackMinutes({ minutes, elapsedSec }) {
+  if (!Number.isFinite(minutes) || minutes <= 0 || !Number.isFinite(elapsedSec) || elapsedSec < 0) return null;
+  const left = Math.floor(minutes - elapsedSec / 60);
+  return left >= FALLBACK_MIN_MINUTES ? left : null;
+}
+
+/**
+ * Who runs a job instead when the providers in `tried` could not start, pure: the
+ * first provider `order` lists ("agents" order) that does `pass`, was not tried and
+ * has its secret (`has`, when given), the job's own providers (`own`: the author of
+ * the PR a review reads) last; null when none is left.
+ */
+export function fallbackAgent({ order = [], tried = [], has, own = [], pass, agents = AGENTS }) {
+  const able = order.filter(n => agents[n]?.passes.includes(pass) && !tried.includes(n) && (!has || has[n] !== false));
+  return able.find(n => !own.includes(n)) ?? able[0] ?? null;
+}
+
+/**
+ * The one line a fallback is said in, naming the kind so the owner knows to top up or rotate:
+ * 'Claude could not start: its credit, billing or quota ran out ("Credit balance is too low"); reviewed by Codex instead. For Claude: top up its account; the secret itself was accepted.'
+ */
+export function fallbackLine({ from, to, failure, text = '', doing = 'run', agents = AGENTS }) {
+  const said = String(text ?? '').replace(/\s+/g, ' ').trim().slice(0, 160);
+  const name = agents[from]?.name ?? from;
+  return `${name} could not start: ${failure.said}${said ? ` ("${said}")` : ''}; ${doing} by ${agents[to]?.name ?? to} instead. For ${name}: ${failure.fix}.`;
 }
 
 

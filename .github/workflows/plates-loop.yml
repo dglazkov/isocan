@@ -60,8 +60,8 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
+  pull-requests: read
   # Read-only: the gate step reuses CI's result for an unchanged commit.
   actions: read
 
@@ -69,27 +69,29 @@ jobs:
   loop:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    env:
-      GH_TOKEN: ${{ github.token }}
-      STITCH_API_KEY: ${{ secrets.STITCH_API_KEY }}
-      # No base URL override: the CLI's default endpoint; the first real cycle confirms it.
+    outputs:
+      transfer: ${{ steps.transfer.outputs.ready }}
+      # The producer's own attempt: rerunning only publish keeps this value.
+      publication: plates-loop-publication-${{ github.run_attempt }}
+      head: ${{ steps.prepare.outputs.head }}
+      day: ${{ steps.prepare.outputs.day }}
+      gate: ${{ steps.gate.outputs.gate }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v7
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
 
       - name: Configured?
         id: configured
+        env:
+          STITCH_CONFIGURED: ${{ secrets.STITCH_API_KEY != '' }}
         run: |
-          if [ -z "$STITCH_API_KEY" ]; then
-            echo "::notice::Skipped: add the STITCH_API_KEY secret to run the nightly Loop pull."
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-          fi
+          echo "ready=$STITCH_CONFIGURED" >> "$GITHUB_OUTPUT"
+          if [ "$STITCH_CONFIGURED" != true ]; then echo "::notice::Skipped: add the STITCH_API_KEY secret to run the nightly Loop pull."; fi
 
       # The project's install, read from .plates/plates.json at run time (so a
       # config change never needs a re-render): `setup` when it has one, else
@@ -97,8 +99,8 @@ jobs:
       # (scripts/plates/improve.mjs applies it to the gate too), so a gate that
       # must not sync or push is told so before anything runs.
       - name: Read the config
-        id: config
         if: steps.configured.outputs.ready == 'true'
+        id: config
         run: |
           node -e '
             const fs = require("fs");
@@ -134,10 +136,10 @@ jobs:
         if: steps.configured.outputs.ready == 'true'
         # setupToken (a secret's name in .plates/plates.json) becomes GH_TOKEN here
         # and in no other step, so setup can clone a private repo with gh
-        # (ledger's data). Absent or unset, the job's own token. Never echoed.
+        # (private data). Absent or unset, no token. Never echoed.
         env:
           SETUP: ${{ steps.config.outputs.setup }}
-          GH_TOKEN: ${{ secrets[steps.config.outputs.setup_token] || github.token }}
+          GH_TOKEN: ${{ secrets[steps.config.outputs.setup_token] || '' }}
         run: |
           if [ -n "$SETUP" ]; then
             echo "setup (.plates/plates.json): $SETUP"
@@ -146,14 +148,11 @@ jobs:
             npm ci
           fi
 
-      # The official CLI, from npm. Pinned to major 0: 0.x is what this script
-      # was checked against (0.11.0), and a 1.0 may rename verbs, so a nightly
-      # never moves to it unseen. Loop is experimental, so even a 0.x minor can
-      # change it; a pull that breaks is red, and GitHub emails.
+      # Exact previously checked CLI release; installation receives no provider key.
       - name: Install the stitch CLI
         if: steps.configured.outputs.ready == 'true'
         run: |
-          npm install -g @google/stitch@0
+          npm install -g @google/stitch@0.11.0 --ignore-scripts
           stitch --version
 
       # Loop is off in a fresh CLI until it is switched on, per runner (isocan's
@@ -166,7 +165,15 @@ jobs:
       - name: Pull Loop's insights
         id: insights
         if: steps.configured.outputs.ready == 'true'
-        run: node scripts/loop.mjs pull
+        env:
+          STITCH_API_KEY: ${{ secrets.STITCH_API_KEY }}
+        run: |
+          if [ -z "$STITCH_API_KEY" ]; then
+            echo "::notice::Skipped: add the STITCH_API_KEY secret to run the nightly Loop pull."
+            exit 0
+          fi
+          node scripts/loop.mjs pull
+          echo "ready=true" >> "$GITHUB_OUTPUT"
 
       # The project's check through the night's scripts/plates/gate.mjs when it
       # is here: a pull that changed nothing leaves the default branch's
@@ -174,9 +181,13 @@ jobs:
       # a pull that changed findings is a dirty tree, never reused, so it runs.
       - name: Gate
         id: gate
-        if: steps.configured.outputs.ready == 'true'
+        if: steps.insights.outputs.ready == 'true'
+        # gate.mjs reads an exact CI result with this read-only token and runs
+        # the check without it; a project check (no gate.mjs) never sees it.
+        env:
+          GATE_TOKEN: ${{ github.token }}
         run: |
-          check() { if [ -f scripts/plates/gate.mjs ]; then node scripts/plates/gate.mjs; else npm test && npm run typecheck && node --test tests/loop.test.mjs; fi; }
+          check() { if [ -f scripts/plates/gate.mjs ]; then GH_TOKEN="$GATE_TOKEN" env -u GATE_TOKEN node scripts/plates/gate.mjs; else (unset GATE_TOKEN; npm test && npm run typecheck && node --test tests/loop.test.mjs); fi; }
           if node scripts/loop.mjs render --check && check; then
             echo "gate=ok" >> "$GITHUB_OUTPUT"
           else
@@ -186,8 +197,9 @@ jobs:
       # Porcelain, never `git diff --quiet`: a finding filed for the first time
       # is not in the index. The push names its own branch. PATHS is every file
       # a pull writes, afterRender's included, so the PR is the gated tree.
-      - name: Open the pull request
-        if: steps.configured.outputs.ready == 'true'
+      - name: Prepare the pull request
+        id: prepare
+        if: steps.insights.outputs.ready == 'true'
         env:
           BASE: ${{ github.event.repository.default_branch }}
           PATHS: ${{ steps.config.outputs.paths }}
@@ -206,7 +218,100 @@ jobs:
           # shellcheck disable=SC2086
           git add -- $PATHS
           git commit -q -m "Loop: findings pulled $DAY"
-          git push --force origin "HEAD:refs/heads/plates-loop/$DAY"
+          git bundle create "$RUNNER_TEMP/loop.bundle" "refs/heads/$BRANCH" "^$GITHUB_SHA"
+          echo "day=$DAY" >> "$GITHUB_OUTPUT"
+          echo "head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Keep publication data
+        id: transfer
+        if: steps.insights.outputs.ready == 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/publication"
+          if [ -f "$RUNNER_TEMP/loop.bundle" ]; then cp "$RUNNER_TEMP/loop.bundle" "$RUNNER_TEMP/publication/loop.bundle"; fi
+          echo ready > "$RUNNER_TEMP/publication/ready"
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: steps.transfer.outputs.ready == 'true'
+        with:
+          name: plates-loop-publication-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/publication/
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Validation verdict
+        id: validation
+        if: always() && steps.insights.outputs.ready == 'true'
+        env:
+          GATE: ${{ steps.gate.outputs.gate }}
+        run: |
+          if [ "$GATE" != ok ]; then
+            echo "::error::The gate did not pass on the pulled findings (gate: ${GATE:-not run}); the PR is left for a person."
+            exit 1
+          fi
+
+      # Keep collection and validation independent in the run summary. A pull
+      # can succeed while the build fails; neither implies accepted findings.
+      - name: Collection and validation summary
+        if: always()
+        env:
+          COLLECTION: ${{ steps.insights.outcome }}
+          VALIDATION: ${{ steps.gate.outputs.gate }}
+        run: |
+          {
+            echo '## Loop: collection and validation'
+            echo '| Stage | Result |'
+            echo '| --- | --- |'
+            echo "| Getting insights | ${COLLECTION:-not run} |"
+            echo "| Project validation | ${VALIDATION:-not run} |"
+            echo ''
+            echo 'Collection retries only recognized transient read failures, at most twice. Validation is never retried automatically. A fetched finding is not an accepted or verified fix.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  publish:
+    needs: loop
+    if: always() && needs.loop.outputs.transfer == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: read
+    steps:
+      # Trusted source only: candidate commits are fetched as objects, never checked out.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.loop.outputs.publication }}
+          path: ${{ runner.temp }}/publication
+      - name: Restore publication data
+        run: |
+          for file in loop.bundle; do
+            if [ -f "$RUNNER_TEMP/publication/$file" ]; then cp "$RUNNER_TEMP/publication/$file" "$RUNNER_TEMP/$file"; fi
+          done
+      - name: Open the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE: ${{ github.event.repository.default_branch }}
+          HEAD: ${{ needs.loop.outputs.head }}
+          DAY: ${{ needs.loop.outputs.day }}
+        run: |
+          BRANCH="plates-loop/$DAY"
+          [ -n "$HEAD" ] || exit 0
+          git fetch -q "$RUNNER_TEMP/loop.bundle" "refs/heads/$BRANCH"
+          head=$(git rev-parse FETCH_HEAD)
+          if [ "$head" != "$HEAD" ] || [ "$(git rev-parse "$head^")" != "$GITHUB_SHA" ]; then
+            echo "::error::Publication commit or source revision mismatch; nothing is pushed."
+            exit 1
+          fi
+          # The working tree remains the trusted workflow revision.
+          gh auth setup-git
+          git push --force origin "$head:refs/heads/plates-loop/$DAY"
           if ! gh pr list --state open --head "$BRANCH" --json number --jq '.[0].number' | grep -q .; then
             cat > "$RUNNER_TEMP/loop-body.md" <<'PLATES_BODY'
           Stitch Loop insights, pulled as untriaged findings in docs/loop/ and generated views. No acceptance or architecture decision is made. An agent proposes; a person decides.
@@ -234,9 +339,9 @@ jobs:
       # merge, closed as superseded (branch kept) otherwise. The newest merges
       # only after the gate passed on this tree.
       - name: Drain the queue
-        if: steps.configured.outputs.ready == 'true'
         env:
-          GATE: ${{ steps.gate.outputs.gate }}
+          GH_TOKEN: ${{ github.token }}
+          GATE: ${{ needs.loop.outputs.gate }}
         run: |
           if [ ! -f scripts/plates/drain.mjs ]; then
             echo "::notice::No drain: scripts/plates/drain.mjs comes with plates's night practice; switch it on to keep the keel-loop/ queue at one PR."
@@ -247,32 +352,3 @@ jobs:
           else
             node scripts/plates/drain.mjs plates-loop/ --yes
           fi
-
-      - name: Validation verdict
-        id: validation
-        if: always() && steps.insights.outcome == 'success'
-        env:
-          GATE: ${{ steps.gate.outputs.gate }}
-        run: |
-          if [ "$GATE" != ok ]; then
-            echo "::error::The gate did not pass on the pulled findings (gate: ${GATE:-not run}); the PR is left for a person."
-            exit 1
-          fi
-
-      # Keep collection and validation independent in the run summary. A pull
-      # can succeed while the build fails; neither implies accepted findings.
-      - name: Collection and validation summary
-        if: always()
-        env:
-          COLLECTION: ${{ steps.insights.outcome }}
-          VALIDATION: ${{ steps.gate.outputs.gate }}
-        run: |
-          {
-            echo '## Loop: collection and validation'
-            echo '| Stage | Result |'
-            echo '| --- | --- |'
-            echo "| Getting insights | ${COLLECTION:-not run} |"
-            echo "| Project validation | ${VALIDATION:-not run} |"
-            echo ''
-            echo 'Collection retries only recognized transient read failures, at most twice. Validation is never retried automatically. A fetched finding is not an accepted or verified fix.'
-          } >> "$GITHUB_STEP_SUMMARY"

@@ -14,7 +14,7 @@ Run by `scripts/persona-run.mjs` at `773cff2`. **Nothing was changed.**
 
 | Finding | Outcome |
 | --- | --- |
-| bytes past the last size somebody agreed to is 10793, past 0 of 734500 | unanswered |
+| bytes past the last size somebody agreed to is 10793, past 0 of 734500 | accepted — 18 Nov: shrank the entry 745,293 → 744,323 bytes by loading release notes on demand, then set CEILING to 749,400 (measured size + 5,000, rounded up); [measurement and reason](../changelog/2026-11-18.md) |
 
 `unanswered` until somebody writes `accepted` or `rejected`. **After 3 days
 an unanswered row fails `npm test`** — the queue can fail, so a correct report

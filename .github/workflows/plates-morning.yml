@@ -112,8 +112,8 @@ jobs:
       branch: ${{ steps.origin.outputs.branch }}
       origin: ${{ steps.origin.outputs.origin }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
       - name: Validate observation source
@@ -132,7 +132,7 @@ jobs:
           '
       - name: Check out the exact observation source
         if: github.event_name == 'workflow_dispatch' && inputs.names_evidence == true
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: dalmaer/plates
           ref: ${{ inputs.names_source_sha }}
@@ -212,8 +212,8 @@ jobs:
       assignee: ${{ steps.decide.outputs.assignee }}
       plan: ${{ steps.decide.outputs.plan }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
       - name: Is the night over?
@@ -246,10 +246,10 @@ jobs:
       finalization: ${{ steps.names_transfer.outputs.finalization }}
       final_pr: ${{ steps.names_transfer.outputs.final_pr }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
       - name: Validate observation source
@@ -268,7 +268,7 @@ jobs:
           '
       - name: Check out the exact observation source
         if: github.event_name == 'workflow_dispatch' && inputs.names_evidence == true
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: dalmaer/plates
           ref: ${{ inputs.names_source_sha }}
@@ -453,8 +453,8 @@ jobs:
     outputs:
       brief: ${{ steps.names_transfer.outputs.brief }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
       - name: Validate observation source
@@ -473,7 +473,7 @@ jobs:
           '
       - name: Check out the exact observation source
         if: github.event_name == 'workflow_dispatch' && inputs.names_evidence == true
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: dalmaer/plates
           ref: ${{ inputs.names_source_sha }}
@@ -572,8 +572,8 @@ jobs:
       NAMES_EVIDENCE: ${{ github.event_name == 'workflow_dispatch' && inputs.names_evidence == true }}
       DAY: ${{ needs.decide.outputs.day }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
       # The canvas set for nightly publishing (plates canvas night's own
@@ -684,7 +684,7 @@ jobs:
 
       - name: Keep the canvas journal
         if: always() && steps.canvas.outputs.enabled == 'true'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: plates-canvas-card-${{ github.run_attempt }}
           path: ${{ runner.temp }}/plates-canvas-card/
@@ -705,8 +705,8 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
       - name: Validate observation source
@@ -725,7 +725,7 @@ jobs:
           '
       - name: Check out the exact observation source
         if: github.event_name == 'workflow_dispatch' && inputs.names_evidence == true
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: dalmaer/plates
           ref: ${{ inputs.names_source_sha }}
@@ -789,7 +789,7 @@ jobs:
           '
       - name: Retain immutable observation for this attempt
         if: always() && steps.names_collect.outcome == 'success'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ steps.names_collect.outputs.name }}
           path: ${{ steps.names_collect.outputs.paths }}

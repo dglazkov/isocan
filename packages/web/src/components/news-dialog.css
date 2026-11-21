@@ -1,0 +1,24 @@
+/* ---------- what's new ---------- */
+/* **The day in the margin, the notes as prose.** In a narrow column every
+   line wrapped three times; given width, a date is a label you skim past and
+   the sentences read at a comfortable measure. Collapses to stacked rows
+   where there is no room for two. */
+.news-day {
+  display: grid; grid-template-columns: 132px minmax(0, 1fr);
+  gap: 0 20px; padding: 12px 0;
+  border-top: 1px solid var(--line-soft);
+}
+.news-day:first-child { border-top: none; padding-top: 2px; }
+.news-day h3 {
+  margin: 0; font-size: 10.5px; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft);
+  padding-top: 3px;
+}
+.news-day ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 7px; }
+/* Near the body measure, so a note reads as a sentence rather than as a row
+   in a table. */
+.news-day li { font-size: 13.5px; line-height: 1.55; max-width: 62ch; }
+@media (max-width: 620px) {
+  .news-day { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .news-day h3 { padding-top: 0; }
+}

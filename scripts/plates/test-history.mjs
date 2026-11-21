@@ -179,13 +179,23 @@ export async function recoverTestHistory({ root, repo, branch, at = new Date(), 
       }
       if (total > discovered) gap('discovery-limit', `${name}: discovered ${discovered} of ${Number.isFinite(total) ? total : 'unknown'} artifacts`);
     }
-    const candidates = [], runs = new Map();
+    const candidates = [], runs = new Map(), omitted = new Map();
+    // Discovery order is not trusted. Verify newest candidates until the night
+    // and this week's two distinct CI runs are filled. Skipped inventory is
+    // explicitly unverified, never evidence of additional valid CI samples.
+    artifacts.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || b.id - a.id);
     for (const listed of artifacts) {
       const preferred = NAMES.find(name => artifacts.some(a => a.workflow_run?.id === listed.workflow_run?.id && a.name === name));
       if (listed.name !== preferred) continue;
       try {
         if (!NAMES.includes(listed.name) || !Number.isFinite(Date.parse(listed.created_at)) || Date.parse(listed.created_at) >= Date.parse(at)) throw new Error('artifact name/time invalid');
-        if (!weeks.includes(weekOf(listed.created_at))) continue;
+        const week = weekOf(listed.created_at);
+        if (!weeks.includes(week)) continue;
+        const sampled = candidates.filter(c => c.kind === 'ci' && c.week === week);
+        if (candidates.some(c => c.kind === 'night') && new Set(sampled.map(c => c.r.id)).size >= 2) {
+          omitted.set(week, (omitted.get(week) ?? 0) + 1);
+          continue;
+        }
         if (listed.expired) throw new Error('artifact expired');
         const a = await github(`${base}/actions/artifacts/${listed.id}`);
         if (a.id !== listed.id || a.name !== listed.name || a.created_at !== listed.created_at || a.expired !== false || !id(a.size_in_bytes) || a.size_in_bytes > MAX.bytes || !id(a.workflow_run?.id)) throw new Error('artifact identity/size mismatch');
@@ -206,7 +216,7 @@ export async function recoverTestHistory({ root, repo, branch, at = new Date(), 
       const unique = eligible.filter((c, i) => eligible.findIndex(x => x.r.id === c.r.id) === i);
       chosen.push(...unique.slice(0, 2));
       if (unique.length < 2) gap('ci-week-missing', `only ${unique.length} verified CI artifacts`, { week });
-      if (eligible.length > 2) gap('ci-sampled', `${eligible.length - 2} artifacts omitted by weekly sample`, { week });
+      if (eligible.length > 2 || omitted.has(week)) gap('ci-sampled', `${Math.max(0, eligible.length - 2)} verified CI artifacts and ${omitted.get(week) ?? 0} unverified artifacts omitted by weekly sample`, { week });
     }
     for (const { a, r, kind, week } of chosen) {
       out.selected.push({ artifactId: a.id, runId: r.id, workflowId: r.workflow_id, kind, week, headSha: r.head_sha });
