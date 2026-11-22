@@ -102,21 +102,25 @@ export function readiness(plan, now = new Date()) {
 const git = (root, args) => spawnSync('git', args, { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: 120_000 });
 
 /**
- * A file on a branch of origin, or null when the branch or the file is not
- * there. A remote that cannot be read throws: an unread branch is never
- * "no ticks".
+ * Pin a branch of origin once, or null when absent. An unread remote throws:
+ * it is never "no ticks". Related files must come from this same revision.
  */
-function remoteFile(root, branch, path, trace = null) {
-  if(trace) Object.assign(trace,{ref:`refs/heads/${branch}`,path,commitSha:null,blobSha:null,sha256:null,state:'unavailable',absence:null});
+function remoteRevision(root, branch) {
   const ls = git(root, ['ls-remote', '--exit-code', '--heads', 'origin', branch]);
-  if (ls.status === 2) { if(trace) Object.assign(trace,{state:'absent',absence:'ref'}); return null; }
+  if (ls.status === 2) return null;
   if (ls.status !== 0) throw new MorningError(`cannot read the branch ${branch} on origin: git ls-remote exited ${ls.status ?? ls.error?.code}`);
   const ref = `refs/remotes/origin/${branch}`;
   const f = git(root, ['fetch', '-q', '--no-tags', 'origin', `+refs/heads/${branch}:${ref}`]);
   if (f.status !== 0) throw new MorningError(`cannot fetch the branch ${branch} from origin: git fetch exited ${f.status ?? f.error?.code}`);
   const pinned=git(root,['rev-parse','--verify',`${ref}^{commit}`]);
   if(pinned.status!==0 || !/^[a-f0-9]{40}$/.test(pinned.stdout.trim())) throw new MorningError('cannot pin the fetched branch');
-  const commit=pinned.stdout.trim();
+  return pinned.stdout.trim();
+}
+
+function remoteFile(root, branch, path, trace = null, revision = undefined) {
+  if(trace) Object.assign(trace,{ref:`refs/heads/${branch}`,path,commitSha:null,blobSha:null,sha256:null,state:'unavailable',absence:null});
+  const commit = revision === undefined ? remoteRevision(root, branch) : revision;
+  if (commit === null) { if(trace) Object.assign(trace,{state:'absent',absence:'ref'}); return null; }
   if(trace) trace.commitSha=commit;
   const tree = git(root, ['ls-tree', '-z', commit, '--', path]);
   if (tree.status !== 0) throw new MorningError(`cannot inspect ${branch}:${path}: git ls-tree failed`);
@@ -451,11 +455,12 @@ export function readVerify(root, {namesEvidence=false,consumer='morning-brief'}=
     if (!hasOrigin(root)) throw new Error('no origin to read verification history');
     for(const trace of traces) {
       const branch=trace.ref.slice('refs/heads/'.length);
-      const text=remoteFile(root,branch,VERIFY_FILE,trace);
+      const revision=remoteRevision(root,branch);
+      const text=remoteFile(root,branch,VERIFY_FILE,trace,revision);
       if(trace.absence==='ref') continue;
       if(text!==null) results.push(...verifyResults(text));
       // Phase 177: the deploy records beside it (a Vercel target's plates promote).
-      const lines=remoteFile(root,branch,DEPLOY_FILE);
+      const lines=remoteFile(root,branch,DEPLOY_FILE,null,revision);
       if(lines!==null) deploys.push(...deployResults(lines));
       if(text===null&&lines===null) {
         Object.assign(trace,{state:'unavailable',absence:null});

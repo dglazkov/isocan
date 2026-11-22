@@ -77,8 +77,8 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
+  pull-requests: read
   actions: read
   issues: read
 
@@ -86,15 +86,27 @@ jobs:
   night:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    outputs:
+      transfer: ${{ steps.transfer.outputs.ready }}
+      # The producer's own attempt: rerunning only publish keeps this value.
+      publication: plates-night-publication-${{ github.run_attempt }}
+      head: ${{ steps.prepare.outputs.head }}
+      day: ${{ steps.improve.outputs.day }}
+      plan_day: ${{ steps.plan.outputs.day }}
+      gate: ${{ steps.improve.outputs.gate }}
+      code: ${{ steps.improve.outputs.code }}
+      plan: ${{ steps.plan.outputs.code }}
+      production: ${{ steps.production.outcome }}
+      canvas: ${{ steps.canvas.outcome }}
     env:
-      GH_TOKEN: ${{ github.token }}
       NAMES_EVIDENCE: ${{ github.event_name == 'workflow_dispatch' && inputs.names_evidence == true }}
     steps:
       # The whole history: some measures read it.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v7
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
       # The project's install, read from .plates/plates.json at run time (so a
@@ -102,6 +114,11 @@ jobs:
       # npm ci when a lockfile exists. Its `env` goes to every later step
       # (scripts/plates/improve.mjs applies it to the gate too), so a gate that
       # must not sync or push is told so before anything runs.
+      # gh stores a helper, never the token; only read steps supply GH_TOKEN.
+      - name: Configure authenticated Git reads
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh auth setup-git
       - name: Validate observation source
         if: github.event_name == 'workflow_dispatch' && inputs.names_evidence == true
         env:
@@ -118,7 +135,7 @@ jobs:
           '
       - name: Check out the exact observation source
         if: github.event_name == 'workflow_dispatch' && inputs.names_evidence == true
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: dalmaer/plates
           ref: ${{ inputs.names_source_sha }}
@@ -195,10 +212,10 @@ jobs:
       - name: Install
         # setupToken (a secret's name in .plates/plates.json) becomes GH_TOKEN here
         # and in no other step, so setup can clone a private repo with gh
-        # (ledger's data). Absent or unset, the job's own token. Never echoed.
+        # (private data). Absent or unset, no token. Never echoed.
         env:
           SETUP: ${{ steps.config.outputs.setup }}
-          GH_TOKEN: ${{ secrets[steps.config.outputs.setup_token] || github.token }}
+          GH_TOKEN: ${{ secrets[steps.config.outputs.setup_token] || '' }}
         run: |
           if [ -n "$SETUP" ]; then
             echo "setup (.plates/plates.json): $SETUP"
@@ -213,13 +230,14 @@ jobs:
         id: production
         continue-on-error: true
         env:
+          GH_TOKEN: ${{ github.token }}
           BASE: ${{ github.event.repository.default_branch }}
           VERCEL_TOKEN: ${{ steps.config.outputs.production_vercel == 'true' && secrets.VERCEL_API_TOKEN || '' }}
         run: node scripts/plates/production-night.mjs
 
       - name: Retain production evidence
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: plates-production-${{ github.run_attempt }}
           path: ${{ runner.temp }}/plates-production/
@@ -238,6 +256,8 @@ jobs:
       # after the measure has still run.
       - name: Plan the night
         id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           DAY=$(date -u +%F)
           code=0
@@ -276,13 +296,11 @@ jobs:
           if node -e "process.exit(JSON.parse(require('fs').readFileSync('.plates/plates.json', 'utf8')).plates === 'self' ? 0 : 1)"; then
             echo "self=true" >> "$GITHUB_OUTPUT"
           fi
-      - name: Gather what came home
-        if: steps.self.outputs.self == 'true'
-        run: node bin/plates.mjs learn || echo "::warning::plates learn did not finish; see its output above."
 
       # Recover bounded, identity-verified history; gaps remain visible to measures.
       - name: Gather the test ledger
         env:
+          GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           BASE: ${{ github.event.repository.default_branch }}
         run: |
@@ -294,6 +312,7 @@ jobs:
       # (climb off, or never run), or no listing, is no line: never red.
       - name: Gather the climb's record
         env:
+          GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           BASE: ${{ github.event.repository.default_branch }}
         run: |
@@ -320,6 +339,7 @@ jobs:
       # line, naming each finding the pass left. None is no line: never red.
       - name: Gather the tend record
         env:
+          GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           BASE: ${{ github.event.repository.default_branch }}
         run: |
@@ -347,6 +367,7 @@ jobs:
       - name: Measure
         id: improve
         env:
+          GH_TOKEN: ${{ github.token }}
           PLATES_NIGHT_RECOVERY: "1"
         run: |
           code=0
@@ -369,13 +390,21 @@ jobs:
             if (r.error) console.log(`improve: ${r.error}`);
           ' "$RUNNER_TEMP/improve.json" "$GITHUB_OUTPUT"
 
+      # Learning writes tracked inbox data. Measure the exact clean revision
+      # first so those proposals do not prevent reuse of its CI gate.
+      - name: Gather what came home
+        if: steps.self.outputs.self == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node bin/plates.mjs learn || echo "::warning::plates learn did not finish; see its output above."
+
       # Tonight's history includes bounded, redacted failure output in the gate
       # receipt, bound to its invocation and commit. No raw logs are uploaded.
       # For tomorrow night: the ledger
       # persists between nights only as this artifact (it is never committed).
       - name: Keep the test ledger
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: plates-test-runs
           # Explicit telemetry paths only: never upload local workaround transcripts.
@@ -404,10 +433,10 @@ jobs:
       # branch (night-plan.mjs publish, phase 78), so climb and the robot tick
       # it: the plan as improve left it, only when the branch holds no plan for
       # tonight or a later night (never the owner's), with a lease. This step
-      # is the night's only writer; the plan branch is the one more ref it
-      # pushes. A failure is red at the verdict, after the PR.
-      - name: Open the night's pull request
-        id: pr
+      # runs in the separate publisher; this job only prepares Git objects
+      # and fixed data files. The publisher never checks out those objects.
+      - name: Prepare the night's pull request
+        id: prepare
         env:
           DAY: ${{ steps.improve.outputs.day }}
           PLAN_DAY: ${{ steps.plan.outputs.day }}
@@ -420,14 +449,6 @@ jobs:
             if(!r || ![`plates-night/${process.env.DAY}`,`keel-night/${process.env.DAY}`].includes(r.branch) || !/^(?:[a-f0-9]{40})?$/.test(r.head) || !Number.isSafeInteger(r.attempts)) throw new Error("missing night recovery lease");
             process.stdout.write(r.head);
           ' "$RUNNER_TEMP/improve.json")
-          published=0
-          if [ "$NAMES_EVIDENCE" = true ]; then
-            PLATES_NAMES_IMPORTS_FILE="$RUNNER_TEMP/names-imports-plan-publication.json" PLATES_NAMES_EVIDENCE_REPOSITORY_ID="$GITHUB_REPOSITORY_ID" \
-            node --import "$RUNNER_TEMP/names-loader.mjs" scripts/plates/night-plan.mjs publish --date "$PLAN_DAY" --names-evidence --json > "$RUNNER_TEMP/names-plan-publication.json" || published=$?
-          else
-            node scripts/plates/night-plan.mjs publish --date "$PLAN_DAY" || published=$?
-          fi
-          echo "publish=$published" >> "$GITHUB_OUTPUT"
           if [ -z "$HEALTH" ]; then
             echo "::error::No health directory was read from .plates/plates.json."
             exit 1
@@ -509,6 +530,217 @@ jobs:
           done
           if [ "${#PATHS[@]}" = 0 ] || [ -z "$(git status --porcelain -- "${PATHS[@]}")" ]; then
             echo "Nothing changed."
+            exit 0
+          fi
+          BRANCH=$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).nightRecovery.branch)' "$RUNNER_TEMP/improve.json")
+          git config user.name "plates-night"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -q -b "$BRANCH"
+          git add -A -- "${PATHS[@]}"
+          git commit -q --only -m "plates night: $DAY" -- "${PATHS[@]}"
+          git show --name-only --format= HEAD > "$RUNNER_TEMP/files.txt"
+          node scripts/plates/pr-body.mjs --input "$RUNNER_TEMP/pr.json" --files "$RUNNER_TEMP/files.txt" > "$RUNNER_TEMP/body.md"
+          git bundle create "$RUNNER_TEMP/night.bundle" "refs/heads/$BRANCH" "^$GITHUB_SHA"
+          echo "head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      # After the machine commit: refuse any remaining dirty source files.
+      # Opt-in only. Install/setup must already provide pinned executables and
+      # a dedicated admitted isocan home; this step installs nothing. Never
+      # hand the raw report to isocan: plates projects allowlisted measurements.
+      - name: Project the night onto its canvas
+        id: canvas
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BASE: ${{ github.event.repository.default_branch }}
+        run: |
+          enabled=$(node -e 'const c=JSON.parse(require("fs").readFileSync(".plates/plates.json","utf8")); console.log(c.canvas?.enabled === true && c.canvas?.cadence === "nightly" ? "yes" : "no")')
+          [ "$enabled" = yes ] || exit 0
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+          # A preflight failure never reaches the canvas: it leaves a receipt
+          # saying so, and the next night recovers from the attempt before it.
+          preflight_fail() {
+            node -e 'const fs = require("node:fs"); fs.mkdirSync(require("node:path").dirname(process.argv[1]), { recursive: true }); fs.writeFileSync(process.argv[1], JSON.stringify({ neverRan: true, provenance: { repo: process.env.GITHUB_REPOSITORY, workflow: ".github/workflows/plates-night.yml", runId: String(process.env.GITHUB_RUN_ID), attempt: Number(process.env.GITHUB_RUN_ATTEMPT), headSha: process.env.GITHUB_SHA } }))' "$RUNNER_TEMP/plates-canvas-night/never-ran.json"
+            echo "::error::$1"
+            exit 1
+          }
+          # Honor legacy provisioning only when the canonical setting is absent.
+          # An explicitly empty canonical value must still fail the preflight.
+          export PLATES_CANVAS_PLATES_VERSION="${PLATES_CANVAS_PLATES_VERSION-${KEEL_CANVAS_KEEL_VERSION-}}"
+          export PLATES_CANVAS_ISOCAN_VERSION="${PLATES_CANVAS_ISOCAN_VERSION-${KEEL_CANVAS_ISOCAN_VERSION-}}"
+          export PLATES_CANVAS_ISOCAN_HOME="${PLATES_CANVAS_ISOCAN_HOME-${KEEL_CANVAS_ISOCAN_HOME-}}"
+          for tool in plates isocan; do
+            command -v "$tool" >/dev/null 2>&1 || preflight_fail "Canvas night requires $tool explicitly installed and pinned by the project setup."
+          done
+          if [ -z "${PLATES_CANVAS_PLATES_VERSION:-}" ] || [ -z "${PLATES_CANVAS_ISOCAN_VERSION:-}" ]; then
+            preflight_fail "Canvas night requires owner-pinned PLATES_CANVAS_PLATES_VERSION and PLATES_CANVAS_ISOCAN_VERSION."
+          fi
+          if [ "$(plates --version)" != "$PLATES_CANVAS_PLATES_VERSION" ] || [ "$(isocan --version)" != "$PLATES_CANVAS_ISOCAN_VERSION" ]; then
+            preflight_fail "Canvas executable version does not match its owner-provisioned pin."
+          fi
+          if [ -z "${PLATES_CANVAS_ISOCAN_HOME:-}" ] || [ ! -d "$PLATES_CANVAS_ISOCAN_HOME" ]; then
+            preflight_fail "Canvas night requires a dedicated owner-provisioned admitted isocan home (PLATES_CANVAS_ISOCAN_HOME)."
+          fi
+          # Restore the latest canvas-enabled attempt, even when it failed:
+          # its pending receipt may describe a write whose answer was lost.
+          # The night and plates-morning's plan card (phase 78) write one
+          # journal, so the newest attempt of either is the one restored
+          # (scripts/plates/canvas-recovery.mjs holds the rules).
+          recovery=$(node scripts/plates/canvas-recovery.mjs --workflow plates-night.yml) || preflight_fail "Canvas recovery stopped before the canvas was touched; this attempt is recorded as never run."
+          export PLATES_CANVAS_RECOVERY="$recovery"
+          export PLATES_CANVAS_PERSISTENCE=artifact-v1
+          export PLATES_ISOCAN="$(command -v isocan)"
+          export ISOCAN_HOME="$PLATES_CANVAS_ISOCAN_HOME"
+          export PLATES_CANVAS_OUTPUT="$RUNNER_TEMP/plates-canvas-night"
+          # The existing report is consumed once; no second improve or gate.
+          plates canvas night --report "$RUNNER_TEMP/improve.json" --yes --json
+
+      - name: Keep the canvas snapshot and receipt
+        if: always() && steps.canvas.outputs.enabled == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: plates-canvas-night-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/plates-canvas-night/
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - name: Keep publication data
+        id: transfer
+        if: always() && steps.improve.outcome == 'success'
+        run: |
+          mkdir -p "$RUNNER_TEMP/publication"
+          for file in night.bundle body.md improve.json names-imports-improve.json; do
+            if [ -f "$RUNNER_TEMP/$file" ]; then cp "$RUNNER_TEMP/$file" "$RUNNER_TEMP/publication/$file"; fi
+          done
+          if [ -f .plates/night/plan.json ]; then cp .plates/night/plan.json "$RUNNER_TEMP/publication/plan.json"; fi
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: steps.transfer.outputs.ready == 'true'
+        with:
+          name: plates-night-publication-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/publication/
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: night
+    if: always() && needs.night.outputs.transfer == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: read
+    env:
+      NAMES_EVIDENCE: ${{ github.event_name == 'workflow_dispatch' && inputs.names_evidence == true }}
+    steps:
+      # Trusted source only: candidate commits are fetched as objects, never checked out.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.night.outputs.publication }}
+          path: ${{ runner.temp }}/publication
+      - name: Restore publication data
+        run: |
+          for file in night.bundle body.md improve.json names-imports-improve.json; do
+            if [ -f "$RUNNER_TEMP/publication/$file" ]; then cp "$RUNNER_TEMP/publication/$file" "$RUNNER_TEMP/$file"; fi
+          done
+          if [ -f "$RUNNER_TEMP/publication/plan.json" ]; then
+            mkdir -p .plates/night
+            cp "$RUNNER_TEMP/publication/plan.json" .plates/night/plan.json
+          fi
+      - name: Validate observation source
+        if: github.event_name == 'workflow_dispatch' && inputs.names_evidence == true
+        env:
+          NAMES_SOURCE_SHA: ${{ inputs.names_source_sha }}
+        run: |
+          node --input-type=module -e '
+            import {lstat,realpath} from "node:fs/promises";
+            import {join} from "node:path";
+            if(!/^[a-f0-9]{40}$/.test(process.env.NAMES_SOURCE_SHA||""))throw Error("Exact names_source_sha required");
+            for(const [base,leaf] of [[process.env.GITHUB_WORKSPACE,".plates-names-runtime"],[process.env.RUNNER_TEMP,"plates-names-runtime"]]){
+              if(!base||/[\r\n]/.test(base)||(await realpath(base))!==base)throw Error("Unsafe observation root");
+              try{await lstat(join(base,leaf));throw Error("Observation runtime path already exists");}catch(e){if(e.code!=="ENOENT")throw e;}
+            }
+          '
+      - name: Check out the exact observation source
+        if: github.event_name == 'workflow_dispatch' && inputs.names_evidence == true
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: dalmaer/plates
+          ref: ${{ inputs.names_source_sha }}
+          path: .plates-names-runtime
+          fetch-depth: 1
+          persist-credentials: false
+          submodules: false
+          lfs: false
+      - name: Prepare observation runtime
+        if: github.event_name == 'workflow_dispatch' && inputs.names_evidence == true
+        env:
+          NAMES_SOURCE_SHA: ${{ inputs.names_source_sha }}
+        run: |
+          node --input-type=module -e '
+            import {lstat,realpath,rename,writeFile,appendFile} from "node:fs/promises";
+            import {execFileSync} from "node:child_process";
+            import {join} from "node:path";
+            import {pathToFileURL} from "node:url";
+            const source=join(process.env.GITHUB_WORKSPACE,".plates-names-runtime"),dest=join(process.env.RUNNER_TEMP,"plates-names-runtime"),sha=process.env.NAMES_SOURCE_SHA;
+            if(!/^[a-f0-9]{40}$/.test(sha||""))throw Error("Exact source required");
+            const verify=async root=>{
+              if((await lstat(root)).isSymbolicLink()||await realpath(root)!==root)throw Error("Unsafe runtime path");
+              const git=args=>execFileSync("git",["-C",root,...args],{encoding:"utf8",timeout:15000}).trim();
+              if(await realpath(git(["rev-parse","--show-toplevel"]))!==root||git(["rev-parse","HEAD"])!==sha)throw Error("Runtime source mismatch");
+            };
+            await verify(source);
+            try{await lstat(dest);throw Error("Runtime destination exists");}catch(e){if(e.code!=="ENOENT")throw e;}
+            await rename(source,dest);await verify(dest);
+            const {NAMES_OBSERVATION_LOADER}=await import(pathToFileURL(join(dest,"lib/names-verify.mjs")));
+            await writeFile(join(process.env.RUNNER_TEMP,"names-loader.mjs"),NAMES_OBSERVATION_LOADER,{flag:"wx",mode:0o600});
+            await appendFile(process.env.GITHUB_ENV,"PLATES_NAMES_RUNTIME_ROOT="+dest+"\n");
+          '
+      - name: Open the night's pull request
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DAY: ${{ needs.night.outputs.day }}
+          PLAN_DAY: ${{ needs.night.outputs.plan_day }}
+          BASE: ${{ github.event.repository.default_branch }}
+          HEAD: ${{ needs.night.outputs.head }}
+        run: |
+          gh auth setup-git
+          # Recovery must have succeeded before any publication, including plan publication.
+          EXPECTED=$(node -e '
+            const r=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).nightRecovery;
+            if(!r || ![`plates-night/${process.env.DAY}`,`keel-night/${process.env.DAY}`].includes(r.branch) || !/^(?:[a-f0-9]{40})?$/.test(r.head) || !Number.isSafeInteger(r.attempts)) throw new Error("missing night recovery lease");
+            process.stdout.write(r.head);
+          ' "$RUNNER_TEMP/improve.json")
+          BRANCH=$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).nightRecovery.branch)' "$RUNNER_TEMP/improve.json")
+          if [ -n "$HEAD" ]; then
+            git fetch -q "$RUNNER_TEMP/night.bundle" "refs/heads/$BRANCH"
+            head=$(git rev-parse FETCH_HEAD)
+            if [ "$head" != "$HEAD" ] || [ "$(git rev-parse "$head^")" != "$GITHUB_SHA" ]; then
+              echo "::error::Publication commit or source revision mismatch; nothing is pushed."
+              exit 1
+            fi
+          fi
+          published=0
+          if [ "$NAMES_EVIDENCE" = true ]; then
+            PLATES_NAMES_IMPORTS_FILE="$RUNNER_TEMP/names-imports-plan-publication.json" PLATES_NAMES_EVIDENCE_REPOSITORY_ID="$GITHUB_REPOSITORY_ID" \
+            node --import "$RUNNER_TEMP/names-loader.mjs" scripts/plates/night-plan.mjs publish --date "$PLAN_DAY" --names-evidence --json > "$RUNNER_TEMP/names-plan-publication.json" || published=$?
+          else
+            node scripts/plates/night-plan.mjs publish --date "$PLAN_DAY" || published=$?
+          fi
+          echo "publish=$published" >> "$GITHUB_OUTPUT"
+          BRANCH=$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).nightRecovery.branch)' "$RUNNER_TEMP/improve.json")
+          if [ -z "$HEAD" ]; then
             if [ "$NAMES_EVIDENCE" = true ]; then
               BRANCH=$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).nightRecovery.branch)' "$RUNNER_TEMP/improve.json")
               NAMES_BRANCH="$BRANCH" PLATES_NAMES_IMPORTS_FILE="$RUNNER_TEMP/names-imports-night-pr-after.json" \
@@ -521,16 +753,8 @@ jobs:
             fi
             exit 0
           fi
-          BRANCH=$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).nightRecovery.branch)' "$RUNNER_TEMP/improve.json")
-          git config user.name "plates-night"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -q -b "$BRANCH"
-          git add -A -- "${PATHS[@]}"
-          git commit -q --only -m "plates night: $DAY" -- "${PATHS[@]}"
-          git show --name-only --format= HEAD > "$RUNNER_TEMP/files.txt"
-          node scripts/plates/pr-body.mjs --input "$RUNNER_TEMP/pr.json" --files "$RUNNER_TEMP/files.txt" > "$RUNNER_TEMP/body.md"
           # Retained attempts came from exactly EXPECTED; a changed branch refuses publication.
-          git push --force-with-lease="refs/heads/$BRANCH:$EXPECTED" origin "HEAD:refs/heads/$BRANCH"
+          git push --force-with-lease="refs/heads/$BRANCH:$EXPECTED" origin "$head:refs/heads/$BRANCH"
           names_publication() {
             [ "$NAMES_EVIDENCE" = true ] || return 0
             NAMES_PHASE="$1" NAMES_PR="${2:-}" NAMES_BRANCH="$BRANCH" NAMES_PREIMAGE="${EXPECTED:-}" \
@@ -581,74 +805,14 @@ jobs:
             fi
           fi
 
-      # After the machine commit: refuse any remaining dirty source files.
-      # Opt-in only. Install/setup must already provide pinned executables and
-      # a dedicated admitted isocan home; this step installs nothing. Never
-      # hand the raw report to isocan: plates projects allowlisted measurements.
-      - name: Project the night onto its canvas
-        id: canvas
-        continue-on-error: true
-        env:
-          REPO: ${{ github.repository }}
-          BASE: ${{ github.event.repository.default_branch }}
-        run: |
-          enabled=$(node -e 'const c=JSON.parse(require("fs").readFileSync(".plates/plates.json","utf8")); console.log(c.canvas?.enabled === true && c.canvas?.cadence === "nightly" ? "yes" : "no")')
-          [ "$enabled" = yes ] || exit 0
-          echo "enabled=true" >> "$GITHUB_OUTPUT"
-          # A preflight failure never reaches the canvas: it leaves a receipt
-          # saying so, and the next night recovers from the attempt before it.
-          preflight_fail() {
-            node -e 'const fs = require("node:fs"); fs.mkdirSync(require("node:path").dirname(process.argv[1]), { recursive: true }); fs.writeFileSync(process.argv[1], JSON.stringify({ neverRan: true, provenance: { repo: process.env.GITHUB_REPOSITORY, workflow: ".github/workflows/plates-night.yml", runId: String(process.env.GITHUB_RUN_ID), attempt: Number(process.env.GITHUB_RUN_ATTEMPT), headSha: process.env.GITHUB_SHA } }))' "$RUNNER_TEMP/plates-canvas-night/never-ran.json"
-            echo "::error::$1"
-            exit 1
-          }
-          # Honor legacy provisioning only when the canonical setting is absent.
-          # An explicitly empty canonical value must still fail the preflight.
-          export PLATES_CANVAS_PLATES_VERSION="${PLATES_CANVAS_PLATES_VERSION-${KEEL_CANVAS_KEEL_VERSION-}}"
-          export PLATES_CANVAS_ISOCAN_VERSION="${PLATES_CANVAS_ISOCAN_VERSION-${KEEL_CANVAS_ISOCAN_VERSION-}}"
-          export PLATES_CANVAS_ISOCAN_HOME="${PLATES_CANVAS_ISOCAN_HOME-${KEEL_CANVAS_ISOCAN_HOME-}}"
-          for tool in plates isocan; do
-            command -v "$tool" >/dev/null 2>&1 || preflight_fail "Canvas night requires $tool explicitly installed and pinned by the project setup."
-          done
-          if [ -z "${PLATES_CANVAS_PLATES_VERSION:-}" ] || [ -z "${PLATES_CANVAS_ISOCAN_VERSION:-}" ]; then
-            preflight_fail "Canvas night requires owner-pinned PLATES_CANVAS_PLATES_VERSION and PLATES_CANVAS_ISOCAN_VERSION."
-          fi
-          if [ "$(plates --version)" != "$PLATES_CANVAS_PLATES_VERSION" ] || [ "$(isocan --version)" != "$PLATES_CANVAS_ISOCAN_VERSION" ]; then
-            preflight_fail "Canvas executable version does not match its owner-provisioned pin."
-          fi
-          if [ -z "${PLATES_CANVAS_ISOCAN_HOME:-}" ] || [ ! -d "$PLATES_CANVAS_ISOCAN_HOME" ]; then
-            preflight_fail "Canvas night requires a dedicated owner-provisioned admitted isocan home (PLATES_CANVAS_ISOCAN_HOME)."
-          fi
-          # Restore the latest canvas-enabled attempt, even when it failed:
-          # its pending receipt may describe a write whose answer was lost.
-          # The night and plates-morning's plan card (phase 78) write one
-          # journal, so the newest attempt of either is the one restored
-          # (scripts/plates/canvas-recovery.mjs holds the rules).
-          recovery=$(node scripts/plates/canvas-recovery.mjs --workflow plates-night.yml) || preflight_fail "Canvas recovery stopped before the canvas was touched; this attempt is recorded as never run."
-          export PLATES_CANVAS_RECOVERY="$recovery"
-          export PLATES_CANVAS_PERSISTENCE=artifact-v1
-          export PLATES_ISOCAN="$(command -v isocan)"
-          export ISOCAN_HOME="$PLATES_CANVAS_ISOCAN_HOME"
-          export PLATES_CANVAS_OUTPUT="$RUNNER_TEMP/plates-canvas-night"
-          # The existing report is consumed once; no second improve or gate.
-          plates canvas night --report "$RUNNER_TEMP/improve.json" --yes --json
-
-      - name: Keep the canvas snapshot and receipt
-        if: always() && steps.canvas.outputs.enabled == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: plates-canvas-night-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/plates-canvas-night/
-          if-no-files-found: ignore
-          retention-days: 90
-
       # Older plates-night PRs: merged when they are data and still merge,
       # closed as superseded (branch kept) otherwise. The newest merges only
       # after a gate that passed on this tree.
       - name: Drain the queue
         id: drain
         env:
-          GATE: ${{ steps.improve.outputs.gate }}
+          GH_TOKEN: ${{ github.token }}
+          GATE: ${{ needs.night.outputs.gate }}
         run: |
           if [ "$NAMES_EVIDENCE" = true ]; then
             GATE_ARGS=()
@@ -666,11 +830,11 @@ jobs:
       - name: Verdict
         if: always()
         env:
-          PRODUCTION_OUTCOME: ${{ steps.production.outcome }}
-          CANVAS_OUTCOME: ${{ steps.canvas.outcome }}
-          CODE: ${{ steps.improve.outputs.code }}
-          GATE: ${{ steps.improve.outputs.gate }}
-          PLAN: ${{ steps.plan.outputs.code }}
+          PRODUCTION_OUTCOME: ${{ needs.night.outputs.production }}
+          CANVAS_OUTCOME: ${{ needs.night.outputs.canvas }}
+          CODE: ${{ needs.night.outputs.code }}
+          GATE: ${{ needs.night.outputs.gate }}
+          PLAN: ${{ needs.night.outputs.plan }}
           PUBLISH: ${{ steps.pr.outputs.publish }}
         run: |
           if [ "$PRODUCTION_OUTCOME" = failure ]; then
@@ -704,6 +868,8 @@ jobs:
       - name: Collect managed-name observations
         id: names_collect
         if: always() && github.event_name == 'workflow_dispatch' && inputs.names_evidence == true
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           PLATES_NAMES_IMPORTS_FILE="$RUNNER_TEMP/names-imports-collector.json" node --import "$RUNNER_TEMP/names-loader.mjs" --input-type=module -e '
             import {appendFile} from "node:fs/promises";
@@ -721,7 +887,7 @@ jobs:
           '
       - name: Retain immutable observation for this attempt
         if: always() && steps.names_collect.outcome == 'success'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ steps.names_collect.outputs.name }}
           path: ${{ steps.names_collect.outputs.paths }}

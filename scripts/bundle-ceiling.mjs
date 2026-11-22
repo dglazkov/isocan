@@ -503,11 +503,26 @@
  * CI measured the combined entry at 729,497 bytes. Following the 5 Oct rule
  * (measured entry + 5,000 headroom, rounded to the hundred), CEILING moves to
  * 734,500; GOAL 640,000 and JUMP 20,000 stay unchanged.
+ *
+ * **734,500 → 749,400 on 18 Nov 2026, after a measured shrink pass.** Dion
+ * asked to fix the overdue findings, including a ceiling bump after shrinking.
+ * At 5618fbcb6 the production entry is 745,293 bytes. Deferring the release
+ * notes dialog until it opens (keeping the unread indicator eager) and moving
+ * its CSS with it takes the entry to 744,323: 970 bytes reclaimed, plus 573
+ * bytes removed from the initial stylesheet. The dialog still refreshes and
+ * marks notes read on opening; it stays mounted after first use.
+ *
+ * The remaining 9,823 bytes over the old ceiling are accepted after inspecting
+ * the source-map breakdown, not reported as a saving. This follows the 5 Oct
+ * rule: measured entry + 5,000 bytes of headroom, rounded up to the hundred.
+ * The 640,000 goal, 20,000 jump guard, three-day response guard and persona's
+ * 747,000 entry target stay unchanged. The persona can still ask before this
+ * headroom is exhausted. Measurements and scope: docs/changelog/2026-11-18.md.
  */
 
 /** The last number somebody agreed to. Raised in the ANSWER to a finding, with
  *  the reason in that answer — not quietly in a diff. */
-export const CEILING = 734_500;
+export const CEILING = 749_400;
 
 /**
  * **Run as a program it prints that number**, so the performance persona's

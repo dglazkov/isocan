@@ -39,7 +39,7 @@ import {
 import { uploadBlob } from "../lib/api.ts";
 import { sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
-import { useUnreadNews } from "./WhatsNew.tsx";
+import { useUnreadNews } from "../lib/news.ts";
 import { showMenu } from "../lib/chromemenu.tsx";
 import { transitionsOn } from "../lib/deckflip.ts";
 import { HomeGlyph } from "./Glyphs.tsx";

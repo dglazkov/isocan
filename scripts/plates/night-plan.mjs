@@ -94,8 +94,8 @@ export const PENDING_LANE = 'robot:pending';
 export const MEASURE_ITEM = 'measures';
 const ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
-const SOURCE = /^(?:default|owner|persona:[a-z0-9][a-z0-9-]*|loop:[A-Za-z0-9][A-Za-z0-9._-]*|health:[a-z][a-z0-9_]*|robot:#[1-9]\d*)$/;
-const LANE = /^(?:climb:[a-z][a-z0-9-]*|robot:#[1-9]\d*|loop|persona:[a-z0-9][a-z0-9-]*|night)$/;
+const SOURCE = /^(?:default|owner|persona:[a-z0-9][a-z0-9-]*|audit:[a-z0-9][a-z0-9-]*|loop:[A-Za-z0-9][A-Za-z0-9._-]*|health:[a-z][a-z0-9_]*|robot:#[1-9]\d*)$/;
+const LANE = /^(?:climb:[a-z][a-z0-9-]*|robot:#[1-9]\d*|loop|persona:[a-z0-9][a-z0-9-]*|audit:[a-z0-9][a-z0-9-]*|night)$/;
 const READY_BY = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?(?:Z|[+-](\d{2}):(\d{2}))$/;
 
 
@@ -179,9 +179,9 @@ export function validatePlan(plan, { openRobotPrs = [], draft = false } = {}) {
     else seen.add(item.id);
     if (!isText(item.title, 300)) bad(`${where}: "title" is one line of text, at most 300 characters`);
     if (!KINDS.includes(item.kind)) bad(`${where}: "kind" is ${KINDS.join(', ')}`);
-    if (!SOURCE.test(item.source ?? '')) bad(`${where}: "source" is default, owner, persona:<name>, loop:<slug>, health:<measure> or robot:#<issue>`);
+    if (!SOURCE.test(item.source ?? '')) bad(`${where}: "source" is default, owner, persona:<name>, audit:<lens>, loop:<slug>, health:<measure> or robot:#<issue>`);
     if (item.lane === PENDING_LANE) { if (!draft || item.kind !== 'build') bad(`${where}: "lane" ${PENDING_LANE} is a draft's build whose robot issue plates goodnight --yes creates; a plan names robot:#<issue>`); }
-    else if (!LANE.test(item.lane ?? '')) bad(`${where}: "lane" is climb:<job>, robot:#<issue>, loop, persona:<name> or night`);
+    else if (!LANE.test(item.lane ?? '')) bad(`${where}: "lane" is climb:<job>, robot:#<issue>, loop, persona:<name>, audit:<lens> or night`);
     if (!STATUSES.includes(item.status)) bad(`${where}: "status" is ${STATUSES.join(', ')}`);
     if (item.number !== undefined && item.number !== null) problems.push(...numberProblems(item.number, where));
     if (item.budget !== undefined && item.budget !== null) {
@@ -203,6 +203,7 @@ export function validatePlan(plan, { openRobotPrs = [], draft = false } = {}) {
       // plates goodnight add drafts its issue), and a persona measures, it does not build.
       if (item.lane === 'loop') bad(`${where}: a build item names the pass that builds it; no pass builds lane loop (an accepted Loop finding that names a number is built by the robot: plates goodnight add drafts its issue, lane robot:#<n>)`);
       if (/^persona:/.test(item.lane ?? '')) bad(`${where}: a build item names the pass that builds it; a persona measures and never builds (hand it to the climb job that measures ${item.number?.measure ?? 'its number'}, lane climb:<job>, or make it triage)`);
+      if (/^audit:/.test(item.lane ?? '')) bad(`${where}: a build item names the pass that builds it; an audit proposes and never builds (a kept finding becomes a phase or a climb; make it triage)`);
       builds++;
       if (builds + outside.length > MAX_BUILD) {
         bad(`${where}: a ${ordinal(builds + outside.length)} build item; at most ${MAX_BUILD} a night, counted with the robot's open PRs (${outside.length ? outside.map(n => `#${n}`).join(', ') : 'none'}); the rest wait for the next night`);
@@ -475,7 +476,37 @@ export async function productionCandidates(input) {
   if (!input.config?.production) return [];
   return (await import('./production.mjs')).productionCandidates(input);
 }
-export const CANDIDATE_SOURCES = Object.freeze([productionCandidates, personaCandidates]);
+/**
+ * The audits practice's findings (phase 192): each finding of an audit
+ * recorded the day before the night or on it, as triage in lane audit:<lens>
+ * (audit.mjs recentCandidates), best leverage first. A finding the previous
+ * night's plan carried is not offered again, and at most AUDIT_ITEMS are
+ * taken, one review item saying how many more wait. No record is no items. An
+ * unreadable record does not fail the night: it is one review item saying why.
+ * A project without the audits practice reads nothing.
+ */
+export const AUDITS_READ = 'audits-read';
+export const AUDITS_WAIT = 'audits-wait';
+/** At most this many audit findings a night, as Loop's FINDING_ITEMS: the plan holds 64 items in all. */
+export const AUDIT_ITEMS = 5;
+export async function auditCandidates({ root, config, date }) {
+  if (!(config?.practices ?? []).includes('audits') || !existsSync(join(root, 'scripts/plates/audit.mjs'))) return [];
+  try {
+    const audit = await practiceScript(root, 'scripts/plates/audit.mjs', 'the audits');
+    // Once only: a finding the previous night's plan already carried (its disposition kept there) is not offered again.
+    let carried = new Set();
+    try { const previous = await readPlan(root); if (previous && previous.date < date) carried = new Set(previous.items.map(i => i.id)); } catch { /* an unreadable previous plan carries nothing */ }
+    const fresh = (await audit.recentCandidates(root, date)).filter(i => !carried.has(i.id));
+    const items = fresh.slice(0, AUDIT_ITEMS);
+    if (fresh.length > AUDIT_ITEMS) items.push(item({ id: AUDITS_WAIT, kind: 'review', source: 'default', lane: 'night',
+      title: short(`${fresh.length - AUDIT_ITEMS} more audit findings wait for triage beyond tonight's ${AUDIT_ITEMS}: read them on their pages in docs/audits/.`, 300) }));
+    return items;
+  } catch (e) {
+    return [item({ id: AUDITS_READ, kind: 'review', source: 'default', lane: 'night',
+      title: short(`The audit records could not be read tonight: ${String(e?.message ?? e).split('\n')[0]}.`, 300) })];
+  }
+}
+export const CANDIDATE_SOURCES = Object.freeze([productionCandidates, personaCandidates, auditCandidates]);
 
 // ---- the default plan -------------------------------------------------------
 
