@@ -267,6 +267,7 @@ export function TopNav({
   }
 
   return (
+    <>
     <div className="shell-topnav-wrap">
       <nav className="shell-topnav" aria-label="Open canvases">
         <button
@@ -393,12 +394,13 @@ export function TopNav({
           {rightSlot}
         </div>
       </nav>
-      {settingsOpen && (
-        <Suspense fallback={null}>
-          <SettingsShell open={settingsOpen} actor={actor} onClose={() => setSettingsOpen(false)} />
-        </Suspense>
-      )}
     </div>
+    {settingsOpen && (
+      <Suspense fallback={null}>
+        <SettingsShell open={settingsOpen} actor={actor} onClose={() => setSettingsOpen(false)} />
+      </Suspense>
+    )}
+    </>
   );
 }
 
