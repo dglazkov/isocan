@@ -30,7 +30,7 @@ this canvas lives. It writes nothing and holds no key.
 1. **The key lives with the home, not the browser** (keys phase 4). The
    Gemini key is the one in *Model keys…* (or `isocan keys set gemini`, or
    `GEMINI_API_KEY`) on the machine that holds the canvas. Each session asks
-   `POST /api/voice/token` for a one-use Live token — an editor of the canvas
+   `POST /api/m/talk/token` for a one-use Live token — an editor of the canvas
    only, and a stored key pays only for its owner unless they share it — and
    the browser never sees the key. A key an older build left in
    `localStorage` (`isocan:voice:key`) is removed on first open, and said.
@@ -134,3 +134,6 @@ coordinates, version refs to version ids, anchored threads at the item's
 spot, `item.add` shaped for a groups canvas, the read tools answered from
 facts, and the Blob/ArrayBuffer frame decoder (the bug that once parsed
 "[object Blob]").
+
+`test/choreography.test.ts` covers ephemeral co-listening playback control
+(`MediaControlController`) and pull-only Vision Share `functionResponse` frames.

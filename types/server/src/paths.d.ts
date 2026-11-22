@@ -61,6 +61,8 @@ export declare const summaryStatsFile: (home: string, id: string) => string;
 export declare const parkCursorsFile: (home: string) => string;
 export declare const daemonFile: (home: string) => string;
 export declare const daemonLogFile: (home: string) => string;
+/** Active home-polled async jobs persisted across daemon restarts (Open Stitch phase 0.2). */
+export declare const jobsFile: (home: string) => string;
 export declare const identityFile: (home: string) => string;
 /** The actor registry snapshot: which session key speaks as whom (#57). */
 export declare const actorsFile: (home: string) => string;

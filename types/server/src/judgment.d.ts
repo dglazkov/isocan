@@ -95,5 +95,5 @@ export declare class Judge {
         model?: string;
         state: unknown;
         questions: Record<string, unknown>;
-    }): Promise<Judged>;
+    }, overrideKey?: string): Promise<Judged>;
 }

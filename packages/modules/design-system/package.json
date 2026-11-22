@@ -1,0 +1,26 @@
+{
+  "name": "@isocan/design-system",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Design system generation, DESIGN.md compilation, fresh-context critique, and direction mockups",
+  "exports": {
+    "./core": "./src/core.ts",
+    "./web": "./src/web.tsx",
+    "./cli": "./src/cli.ts",
+    "./server": "./src/server.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "isocan": {
+    "engines": "^0.2.12"
+  },
+  "dependencies": {
+    "@isocan/core": "*",
+    "zod": "^4.5.1"
+  },
+  "peerDependencies": {
+    "react": "^18.3.1"
+  }
+}

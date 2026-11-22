@@ -17,9 +17,18 @@ import type { Actor, CanvasContents, Item } from "./model.js";
 import type { Operation } from "./ops.js";
 import { type SpokenColour } from "./colour.js";
 import { type MoodSwatch } from "./mood-swatches.js";
-export { deltaE, formatMoodSwatches, IMAGE_SWATCHES_UNAVAILABLE, parseMoodSwatches, rgbToLab, SWATCHES_ROUTE, swatchesFromRgba, type MoodSwatch, type SwatchesRequest, type SwatchesResponse, } from "./mood-swatches.js";
-/** The route's path. */
-export declare const IMAGE_ROUTE = "/api/image";
+export { deltaE, formatMoodSwatches, IMAGE_SWATCHES_UNAVAILABLE, parseMoodSwatches, rgbToLab, SWATCHES_ROUTE, SWATCHES_ROUTE_LEGACY, swatchesFromRgba, type MoodSwatch, type SwatchesRequest, type SwatchesResponse, } from "./mood-swatches.js";
+/**
+ * The route's path. Since 19 Nov 2026 the mood module's own
+ * (the mood module's `./server` half, mounted at `/api/m/mood/image`; Open Stitch phase
+ * 0.1). The old spellings, `IMAGE_ROUTE_LEGACY` and `SWATCHES_ROUTE_LEGACY`,
+ * are thin aliases on the home for one release.
+ */
+export declare const IMAGE_ROUTE = "/api/m/mood/image";
+/** Where the image route answered before 19 Nov 2026. Forwarded to `IMAGE_ROUTE`; remove with the release after module API 0.2.12. */
+export declare const IMAGE_ROUTE_LEGACY = "/api/image";
+/** Where pictures are drawn: Google's Interactions API, which the mood module's server half posts to with the key in `x-goog-api-key`. */
+export declare const IMAGE_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/interactions";
 /** The body is malformed: no canvas, no words, `n` out of range, an actor missing. */
 export declare const IMAGE_BAD_REQUEST = "image-bad-request";
 /** The machine's person's own Gemini key, asked for by somebody else with sharing off. */
@@ -61,8 +70,9 @@ export declare function isMoodDial(value: unknown): value is MoodDial;
  * Dion decided Flash by default (§8); Pro (`gemini-3-pro-image`, $0.134 a 1K
  * image on the same page) is for *Redraw in Pro*, a later phase. The id is
  * configuration — `ISOCAN_IMAGE_MODEL` wins — because Google's naming moves.
+ * The id itself is the manifest's `image` row (`models.ts`); the price table stays here.
  */
-export declare const IMAGE_MODEL_DEFAULT = "gemini-nano-banana-2.1";
+export declare const IMAGE_MODEL_DEFAULT: string;
 /** The model a run draws with: `ISOCAN_IMAGE_MODEL` when set, else the default. */
 export declare function imageModel(env?: Readonly<Record<string, string | undefined>>): string;
 /**

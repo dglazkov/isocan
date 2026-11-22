@@ -22,7 +22,8 @@ import { type DesignRepairsResponse } from "../../core/src/design-repair.js";
 import { type RecapHeadResponse } from "../../core/src/index.js";
 import type { SummaryEntry, SummaryMake, SummaryRead, SummaryStats, SummaryWait } from "../../core/src/semantic-zoom.js";
 import type { ImageRequest, ImageResponse, SwatchesRequest, SwatchesResponse } from "../../core/src/mood.js";
-import type { Actor, ActorBindingRecord, ActorClaimOp, BadgesResponse, BlobUploadResponse, Capability, CanvasSnapshotResponse, CanvasGroupMigrationPreview, ContextManifest, ContextRequest, ContextContentPage, CreateSessionResponse, GcReport, GcRequest, HomeGcReport, GrantResponse, PublicCanvasesResponse, GrantsResponse, GrantSubject, HomesResponse, KillBadgeResponse, LogEntry, MintPassResponse, PanelActorResponse, PassResponse, Operation, PostOpResponse, PresenceSession, Canvas, RedeemPassResponse, UpdateSessionRequest, ParkAdvanceRequest, ParkClaimRequest, ParkClaimResponse, ParkDeliveredRequest, RcAnsweringResponse, RcHoldRequest, RcHoldResponse, WatchLogRequest, WatchLogResponse, ActorNames, ActorKinds, NewsResponse, PresenceWhereResponse, ServingResponse, SlashCommand, SpaceCanvasResponse, SpaceLinkRequest, SpaceLinkResponse, SpaceResponse, SpacesResponse, SeenMarksResponse, SeenResponse, GroupResponse, GroupAction, GroupsResponse, OperatorLogResponse, OperatorLookRequest, OperatorLookResponse, OperatorPurgeRequest, OperatorPurgeResponse, OperatorShowResponse, OperatorTakedownRequest, OperatorTakedownResponse, OperatorEndRequest, OperatorEndResponse, OperatorRevokeRequest, OperatorRevokeResponse, OperatorRefuseRequest, OperatorRefuseResponse, TakedownsResponse } from "../../core/src/index.js";
+import type { KeyProvider, UserKeyDeleteResponse, UserKeyPutResponse, UserKeysListing } from "../../core/src/keys.js";
+import type { Actor, ActorBindingRecord, ActorClaimOp, BadgesResponse, BlobUploadResponse, Capability, CanvasSnapshotResponse, CanvasGroupMigrationPreview, ContextManifest, ContextRequest, ContextContentPage, CreateSessionResponse, GcReport, GcRequest, HomeGcReport, GrantResponse, PublicCanvasesResponse, GrantsResponse, GrantSubject, HomesResponse, KillBadgeResponse, LogEntry, MintPassResponse, PanelActorResponse, PassResponse, Operation, PostOpResponse, PresenceSession, Canvas, RedeemPassResponse, UpdateSessionRequest, ParkAdvanceRequest, ParkClaimRequest, ParkClaimResponse, ParkDeliveredRequest, RcAnsweringResponse, RcHoldRequest, RcHoldResponse, WatchLogRequest, WatchLogResponse, ActorNames, ActorKinds, NewsResponse, PresenceWhereResponse, ServingResponse, SlashCommand, SpaceCanvasResponse, SpaceLinkRequest, SpaceLinkResponse, SpaceResponse, SpacesResponse, SeenMarksResponse, SeenResponse, GroupResponse, GroupAction, GroupsResponse, OperatorLogResponse, OperatorLookRequest, OperatorLookResponse, OperatorPurgeRequest, OperatorPurgeResponse, OperatorShowResponse, OperatorTakedownRequest, OperatorTakedownResponse, OperatorEndRequest, OperatorEndResponse, OperatorRevokeRequest, OperatorRevokeResponse, OperatorRefuseRequest, OperatorRefuseResponse, TakedownsResponse, JobAbandonRequest, JobResponse, JobRetryRequest, JobsListResponse, NodeLease, PaintAckResult } from "../../core/src/index.js";
 import { type ForgetCanvasResponse } from "../../core/src/index.js";
 import type { BadgeStore, BuildStamp, UpgradeVerdict } from "../../core/src/index.js";
 import { ApiError } from "../../core/src/index.js";
@@ -315,7 +316,40 @@ export declare class DaemonRoutes {
     createSession(canvasId: string, actor: Actor, label?: string, harness?: string, 
     /** "rc": a parked `isocan rc` announcing itself — a process fact on the
      * presence plane, rendered nowhere. Defaults to "cli". */
-    kind?: "cli" | "rc"): Promise<CreateSessionResponse>;
+    kind?: "cli" | "rc", handle?: string): Promise<CreateSessionResponse>;
+    /** Active ephemeral 30-second soft node leases on `canvasId`. */
+    leases(canvasId: string): Promise<{
+        leases: NodeLease[];
+    }>;
+    /** Acquire or renew a soft node lease on `itemId` for `handle`. */
+    acquireLease(canvasId: string, body: {
+        itemId: string;
+        handle: string;
+        ttlMs?: number;
+        actorId?: string;
+    }): Promise<{
+        acquired: boolean;
+        lease: NodeLease;
+        holder?: NodeLease;
+    }>;
+    /** Release a soft node lease on `itemId`. */
+    releaseLease(canvasId: string, itemId: string, handle?: string): Promise<{
+        released: boolean;
+    }>;
+    /** Record an ephemeral paint acknowledgement up to `seq`. */
+    recordPaintAck(canvasId: string, seq: number): Promise<{
+        ok: true;
+        canvasId: string;
+        paintedSeq: number;
+    }>;
+    /** Read or await a paint acknowledgement (`rendered` vs `applied`). */
+    paintAckStatus(canvasId: string, opts?: {
+        seq?: number;
+        waitMs?: number;
+    }): Promise<PaintAckResult | {
+        canvasId: string;
+        paintedSeq: number;
+    }>;
     updateSession(canvasId: string, sessionId: string, patch: UpdateSessionRequest): Promise<{
         ok: true;
         cancelled?: {
@@ -524,14 +558,14 @@ export declare class DaemonRoutes {
      */
     judgment(request: JudgmentRequest): Promise<unknown>;
     /**
-     * **Draw a mood-board spread** (`POST /api/image`, moodboard phase 0): the
+     * **Draw a mood-board spread** (`POST /api/m/mood/image`, moodboard phase 0): the
      * home wraps the words in its template, spends its Gemini key, and adds the
      * tiles as `actor`; the answer names them. Refusals arrive as the home's
      * codes (`image-refused`, `image-owner-only`, `image-unavailable`, …).
      */
     image(request: ImageRequest): Promise<ImageResponse>;
     /**
-     * **Read dominant colour swatches from an image item** (`POST /api/image/swatches`,
+     * **Read dominant colour swatches from an image item** (`POST /api/m/mood/swatches`,
      * moodboard phase 2): uses `sharp` when the home has it, or falls back to a
      * picture-capable text model (`estimated: true`).
      */
@@ -695,6 +729,22 @@ export declare class DaemonRoutes {
      * badge may see, which is what a canvas list draws beside its rows.
      */
     takedowns(canvasId?: string): Promise<TakedownsResponse>;
+    /** Per-user BYOK keys stored for the authenticated caller on this home (`GET /api/me/keys`). */
+    listUserKeys(): Promise<UserKeysListing>;
+    /** Store a sealed per-user BYOK key for the authenticated caller (`PUT /api/me/keys/:provider`). */
+    setUserKey(provider: KeyProvider, key: string): Promise<UserKeyPutResponse>;
+    /** Remove the authenticated caller's per-user BYOK key (`DELETE /api/me/keys/:provider`). */
+    deleteUserKey(provider: KeyProvider): Promise<UserKeyDeleteResponse>;
+    /** List async jobs recorded on this canvas's items (`GET /api/projects/:id/jobs`). */
+    listJobs(canvasId: string): Promise<JobsListResponse>;
+    /** Inspect a single async job on this canvas (`GET /api/projects/:id/jobs/:jobId`). */
+    getJob(canvasId: string, jobId: string): Promise<JobResponse>;
+    /** Abandon an active async job (`POST /api/projects/:id/jobs/:jobId/abandon`). */
+    abandonJob(canvasId: string, jobId: string, body?: JobAbandonRequest): Promise<JobResponse>;
+    /** Retry a terminal async job on the same item (`POST /api/projects/:id/jobs/:jobId/retry`). */
+    retryJob(canvasId: string, jobId: string, body?: JobRetryRequest): Promise<JobResponse>;
+    /** Call a module's server route (`/api/m/<module>/<path>`) through the daemon's authenticated transport. */
+    moduleRequest<T>(method: "GET" | "POST", route: string, body?: unknown, signal?: AbortSignal): Promise<T>;
     uploadBlob(canvasId: string, data: Uint8Array, mimeType: string, filename: string, signal?: AbortSignal): Promise<BlobUploadResponse>;
     downloadBlob(canvasId: string, blobHash: string, signal?: AbortSignal): Promise<Uint8Array>;
 }

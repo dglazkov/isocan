@@ -40,8 +40,8 @@
 import type { TextRequest } from "./text.js";
 /** Where Jev answers for a caller holding its own key — the CLI and the measurement scripts; the web never calls it (the home does). */
 export declare const JEV_URL = "https://api.typesafe.ai/v1/systemone";
-/** The vendor's moving alias, named in every request so an upgrade needs no deploy; the versioned model that answered comes back as `by`. */
-export declare const JEV_MODEL = "jev-latest";
+/** The vendor's moving alias, named in every request so an upgrade needs no deploy; the versioned model that answered comes back as `by`. The manifest's `judge` row (`models.ts`). */
+export declare const JEV_MODEL: string;
 /** $ per input token — $0.042 per million, output billed at zero (judge phase 0). */
 export declare const JEV_INPUT_PRICE: number;
 /** One named question in Jev's own request shape — yes/no, a choice among named options, or a level on a scale. */
@@ -347,6 +347,12 @@ export interface HttpTextGeneratorOptions {
  */
 export declare function stubTextGenerator(seed?: number): TextGenerator;
 /**
+ * The model the OpenAI-shaped generator asks when `ISOCAN_TEXT_MODEL` names
+ * none: the manifest's `text` row's fallback (`models.ts`) — the other
+ * provider's default, for a home whose text key is not Claude's.
+ */
+export declare const OPENAI_TEXT_MODEL: string;
+/**
  * Standard HTTPS JSON-schema `TextGenerator` using `fetch` with zero SDK dependencies.
  * Reads `ISOCAN_TEXT_API_KEY` and `ISOCAN_TEXT_MODEL` when not passed in `opts`.
  */
@@ -358,9 +364,9 @@ export declare const CLAUDE_MESSAGES_URL = "https://api.anthropic.com/v1/message
  * Claude Opus 5.5, the current default model (the `claude-api` skill's
  * recommendation, 2 Oct 2026). Its cost lever is `CLAUDE_TEXT_EFFORT`, not a
  * smaller model: a screen's labels are short structured copy, which low effort
- * writes well and fast.
+ * writes well and fast. The id lives in the manifest's `text` row (`models.ts`).
  */
-export declare const CLAUDE_TEXT_MODEL = "claude-opus-5-5";
+export declare const CLAUDE_TEXT_MODEL: string;
 /**
  * How hard Claude thinks before writing a screen's words. Low: the output is a
  * few dozen labels held to a schema, the dialog is waiting on it, and the

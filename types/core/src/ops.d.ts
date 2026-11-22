@@ -104,10 +104,27 @@ export interface NewComment {
     at?: number;
     /** Resolved #item-references (item ids); see Comment.items. */
     items?: string[];
+    /** Structured edit receipt posted by an agent reply (Open Stitch Phase 2A). */
+    receipt?: import("./receipts.js").CommentReceipt;
+    /** Structured patch proposal posted by an agent reply (Open Stitch Phase 2A). */
+    proposal?: import("./receipts.js").CommentProposal;
     /** Public attachment intent; the home resolves it at one canvas revision. */
     contextRequest?: import("./canvas-group-context.js").ContextRequest;
     /** Canonical writer output only; public callers cannot supply retained metadata. */
     context?: import("./canvas-group-context.js").ContextManifest;
+}
+/**
+ * Optimistic concurrency precondition checked by the reducer before applying
+ * an item mutation (Open Stitch Phase 2A, op change #1 — extends existing item
+ * ops without adding a new operation type).
+ */
+export interface ItemPrecondition {
+    /** Expected `item.currentVersionId`. */
+    versionId?: string;
+    /** Expected `blobHash` of the item's current version. */
+    contentHash?: string;
+    /** Expected `item.updatedAt` ISO timestamp. */
+    updatedAt?: string;
 }
 /**
  * A change to a title, description or properties. `properties` MERGES, so taking a key
@@ -338,11 +355,13 @@ export type Operation = {
     itemId: string;
     x: number;
     y: number;
+    expect?: ItemPrecondition;
 } | {
     type: "item.resize";
     itemId: string;
     width: number;
     height: number;
+    expect?: ItemPrecondition;
 } | {
     type: "item.update";
     /** Saved group brief reservation; omitted lets the home inspect the brief bytes. */
@@ -365,11 +384,13 @@ export type Operation = {
     /** Attach, update, or remove (when `null`) named fidelity faces on the
      * current version without minting a new version history entry. */
     faces?: Partial<Record<NamedFaceId, VisualFace | null>>;
+    expect?: ItemPrecondition;
 } | {
     type: "item.addVersion";
     itemId: string;
     version: NewVersion;
     briefHeight?: number;
+    expect?: ItemPrecondition;
 } | {
     /** Replace content and its metadata as one conditional, undoable act.
      * A distinct type makes older daemons refuse instead of ignoring a
@@ -423,6 +444,7 @@ export type Operation = {
 } | {
     type: "item.delete";
     itemId: string;
+    expect?: ItemPrecondition;
 } | {
     type: "item.restore";
     itemId: string;

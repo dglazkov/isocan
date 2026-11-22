@@ -115,7 +115,6 @@ var init_drawing = __esm({
 var init_annotation = __esm({
   "packages/core/src/annotation.ts"() {
     "use strict";
-    init_drawing();
   }
 });
 
@@ -129,16 +128,6 @@ function commentContextRoute(canvasId, threadId, commentId) {
 var init_canvas_group_context = __esm({
   "packages/core/src/canvas-group-context.ts"() {
     "use strict";
-    init_errors();
-    init_annotation();
-  }
-});
-
-// packages/core/src/design-record.ts
-var init_design_record = __esm({
-  "packages/core/src/design-record.ts"() {
-    "use strict";
-    init_errors();
   }
 });
 
@@ -146,11 +135,6 @@ var init_design_record = __esm({
 var init_canvas_group_context_resolve = __esm({
   "packages/core/src/canvas-group-context-resolve.ts"() {
     "use strict";
-    init_model();
-    init_errors();
-    init_annotation();
-    init_design_record();
-    init_canvas_group_context();
   }
 });
 
@@ -170,7 +154,6 @@ var GROUP_KIND;
 var init_canvas_group_kit = __esm({
   "packages/core/src/canvas-group-kit.ts"() {
     "use strict";
-    init_annotation();
     init_errors();
     GROUP_KIND = "group";
   }
@@ -191,7 +174,6 @@ var TEXT_KIND, TEXT_WIDTH, TEXT_STYLES, TEXT_COLUMN, TEXT_COLUMN_MAX;
 var init_textnode = __esm({
   "packages/core/src/textnode.ts"() {
     "use strict";
-    init_zoomrule();
     TEXT_KIND = "text";
     TEXT_WIDTH = 320;
     TEXT_STYLES = ["body", "heading", "title", "display"];
@@ -211,10 +193,6 @@ var init_textnode = __esm({
 var init_placement = __esm({
   "packages/core/src/placement.ts"() {
     "use strict";
-    init_drawing();
-    init_annotation();
-    init_textnode();
-    init_errors();
   }
 });
 
@@ -222,77 +200,6 @@ var init_placement = __esm({
 var init_canonical_json = __esm({
   "packages/core/src/canonical-json.ts"() {
     "use strict";
-  }
-});
-
-// packages/core/src/design-partner-values.ts
-var init_design_partner_values = __esm({
-  "packages/core/src/design-partner-values.ts"() {
-    "use strict";
-  }
-});
-
-// packages/core/src/design-brief.ts
-var init_design_brief = __esm({
-  "packages/core/src/design-brief.ts"() {
-    "use strict";
-    init_canvas_group_context();
-    init_design_partner_values();
-  }
-});
-
-// packages/core/src/design-partner.ts
-var init_design_partner = __esm({
-  "packages/core/src/design-partner.ts"() {
-    "use strict";
-    init_design_partner_values();
-    init_design_partner_values();
-    init_design_brief();
-    init_design_brief();
-  }
-});
-
-// packages/core/src/design-request-parse.ts
-var init_design_request_parse = __esm({
-  "packages/core/src/design-request-parse.ts"() {
-    "use strict";
-    init_canonical_json();
-    init_design_partner_values();
-    init_design_partner_values();
-    init_design_partner();
-  }
-});
-
-// packages/core/src/design-decision-parse.ts
-var init_design_decision_parse = __esm({
-  "packages/core/src/design-decision-parse.ts"() {
-    "use strict";
-    init_canonical_json();
-    init_design_partner();
-    init_design_request_parse();
-    init_design_partner_values();
-  }
-});
-
-// packages/core/src/design-repair-parse.ts
-var init_design_repair_parse = __esm({
-  "packages/core/src/design-repair-parse.ts"() {
-    "use strict";
-    init_canonical_json();
-    init_design_partner();
-    init_design_decision_parse();
-    init_design_request_parse();
-    init_design_partner_values();
-  }
-});
-
-// packages/core/src/design-retention.ts
-var init_design_retention = __esm({
-  "packages/core/src/design-retention.ts"() {
-    "use strict";
-    init_canvas_group_context();
-    init_design_partner();
-    init_errors();
   }
 });
 
@@ -310,8 +217,6 @@ var AREA_KIND, AREA_TITLE_HEIGHT, AREA_CARD_HEIGHT, AREA_HEAD;
 var init_area = __esm({
   "packages/core/src/area.ts"() {
     "use strict";
-    init_placement();
-    init_textnode();
     AREA_KIND = "area";
     AREA_TITLE_HEIGHT = 56;
     AREA_CARD_HEIGHT = 120;
@@ -331,36 +236,25 @@ var init_canvas_scope = __esm({
   }
 });
 
-// packages/core/src/design-decision-state.ts
-var init_design_decision_state = __esm({
-  "packages/core/src/design-decision-state.ts"() {
-    "use strict";
-    init_design_decision_parse();
-    init_design_partner();
-    init_design_partner_values();
-    init_errors();
-    init_design_retention();
-    init_canvas_scope();
-  }
-});
-
-// packages/core/src/design-repair-state.ts
-var init_design_repair_state = __esm({
-  "packages/core/src/design-repair-state.ts"() {
-    "use strict";
-    init_design_repair_parse();
-    init_design_partner_values();
-    init_design_decision_state();
-    init_design_retention();
-    init_errors();
-  }
-});
-
 // packages/core/src/text-anchor.ts
 var init_text_anchor = __esm({
   "packages/core/src/text-anchor.ts"() {
     "use strict";
-    init_errors();
+  }
+});
+
+// packages/core/src/receipts.ts
+var PROPOSAL_KINDS, PROPOSAL_KIND_SET;
+var init_receipts = __esm({
+  "packages/core/src/receipts.ts"() {
+    "use strict";
+    PROPOSAL_KINDS = [
+      "markdown_replace",
+      "sticky_patch",
+      "property_patch",
+      "agent_instruction"
+    ];
+    PROPOSAL_KIND_SET = new Set(PROPOSAL_KINDS);
   }
 });
 
@@ -396,38 +290,12 @@ var init_identity = __esm({
   }
 });
 
-// packages/core/src/questionnaire-adoption.ts
-var init_questionnaire_adoption = __esm({
-  "packages/core/src/questionnaire-adoption.ts"() {
-    "use strict";
-    init_errors();
-    init_design_partner();
-    init_questionnaire();
-  }
-});
-
 // packages/core/src/questionnaire.ts
 var questionnaireActorsRoute;
 var init_questionnaire = __esm({
   "packages/core/src/questionnaire.ts"() {
     "use strict";
-    init_design_retention();
-    init_errors();
-    init_design_partner();
-    init_identity();
-    init_design_decision_state();
-    init_questionnaire_adoption();
     questionnaireActorsRoute = (canvasId) => `/api/projects/${encodeURIComponent(canvasId)}/questionnaire/actors`;
-  }
-});
-
-// packages/core/src/design-partner-plan.ts
-var init_design_partner_plan = __esm({
-  "packages/core/src/design-partner-plan.ts"() {
-    "use strict";
-    init_canonical_json();
-    init_model();
-    init_design_partner();
   }
 });
 
@@ -480,10 +348,6 @@ var init_itemthread = __esm({
 var init_prototype_click = __esm({
   "packages/core/src/prototype-click.ts"() {
     "use strict";
-    init_errors();
-    init_ids();
-    init_itemthread();
-    init_placement();
   }
 });
 
@@ -500,29 +364,6 @@ var init_lineage = __esm({
 var init_proposal = __esm({
   "packages/core/src/proposal.ts"() {
     "use strict";
-    init_lineage();
-  }
-});
-
-// packages/core/src/reducer.ts
-var init_reducer = __esm({
-  "packages/core/src/reducer.ts"() {
-    "use strict";
-    init_design_repair_state();
-    init_text_anchor();
-    init_canvas_group_context();
-    init_model();
-    init_errors();
-    init_ceiling();
-    init_questionnaire();
-    init_design_partner();
-    init_design_partner_plan();
-    init_placement();
-    init_canvas_groups();
-    init_design_record();
-    init_prototype_click();
-    init_proposal();
-    init_design_decision_state();
   }
 });
 
@@ -569,14 +410,7 @@ function groupChangeItemIds(op) {
 var init_canvas_groups = __esm({
   "packages/core/src/canvas-groups.ts"() {
     "use strict";
-    init_model();
-    init_annotation();
-    init_drawing();
-    init_errors();
     init_canvas_group_kit();
-    init_placement();
-    init_reducer();
-    init_opwords();
   }
 });
 
@@ -584,8 +418,6 @@ var init_canvas_groups = __esm({
 var init_duplicate = __esm({
   "packages/core/src/duplicate.ts"() {
     "use strict";
-    init_lineage();
-    init_placement();
   }
 });
 
@@ -610,7 +442,6 @@ var REGISTRY, JUDGMENT_ROUTE;
 var init_modules = __esm({
   "packages/core/src/modules.ts"() {
     "use strict";
-    init_canvas_scope();
     REGISTRY = /* @__PURE__ */ new Map();
     JUDGMENT_ROUTE = "/api/judgment";
   }
@@ -620,11 +451,6 @@ var init_modules = __esm({
 var init_canvas_group_copy = __esm({
   "packages/core/src/canvas-group-copy.ts"() {
     "use strict";
-    init_canvas_groups();
-    init_duplicate();
-    init_edges();
-    init_modules();
-    init_errors();
   }
 });
 
@@ -632,10 +458,6 @@ var init_canvas_group_copy = __esm({
 var init_canvas_group_migration = __esm({
   "packages/core/src/canvas-group-migration.ts"() {
     "use strict";
-    init_area();
-    init_annotation();
-    init_canvas_groups();
-    init_errors();
   }
 });
 
@@ -653,9 +475,9 @@ function formatDotToken(id, secret) {
 function formatBadgeToken(badgeId, secret) {
   return formatDotToken(badgeId, secret);
 }
-async function askTheDoor(base2, timeoutMs = 1e4, signal, fetchFn = fetch) {
+async function askTheDoor(base, timeoutMs = 1e4, signal, fetchFn = fetch) {
   try {
-    const res = await fetchFn(`${base2}${DOOR_ROUTE}`, {
+    const res = await fetchFn(`${base}${DOOR_ROUTE}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ carrier: "bearer" }),
@@ -676,7 +498,7 @@ async function askTheDoor(base2, timeoutMs = 1e4, signal, fetchFn = fetch) {
     }
     return { badge: { badgeId: body.badgeId, secret: body.secret, at: (/* @__PURE__ */ new Date()).toISOString() } };
   } catch (err) {
-    return { refused: { status: 0, error: `could not reach the door at ${base2}: ${err.message}` } };
+    return { refused: { status: 0, error: `could not reach the door at ${base}: ${err.message}` } };
   }
 }
 function bearerHeader(badge) {
@@ -708,7 +530,6 @@ var grantsRoute, grantRoute, grantRevokeRoute, SPACES_ROUTE, spaceRoute, spaceCa
 var init_grants = __esm({
   "packages/core/src/grants.ts"() {
     "use strict";
-    init_identity();
     init_rungs();
     grantsRoute = (canvasId) => `/api/projects/${encodeURIComponent(canvasId)}/grants`;
     grantRoute = (canvasId, grantId) => `${grantsRoute(canvasId)}/${encodeURIComponent(grantId)}`;
@@ -750,7 +571,6 @@ var PUBLIC_CANVASES_ROUTE;
 var init_public = __esm({
   "packages/core/src/public.ts"() {
     "use strict";
-    init_grants();
     PUBLIC_CANVASES_ROUTE = "/api/public";
   }
 });
@@ -811,7 +631,6 @@ var PASS_TTL_MS, passesRoute, passRoute, PASS_REDEEM_ROUTE;
 var init_passes = __esm({
   "packages/core/src/passes.ts"() {
     "use strict";
-    init_badge();
     PASS_TTL_MS = 15 * 60 * 1e3;
     passesRoute = (canvasId) => `/api/projects/${encodeURIComponent(canvasId)}/passes`;
     passRoute = (canvasId, passId) => `${passesRoute(canvasId)}/${encodeURIComponent(passId)}`;
@@ -829,14 +648,14 @@ function canvasUrl(origin, canvasId) {
 function canvasUrlWithPass(origin, canvasId, token) {
   return urlWithPass(canvasUrl(origin, canvasId), token);
 }
-function urlWithPass(url2, token) {
-  return `${url2}#${token}`;
+function urlWithPass(url, token) {
+  return `${url}#${token}`;
 }
 function splitPassFragment(address) {
-  const hash2 = address.indexOf("#");
-  if (hash2 < 0) return { address };
-  const pass = address.slice(hash2 + 1);
-  const rest = address.slice(0, hash2);
+  const hash = address.indexOf("#");
+  if (hash < 0) return { address };
+  const pass = address.slice(hash + 1);
+  const rest = address.slice(0, hash);
   return pass ? { address: rest, pass } : { address: rest };
 }
 function parseCanvasAddress(raw) {
@@ -844,19 +663,19 @@ function parseCanvasAddress(raw) {
   if (!trimmed) return null;
   const { address, pass } = splitPassFragment(trimmed);
   const schemed = /^[a-z][a-z0-9+.-]*:\/\//i.test(address) ? address : `${/^(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/.test(address) ? "http" : "https"}://${address}`;
-  let url2;
+  let url;
   try {
-    url2 = new URL(schemed);
+    url = new URL(schemed);
   } catch {
     return null;
   }
-  if (url2.protocol !== "http:" && url2.protocol !== "https:") return null;
-  if (!url2.hostname) return null;
-  const parts = url2.pathname.replace(/\/+$/, "").split("/");
+  if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+  if (!url.hostname) return null;
+  const parts = url.pathname.replace(/\/+$/, "").split("/");
   if (parts.length !== 3 || parts[0] !== "" || `/${parts[1]}` !== CANVAS_PATH_PREFIX) return null;
   const canvasId = decodeSegment(parts[2]);
   if (!canvasId) return null;
-  return { origin: url2.origin, canvasId, ...pass !== void 0 ? { pass } : {} };
+  return { origin: url.origin, canvasId, ...pass !== void 0 ? { pass } : {} };
 }
 function decodeSegment(segment) {
   if (!segment) return null;
@@ -869,9 +688,9 @@ function decodeSegment(segment) {
 function normalizeHomeUrl(raw) {
   const trimmed = raw.trim();
   try {
-    const url2 = new URL(trimmed);
-    if (url2.protocol !== "http:" && url2.protocol !== "https:") return trimmed.replace(/\/+$/, "");
-    return url2.origin;
+    const url = new URL(trimmed);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return trimmed.replace(/\/+$/, "");
+    return url.origin;
   } catch {
     return trimmed.replace(/\/+$/, "");
   }
@@ -1589,7 +1408,6 @@ var init_reactions = __esm({
 var init_docket = __esm({
   "packages/core/src/docket.ts"() {
     "use strict";
-    init_reactions();
   }
 });
 
@@ -1688,19 +1506,10 @@ var init_touches = __esm({
   }
 });
 
-// packages/core/src/recap-window.ts
-var init_recap_window = __esm({
-  "packages/core/src/recap-window.ts"() {
-    "use strict";
-    init_touches();
-  }
-});
-
 // packages/core/src/recap.ts
 var init_recap = __esm({
   "packages/core/src/recap.ts"() {
     "use strict";
-    init_recap_window();
   }
 });
 
@@ -1711,8 +1520,6 @@ function recapHeadRoute(canvasId) {
 var init_recap_head = __esm({
   "packages/core/src/recap-head.ts"() {
     "use strict";
-    init_canvas_group_context();
-    init_recap_window();
   }
 });
 
@@ -1733,11 +1540,11 @@ function findMentionSpans(body, candidates) {
 }
 function extractMentions(body, candidates) {
   const mentioned = new Set(findMentionSpans(body, candidates).map((span) => span.actorId));
-  const ids2 = [];
+  const ids = [];
   for (const candidate of candidates) {
-    if (mentioned.has(candidate.id) && !ids2.includes(candidate.id)) ids2.push(candidate.id);
+    if (mentioned.has(candidate.id) && !ids.includes(candidate.id)) ids.push(candidate.id);
   }
-  return ids2;
+  return ids;
 }
 function resolvableNames(candidates) {
   const names = [];
@@ -1802,7 +1609,6 @@ function collectCanvasNames(canvas) {
 var init_mentions = __esm({
   "packages/core/src/mentions.ts"() {
     "use strict";
-    init_identity();
     init_model();
   }
 });
@@ -1818,9 +1624,6 @@ var init_activity = __esm({
 var init_roster = __esm({
   "packages/core/src/roster.ts"() {
     "use strict";
-    init_questionnaire();
-    init_mentions();
-    init_activity();
   }
 });
 
@@ -1846,11 +1649,6 @@ var CLAIM_STANDS_MS, CLAIM_REFUSAL;
 var init_claims = __esm({
   "packages/core/src/claims.ts"() {
     "use strict";
-    init_harness();
-    init_harness();
-    init_errors();
-    init_ids();
-    init_identity();
     CLAIM_STANDS_MS = 30 * 60 * 1e3;
     CLAIM_REFUSAL = {
       heldElsewhere: "held-elsewhere",
@@ -1864,9 +1662,6 @@ var init_claims = __esm({
 var init_invert = __esm({
   "packages/core/src/invert.ts"() {
     "use strict";
-    init_errors();
-    init_canvas_groups();
-    init_design_decision_state();
   }
 });
 
@@ -1894,8 +1689,6 @@ var CANVAS_KIND;
 var init_canvasitem = __esm({
   "packages/core/src/canvasitem.ts"() {
     "use strict";
-    init_address();
-    init_browseritem();
     CANVAS_KIND = "canvas";
   }
 });
@@ -1931,8 +1724,6 @@ var init_kinds = __esm({
 var init_tidy = __esm({
   "packages/core/src/tidy.ts"() {
     "use strict";
-    init_annotation();
-    init_placement();
   }
 });
 
@@ -1940,10 +1731,6 @@ var init_tidy = __esm({
 var init_format = __esm({
   "packages/core/src/format.ts"() {
     "use strict";
-    init_annotation();
-    init_kinds();
-    init_lineage();
-    init_tidy();
   }
 });
 
@@ -1951,12 +1738,6 @@ var init_format = __esm({
 var init_canvas_group_arrange = __esm({
   "packages/core/src/canvas-group-arrange.ts"() {
     "use strict";
-    init_annotation();
-    init_placement();
-    init_format();
-    init_tidy();
-    init_canvas_group_kit();
-    init_canvas_groups();
   }
 });
 
@@ -1964,7 +1745,6 @@ var init_canvas_group_arrange = __esm({
 var init_group_aim = __esm({
   "packages/core/src/group-aim.ts"() {
     "use strict";
-    init_canvas_groups();
   }
 });
 
@@ -1972,8 +1752,6 @@ var init_group_aim = __esm({
 var init_group_stack = __esm({
   "packages/core/src/group-stack.ts"() {
     "use strict";
-    init_canvas_groups();
-    init_annotation();
   }
 });
 
@@ -1988,7 +1766,6 @@ var init_canvas_group_create = __esm({
 var init_bench = __esm({
   "packages/core/src/bench.ts"() {
     "use strict";
-    init_roster();
   }
 });
 
@@ -1996,7 +1773,6 @@ var init_bench = __esm({
 var init_benchjoin = __esm({
   "packages/core/src/benchjoin.ts"() {
     "use strict";
-    init_mentions();
   }
 });
 
@@ -2011,8 +1787,6 @@ var init_filenames = __esm({
 var init_googledoc = __esm({
   "packages/core/src/googledoc.ts"() {
     "use strict";
-    init_canvasitem();
-    init_filenames();
   }
 });
 
@@ -2020,9 +1794,6 @@ var init_googledoc = __esm({
 var init_addable = __esm({
   "packages/core/src/addable.ts"() {
     "use strict";
-    init_address();
-    init_googledoc();
-    init_browseritem();
   }
 });
 
@@ -2041,28 +1812,27 @@ var init_whatsnew = __esm({
 });
 
 // packages/core/src/protocol.ts
-function isLoopbackBase(base2) {
-  return LOOPBACK.test(hostOf(base2) ?? "");
+function isLoopbackBase(base) {
+  return LOOPBACK.test(hostOf(base) ?? "");
 }
-function hostOf(base2) {
+function hostOf(base) {
   try {
-    return new URL(base2).hostname;
+    return new URL(base).hostname;
   } catch {
     try {
-      return new URL(`http://${base2}`).hostname;
+      return new URL(`http://${base}`).hostname;
     } catch {
       return null;
     }
   }
 }
-function healthPath(base2) {
-  return isLoopbackBase(base2) ? "/healthz" : "/api/healthz";
+function healthPath(base) {
+  return isLoopbackBase(base) ? "/healthz" : "/api/healthz";
 }
-var CANVAS_GROUPS_FEATURE, QUESTIONNAIRES_FEATURE, DESIGN_REQUESTS_FEATURE, DESIGN_DECISIONS_FEATURE, DESIGN_REPAIRS_FEATURE, CURRENT_CLIENT_FEATURES, CLIENT_FEATURES_HEADER, PARK_ADOPTED_CODE, rcAnsweringRoute, FILENAME_HEADER, MAX_DIRECT_UPLOAD_BYTES, encodeFilename, LOOPBACK, HOME_JOIN_ROUTE, HOME_FORGET_ROUTE, HOMES_ROUTE, PRESENCE_WHERE_ROUTE, NEWS_ROUTE, ACTOR_KINDS_ROUTE, SERVING_ROUTE, HOME_GC_ROUTE;
+var CANVAS_GROUPS_FEATURE, QUESTIONNAIRES_FEATURE, DESIGN_REQUESTS_FEATURE, DESIGN_DECISIONS_FEATURE, DESIGN_REPAIRS_FEATURE, CURRENT_CLIENT_FEATURES, CLIENT_FEATURES_HEADER, leasesRoute, paintAckRoute, PARK_ADOPTED_CODE, rcAnsweringRoute, FILENAME_HEADER, MAX_DIRECT_UPLOAD_BYTES, encodeFilename, LOOPBACK, HOME_JOIN_ROUTE, HOME_FORGET_ROUTE, HOMES_ROUTE, PRESENCE_WHERE_ROUTE, NEWS_ROUTE, ACTOR_KINDS_ROUTE, SERVING_ROUTE, HOME_GC_ROUTE;
 var init_protocol = __esm({
   "packages/core/src/protocol.ts"() {
     "use strict";
-    init_address();
     CANVAS_GROUPS_FEATURE = "canvas-groups-v4";
     QUESTIONNAIRES_FEATURE = "questionnaires-v1";
     DESIGN_REQUESTS_FEATURE = "design-requests-v2";
@@ -2070,6 +1840,8 @@ var init_protocol = __esm({
     DESIGN_REPAIRS_FEATURE = "design-repairs-v1";
     CURRENT_CLIENT_FEATURES = `${CANVAS_GROUPS_FEATURE},${QUESTIONNAIRES_FEATURE},design-requests-v1,${DESIGN_REQUESTS_FEATURE},${DESIGN_DECISIONS_FEATURE},${DESIGN_REPAIRS_FEATURE}`;
     CLIENT_FEATURES_HEADER = "x-isocan-features";
+    leasesRoute = (canvasId) => `/api/projects/${encodeURIComponent(canvasId)}/leases`;
+    paintAckRoute = (canvasId) => `/api/projects/${encodeURIComponent(canvasId)}/paint-ack`;
     PARK_ADOPTED_CODE = "park-adopted";
     rcAnsweringRoute = (canvasId) => `/api/projects/${encodeURIComponent(canvasId)}/rc`;
     FILENAME_HEADER = "X-Isocan-Filename";
@@ -2113,9 +1885,6 @@ var DESIGN_SYSTEM_AFTER, DESIGN_SYSTEM_LIMIT;
 var init_designsystem = __esm({
   "packages/core/src/designsystem.ts"() {
     "use strict";
-    init_area();
-    init_canvas_scope();
-    init_design_role();
     init_design_role();
     DESIGN_SYSTEM_AFTER = 2;
     DESIGN_SYSTEM_LIMIT = DESIGN_SYSTEM_AFTER * 3;
@@ -2126,16 +1895,6 @@ var init_designsystem = __esm({
 var init_capabilities = __esm({
   "packages/core/src/capabilities.ts"() {
     "use strict";
-    init_area();
-    init_browseritem();
-    init_canvas_groups();
-    init_canvasitem();
-    init_designsystem();
-    init_drawing();
-    init_googledoc();
-    init_kinds();
-    init_modules();
-    init_textnode();
   }
 });
 
@@ -2217,9 +1976,6 @@ var KEPT_AFTER_MS;
 var init_evals = __esm({
   "packages/core/src/evals.ts"() {
     "use strict";
-    init_commands();
-    init_preference();
-    init_undone();
     KEPT_AFTER_MS = 12 * 60 * 60 * 1e3;
   }
 });
@@ -2242,8 +1998,6 @@ var init_slop = __esm({
 var init_command_bodies = __esm({
   "packages/core/src/command-bodies.ts"() {
     "use strict";
-    init_slop();
-    init_command_catalogue();
   }
 });
 
@@ -2265,9 +2019,6 @@ var init_shortcut = __esm({
 var init_shortcuttext = __esm({
   "packages/core/src/shortcuttext.ts"() {
     "use strict";
-    init_shortcut();
-    init_modules();
-    init_shortcuts();
   }
 });
 
@@ -2282,7 +2033,6 @@ var init_bytes = __esm({
 var init_merge = __esm({
   "packages/core/src/merge.ts"() {
     "use strict";
-    init_drawing();
   }
 });
 
@@ -2290,7 +2040,6 @@ var init_merge = __esm({
 var init_onit = __esm({
   "packages/core/src/onit.ts"() {
     "use strict";
-    init_commands();
   }
 });
 
@@ -2312,16 +2061,6 @@ var init_contextmark = __esm({
 var init_context_source = __esm({
   "packages/core/src/context-source.ts"() {
     "use strict";
-    init_canvas_group_context();
-  }
-});
-
-// packages/core/src/context-report.ts
-var init_context_report = __esm({
-  "packages/core/src/context-report.ts"() {
-    "use strict";
-    init_elapsed();
-    init_recap_head();
   }
 });
 
@@ -2329,13 +2068,6 @@ var init_context_report = __esm({
 var init_context = __esm({
   "packages/core/src/context.ts"() {
     "use strict";
-    init_model();
-    init_designsystem();
-    init_modules();
-    init_contextmark();
-    init_canvas_group_context();
-    init_context_source();
-    init_context_report();
   }
 });
 
@@ -2343,7 +2075,6 @@ var init_context = __esm({
 var init_memory_link = __esm({
   "packages/core/src/memory-link.ts"() {
     "use strict";
-    init_canvasitem();
   }
 });
 
@@ -2351,14 +2082,6 @@ var init_memory_link = __esm({
 var init_memory = __esm({
   "packages/core/src/memory.ts"() {
     "use strict";
-    init_canvasitem();
-    init_area();
-    init_canvas_groups();
-    init_placement();
-    init_designsystem();
-    init_canvas_group_context();
-    init_context();
-    init_memory_link();
     init_memory_link();
   }
 });
@@ -2367,9 +2090,6 @@ var init_memory = __esm({
 var init_design_scope = __esm({
   "packages/core/src/design-scope.ts"() {
     "use strict";
-    init_canvas_scope();
-    init_designsystem();
-    init_memory();
   }
 });
 
@@ -2378,10 +2098,6 @@ var panelActorRoute;
 var init_extensions = __esm({
   "packages/core/src/extensions.ts"() {
     "use strict";
-    init_commands();
-    init_identity();
-    init_ops();
-    init_opwords();
     panelActorRoute = (canvasId, itemId) => `/api/projects/${encodeURIComponent(canvasId)}/panels/${encodeURIComponent(itemId)}/actor`;
   }
 });
@@ -2389,15 +2105,6 @@ var init_extensions = __esm({
 // packages/core/src/media.ts
 var init_media = __esm({
   "packages/core/src/media.ts"() {
-    "use strict";
-    init_filenames();
-    init_modules();
-  }
-});
-
-// packages/core/src/designmd.ts
-var init_designmd = __esm({
-  "packages/core/src/designmd.ts"() {
     "use strict";
   }
 });
@@ -2413,17 +2120,6 @@ var init_contrast = __esm({
 var init_colour = __esm({
   "packages/core/src/colour.ts"() {
     "use strict";
-    init_contrast();
-    init_textnode();
-    init_area();
-    init_drawing();
-  }
-});
-
-// packages/core/src/textsurfaces.ts
-var init_textsurfaces = __esm({
-  "packages/core/src/textsurfaces.ts"() {
-    "use strict";
   }
 });
 
@@ -2438,9 +2134,6 @@ var init_theme = __esm({
 var init_groundtone = __esm({
   "packages/core/src/groundtone.ts"() {
     "use strict";
-    init_contrast();
-    init_textsurfaces();
-    init_theme();
   }
 });
 
@@ -2448,11 +2141,6 @@ var init_groundtone = __esm({
 var init_textcolour = __esm({
   "packages/core/src/textcolour.ts"() {
     "use strict";
-    init_contrast();
-    init_groundtone();
-    init_theme();
-    init_textsurfaces();
-    init_textnode();
   }
 });
 
@@ -2460,27 +2148,6 @@ var init_textcolour = __esm({
 var init_groundsample = __esm({
   "packages/core/src/groundsample.ts"() {
     "use strict";
-    init_theme();
-  }
-});
-
-// packages/core/src/design-contract.ts
-var sides, corners, ownedProperties;
-var init_design_contract = __esm({
-  "packages/core/src/design-contract.ts"() {
-    "use strict";
-    init_designmd();
-    sides = ["top", "right", "bottom", "left"];
-    corners = ["top-left", "top-right", "bottom-right", "bottom-left"];
-    ownedProperties = /* @__PURE__ */ new Set(["padding", ...sides.map((side) => `padding-${side}`), "border-radius", ...corners.map((corner) => `border-${corner}-radius`), "font-size", "font-weight"]);
-  }
-});
-
-// packages/core/src/design-direction.ts
-var init_design_direction = __esm({
-  "packages/core/src/design-direction.ts"() {
-    "use strict";
-    init_designmd();
   }
 });
 
@@ -2488,10 +2155,6 @@ var init_design_direction = __esm({
 var init_designcheck = __esm({
   "packages/core/src/designcheck.ts"() {
     "use strict";
-    init_design_contract();
-    init_contrast();
-    init_design_direction();
-    init_designmd();
   }
 });
 
@@ -2499,8 +2162,6 @@ var init_designcheck = __esm({
 var init_tokens = __esm({
   "packages/core/src/tokens.ts"() {
     "use strict";
-    init_designmd();
-    init_contrast();
   }
 });
 
@@ -2508,7 +2169,6 @@ var init_tokens = __esm({
 var init_fit = __esm({
   "packages/core/src/fit.ts"() {
     "use strict";
-    init_placement();
   }
 });
 
@@ -2555,7 +2215,6 @@ var init_operator = __esm({
   "packages/core/src/operator.ts"() {
     "use strict";
     init_prove_path();
-    init_prove_path();
     OPERATOR_PROOF_HEADER = "x-isocan-operator-proof";
     OPERATOR_PROOF_WINDOW_MS = 10 * 60 * 1e3;
     OPERATOR_LOG_ROUTE = "/api/operator/log";
@@ -2567,7 +2226,6 @@ var TAKEDOWNS_ROUTE, TAKEDOWNS_CANVAS_PARAM, OPERATOR_LOOK_MS;
 var init_takedown = __esm({
   "packages/core/src/takedown.ts"() {
     "use strict";
-    init_address();
     TAKEDOWNS_ROUTE = "/api/takedowns";
     TAKEDOWNS_CANVAS_PARAM = "canvas";
     OPERATOR_LOOK_MS = 60 * 60 * 1e3;
@@ -2586,7 +2244,6 @@ var BADGE_ENDED;
 var init_ended = __esm({
   "packages/core/src/ended.ts"() {
     "use strict";
-    init_takedown();
     BADGE_ENDED = "badge-ended";
   }
 });
@@ -2595,8 +2252,6 @@ var init_ended = __esm({
 var init_revoked = __esm({
   "packages/core/src/revoked.ts"() {
     "use strict";
-    init_grants();
-    init_takedown();
   }
 });
 
@@ -2605,9 +2260,6 @@ var NET_REFUSAL_DEFAULT_MS;
 var init_refusal = __esm({
   "packages/core/src/refusal.ts"() {
     "use strict";
-    init_takedown();
-    init_grants();
-    init_errors();
     NET_REFUSAL_DEFAULT_MS = 24 * 60 * 60 * 1e3;
   }
 });
@@ -2648,7 +2300,6 @@ var ASSET_MAX_BYTES, ASSETS_MAX_BYTES;
 var init_moduleassets = __esm({
   "packages/core/src/moduleassets.ts"() {
     "use strict";
-    init_modules();
     ASSET_MAX_BYTES = 256 * 1024;
     ASSETS_MAX_BYTES = 2 * 1024 * 1024;
   }
@@ -2658,8 +2309,6 @@ var init_moduleassets = __esm({
 var init_designimport = __esm({
   "packages/core/src/designimport.ts"() {
     "use strict";
-    init_designmd();
-    init_tokens();
   }
 });
 
@@ -2667,19 +2316,6 @@ var init_designimport = __esm({
 var init_converge = __esm({
   "packages/core/src/converge.ts"() {
     "use strict";
-    init_lineage();
-    init_preference();
-    init_proposal();
-  }
-});
-
-// packages/core/src/brief-card.ts
-var init_brief_card = __esm({
-  "packages/core/src/brief-card.ts"() {
-    "use strict";
-    init_kinds();
-    init_lineage();
-    init_proposal();
   }
 });
 
@@ -2687,10 +2323,40 @@ var init_brief_card = __esm({
 var init_proposal_words = __esm({
   "packages/core/src/proposal-words.ts"() {
     "use strict";
-    init_lineage();
-    init_contextmark();
-    init_brief_card();
-    init_proposal();
+  }
+});
+
+// packages/core/src/mention-breaker.ts
+function evaluateMentionBreaker(comments2, isAgent, limit = MAX_AGENT_MENTION_HOPS) {
+  let consecutiveAgentHops = 0;
+  for (let i = comments2.length - 1; i >= 0; i--) {
+    const comment = comments2[i];
+    if (comment.record || isSystemActor(comment.author.id)) continue;
+    if (!isAgent(comment.author.id)) {
+      break;
+    }
+    consecutiveAgentHops += 1;
+  }
+  if (consecutiveAgentHops >= limit) {
+    return {
+      allowed: false,
+      consecutiveAgentHops,
+      limit,
+      reason: `${limit}-hop agent mention circuit breaker tripped after ${consecutiveAgentHops} consecutive agent messages without a human reply`
+    };
+  }
+  return {
+    allowed: true,
+    consecutiveAgentHops,
+    limit
+  };
+}
+var MAX_AGENT_MENTION_HOPS;
+var init_mention_breaker = __esm({
+  "packages/core/src/mention-breaker.ts"() {
+    "use strict";
+    init_model();
+    MAX_AGENT_MENTION_HOPS = 4;
   }
 });
 
@@ -2777,7 +2443,26 @@ function dispatchReason(op, authorId, agent, canvas) {
     const thread = canvas?.threads[op.threadId];
     const candidates = canvas ? collectCanvasNames(canvas) : void 0;
     const reason = reasonFor(op.comment, thread, agent.actorId, agent.names, agent.joined, candidates);
-    if (reason && (!capped || reason === "mentioned")) return reason;
+    if (reason && (!capped || reason === "mentioned")) {
+      if (agent.isAgent && thread) {
+        const alreadyIncluded = thread.comments.some((c) => c.id === op.comment.id);
+        const history = alreadyIncluded ? thread.comments : [
+          ...thread.comments,
+          {
+            author: { id: authorId, name: authorId },
+            ...op.comment.mentions ? { mentions: op.comment.mentions } : {},
+            ...op.comment.record ? { record: op.comment.record } : {}
+          }
+        ];
+        const hopCheck = evaluateMentionBreaker(
+          history,
+          agent.isAgent,
+          agent.mentionHopLimit ?? MAX_AGENT_MENTION_HOPS
+        );
+        if (!hopCheck.allowed) return null;
+      }
+      return reason;
+    }
   }
   if (op.type === "questionnaire.ask" || op.type === "questionnaire.answer") {
     const thread = canvas?.threads[op.threadId];
@@ -2809,6 +2494,7 @@ var init_inbox_routing = __esm({
     init_mentions();
     init_identity();
     init_touches();
+    init_mention_breaker();
     init_inbox();
   }
 });
@@ -2914,18 +2600,6 @@ var init_inbox = __esm({
 var init_goodnight = __esm({
   "packages/core/src/goodnight.ts"() {
     "use strict";
-    init_identity();
-    init_lineage();
-    init_proposal();
-    init_designsystem();
-    init_roster();
-    init_undone();
-    init_commands();
-    init_inbox();
-    init_onit();
-    init_tidy();
-    init_textnode();
-    init_placement();
   }
 });
 
@@ -2933,10 +2607,6 @@ var init_goodnight = __esm({
 var init_morning = __esm({
   "packages/core/src/morning.ts"() {
     "use strict";
-    init_model();
-    init_identity();
-    init_proposal();
-    init_goodnight();
   }
 });
 
@@ -2951,17 +2621,6 @@ var init_design_words = __esm({
 var init_explain = __esm({
   "packages/core/src/explain.ts"() {
     "use strict";
-    init_lineage();
-    init_lane();
-    init_proposal();
-    init_preference();
-    init_designsystem();
-    init_design_scope();
-    init_design_words();
-    init_goodnight();
-    init_tidy();
-    init_placement();
-    init_textnode();
   }
 });
 
@@ -3029,8 +2688,6 @@ var init_roll = __esm({
 var init_summons = __esm({
   "packages/core/src/summons.ts"() {
     "use strict";
-    init_inbox();
-    init_onit();
   }
 });
 
@@ -3045,7 +2702,6 @@ var init_motion_messages = __esm({
 var init_docstatus = __esm({
   "packages/core/src/docstatus.ts"() {
     "use strict";
-    init_persona();
   }
 });
 
@@ -3053,9 +2709,6 @@ var init_docstatus = __esm({
 var init_jsoncanvas = __esm({
   "packages/core/src/jsoncanvas.ts"() {
     "use strict";
-    init_edges();
-    init_modules();
-    init_browseritem();
   }
 });
 
@@ -3063,12 +2716,6 @@ var init_jsoncanvas = __esm({
 var init_context_pin = __esm({
   "packages/core/src/context-pin.ts"() {
     "use strict";
-    init_canvasitem();
-    init_contextmark();
-    init_context_source();
-    init_canvas_group_context();
-    init_canvas_groups();
-    init_designsystem();
   }
 });
 
@@ -3076,7 +2723,6 @@ var init_context_pin = __esm({
 var init_slides = __esm({
   "packages/core/src/slides.ts"() {
     "use strict";
-    init_canvas_group_context();
   }
 });
 
@@ -3091,8 +2737,6 @@ var init_morph = __esm({
 var init_slidewrites = __esm({
   "packages/core/src/slidewrites.ts"() {
     "use strict";
-    init_textnode();
-    init_slides();
   }
 });
 
@@ -3100,9 +2744,6 @@ var init_slidewrites = __esm({
 var init_deckexport = __esm({
   "packages/core/src/deckexport.ts"() {
     "use strict";
-    init_slides();
-    init_slidewrites();
-    init_filenames();
   }
 });
 
@@ -3113,24 +2754,11 @@ var init_shelf = __esm({
   }
 });
 
-// packages/core/src/sprint-board.ts
-var init_sprint_board = __esm({
-  "packages/core/src/sprint-board.ts"() {
-    "use strict";
-    init_sprint();
-  }
-});
-
 // packages/core/src/sprint.ts
 var PHASES;
 var init_sprint = __esm({
   "packages/core/src/sprint.ts"() {
     "use strict";
-    init_sprint_board();
-    init_canvas_groups();
-    init_model();
-    init_commands();
-    init_area();
     PHASES = [
       { name: "map", label: "Map", kind: "group", mark: null, defaultSeconds: 45 * 60, area: "map" },
       { name: "experts", label: "Ask the Experts", kind: "group", mark: null, defaultSeconds: 20 * 60, area: "experts" },
@@ -3159,9 +2787,6 @@ var HOUR, DAY;
 var init_timeline = __esm({
   "packages/core/src/timeline.ts"() {
     "use strict";
-    init_opwords();
-    init_reducer();
-    init_canvas_groups();
     HOUR = 36e5;
     DAY = 24 * HOUR;
   }
@@ -3178,8 +2803,6 @@ var init_canvassort = __esm({
 var init_canvasswitch = __esm({
   "packages/core/src/canvasswitch.ts"() {
     "use strict";
-    init_canvassort();
-    init_shelf();
   }
 });
 
@@ -3206,8 +2829,6 @@ var LENS_WINDOWS;
 var init_lens = __esm({
   "packages/core/src/lens.ts"() {
     "use strict";
-    init_kinds();
-    init_opwords();
     LENS_WINDOWS = [
       { label: "Today", hours: 24 },
       { label: "This week", hours: 24 * 7 },
@@ -3220,8 +2841,6 @@ var init_lens = __esm({
 var init_export = __esm({
   "packages/core/src/export.ts"() {
     "use strict";
-    init_media();
-    init_address();
   }
 });
 
@@ -3236,16 +2855,6 @@ var init_text_attention = __esm({
 var init_live_drag = __esm({
   "packages/core/src/live-drag.ts"() {
     "use strict";
-  }
-});
-
-// packages/core/src/markdown-resources.ts
-var init_markdown_resources = __esm({
-  "packages/core/src/markdown-resources.ts"() {
-    "use strict";
-    init_address();
-    init_backing();
-    init_model();
   }
 });
 
@@ -3268,9 +2877,154 @@ var init_inbox_api = __esm({
 var init_loop = __esm({
   "packages/core/src/loop.ts"() {
     "use strict";
-    init_docstatus();
-    init_filenames();
-    init_persona();
+  }
+});
+
+// packages/core/src/models.ts
+var init_models = __esm({
+  "packages/core/src/models.ts"() {
+    "use strict";
+  }
+});
+
+// packages/core/src/jobs.ts
+var jobsRoute, jobRoute, jobAbandonRoute, jobRetryRoute;
+var init_jobs = __esm({
+  "packages/core/src/jobs.ts"() {
+    "use strict";
+    jobsRoute = (canvasId) => `/api/projects/${encodeURIComponent(canvasId)}/jobs`;
+    jobRoute = (canvasId, jobId) => `${jobsRoute(canvasId)}/${encodeURIComponent(jobId)}`;
+    jobAbandonRoute = (canvasId, jobId) => `${jobRoute(canvasId, jobId)}/abandon`;
+    jobRetryRoute = (canvasId, jobId) => `${jobRoute(canvasId, jobId)}/retry`;
+  }
+});
+
+// packages/core/src/sizing.ts
+var init_sizing = __esm({
+  "packages/core/src/sizing.ts"() {
+    "use strict";
+  }
+});
+
+// packages/core/src/node-chrome.ts
+var init_node_chrome = __esm({
+  "packages/core/src/node-chrome.ts"() {
+    "use strict";
+  }
+});
+
+// packages/core/src/resize-geometry.ts
+var init_resize_geometry = __esm({
+  "packages/core/src/resize-geometry.ts"() {
+    "use strict";
+  }
+});
+
+// packages/core/src/snap-v2.ts
+var init_snap_v2 = __esm({
+  "packages/core/src/snap-v2.ts"() {
+    "use strict";
+  }
+});
+
+// packages/core/src/make-room.ts
+var init_make_room = __esm({
+  "packages/core/src/make-room.ts"() {
+    "use strict";
+  }
+});
+
+// packages/core/src/auto-layout-infer.ts
+var init_auto_layout_infer = __esm({
+  "packages/core/src/auto-layout-infer.ts"() {
+    "use strict";
+  }
+});
+
+// packages/core/src/title-source.ts
+var init_title_source = __esm({
+  "packages/core/src/title-source.ts"() {
+    "use strict";
+  }
+});
+
+// packages/core/src/context-menu-model.ts
+var init_context_menu_model = __esm({
+  "packages/core/src/context-menu-model.ts"() {
+    "use strict";
+  }
+});
+
+// packages/core/src/failures.ts
+var init_failures = __esm({
+  "packages/core/src/failures.ts"() {
+    "use strict";
+  }
+});
+
+// packages/core/src/handles.ts
+var AGENT_ACTION_VERBS, ACTION_VERB_SET;
+var init_handles = __esm({
+  "packages/core/src/handles.ts"() {
+    "use strict";
+    AGENT_ACTION_VERBS = [
+      "thinking",
+      "reading",
+      "writing",
+      "generating",
+      "coding",
+      "verifying",
+      "coordinating",
+      "idle",
+      "done"
+    ];
+    ACTION_VERB_SET = new Set(AGENT_ACTION_VERBS);
+  }
+});
+
+// packages/core/src/agent-station.ts
+var AGENT_STATION_PHASES, PHASE_SET;
+var init_agent_station = __esm({
+  "packages/core/src/agent-station.ts"() {
+    "use strict";
+    AGENT_STATION_PHASES = [
+      "working",
+      "waiting",
+      "paused",
+      "done",
+      "failed",
+      "stopped"
+    ];
+    PHASE_SET = new Set(AGENT_STATION_PHASES);
+  }
+});
+
+// packages/core/src/work-visible.ts
+var init_work_visible = __esm({
+  "packages/core/src/work-visible.ts"() {
+    "use strict";
+  }
+});
+
+// packages/core/src/context-graph.ts
+var init_context_graph = __esm({
+  "packages/core/src/context-graph.ts"() {
+    "use strict";
+  }
+});
+
+// packages/core/src/voice-choreography.ts
+var DEFAULT_AGENT_DISPOSITION;
+var init_voice_choreography = __esm({
+  "packages/core/src/voice-choreography.ts"() {
+    "use strict";
+    DEFAULT_AGENT_DISPOSITION = Object.freeze({
+      initiative: 0.5,
+      curiosity: 0.5,
+      divergence: 0.5,
+      depth: 0.5,
+      partnering: 0.5
+    });
   }
 });
 
@@ -3286,7 +3040,6 @@ var init_src = __esm({
     init_canvas_group_copy();
     init_canvas_group_migration();
     init_ops();
-    init_reducer();
     init_badge();
     init_grants();
     init_public();
@@ -3359,7 +3112,6 @@ var init_src = __esm({
     init_preference();
     init_extensions();
     init_media();
-    init_designmd();
     init_contrast();
     init_colour();
     init_textcolour();
@@ -3427,9 +3179,26 @@ var init_src = __esm({
     init_live_drag();
     init_edges();
     init_text_anchor();
-    init_markdown_resources();
     init_inbox_api();
     init_loop();
+    init_models();
+    init_jobs();
+    init_sizing();
+    init_node_chrome();
+    init_resize_geometry();
+    init_snap_v2();
+    init_make_room();
+    init_auto_layout_infer();
+    init_title_source();
+    init_context_menu_model();
+    init_failures();
+    init_handles();
+    init_agent_station();
+    init_work_visible();
+    init_mention_breaker();
+    init_receipts();
+    init_context_graph();
+    init_voice_choreography();
   }
 });
 
@@ -3484,9 +3253,9 @@ function asksIn(entries, undone) {
 }
 function resultOf(entry, itemId) {
   const op = entry.envelope.op;
-  const base2 = { seq: entry.seq, ts: Date.parse(entry.envelope.ts), itemId, by: entry.envelope.actor };
-  if ((op.type === "item.addVersion" || op.type === "item.edit") && op.itemId === itemId) return { ...base2, versionId: op.version.id };
-  if (op.type === "item.add" && op.properties?.[PARENT_PROP] === itemId) return { ...base2, childId: op.itemId };
+  const base = { seq: entry.seq, ts: Date.parse(entry.envelope.ts), itemId, by: entry.envelope.actor };
+  if ((op.type === "item.addVersion" || op.type === "item.edit") && op.itemId === itemId) return { ...base, versionId: op.version.id };
+  if (op.type === "item.add" && op.properties?.[PARENT_PROP] === itemId) return { ...base, childId: op.itemId };
   return null;
 }
 function goneAt(entries, undone, r, horizon) {
@@ -3676,12 +3445,12 @@ function stuckAnswered(canvas, at) {
 }
 function stuckSections(stuck, title, q, lead, waits) {
   const who = q ? "I've" : `${stuck.tries.at(-1).by.name} has`;
-  const out = [{ key: "guessing", heading: `${who} been guessing at \u201C${title}\u201D`, lines: stuck.facts.map((text2) => ({ text: text2 })) }];
+  const out = [{ key: "guessing", heading: `${who} been guessing at \u201C${title}\u201D`, lines: stuck.facts.map((text) => ({ text })) }];
   if (!q) {
     out.push({ key: "waits", heading: "The question", lines: [{ text: waits ? `The question waits: ${waits}` : `Asked ${lead ?? "the lead"}: a question instead of another take, on its way.` }] });
     return out;
   }
-  out.push({ key: "noticed", heading: "What I noticed \u2014 say if I'm wrong", lines: q.observations.map((text2) => ({ text: text2 })) });
+  out.push({ key: "noticed", heading: "What I noticed \u2014 say if I'm wrong", lines: q.observations.map((text) => ({ text })) });
   out.push({
     key: "tiles",
     heading: "Now, or instead?",
@@ -3733,32 +3502,27 @@ init_src();
 init_questionnaire();
 
 // packages/core/src/design-request.ts
-init_design_request_parse();
-init_design_request_parse();
 var designRequestsRoute = (canvasId) => `/api/projects/${encodeURIComponent(canvasId)}/design/requests`;
 
 // packages/core/src/design-decision.ts
-init_design_decision_state();
-init_identity();
-init_design_decision_parse();
 var designDecisionsRoute = (canvasId) => `/api/projects/${encodeURIComponent(canvasId)}/design/decisions`;
 
 // packages/core/src/design-repair.ts
-init_design_repair_parse();
 var designRepairsRoute = (canvasId) => `/api/projects/${encodeURIComponent(canvasId)}/design/repairs`;
 
 // packages/api/src/routes.ts
 init_src();
 init_src();
 init_src();
-var imagePath = "/api/image";
-var swatchesPath = "/api/image/swatches";
+var imagePath = "/api/m/mood/image";
+var swatchesPath = "/api/m/mood/swatches";
+var userKeysPath = "/api/me/keys";
 var summariesPath = (canvasId) => `/api/projects/${encodeURIComponent(canvasId)}/summaries`;
 var OPERATIONS_ROUTE = "/api/ops";
 var platformFetch = (input, init) => fetch(input, init);
 var DaemonRoutes = class {
-  constructor(base2, badgeStore, lifetime, sourceContext) {
-    this.base = base2;
+  constructor(base, badgeStore, lifetime, sourceContext) {
+    this.base = base;
     this.badgeStore = badgeStore;
     this.lifetime = lifetime;
     if (sourceContext) this.sourceContext = Object.freeze({
@@ -3844,7 +3608,7 @@ var DaemonRoutes = class {
    * Exactly one recovery per request, and never a loop: a 401 goes to the
    * door (which re-claims on the way back), and a `not-your-actor` claims.
    */
-  async request(method, url2, body, signal, extra) {
+  async request(method, url, body, signal, extra) {
     signal = this.requestSignal(signal);
     signal?.throwIfAborted();
     const isClaimOp = body !== null && typeof body === "object" && body.op?.type === "actor.claim";
@@ -3858,7 +3622,7 @@ var DaemonRoutes = class {
       };
       signal?.throwIfAborted();
       if (body !== void 0) headers["Content-Type"] = "application/json";
-      return this.fetcher(`${this.base}${url2}`, {
+      return this.fetcher(`${this.base}${url}`, {
         method,
         ...signal !== void 0 ? { signal } : {},
         ...Object.keys(headers).length > 0 ? { headers } : {},
@@ -3871,7 +3635,7 @@ var DaemonRoutes = class {
     if (res.status === 401 && json?.code === BADGE_ENDED && json?.reason === "operator") {
       throw new ApiError(401, json.error, BADGE_ENDED, "operator");
     }
-    const recovered = res.status === 401 ? await this.reBadge(signal) : json?.code === "not-your-actor" && await this.reclaimIdentity();
+    const recovered = res.status === 401 && json?.code === "identity-required" ? await this.reclaimIdentity() : res.status === 401 ? await this.reBadge(signal) : json?.code === "not-your-actor" && await this.reclaimIdentity();
     if (recovered) {
       signal?.throwIfAborted();
       res = await send();
@@ -4105,13 +3869,39 @@ var DaemonRoutes = class {
     this.observedGroupModes.set(canvasId, preview.fromMode);
     return preview;
   }
-  createSession(canvasId, actor, label, harness, kind) {
+  createSession(canvasId, actor, label, harness, kind, handle) {
     return this.request("POST", `/api/projects/${canvasId}/sessions`, {
       actor,
       ...label !== void 0 ? { label } : {},
       ...harness !== void 0 ? { harness } : {},
-      ...kind !== void 0 ? { kind } : {}
+      ...kind !== void 0 ? { kind } : {},
+      ...handle !== void 0 ? { handle } : {}
     });
+  }
+  /** Active ephemeral 30-second soft node leases on `canvasId`. */
+  leases(canvasId) {
+    return this.request("GET", leasesRoute(canvasId));
+  }
+  /** Acquire or renew a soft node lease on `itemId` for `handle`. */
+  acquireLease(canvasId, body) {
+    return this.request("POST", leasesRoute(canvasId), body);
+  }
+  /** Release a soft node lease on `itemId`. */
+  releaseLease(canvasId, itemId, handle) {
+    const query = handle ? `?handle=${encodeURIComponent(handle)}` : "";
+    return this.request("DELETE", `${leasesRoute(canvasId)}/${encodeURIComponent(itemId)}${query}`);
+  }
+  /** Record an ephemeral paint acknowledgement up to `seq`. */
+  recordPaintAck(canvasId, seq) {
+    return this.request("POST", paintAckRoute(canvasId), { seq });
+  }
+  /** Read or await a paint acknowledgement (`rendered` vs `applied`). */
+  paintAckStatus(canvasId, opts = {}) {
+    const params = new URLSearchParams();
+    if (opts.seq !== void 0) params.set("seq", String(opts.seq));
+    if (opts.waitMs !== void 0) params.set("waitMs", String(opts.waitMs));
+    const suffix = params.toString() ? `?${params.toString()}` : "";
+    return this.request("GET", `${paintAckRoute(canvasId)}${suffix}`);
   }
   updateSession(canvasId, sessionId, patch) {
     return this.request("PUT", `/api/projects/${canvasId}/sessions/${sessionId}`, patch);
@@ -4532,7 +4322,7 @@ var DaemonRoutes = class {
     return this.request("POST", JUDGMENT_ROUTE, request);
   }
   /**
-   * **Draw a mood-board spread** (`POST /api/image`, moodboard phase 0): the
+   * **Draw a mood-board spread** (`POST /api/m/mood/image`, moodboard phase 0): the
    * home wraps the words in its template, spends its Gemini key, and adds the
    * tiles as `actor`; the answer names them. Refusals arrive as the home's
    * codes (`image-refused`, `image-owner-only`, `image-unavailable`, …).
@@ -4541,7 +4331,7 @@ var DaemonRoutes = class {
     return this.request("POST", imagePath, request);
   }
   /**
-   * **Read dominant colour swatches from an image item** (`POST /api/image/swatches`,
+   * **Read dominant colour swatches from an image item** (`POST /api/m/mood/swatches`,
    * moodboard phase 2): uses `sharp` when the home has it, or falls back to a
    * picture-capable text model (`estimated: true`).
    */
@@ -4553,8 +4343,8 @@ var DaemonRoutes = class {
     return this.request("GET", `/api/commands`);
   }
   /** Write one for this home. `text` is the file, frontmatter and all. */
-  saveCommand(name, text2) {
-    return this.request("PUT", `/api/commands/${encodeURIComponent(name)}`, { text: text2 });
+  saveCommand(name, text) {
+    return this.request("PUT", `/api/commands/${encodeURIComponent(name)}`, { text });
   }
   /** Remove one of this home's; the built-in of that name comes back. */
   deleteCommand(name) {
@@ -4794,6 +4584,41 @@ var DaemonRoutes = class {
     const suffix = canvasId ? `?${TAKEDOWNS_CANVAS_PARAM}=${encodeURIComponent(canvasId)}` : "";
     return this.request("GET", `${TAKEDOWNS_ROUTE}${suffix}`);
   }
+  /** Per-user BYOK keys stored for the authenticated caller on this home (`GET /api/me/keys`). */
+  async listUserKeys() {
+    return this.request("GET", userKeysPath);
+  }
+  /** Store a sealed per-user BYOK key for the authenticated caller (`PUT /api/me/keys/:provider`). */
+  async setUserKey(provider, key) {
+    return this.request("PUT", `${userKeysPath}/${encodeURIComponent(provider)}`, { key });
+  }
+  /** Remove the authenticated caller's per-user BYOK key (`DELETE /api/me/keys/:provider`). */
+  async deleteUserKey(provider) {
+    return this.request("DELETE", `${userKeysPath}/${encodeURIComponent(provider)}`);
+  }
+  /** List async jobs recorded on this canvas's items (`GET /api/projects/:id/jobs`). */
+  async listJobs(canvasId) {
+    return this.request("GET", jobsRoute(canvasId));
+  }
+  /** Inspect a single async job on this canvas (`GET /api/projects/:id/jobs/:jobId`). */
+  async getJob(canvasId, jobId) {
+    return this.request("GET", jobRoute(canvasId, jobId));
+  }
+  /** Abandon an active async job (`POST /api/projects/:id/jobs/:jobId/abandon`). */
+  async abandonJob(canvasId, jobId, body) {
+    return this.request("POST", jobAbandonRoute(canvasId, jobId), body ?? {});
+  }
+  /** Retry a terminal async job on the same item (`POST /api/projects/:id/jobs/:jobId/retry`). */
+  async retryJob(canvasId, jobId, body) {
+    return this.request("POST", jobRetryRoute(canvasId, jobId), body ?? {});
+  }
+  /** Call a module's server route (`/api/m/<module>/<path>`) through the daemon's authenticated transport. */
+  async moduleRequest(method, route, body, signal) {
+    if (!route.startsWith("/api/m/")) {
+      throw new Error(`moduleRequest expects a /api/m/<module>/<path> route, got "${route}"`);
+    }
+    return this.request(method, route, body, signal);
+  }
   async uploadBlob(canvasId, data, mimeType, filename, signal) {
     signal = this.requestSignal(signal);
     signal?.throwIfAborted();
@@ -4904,8 +4729,8 @@ var summonsPrompt = (canvasTitle, agentName, payload, context) => {
 The payload (the same shape \`isocan wait --json\` returns):
 ` + JSON.stringify(fullPayload, null, 2);
 };
-function clipStatus(text2, max = 64) {
-  const clean = text2.replace(/\s+/g, " ").trim();
+function clipStatus(text, max = 64) {
+  const clean = text.replace(/\s+/g, " ").trim();
   if (clean.length <= max) return clean;
   const cut = clean.slice(0, max - 1);
   const word = cut.lastIndexOf(" ");
@@ -4967,13 +4792,13 @@ function humanizeToolStatus(rawTitle, canvasItems) {
   }
   const fileRead = raw.match(/^(?:File|Read|View|Cat)\s+(.+)$/i);
   if (fileRead) {
-    const base2 = fileRead[1].trim().replace(/['"]/g, "").split(/[\\/]/).pop() ?? fileRead[1].trim();
-    return { status: `reading ${clipStatus(base2, 36)}\u2026`, ...itemId ? { itemId } : {} };
+    const base = fileRead[1].trim().replace(/['"]/g, "").split(/[\\/]/).pop() ?? fileRead[1].trim();
+    return { status: `reading ${clipStatus(base, 36)}\u2026`, ...itemId ? { itemId } : {} };
   }
   const fileWrite = raw.match(/^(?:Write|Edit|Update|Patch)\s+(.+)$/i);
   if (fileWrite) {
-    const base2 = fileWrite[1].trim().replace(/['"]/g, "").split(/[\\/]/).pop() ?? fileWrite[1].trim();
-    return { status: `editing ${clipStatus(base2, 36)}\u2026`, ...itemId ? { itemId } : {} };
+    const base = fileWrite[1].trim().replace(/['"]/g, "").split(/[\\/]/).pop() ?? fileWrite[1].trim();
+    return { status: `editing ${clipStatus(base, 36)}\u2026`, ...itemId ? { itemId } : {} };
   }
   if (/^(?:Search|Grep|Find|Glob)\b/i.test(raw)) {
     return { status: "searching workspace\u2026", ...itemId ? { itemId } : {} };
@@ -5096,9 +4921,9 @@ async function room(deps, life, announce, onLeave) {
     return snapshot.canvas.agents ?? {};
   };
   const rcCwd = deps.cwd;
-  const reap = async (roster2) => {
+  const reap = async (roster) => {
     for (const row of await rows.list()) {
-      if (row.canvasId === p.id && !roster2[row.actorId]) await rows.remove(p.id, row.actorId);
+      if (row.canvasId === p.id && !roster[row.actorId]) await rows.remove(p.id, row.actorId);
     }
   };
   const adoptionRow = async (actorId, name) => {
@@ -5115,12 +4940,12 @@ async function room(deps, life, announce, onLeave) {
       sessionId: null
     };
   };
-  const reconcile = async (roster2) => {
-    for (const record2 of Object.values(roster2)) {
+  const reconcile = async (roster) => {
+    for (const record2 of Object.values(roster)) {
       if (notHeld.has(record2.actor.id)) continue;
       await rows.adopt(await adoptionRow(record2.actor.id, record2.actor.name));
     }
-    await reap(roster2);
+    await reap(roster);
   };
   const known = /* @__PURE__ */ new Map();
   const opening = await rosterOf();
@@ -5684,8 +5509,8 @@ async function room(deps, life, announce, onLeave) {
     for (const d of dispatches.values()) if (d.scannedTip < from) from = d.scannedTip;
     return from;
   };
-  const takeUp = async (roster2) => {
-    for (const record2 of Object.values(roster2)) {
+  const takeUp = async (roster) => {
+    for (const record2 of Object.values(roster)) {
       if (dispatches.has(record2.actor.id) || notHeld.has(record2.actor.id)) continue;
       known.set(record2.actor.id, record2.actor.name);
       const parked = await parkAgent(record2.actor.id, await ownRow(record2.actor.id));
@@ -5751,8 +5576,8 @@ async function room(deps, life, announce, onLeave) {
         await refreshHands();
       }
     }
-    const roster2 = lastRoster;
-    await takeUp(roster2);
+    const roster = lastRoster;
+    await takeUp(roster);
     for (const entry of batch.entries) {
       const op = entry.envelope.op;
       const by = entry.envelope.actor;
@@ -5764,7 +5589,7 @@ async function room(deps, life, announce, onLeave) {
             await sayNotHeld(op.agent.id);
             continue;
           }
-          const record2 = roster2[op.agent.id];
+          const record2 = roster[op.agent.id];
           narrate(`${by.name} enrolled ${op.agent.name} \u2014 answerable here${record2 ? ` \xB7 ${policyLine(record2)}` : ""}`);
           if (record2) await sayPolicy(record2);
           const row = await adoptionRow(op.agent.id, op.agent.name);
@@ -5786,7 +5611,7 @@ async function room(deps, life, announce, onLeave) {
         await state.delete(keys.session(op.actorId));
         continue;
       }
-      for (const record2 of Object.values(roster2)) {
+      for (const record2 of Object.values(roster)) {
         const dispatch = dispatches.get(record2.actor.id);
         if (!dispatch || entry.seq <= dispatch.scannedTip) continue;
         const joined = snapshot?.joined;
@@ -5837,9 +5662,9 @@ async function room(deps, life, announce, onLeave) {
     for (const [actorId, dispatch] of dispatches) {
       if (dispatch.busy || dispatch.pending.length === 0) continue;
       if (clock.now() < dispatch.retryAfter) continue;
-      const record2 = roster2[actorId];
+      const record2 = roster[actorId];
       if (!record2) continue;
-      const enrolledIds = new Set(Object.keys(roster2));
+      const enrolledIds = new Set(Object.keys(roster));
       const hasPersonWord = dispatch.pending.some(
         (e2) => !enrolledIds.has(e2.envelope.actor.id) && !isSystemActor(e2.envelope.actor.id)
       );

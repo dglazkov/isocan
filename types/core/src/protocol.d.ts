@@ -15,6 +15,7 @@
  */
 import type { CursorSignal, TextAttention } from "./text-attention.js";
 import type { PresenceDrag } from "./live-drag.js";
+import type { AgentActionVerb } from "./handles.js";
 import type { Capability } from "./grants.js";
 import type { ActorColors, ActorJoins, ActorNames } from "./identity.js";
 import type { Actor, Canvas, CanvasContents } from "./model.js";
@@ -228,6 +229,14 @@ export type ClientMessage = {
     /** A drag in progress — only while the press has become a drag, and
      * absent from the first beat after it ends. See `PresenceDrag`. */
     drag?: PresenceDrag | undefined;
+    /** Follow-Me viewport rect reported by a web client (Open Stitch Phase 2A). */
+    viewport?: PresenceViewport | null | undefined;
+}
+/** Ephemeral paint acknowledgement from a web client after painting through `seq`. */
+ | {
+    type: "paint.ack";
+    canvasId: string;
+    seq: number;
 }
 /**
  * A whole roster, from a connection that speaks for several people at once.
@@ -275,6 +284,29 @@ export type ClientMessage = {
     owners?: Actor[];
     policies?: Record<string, RcPolicy>;
 };
+/** Follow-Me viewport rectangle reported by a live client (OS1 ADR 0275). */
+export interface PresenceViewport {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    zoom: number;
+    /** Up to 40 item ids visible in this viewport, nearest centre first. */
+    visibleIds?: string[];
+}
+/** One ephemeral, daemon-held 30-second soft lease on an item (OS1 ADR 0274). */
+export interface NodeLease {
+    canvasId: string;
+    itemId: string;
+    handle: string;
+    actorId?: string;
+    acquiredAt: string;
+    expiresAt: string;
+}
+/** Route for inspecting and acquiring/releasing ephemeral soft node leases. */
+export declare const leasesRoute: (canvasId: string) => string;
+/** Route for reading or recording ephemeral paint acknowledgements. */
+export declare const paintAckRoute: (canvasId: string) => string;
 /** One live connection, as the desk holds it: who is on the canvas, what
  *  they may do, and what they are doing right now. */
 export interface PresenceSession {
@@ -318,6 +350,14 @@ export interface PresenceSession {
     harness: string | null;
     /** Display override; fall back to actor.name. */
     label: string | null;
+    /** Deterministic collaborator handle (`ada`, `newton`, …; without leading `@`). */
+    handle?: string;
+    /** Explicit honest presence verb (`thinking`, `reading`, `writing`, …; OS1 ADR 0272/0273). */
+    action?: AgentActionVerb;
+    /** Live Follow-Me viewport rectangle for this session (OS1 ADR 0275). */
+    viewport?: PresenceViewport | null;
+    /** Most recent first-person past-tense work summary (OS1 ADR 0018). */
+    workSummary?: string | null;
     cursor: {
         x: number;
         y: number;
@@ -409,6 +449,8 @@ export type PresenceActivity = {
 export interface CreateSessionRequest {
     actor: Actor;
     label?: string;
+    /** Deterministic or chosen `@handle` (without leading `@`). */
+    handle?: string;
     /** See `PresenceSession.harness`. */
     harness?: string;
     /** "cli" (the default) or "rc" — a parked rc announcing itself. "web"
@@ -443,6 +485,14 @@ export interface UpdateSessionRequest {
      * from what a command is doing; never displaces an explicit status. */
     statusSource?: "explicit" | "lifecycle" | "inferred";
     activity?: PresenceActivity | null;
+    /** Explicit collaborator handle (`ada`, `newton`, …). */
+    handle?: string | null;
+    /** Explicit honest presence verb (`thinking`, `reading`, `writing`, …), or null to clear. */
+    action?: AgentActionVerb | null;
+    /** Follow-Me viewport rect, or null to clear. */
+    viewport?: PresenceViewport | null;
+    /** First-person past-tense work summary, or null to clear. */
+    workSummary?: string | null;
     /** Pick up a thread, or (null) put it down. Omit to leave it alone: the
      * whole point is that it survives everything else a session does. */
     onThread?: string | null;

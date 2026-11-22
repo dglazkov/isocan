@@ -109,7 +109,9 @@ export declare const THEME_PROP = "theme";
  * with items as stones in raked rings. They borrow Ocean's fish and Desert's
  * crescent.
  */
-export declare const THEMES: readonly ["galaxy", "ocean", "mountains", "farm", "desert", "meadow", "night", "snow", "aurora", "pond", "zen"];
+export declare const THEMES: readonly ["galaxy", "ocean", "mountains", "farm", "desert", "meadow", "night", "snow", "aurora", "pond", "zen", "stitch"];
+/** True when `theme` is drawn as a CSS surface ground rather than a painted JPEG tile. */
+export declare function isSurfaceTheme(theme: CanvasTheme | null): boolean;
 /** One of the seeded grounds. Not a string: a canvas wearing a name nothing
  *  can draw is a blank screen with no way to explain itself. */
 export type CanvasTheme = (typeof THEMES)[number];

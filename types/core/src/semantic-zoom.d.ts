@@ -34,9 +34,10 @@ export declare const SUMMARY_QUIET_MS = 30000;
  * The model a summary asks for when `ISOCAN_SUMMARY_MODEL` names none and the
  * home's text key is Claude's: the cheapest tier. A summary is a short,
  * high-volume, low-stakes call; `/api/text`'s own default is the most capable
- * tier, which is wrong for this (design §7).
+ * tier, which is wrong for this (design §7). The id is the manifest's
+ * `summary` row (`models.ts`).
  */
-export declare const SUMMARY_MODEL = "claude-haiku-5-5";
+export declare const SUMMARY_MODEL: string;
 /**
  * The system line a summary is asked under. `/api/text`'s generator sends a
  * copywriting one ("You write the words on an app's screens…"), which phase 0

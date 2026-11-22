@@ -148,6 +148,15 @@ export declare function dispatchReason(op: Operation, authorId: string, agent: {
      * listens to everyone. Absent: the author speaks for itself.
      */
     onBehalfOf?: readonly string[] | undefined;
+    /**
+     * Predicate identifying agent actors for the 4-hop `@mention` circuit
+     * breaker (Open Stitch Phase 2A, OS1 ADR 0274). When supplied, consecutive
+     * agent-to-agent messages in one thread stop waking agents once they hit
+     * `mentionHopLimit` (default 4) until a human posts in the thread.
+     */
+    isAgent?: ((actorId: string) => boolean) | undefined;
+    /** Override for the 4-hop mention breaker limit (default 4). */
+    mentionHopLimit?: number | undefined;
 }, canvas: CanvasContents | null | undefined): InboxReason | "change" | null;
 export declare function inboxOn(canvas: CanvasContents, actor: Actor, names: readonly MentionCandidate[], canvasId: string, canvasTitle?: string, 
 /** The registry's joins, when the caller holds them — see `addressesActor`. */

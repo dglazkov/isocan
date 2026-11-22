@@ -74,3 +74,6 @@ export type { DirBinding, DirMarker } from "./binding.js";
 export * from "./personas.js";
 export * from "./personal-desk.js";
 export type { CanvasLifecycle } from "./store.js";
+export { DEFAULT_JOB_POLL_MS, JobBadRequestError, JobConflictError, JobManager, JobNotFoundError, } from "./jobs.js";
+export type { JobClock, JobDaemonOptions, JobManagerOptions } from "./jobs.js";
+export { DEFAULT_LEASE_TTL_MS, LeaseManager, type LeaseAcquireResult } from "./leases.js";

@@ -66,6 +66,11 @@ interface OwnAsk {
     model?: (provider: TextProvider) => string | undefined;
     fallbacks?: boolean;
     images?: readonly TextImage[];
+    /** Per-user BYOK override (Open Stitch phase 0.3): spends the caller's own key instead of the home's. */
+    overrideKey?: {
+        key: string;
+        provider: TextProvider;
+    };
 }
 export declare class TextModel {
     private readonly opts;

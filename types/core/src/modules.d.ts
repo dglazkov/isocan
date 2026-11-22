@@ -22,6 +22,10 @@ import type { TextRequest } from "./text.js";
 import type { CopyDeck, CopyEdit } from "./copy-deck.js";
 import type { CopyVoice } from "./copy-voice.js";
 import type { CommandMetadata, SlashCommand } from "./commands.js";
+import type { JsonSchema } from "./jev.js";
+import type { KeyProvider, ResolvedServerKey } from "./keys.js";
+import type { JobSnapshot, ServerJobRunner, StartJobSpec } from "./jobs.js";
+import type { CanvasSnapshotResponse } from "./protocol.js";
 /**
  * **The module registry** (`docs/projects/modules/design.md`).
  *
@@ -1235,6 +1239,179 @@ export type ModuleMenuRow = {
     separator: string;
 };
 /**
+ * **A module's server half** (module API 0.2.12, 19 Nov 2026; Open Stitch
+ * phase 0.1) — the `./server` export, a third twin beside `./web` and
+ * `./cli`, read by the home alone.
+ *
+ * Until now a module could not own a route, so anything that spent a model
+ * key — talk's Live token, mood's pictures — was a core-and-server change
+ * with the module's name on it (`model-routes.ts` held both). The design
+ * said what the door would be if a second module ever needed one:
+ * `/api/m/<name>/…` behind the same badge check. This is that door, and the
+ * two routes that forced it are its first tenants.
+ *
+ * **What a server route may do** is what the home's own model routes do, and
+ * the home does the doing: the badge check, the takedown, the admission and
+ * the edit rung, forwarding to the canvas's home, whose key it is (owner-only
+ * spend) and the badge's rate all run BEFORE the handler, in the order the
+ * home's routes run them, so a handler cannot forget one. A handler is
+ * handed the key it was cleared to spend and a small host, and answers with
+ * a status and a body. It cannot add an op, read the desk, or keep a store:
+ * what it writes is `submit`, which is an op as the caller.
+ */
+export interface ServerModule {
+    /** The package name — `@isocan/<name>`; routes mount under `/api/m/<name>/`. */
+    name: string;
+    routes: readonly ServerRoute[];
+    /** Named async job runners (`kind → runner`) polled by the home daemon (Open Stitch phase 0.2). */
+    jobs?: Readonly<Record<string, ServerJobRunner>>;
+}
+/**
+ * **Whose key a route may spend.** `"owner"` (the default) is the home's own
+ * rule for `/api/text` (`docs/projects/keys/design.md`): a key from the
+ * environment serves every editor; a key from keys.json pays only for the
+ * machine's person, or for everyone once they turned sharing on. `"shared"`
+ * is that rule without the owner's exception: only a key meant for everyone
+ * — the operator's, or one its owner shared — so a route that acts for other
+ * people is never quietly paid by the person whose machine it runs on.
+ * `"none"` names no provider and spends nothing; the door still runs.
+ */
+type ModuleSpend = "none" | "owner" | "shared";
+/** One route a module's server half owns. */
+export interface ServerRoute {
+    method: "GET" | "POST";
+    /** Relative to the module's mount — `token`, `image`, `swatches` — with no leading slash. */
+    path: string;
+    /** Whose key this spends; default `"owner"`. */
+    spend?: ModuleSpend;
+    /** The provider whose key it spends. Required unless `spend` is `"none"`. */
+    provider?: KeyProvider;
+    /** Asks per badge per minute, counted only once every check has passed. Absent, unmetered. */
+    rate?: {
+        perMinute: number;
+    };
+    /** Fastify's body limit for a `POST`, in bytes; default 16 KiB. */
+    bodyLimit?: number;
+    /** The route's own words for the home's refusals — the codes its web and CLI halves already read. */
+    says?: ServerRouteWords;
+    /**
+     * **Refusals that cost nothing**, answered before the door: the body's
+     * shape, a deny-list. A canvas must still be named for the door to run;
+     * the home refuses an ask without one in the route's `badRequest` words.
+     */
+    check?: (ask: {
+        body: unknown;
+        query: Readonly<Record<string, string>>;
+    }) => ModuleResponse | null;
+    handler: (req: ModuleRequest, host: ServerHost) => Promise<ModuleResponse>;
+}
+/** What the home says, in a route's words, when it refuses before the handler. Absent, the home's own sentences and `module-…` codes. */
+interface ServerRouteWords {
+    /** The code for a stored key that is somebody else's; the sentence is `ownerOnlySentence`. */
+    ownerOnly?: string;
+    unavailable?: {
+        code: string;
+        error: string;
+    };
+    rateLimited?: {
+        code: string;
+        error: string;
+    };
+    badRequest?: {
+        code: string;
+        error: string;
+    };
+}
+/** The ask, once the home has let it through: the canvas it names (admitted, editable and homed here), the body and query as sent, and the badge asking. */
+export interface ModuleRequest {
+    canvasId: string;
+    body: unknown;
+    query: Readonly<Record<string, string>>;
+    badgeId: string;
+}
+/** What a handler answers: a status and a JSON body, sent as they are. */
+export interface ModuleResponse {
+    status: number;
+    body: unknown;
+}
+/**
+ * **What a module's handler is handed** — the helpers the home's own model
+ * routes use, promoted, and nothing else (`CliHost`'s rule: a module that
+ * wants more is asking for a helper to be promoted, a review question and not
+ * a private import). Every member acts as the badge that asked.
+ */
+export interface ServerHost {
+    /** The module's name, for log lines. */
+    module: string;
+    /** The badge asking. */
+    badgeId: string;
+    /** Throws the ops route's refusal unless the badge claims this actor — asked before anything is spent on their behalf. */
+    speaksFor: (actorId: string) => Promise<void>;
+    /** The first actor claimed by this badge, or null when none is claimed yet (for routes whose `actor` field is optional). */
+    defaultActor?: () => Promise<Actor | null>;
+    /**
+     * The key this ask may spend for a provider: the caller's per-user BYOK key
+     * first, else the environment's, else keys.json under the route's `spend`
+     * rule — or null when there is none or the badge may not spend it. For the
+     * route's own provider the home has already decided; this is that answer.
+     */
+    keyFor: (provider: KeyProvider) => Promise<string | null>;
+    /**
+     * Like `keyFor`, returning both the secret key to spend and its non-secret
+     * `credentialRef` (`user:<actorId>:<provider>:v<n>`, `env:<provider>`, or
+     * `home:<provider>`) so handlers can stamp provenance on generated items.
+     */
+    resolveKey: (provider: KeyProvider) => Promise<ResolvedServerKey | null>;
+    /** The canvas as the home holds it, read-only. */
+    canvas: (canvasId: string) => Promise<CanvasSnapshotResponse>;
+    /** Admitted canvases held at this home, read-only and gated by the caller's badge admissions. */
+    listCanvases?: () => Promise<Canvas[]>;
+    /** A blob's bytes, or null when the home does not hold them. */
+    readBlob: (canvasId: string, blobHash: string) => Promise<Uint8Array | null>;
+    /** Store bytes on the canvas, as the badge would through `/api/projects/:id/blobs`. */
+    putBlob: (canvasId: string, bytes: Uint8Array, meta: {
+        mimeType: string;
+        filename: string;
+    }) => Promise<{
+        blobHash: string;
+        mimeType: string;
+        size: number;
+    }>;
+    /** An op as the caller: refused unless the badge claims `actor`; `group` makes several one undo. */
+    submit: (ask: {
+        canvasId: string;
+        actor: Actor;
+        op: Operation;
+        group?: string;
+    }) => Promise<void>;
+    /** Start a home-polled async job on this canvas, storing `job.*` properties on the placeholder or target item. */
+    startJob: (ask: {
+        canvasId: string;
+        actor: Actor;
+        spec: StartJobSpec;
+    }) => Promise<JobSnapshot>;
+    /** The home's text model under `/api/text`'s own rules, for a route that wants words rather than its own key. */
+    text: ServerTextHost;
+    /** The transport, which a test fakes the provider through. */
+    fetch: typeof fetch;
+    now: () => number;
+    /** The seams the home was handed for this module (a model override, how `sharp` is loaded) — the module's own to read. */
+    options: Readonly<Record<string, unknown>>;
+    log: (line: string) => void;
+}
+/** The home's text model, as `/api/text` spends it: owner-only for a stored key, the badge's rate, pictures fitted by the home. `write` answers as the route would. */
+interface ServerTextHost {
+    available: () => boolean;
+    takesImages: () => boolean;
+    write: (ask: {
+        prompt: string;
+        schema: JsonSchema;
+    }, pictures?: readonly {
+        bytes: Uint8Array;
+        mimeType: string;
+    }[]) => Promise<ModuleResponse>;
+}
+/**
  * **A runtime module's manifest** (phase 3): what `isocan module add` prints
  * before `--yes`, what the daemon lists on `/api/serving`, and what the CLI
  * reads before it imports any code. Written by `scripts/module-build.mjs`
@@ -1366,8 +1543,17 @@ export declare function isDataOnly(manifest: ModuleManifest): boolean;
  * own `scripts/*.mjs`, run the way `canvas shot` runs its — optional so a
  * module can tell an older host by its absence. A module built for `^0.2.10`
  * still loads.
+ *
+ * **0.2.11 → 0.2.12 on 19 Nov 2026**, two additions (Open Stitch phase 0.1
+ * and 0.5, `docs/projects/modules/mcp.md`): `ServerModule`, a third half a
+ * module MAY provide (`./server`), whose routes the home mounts under
+ * `/api/m/<name>/` behind its own door, and `ServerHost`, what such a route
+ * is handed; and `CliModule.tools`, the MCP tools a module MAY declare beside
+ * its verbs, which `isocan mcp` registers as `<module>_<verb>` next to the
+ * sixteen built-ins. Both optional and provided, never demanded: a module
+ * built for `^0.2.11` still loads.
  */
-export declare const MODULE_API_VERSION = "0.2.11";
+export declare const MODULE_API_VERSION = "0.2.12";
 /**
  * **The parts of the API we intend to change**, named so a module can say it
  * is using one and a home can say yes before it runs.

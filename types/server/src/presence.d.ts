@@ -13,20 +13,34 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import type { Actor, CanvasContents, Capability, CursorSignal, Operation, PresenceActivity, PresenceSession } from "../../core/src/index.js";
+import type { Actor, AgentActionVerb, CanvasContents, Capability, CursorSignal, Operation, PaintAckResult, PresenceActivity, PresenceSession, PresenceViewport } from "../../core/src/index.js";
 export declare const SESSION_TTL_MS: number;
 export declare class PresenceHub {
     private readonly ttlMs;
     private rooms;
     private listeners;
     private sweeper;
+    /** Ephemeral highest sequence number painted by a web client per canvas (NOT an op). */
+    private paintedSeqs;
+    private paintWaiters;
     constructor(ttlMs?: number);
     close(): void;
+    /** Record an ephemeral paint acknowledgement from a connected client (monotone). */
+    recordPaintAck(canvasId: string, seq: number): number;
+    /** Highest sequence number reported painted by a client on `canvasId` (0 if none yet). */
+    lastPaintedSeq(canvasId: string): number;
+    /**
+     * Wait up to `timeoutMs` for a client paint ack reaching `seq`.
+     * Resolves as `"rendered"` once `lastPaintedSeq(canvasId) >= seq`, or
+     * `"applied"` if the deadline elapses first (e.g. no browser tab open).
+     */
+    waitForPaint(canvasId: string, seq: number, timeoutMs?: number): Promise<PaintAckResult>;
     onChange(listener: (canvasId: string) => void): void;
     private emit;
     private room;
     createSession(canvasId: string, actor: Actor, kind: PresenceSession["kind"], options?: {
         label?: string;
+        handle?: string;
         sessionId?: string;
         harness?: string;
         capability?: Capability;
@@ -49,6 +63,10 @@ export declare class PresenceHub {
         status?: string | null;
         statusSource?: "explicit" | "lifecycle" | "inferred";
         activity?: PresenceActivity | null;
+        handle?: string | null;
+        action?: AgentActionVerb | null;
+        viewport?: PresenceViewport | null;
+        workSummary?: string | null;
         onThread?: string | null;
     }): boolean;
     endSession(canvasId: string, sessionId: string): void;

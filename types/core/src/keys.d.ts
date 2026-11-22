@@ -195,8 +195,16 @@ export declare function agentKeyEnv(stored: Partial<Record<KeyProvider, StoredKe
  * `/api/text`: admission and the edit rung on the canvas, owner-only spend
  * for a stored key, a per-badge rate, and a canvas homed elsewhere asked
  * there.
+ *
+ * Since 19 Nov 2026 the route is the talk module's own (its `./server` half,
+ * mounted at `/api/m/talk/token`; Open Stitch phase 0.1). The old spelling,
+ * `LIVE_TOKEN_ROUTE_LEGACY`, is a thin alias on the home for one release.
  */
-export declare const LIVE_TOKEN_ROUTE = "/api/voice/token";
+export declare const LIVE_TOKEN_ROUTE = "/api/m/talk/token";
+/** Where the token route answered before 19 Nov 2026. The home forwards it to `LIVE_TOKEN_ROUTE`; remove with the release after 0.2.12 (the alias, this constant, and the home's two lines). */
+export declare const LIVE_TOKEN_ROUTE_LEGACY = "/api/voice/token";
+/** Where Google mints Live tokens (`v1alpha`); the talk module's server half posts here with the key in `x-goog-api-key`. */
+export declare const LIVE_TOKEN_ENDPOINT = "https://generativelanguage.googleapis.com/v1alpha/auth_tokens";
 /** The route refused a collaborator: the Gemini key is the owner's, and sharing is off. */
 export declare const LIVE_TOKEN_OWNER_ONLY = "voice-owner-only";
 /** The home holds no Gemini key. */
@@ -217,5 +225,77 @@ export interface LiveTokenResponse {
     token: string;
     expireTime: string;
     newSessionExpireTime: string;
+}
+/**
+ * **A non-secret reference identifying which key made a generation**
+ * (Open Stitch phase 0.3): stamped on generated items (`CREDENTIAL_REF_PROP`)
+ * so provenance names the key source and rotation version without ever writing
+ * secret material or a secret prefix onto an item or log.
+ *
+ * - `env:<provider>` — the home's environment variable
+ * - `home:<provider>` — this machine's `~/.isocan/keys.json`
+ * - `user:<actorId>:<provider>:v<version>` — a caller's per-user BYOK key sealed in the home
+ */
+export type CredentialRef = `env:${KeyProvider}` | `home:${KeyProvider}` | `user:${string}:${KeyProvider}:v${number}`;
+/** Structured form of a `CredentialRef`, accepted by `formatCredentialRef` and returned by `parseCredentialRef`. */
+type CredentialRefParts = {
+    scope: "env";
+    provider: KeyProvider;
+} | {
+    scope: "home";
+    provider: KeyProvider;
+} | {
+    scope: "user";
+    actorId: string;
+    provider: KeyProvider;
+    version: number;
+};
+/** Item property key where model routes stamp the non-secret `CredentialRef` of the key that produced an item or version. */
+export declare const CREDENTIAL_REF_PROP = "credentialRef";
+/**
+ * **Per-user BYOK key routes** (Open Stitch phase 0.3): works on BOTH local
+ * and hosted homes for the signed-in caller (unlike `KEYS_ROUTE`, which is
+ * machine-local and 404s on hosted homes).
+ *
+ * - `GET /api/me/keys` — lists each provider's status for the caller (never the secret)
+ * - `PUT /api/me/keys/:provider` — body `{ key }`, seals & stores for the caller, bumps monotonic version
+ * - `DELETE /api/me/keys/:provider` — removes the caller's sealed key
+ */
+export declare const USER_KEYS_ROUTE = "/api/me/keys";
+/** Refusal code when per-user key storage is not configured on a hosted home (missing `ISOCAN_KEYS_SECRET`). */
+export declare const USER_KEYS_UNAVAILABLE = "user-keys-unavailable";
+/** Refusal code when an authenticated badge has not claimed an identity or attested an attribute yet. */
+export declare const USER_KEYS_IDENTITY_REQUIRED = "identity-required";
+/** Format a non-secret `CredentialRef` string from its parts. Validates provider, actorId, and version. */
+export declare function formatCredentialRef(parts: CredentialRefParts): CredentialRef;
+/** Parse a `CredentialRef` string back into its structured parts, or `null` if invalid. */
+export declare function parseCredentialRef(raw: unknown): CredentialRefParts | null;
+/** A resolved key beside the non-secret reference identifying which key was spent. */
+export interface ResolvedServerKey {
+    key: string;
+    credentialRef: CredentialRef;
+}
+/** One provider's status returned by `GET /api/me/keys` (never carries secret material). */
+export interface UserKeyRow {
+    provider: KeyProvider;
+    present: boolean;
+    version?: number;
+    updatedAt?: string;
+    source: "user" | "home" | "env" | "none";
+}
+/** Response body of `GET /api/me/keys`. */
+export interface UserKeysListing {
+    keys: UserKeyRow[];
+}
+/** Response body of `PUT /api/me/keys/:provider`. */
+export interface UserKeyPutResponse {
+    provider: KeyProvider;
+    version: number;
+    credentialRef: CredentialRef;
+}
+/** Response body of `DELETE /api/me/keys/:provider`. */
+export interface UserKeyDeleteResponse {
+    provider: KeyProvider;
+    removed: boolean;
 }
 export {};

@@ -24,10 +24,12 @@ import { type AuthConfig, type ProxyAuthConfig, type SigningKeys } from "./attes
 import type { HomeLinks } from "./home-links.js";
 import type { JudgmentOptions } from "./judgment.js";
 import type { KeyRouteOptions } from "./key-routes.js";
+import { type DaemonUserKeyOptions } from "./user-keys.js";
 import type { SummaryOptions } from "./summaries.js";
 import type { TextOptions } from "./text.js";
-import type { ImageOptions } from "./image.js";
-import type { LiveTokenOptions } from "./live-token.js";
+import type { ModuleSeams } from "./module-routes.js";
+import { JobManager, type JobDaemonOptions } from "./jobs.js";
+import { LeaseManager } from "./leases.js";
 export interface DaemonOptions {
     port?: number;
     home?: string;
@@ -221,15 +223,23 @@ export interface DaemonOptions {
     text?: TextOptions;
     /** Semantic Zoom's summaries (`summaries.ts`) — tests hand it a clock and a quiet period; a running home reads `ISOCAN_SUMMARY_MODEL` and `ISOCAN_SUMMARY_QUIET_MS`. */
     summaries?: SummaryOptions;
-    /** The talk module's Live tokens (`live-token.ts`) — tests hand it a fake
+    /** The talk module's Live tokens (its `./server` half, via `module-routes.ts`) — tests hand it a fake
      * Google; a running home reads `GEMINI_API_KEY`, else its `keys.json`. */
-    liveToken?: LiveTokenOptions;
-    /** The mood board's image model (`image.ts`) — tests hand it a fake
-     * Google; a running home reads `GEMINI_API_KEY`, else its `keys.json`. */
-    image?: ImageOptions;
+    liveToken?: ModuleSeams;
+    /** The mood board's image model (its `./server` half, via `module-routes.ts`) — tests hand it a fake
+     * Google and how `sharp` loads; a running home reads `GEMINI_API_KEY`, else its `keys.json`. */
+    image?: ModuleSeams;
+    /** Generic per-module seams keyed by module slug, forwarded to `ServerModuleEntry.seams`. */
+    modules?: Readonly<Record<string, ModuleSeams>>;
     /** The settings area's key routes (`key-routes.ts`) — tests hand them an
      * environment and a fake provider; a running home reads its own. */
     keys?: KeyRouteOptions;
+    /** Per-user BYOK sealed key store (`user-keys.ts`) — tests may override secret, env, or clock. */
+    userKeys?: DaemonUserKeyOptions;
+    /** Home-polled async jobs (`jobs.ts`, Open Stitch phase 0.2) — poll interval, clock, and test runners. */
+    jobs?: JobDaemonOptions;
+    /** Optional clock for ephemeral 30-second soft node leases (tests only). */
+    leasesNow?: () => number;
 }
 export interface RunDaemonOptions extends DaemonOptions {
     /** Stop whatever daemon is already there and take the port. What `npm run
@@ -283,6 +293,10 @@ export interface Daemon {
      * not observable from outside.
      */
     presence: PresenceHub;
+    /** The home's async job manager (`jobs.ts`, Open Stitch phase 0.2). */
+    jobs: JobManager;
+    /** Ephemeral 30-second soft node leases (`leases.ts`, Open Stitch phase 2A). */
+    leases: LeaseManager;
     close: () => Promise<void>;
 }
 export declare function startDaemon(options?: DaemonOptions): Promise<Daemon>;

@@ -24,14 +24,16 @@ import type { Store } from "./store.js";
 import type { Workstation } from "./workstation.js";
 /**
  * **The routes that spend the home's keys** — `POST /api/judgment` (the
- * judge, wireframes phase 5), `POST /api/text` (the text model, copy-edit
- * phase 0.5) and, since keys phase 4, `POST /api/voice/token` (a Gemini Live
- * token for the talk module). Moved out of `registerRoutes` together on 2 Oct 2026 when the
+ * judge, wireframes phase 5) and `POST /api/text` (the text model, copy-edit
+ * phase 0.5). Moved out of `registerRoutes` together on 2 Oct 2026 when the
  * second landed, so `registerRoutes` stays under its agreed length
  * (`register-routes.test.ts`) and the twins sit side by side. They read the
  * same closures — the takedown list, the admission, the view-only refusal —
  * handed in by `registerRoutes` where the judgment route used to begin, so
- * registration order is what it was.
+ * registration order is what it was. The talk module's voice token and the
+ * mood module's pictures lived here too (keys phase 4, moodboard phases 0
+ * and 2) until 19 Nov 2026, when modules could own a route: they are the
+ * modules' now (`module-routes.ts`), behind this file's door.
  */
 interface ModelRouteScope {
     engine: Engine;

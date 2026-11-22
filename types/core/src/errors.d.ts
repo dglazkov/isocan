@@ -32,7 +32,7 @@
  * wire errors so branching on it does not load refusal policy helpers.
  */
 export declare const REFUSED = "refused";
-type OpErrorCode = "design-intent-conflict" | "edit-conflict" | "unknown-item" | "unknown-version" | "unknown-thread" | "unknown-comment" | "unknown-anchor" | "not-in-trash" | "duplicate-id" | "empty-body" | "last-comment" | "main-exists" | "name-taken" | "unknown-actor"
+type OpErrorCode = "design-intent-conflict" | "edit-conflict" | "precondition-conflict" | "unknown-item" | "unknown-version" | "unknown-thread" | "unknown-comment" | "unknown-anchor" | "not-in-trash" | "duplicate-id" | "empty-body" | "last-comment" | "main-exists" | "name-taken" | "unknown-actor"
 /** The speaker named an actor its badge does not claim (the identity desk's
  * mechanism 5). The remedy is always the same and always available: claim
  * the actor first. */
@@ -92,6 +92,34 @@ export declare class OpValidationError extends Error {
 /** Structural undo conflicts must not be discarded or fall through to older work. */
 export declare class GroupConflictError extends OpValidationError {
     constructor(message: string);
+}
+/** An item op's `expect` precondition disagreed with the item's live state (HTTP 409). */
+export declare class PreconditionConflictError extends OpValidationError {
+    readonly itemId: string;
+    readonly details?: {
+        expected?: {
+            versionId?: string;
+            contentHash?: string;
+            updatedAt?: string;
+        };
+        actual?: {
+            versionId?: string;
+            contentHash?: string;
+            updatedAt?: string;
+        };
+    } | undefined;
+    constructor(itemId: string, message: string, details?: {
+        expected?: {
+            versionId?: string;
+            contentHash?: string;
+            updatedAt?: string;
+        };
+        actual?: {
+            versionId?: string;
+            contentHash?: string;
+            updatedAt?: string;
+        };
+    } | undefined);
 }
 /** Conversion refusals leave queued intent and every actor's history candidate intact. */
 export declare class MigrationBoundaryError extends OpValidationError {

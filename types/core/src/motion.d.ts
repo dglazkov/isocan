@@ -44,6 +44,7 @@ export { MOTION_MAX_SECONDS, motionWarnings, validateMotionSpec, type MotionWarn
 export { authoredSpec, motionDocumentSpec, motionSpecFrom, motionTargets, type MotionAuthoredMove, type MotionAuthoredSpec, type MotionPivotName } from "./motion-spec.js";
 export { MOTION_MESSAGES, motionMessage, motionSeek } from "./motion-messages.js";
 export { addMotionItem, addMotionMovie, MOTION_BESIDE, versionMotionItem, type MotionWriter } from "./motion-items.js";
+export * from "./m3-motion.js";
 /**
  * **The properties a motion item wears** (design §2). `motion` marks it;
  * `motionSources` is JSON `[{ item, version }]` — what it was taken from,

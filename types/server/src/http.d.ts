@@ -16,9 +16,11 @@
 import type { JudgmentOptions } from "./judgment.js";
 import type { SummaryOptions } from "./summaries.js";
 import type { TextOptions } from "./text.js";
-import type { ImageOptions } from "./image.js";
-import type { LiveTokenOptions } from "./live-token.js";
+import type { ModuleSeams } from "./module-routes.js";
+import type { JobManager } from "./jobs.js";
 import { type KeyRouteOptions } from "./key-routes.js";
+import type { UserKeyStore } from "./user-keys.js";
+import { LeaseManager } from "./leases.js";
 import type { FastifyInstance } from "fastify";
 import { Engine } from "./engine.js";
 import { type AuthConfig, type ProxyAuthConfig, type SigningKeys } from "./attest.js";
@@ -74,15 +76,23 @@ export interface RouteOptions {
     text?: TextOptions;
     /** Semantic Zoom's summaries (`summaries.ts`): the quiet period, the model, the bound and the clock. Absent, the production defaults. */
     summaries?: SummaryOptions;
-    /** The talk module's Gemini Live tokens (`live-token.ts`): its key, rate and
+    /** The talk module's Gemini Live tokens (its `./server` half, mounted by `module-routes.ts`): its key, rate and
      * transport. Absent, the key is `GEMINI_API_KEY`, else `keys.json`, read per call. */
-    liveToken?: LiveTokenOptions;
-    /** The mood board's image model (`image.ts`): its key, model, rate and
-     * transport. Absent, the key is `GEMINI_API_KEY`, else `keys.json`, read per call. */
-    image?: ImageOptions;
+    liveToken?: ModuleSeams;
+    /** The mood board's image model (its `./server` half, mounted by `module-routes.ts`): its key, model, rate,
+     * transport and how `sharp` loads. Absent, the key is `GEMINI_API_KEY`, else `keys.json`, read per call. */
+    image?: ModuleSeams;
+    /** Generic per-module seams keyed by module slug, forwarded to `ServerModuleEntry.seams`. */
+    modules?: Readonly<Record<string, ModuleSeams>>;
     /** The machine-local key routes (`key-routes.ts`): the environment and the
      * provider transport they read. Absent, `process.env` and `fetch`. */
     keys?: KeyRouteOptions;
+    /** Per-user BYOK sealed key store (`user-keys.ts`): serves `/api/me/keys` and overrides home keys per call. */
+    userKeys?: UserKeyStore | null;
+    /** The home's async job manager (`jobs.ts`, Open Stitch phase 0.2). */
+    jobs?: JobManager;
+    /** Ephemeral 30-second soft node leases (`leases.ts`, Open Stitch phase 2A). */
+    leases?: LeaseManager;
     /**
      * **The local workstation seam** (`Workstation | null`).
      *
