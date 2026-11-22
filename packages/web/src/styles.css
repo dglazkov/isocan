@@ -64,6 +64,7 @@
   /* Pond and Zen garden (living grounds phase 4): the means of their stills. */
   --theme-pond: #102625;
   --theme-zen: #b5ac9a;
+  --theme-stitch: #f1f3f4;
   /* Deep space (#195). The same value on either ground, deliberately: a
      starfield is a PICTURE, not a surface that follows the app's theme, and a
      white sky is a different picture rather than a light-mode one. Declared in
@@ -417,6 +418,7 @@
   /* Pond and Zen garden (living grounds phase 4): the means of their stills. */
   --theme-pond: #102625;
   --theme-zen: #b5ac9a;
+  --theme-stitch: #f1f3f4;
   /* Deep space (#195). The same value on either ground, deliberately: a
      starfield is a PICTURE, not a surface that follows the app's theme, and a
      white sky is a different picture rather than a light-mode one. Declared in

@@ -29,13 +29,16 @@ import { CanvasGoneAtHomeError, collectInbox, sequenceInbox } from "./inbox.ts";
 import type { JudgmentOptions } from "./judgment.ts";
 import type { SummaryOptions } from "./summaries.ts";
 import type { TextOptions } from "./text.ts";
-import type { ImageOptions } from "./image.ts";
-import type { LiveTokenOptions } from "./live-token.ts";
+import type { ModuleSeams } from "./module-routes.ts";
+import type { JobManager } from "./jobs.ts";
 import { registerModelRoutes } from "./model-routes.ts";
 import { registerKeyRoutes, type KeyRouteOptions } from "./key-routes.ts";
+import type { UserKeyStore } from "./user-keys.ts";
 import { judgeWorkerPolicy, registerModelFileRoutes } from "./model-files.ts";
 import { textAttention, contributions } from "@isocan/core";
-import { CLIENT_FEATURES_HEADER, supportsCanvasGroups, GroupConflictError, MigrationBoundaryError } from "@isocan/core";
+import { CLIENT_FEATURES_HEADER, supportsCanvasGroups, GroupConflictError, MigrationBoundaryError, PreconditionConflictError } from "@isocan/core";
+import { LeaseManager } from "./leases.ts";
+import { registerLeaseRoutes } from "./lease-routes.ts";
 import { CanvasGroupsClientError, groupOperation, requireGroupClient } from "./canvas-groups.ts";
 import { QuestionnaireClientError, questionnaireOperation, requireQuestionnaireClient } from "./questionnaire-capability.ts";
 import { supportsQuestionnaires } from "@isocan/core";
@@ -514,15 +517,23 @@ export interface RouteOptions {
   text?: TextOptions;
   /** Semantic Zoom's summaries (`summaries.ts`): the quiet period, the model, the bound and the clock. Absent, the production defaults. */
   summaries?: SummaryOptions;
-  /** The talk module's Gemini Live tokens (`live-token.ts`): its key, rate and
+  /** The talk module's Gemini Live tokens (its `./server` half, mounted by `module-routes.ts`): its key, rate and
    * transport. Absent, the key is `GEMINI_API_KEY`, else `keys.json`, read per call. */
-  liveToken?: LiveTokenOptions;
-  /** The mood board's image model (`image.ts`): its key, model, rate and
-   * transport. Absent, the key is `GEMINI_API_KEY`, else `keys.json`, read per call. */
-  image?: ImageOptions;
+  liveToken?: ModuleSeams;
+  /** The mood board's image model (its `./server` half, mounted by `module-routes.ts`): its key, model, rate,
+   * transport and how `sharp` loads. Absent, the key is `GEMINI_API_KEY`, else `keys.json`, read per call. */
+  image?: ModuleSeams;
+  /** Generic per-module seams keyed by module slug, forwarded to `ServerModuleEntry.seams`. */
+  modules?: Readonly<Record<string, ModuleSeams>>;
   /** The machine-local key routes (`key-routes.ts`): the environment and the
    * provider transport they read. Absent, `process.env` and `fetch`. */
   keys?: KeyRouteOptions;
+  /** Per-user BYOK sealed key store (`user-keys.ts`): serves `/api/me/keys` and overrides home keys per call. */
+  userKeys?: UserKeyStore | null;
+  /** The home's async job manager (`jobs.ts`, Open Stitch phase 0.2). */
+  jobs?: JobManager;
+  /** Ephemeral 30-second soft node leases (`leases.ts`, Open Stitch phase 2A). */
+  leases?: LeaseManager;
   /**
    * **The local workstation seam** (`Workstation | null`).
    *
@@ -908,10 +919,13 @@ export function registerRoutes(
     if (err instanceof CanvasGroupsClientError || err instanceof QuestionnaireClientError || err instanceof DesignRequestClientError || err instanceof DesignDecisionClientError || err instanceof DesignRepairClientError) {
       return reply.status(426).send({ error: err.message, code: err.code });
     }
-    if (err instanceof GroupConflictError || err instanceof MigrationBoundaryError || err instanceof SelfLinkError || err instanceof NotAReplicaError) {
+    if (err instanceof GroupConflictError || err instanceof PreconditionConflictError || err instanceof MigrationBoundaryError || err instanceof SelfLinkError || err instanceof NotAReplicaError) {
       return reply.status(409).send({ error: err.message, code: err.code });
     }
     if (err instanceof OpValidationError) {
+      if (err.code === "precondition-conflict") {
+        return reply.status(409).send({ error: err.message, code: err.code });
+      }
       return reply.status(400).send({ error: err.message, code: err.code, ...(err.reason ? { reason: err.reason } : {}) });
     }
     if (err instanceof CanvasNotFoundError) {
@@ -4578,6 +4592,7 @@ export function registerRoutes(
     // sessions are born on the socket.
     const session = presence.createSession(id, body.actor, body.kind === "rc" ? "rc" : "cli", {
       ...(body.label !== undefined ? { label: body.label } : {}),
+      ...(body.handle !== undefined ? { handle: body.handle } : {}),
       ...(body.harness !== undefined ? { harness: body.harness } : {}),
     });
     return { sessionId: session.sessionId, ttlMs: SESSION_TTL_MS };
@@ -4634,6 +4649,9 @@ export function registerRoutes(
     // (multi-identity phase 5), so `isocan who` shows one Dimitri.
     return engine.resolveSessions(presence.roster(id));
   });
+
+  // ---- soft 30s node leases & paint acks (Open Stitch Phase 2A — ephemeral, NOT ops) ----
+  registerLeaseRoutes(app, engine, presence, options.leases ?? new LeaseManager());
 
   app.delete("/api/presence/actors/:actorId", async (req) => {
     const { actorId } = req.params as { actorId: string };

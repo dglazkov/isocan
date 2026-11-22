@@ -25,3 +25,4 @@
  */
 export { createServer, type ServerDeps } from "./server.ts";
 export { serveStdio } from "./stdio.ts";
+export { BUILT_IN_TOOLS, moduleToolName, moduleToolPrefix, type McpModule, type McpTool, type McpToolHost } from "./tools.ts";

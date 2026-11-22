@@ -41,6 +41,7 @@ import { LevelMeter } from "@isocan/core/voice-dsp";
 import { Playback, capture, fromBytes, type Capture } from "./audio.ts";
 import type { LiveTokenResponse } from "@isocan/core/keys";
 import { LIVE_MODEL, LIVE_VOICES, canvasSnapshotText, commandsBrief, isLiveVoice, liveSetup, liveTokenUrl, planForCall, toolScheduling, type SnapshotItem } from "./live.ts";
+import { PendingCallGate, SpeechBudget, detectFollowMeIntent } from "./choreography.ts";
 import { voiceCore } from "./core.ts";
 
 /**
@@ -72,7 +73,7 @@ const OLD_KEY_SHELF = "isocan:voice:key";
  * must then name, and the entry has no bytes to spare (measured, keys phase
  * 4). `test/token.test.ts` holds the two spellings to one.
  */
-const LIVE_TOKEN_ROUTE = "/api/voice/token";
+const LIVE_TOKEN_ROUTE = "/api/m/talk/token";
 const MODEL_SHELF = "isocan:voice:model";
 const VOICE_SHELF = "isocan:voice:voice";
 /**
@@ -730,7 +731,7 @@ export function forgetBrowserKey(storage: Pick<Storage, "getItem" | "removeItem"
 
 /**
  * **A one-use Live token, asked for per session** (keys phase 4). The home
- * mints it with its Gemini key (`POST /api/voice/token`, gated like the text
+ * mints it with its Gemini key (`POST /api/m/talk/token`, gated like the text
  * route: an editor of this canvas, the owner's key only for the owner unless
  * they share it); this page never sees the key. Throws the home's sentence.
  */
@@ -804,6 +805,8 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
    * decides and drop them when it acted.
    */
   const fastRef = useRef<import("./fastact.ts").FastPath | null>(null);
+  const paintGateRef = useRef(new PendingCallGate());
+  const speechBudgetRef = useRef(new SpeechBudget());
   /* The canvas moving is how an undo by keyboard is seen: the shadow compares
      the item the model's act touched with where it was before the act. */
   useEffect(() => {
@@ -861,6 +864,8 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
     shadowRef.current = null;
     void fastRef.current?.flush();
     fastRef.current = null;
+    paintGateRef.current.clear();
+    speechBudgetRef.current.clear();
     captureRef.current?.stop();
     captureRef.current = null;
     abortRef.current?.abort();
@@ -1002,9 +1007,13 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
       }      const content = message.serverContent as Record<string, unknown> | undefined;
       if (content) {
         if (content.inputTranscription && (content.inputTranscription as { text?: string }).text) {
-          say("you", (content.inputTranscription as { text: string }).text);
-          shadowRef.current?.heard((content.inputTranscription as { text: string }).text);
-          fastRef.current?.heard((content.inputTranscription as { text: string }).text);
+          const heardText = (content.inputTranscription as { text: string }).text;
+          say("you", heardText);
+          shadowRef.current?.heard(heardText);
+          fastRef.current?.heard(heardText);
+          if (detectFollowMeIntent(heardText) && speechBudgetRef.current.record("follow_me", `follow:${Math.floor(Date.now() / 3000)}`)) {
+            say("system", "follow-me intent detected — anchoring to current view");
+          }
         }
         if (content.outputTranscription && (content.outputTranscription as { text?: string }).text) {
           say("model", (content.outputTranscription as { text: string }).text);
@@ -1061,8 +1070,26 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
           // the sentence was said about.
           shadowRef.current?.toolCall(call.name, call.args ?? {});
           const verdict = verdicts?.[i];
-          const response = verdict && !verdict.run ? verdict.response : await runTool(call.name, call.args ?? {}, factsRef.current);
-          say("system", `${call.name} → ${response.ok ? "done" : String(response.error)}`);
+          const rawResponse = verdict && !verdict.run ? verdict.response : await runTool(call.name, call.args ?? {}, factsRef.current);
+          let response = rawResponse;
+          if (rawResponse.ok && !call.name.startsWith("read_")) {
+            const held = paintGateRef.current.hold({
+              callId: call.id,
+              name: call.name,
+              response: rawResponse,
+              timeoutMs: 250,
+            });
+            if (typeof requestAnimationFrame === "function") {
+              requestAnimationFrame(() => {
+                paintGateRef.current.ackPaint(call.id);
+              });
+            }
+            response = (await held).response;
+          }
+          const summaryLine = `${call.name} → ${response.ok ? "done" : String(response.error)}`;
+          if (speechBudgetRef.current.record(summaryLine, `tool:${call.id}`)) {
+            say("system", summaryLine);
+          }
           /* A non-blocking tool's answer says WHEN it should reach the
              model; a blocking one's needs no scheduling and carries none. */
           const scheduling = toolScheduling(call.name);

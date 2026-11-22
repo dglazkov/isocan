@@ -35,6 +35,12 @@ import {
   type UiPieceId,
   type UiTweaks,
 } from "@isocan/core/ui-tweaks";
+import {
+  STITCH_PRESETS,
+  compileStitchTokensCss,
+  stitchPresetToUiTweaks,
+  type StitchPresetId,
+} from "@isocan/core/stitch-tokens";
 import { flashNotice, sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
 import { canEditNow } from "../lib/capability.ts";
 import { browserClipboard, copyToClipboard } from "../lib/copy.ts";
@@ -190,6 +196,7 @@ export default function UiDevtools({ canvasId, actor }: { canvasId: string; acto
   const canvasRaw = useCanvasStore((s) => s.record?.properties?.[UI_TWEAKS_PROP] ?? null);
   const canvasTweaks = useMemo(() => parseUiTweaks(canvasRaw), [canvasRaw]);
   const [localTweaks, setLocalTweaks] = useState<UiTweaks>(readStoredLocalOverrides);
+  const [stitchPreset, setStitchPreset] = useState<StitchPresetId | null>(null);
   const merged = useMemo(() => cleanUiTweaks({ ...canvasTweaks, ...localTweaks }), [canvasTweaks, localTweaks]);
 
   const activePiece: UiPieceId = (findUiPiece(signal.piece)?.id ?? "glass") as UiPieceId;
@@ -350,6 +357,26 @@ export default function UiDevtools({ canvasId, actor }: { canvasId: string; acto
     updateLocal(next);
   }
 
+  function applyStitchPreset(presetId: StitchPresetId): void {
+    const mode = document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+    const presetTweaks = stitchPresetToUiTweaks(presetId, mode);
+    let next = { ...localTweaks };
+    for (const [key, value] of Object.entries(presetTweaks)) {
+      const knob = findUiKnob(key);
+      if (knob) next = setKnobOverride(knob, value, next);
+    }
+    setStitchPreset(presetId);
+    updateLocal(next);
+    const css = compileStitchTokensCss(presetId);
+    let styleEl = document.head.querySelector<HTMLStyleElement>("style[data-stitch-tokens]");
+    if (!styleEl) {
+      styleEl = document.createElement("style");
+      styleEl.setAttribute("data-stitch-tokens", "");
+      document.head.appendChild(styleEl);
+    }
+    styleEl.textContent = css;
+  }
+
   function onResetAll(): void {
     let next: UiTweaks = {};
     for (const knob of UI_KNOBS) {
@@ -357,6 +384,8 @@ export default function UiDevtools({ canvasId, actor }: { canvasId: string; acto
         next[knob.key] = knob.defaultValue;
       }
     }
+    setStitchPreset(null);
+    document.head.querySelector("style[data-stitch-tokens]")?.remove();
     updateLocal(next);
     flashNotice("Reset UI customizations to defaults");
   }
@@ -480,6 +509,25 @@ export default function UiDevtools({ canvasId, actor }: { canvasId: string; acto
         <div className="ui-devtools-summary">{pieceInfo.summary}</div>
 
         <div className="ui-devtools-body" role="tabpanel" aria-label={pieceInfo.name}>
+          {activePiece === "glass" && (
+            <div className="ui-devtools-presets" role="group" aria-label="Stitch surface presets">
+              <span className="ui-devtools-label">Stitch surface</span>
+              <div className="ui-devtools-preset-row">
+                {STITCH_PRESETS.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    className={`ui-devtools-preset${stitchPreset === preset.id ? " active" : ""}`}
+                    aria-pressed={stitchPreset === preset.id}
+                    title={preset.description}
+                    onClick={() => applyStitchPreset(preset.id)}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {knobs.map((knob) => {
             const current = merged[knob.key] ?? knob.defaultValue;
             const changed = !isDefaultUiTweak(knob, merged[knob.key]);

@@ -34,7 +34,7 @@ import { FileWorkstation } from "./file-workstation.ts";
 import type { Workstation } from "./workstation.ts";
 import { grantTheLinkOnOldCanvases } from "./migrations.ts";
 import { PresenceHub } from "./presence.ts";
-import { daemonFile, isocanHome } from "./paths.ts";
+import { daemonFile, isocanHome, jobsFile } from "./paths.ts";
 import { resolveHomeUrl } from "./config.ts";
 import {
   resolveAuth,
@@ -51,10 +51,12 @@ import { contentPorts, registerContentRoutes } from "./content.ts";
 import { contentTtl } from "./content-auth.ts";
 import type { JudgmentOptions } from "./judgment.ts";
 import type { KeyRouteOptions } from "./key-routes.ts";
+import { UserKeyStore, type DaemonUserKeyOptions } from "./user-keys.ts";
 import type { SummaryOptions } from "./summaries.ts";
 import type { TextOptions } from "./text.ts";
-import type { ImageOptions } from "./image.ts";
-import type { LiveTokenOptions } from "./live-token.ts";
+import type { ModuleSeams } from "./module-routes.ts";
+import { JobManager, type JobDaemonOptions } from "./jobs.ts";
+import { LeaseManager } from "./leases.ts";
 
 export interface DaemonOptions {
   port?: number;
@@ -249,15 +251,23 @@ export interface DaemonOptions {
   text?: TextOptions;
   /** Semantic Zoom's summaries (`summaries.ts`) — tests hand it a clock and a quiet period; a running home reads `ISOCAN_SUMMARY_MODEL` and `ISOCAN_SUMMARY_QUIET_MS`. */
   summaries?: SummaryOptions;
-  /** The talk module's Live tokens (`live-token.ts`) — tests hand it a fake
+  /** The talk module's Live tokens (its `./server` half, via `module-routes.ts`) — tests hand it a fake
    * Google; a running home reads `GEMINI_API_KEY`, else its `keys.json`. */
-  liveToken?: LiveTokenOptions;
-  /** The mood board's image model (`image.ts`) — tests hand it a fake
-   * Google; a running home reads `GEMINI_API_KEY`, else its `keys.json`. */
-  image?: ImageOptions;
+  liveToken?: ModuleSeams;
+  /** The mood board's image model (its `./server` half, via `module-routes.ts`) — tests hand it a fake
+   * Google and how `sharp` loads; a running home reads `GEMINI_API_KEY`, else its `keys.json`. */
+  image?: ModuleSeams;
+  /** Generic per-module seams keyed by module slug, forwarded to `ServerModuleEntry.seams`. */
+  modules?: Readonly<Record<string, ModuleSeams>>;
   /** The settings area's key routes (`key-routes.ts`) — tests hand them an
    * environment and a fake provider; a running home reads its own. */
   keys?: KeyRouteOptions;
+  /** Per-user BYOK sealed key store (`user-keys.ts`) — tests may override secret, env, or clock. */
+  userKeys?: DaemonUserKeyOptions;
+  /** Home-polled async jobs (`jobs.ts`, Open Stitch phase 0.2) — poll interval, clock, and test runners. */
+  jobs?: JobDaemonOptions;
+  /** Optional clock for ephemeral 30-second soft node leases (tests only). */
+  leasesNow?: () => number;
 }
 
 export interface RunDaemonOptions extends DaemonOptions {
@@ -313,6 +323,10 @@ export interface Daemon {
    * not observable from outside.
    */
   presence: PresenceHub;
+  /** The home's async job manager (`jobs.ts`, Open Stitch phase 0.2). */
+  jobs: JobManager;
+  /** Ephemeral 30-second soft node leases (`leases.ts`, Open Stitch phase 2A). */
+  leases: LeaseManager;
   close: () => Promise<void>;
 }
 
@@ -576,8 +590,23 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     : null;
 
   const keysHome = workstation?.keysHome ?? null;
+  const userKeys = new UserKeyStore({
+    dataDir: home,
+    hosted: isCloud || servesWorld,
+    ...options.userKeys,
+  });
+  const jobs = new JobManager({
+    engine,
+    store,
+    keysHome,
+    userKeys,
+    filePath: options.jobs?.filePath !== undefined ? options.jobs.filePath : jobsFile(home),
+    ...(options.jobs ?? {}),
+  });
+  const leases = new LeaseManager(options.leasesNow ? { now: options.leasesNow } : {});
   const routeOptions = {
     workstation,
+    userKeys,
     auth,
     proxyAuth,
     operators,
@@ -592,6 +621,8 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     park: new ParkCursors(desk),
     servesWorld,
     rc,
+    jobs,
+    leases,
     ...(options.signingKeys ? { signingKeys: options.signingKeys } : {}),
     // The two spenders read the workstation's `keys.json` (keys phase 1) on a
     // local daemon, and `null` (env-only) on a hosted home.
@@ -600,9 +631,11 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     ...(options.summaries ? { summaries: options.summaries } : {}),
     liveToken: { keysHome, ...options.liveToken },
     image: { keysHome, ...options.image },
+    ...(options.modules ? { modules: options.modules } : {}),
     ...(options.keys ? { keys: options.keys } : {}),
   };
   registerRoutes(app, engine, store, desk, presence, routeOptions);
+  await jobs.init();
   await app.listen({ port, host });
 
   /**
@@ -799,6 +832,9 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
 
   const close = async () => {
     presence.close();
+    // Drain active job polls and pending `jobs.json` writes before tearing down
+    // the engine and store — same guarantee as the sweeper below.
+    await jobs.close();
     // The sweeper first, and awaited: an interval that survives its daemon is
     // the shape of handle this file has already paid for twice (the sockets,
     // and the writes `engine.settled()` exists to catch). Stopping it before
@@ -873,6 +909,8 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     desk,
     workstation,
     presence,
+    jobs,
+    leases,
     port,
     birthHome,
     homes,

@@ -57,6 +57,12 @@ const ALLOWED: Record<string, string> = {
     "project.create/update/delete on canvases this tab does not have open",
   "packages/web/src/lib/sprint.ts":
     "handInFromDesk writes item.add to the SPRINT canvas from a desk tab — not the canvas this tab has open (sprint phase 3); every write to the open canvas in this file goes through sendEchoed",
+  "packages/web/src/components/shell/HomeInbox.tsx":
+    "cross-canvas inbox inline replies write thread.reply to canvases other than the one this tab has open",
+  "packages/web/src/components/shell/TopNav.tsx":
+    "creates a brand-new canvas (project.create) before navigating to it",
+  "packages/web/src/components/shell/welcomeSeed.ts":
+    "seeds starter items onto a newly created canvas before it is opened",
 };
 
 describe("writes to the open canvas", () => {

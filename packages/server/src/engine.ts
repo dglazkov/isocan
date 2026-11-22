@@ -90,6 +90,7 @@ import {
   resolvePlacement,
   SHELF,
   GroupConflictError,
+  PreconditionConflictError,
   resolveCanvasGroupRequest,
   validateGroupForest,
   isGroupItem,
@@ -1959,7 +1960,7 @@ export class Engine {
             if (group.length === 1) return written;
             continue;
           } catch (err) {
-            if (op.type === "group.change" || op.type === "design.restore" || err instanceof GroupConflictError || err instanceof DesignRestoreConflict) throw err;
+            if (op.type === "group.change" || op.type === "design.restore" || err instanceof GroupConflictError || err instanceof PreconditionConflictError || err instanceof DesignRestoreConflict) throw err;
             if (!(err instanceof OpValidationError)) throw err;
           }
         }
@@ -2023,7 +2024,7 @@ export class Engine {
             if (group.length === 1) return redone;
             continue;
           } catch (err) {
-            if (op.type === "group.change" || op.type === "design.restore" || err instanceof GroupConflictError || err instanceof DesignRestoreConflict) throw err;
+            if (op.type === "group.change" || op.type === "design.restore" || err instanceof GroupConflictError || err instanceof PreconditionConflictError || err instanceof DesignRestoreConflict) throw err;
             if (!(err instanceof OpValidationError)) throw err;
           }
         }

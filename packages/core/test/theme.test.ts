@@ -147,7 +147,7 @@ describe("the cursor a ground gives everybody", () => {
     /* Phase 4 (10 Oct 2026) amends it, on purpose and by name: a new cursor
        is entry bytes the ceiling cannot hold, so these grounds borrow one, and
        each says from whom. Any other pair sharing a pointer still fails. */
-    const borrows: Partial<Record<string, string>> = { snow: "galaxy", aurora: "desert", pond: "ocean", zen: "desert" };
+    const borrows: Partial<Record<string, string>> = { snow: "galaxy", aurora: "desert", pond: "ocean", zen: "desert", stitch: "galaxy" };
     for (const [ground, from] of Object.entries(borrows)) {
       expect(themeCursorName(ground as (typeof THEMES)[number]), `${ground} borrows ${from}'s cursor`).toBe(themeCursorName(from as (typeof THEMES)[number]));
     }

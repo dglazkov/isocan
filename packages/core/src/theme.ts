@@ -112,7 +112,18 @@ export const THEME_PROP = "theme";
  * with items as stones in raked rings. They borrow Ocean's fish and Desert's
  * crescent.
  */
-export const THEMES = ["galaxy", "ocean", "mountains", "farm", "desert", "meadow", "night", "snow", "aurora", "pond", "zen"] as const;
+export const THEMES = ["galaxy", "ocean", "mountains", "farm", "desert", "meadow", "night", "snow", "aurora", "pond", "zen", "stitch"] as const;
+
+/**
+ * Pure CSS surface grounds (ADR 0253): drawn by stylesheet tokens and a crisp
+ * dot grid rather than a JPEG tile, costing zero image bytes on first paint.
+ */
+const SURFACE_THEMES = ["stitch"] as const satisfies readonly CanvasTheme[];
+
+/** True when `theme` is drawn as a CSS surface ground rather than a painted JPEG tile. */
+export function isSurfaceTheme(theme: CanvasTheme | null): boolean {
+  return theme !== null && (SURFACE_THEMES as readonly string[]).includes(theme);
+}
 
 /** One of the seeded grounds. Not a string: a canvas wearing a name nothing
  *  can draw is a blank screen with no way to explain itself. */
@@ -672,4 +683,6 @@ const THEME_CURSOR: Record<CanvasTheme, CanvasCursor> = {
   meadow: "ladybird",
   // Night's pointer IS a firefly: its lantern is a hole the ground glows through.
   night: "firefly",
+  // Stitch borrows galaxy's sparkle (zero new cursor paths in entry bytes).
+  stitch: "sparkle",
 };

@@ -22,6 +22,7 @@ import { collectCanvasNames, extractMentions, type MentionCandidate } from "./me
 import { sameActor, type ActorJoins } from "./identity.ts";
 import type { RcPolicy } from "./protocol.ts";
 import { opMatchesFilters, opTouchesAreas } from "./touches.ts";
+import { evaluateMentionBreaker, MAX_AGENT_MENTION_HOPS } from "./mention-breaker.ts";
 import { LISTEN_ANYONE, parseListen, listenGrants, ownersWord, mayWake, type InboxEntry, type AgentRules, type Keeping, type ListenEntry } from "./inbox.ts";
 type InboxReason = InboxEntry["reason"];
 
@@ -346,6 +347,15 @@ export function dispatchReason(
      * listens to everyone. Absent: the author speaks for itself.
      */
     onBehalfOf?: readonly string[] | undefined;
+    /**
+     * Predicate identifying agent actors for the 4-hop `@mention` circuit
+     * breaker (Open Stitch Phase 2A, OS1 ADR 0274). When supplied, consecutive
+     * agent-to-agent messages in one thread stop waking agents once they hit
+     * `mentionHopLimit` (default 4) until a human posts in the thread.
+     */
+    isAgent?: ((actorId: string) => boolean) | undefined;
+    /** Override for the 4-hop mention breaker limit (default 4). */
+    mentionHopLimit?: number | undefined;
   },
   canvas: CanvasContents | null | undefined,
 ): InboxReason | "change" | null {
@@ -371,7 +381,30 @@ export function dispatchReason(
     const thread = canvas?.threads[op.threadId];
     const candidates = canvas ? collectCanvasNames(canvas) : undefined;
     const reason = reasonFor(op.comment, thread, agent.actorId, agent.names, agent.joined, candidates);
-    if (reason && (!capped || reason === "mentioned")) return reason;
+    if (reason && (!capped || reason === "mentioned")) {
+      // 4-hop agent mention circuit breaker (OS1 ADR 0274): stop infinite
+      // @a -> @b -> @a ping-pong loops until a human speaks in the thread.
+      if (agent.isAgent && thread) {
+        const alreadyIncluded = thread.comments.some((c) => c.id === op.comment.id);
+        const history = alreadyIncluded
+          ? thread.comments
+          : [
+              ...thread.comments,
+              {
+                author: { id: authorId, name: authorId },
+                ...(op.comment.mentions ? { mentions: op.comment.mentions } : {}),
+                ...(op.comment.record ? { record: op.comment.record } : {}),
+              },
+            ];
+        const hopCheck = evaluateMentionBreaker(
+          history,
+          agent.isAgent,
+          agent.mentionHopLimit ?? MAX_AGENT_MENTION_HOPS,
+        );
+        if (!hopCheck.allowed) return null;
+      }
+      return reason;
+    }
   }
   if (op.type === "questionnaire.ask" || op.type === "questionnaire.answer") {
     const thread = canvas?.threads[op.threadId];

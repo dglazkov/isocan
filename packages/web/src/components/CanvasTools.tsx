@@ -29,7 +29,7 @@ const AddPopover = lazy(() => import("./AddPopover.tsx").then((module) => ({ def
 import { hideMenu, showMenu, useChromeHidden } from "../lib/chromemenu.tsx";
 import { openContextMenu } from "../lib/contextmenu.ts";
 import { screenToWorld } from "../lib/viewport.ts";
-import { openReactionBar } from "./ReactionBar.tsx";
+import { openReactionBar } from "../lib/reactionbar.ts";
 import { setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { IDENTITY_COLORS, actorColorIn, useActorColors } from "../lib/colors.ts";
 import { ToolGlyph, toolHint, useCanvasTools } from "../lib/tools.tsx";

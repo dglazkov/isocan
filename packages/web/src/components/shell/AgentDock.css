@@ -1,0 +1,218 @@
+/* Stitch AgentDock (Open Stitch Phase 1A, OS1 ADR 0256).
+   Single top-right anchor (flips top-left opposite a right-docked prompt),
+   stacking orientation header, notifications, and agent roster accordion. */
+
+.shell-agent-dock {
+  position: fixed;
+  top: calc(var(--edge) + var(--pill-h) + 10px);
+  z-index: var(--z-dock);
+  width: 300px;
+  max-width: calc(100vw - var(--edge) * 2);
+  max-height: calc(100vh - var(--edge) * 2 - var(--pill-h) - 24px);
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--stitch-radius, 16px);
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-glass);
+  color: var(--ink);
+  overflow: hidden;
+}
+
+.shell-agent-dock[data-side="right"] {
+  right: var(--edge);
+}
+
+.shell-agent-dock[data-side="left"] {
+  left: var(--edge);
+}
+
+.shell-agent-dock[data-custom-geometry="true"] {
+  right: auto;
+  bottom: auto;
+}
+
+.shell-agent-dock-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--glass-border);
+  cursor: grab;
+  user-select: none;
+}
+
+.shell-agent-dock-header:active {
+  cursor: grabbing;
+}
+
+.shell-agent-dock-orient {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+
+.shell-agent-dock-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shell-agent-dock-sub {
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.shell-agent-dock-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+
+.shell-agent-dock-reset {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-muted);
+  font-size: 11px;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+
+.shell-agent-dock-reset:hover {
+  background: var(--glass-chip);
+  color: var(--ink);
+}
+
+.shell-agent-dock-section {
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.shell-agent-dock-section:last-of-type {
+  border-bottom: none;
+}
+
+.shell-agent-dock-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.shell-agent-dock-trigger:hover {
+  background: var(--glass-chip);
+}
+
+.shell-agent-dock-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--glass-chip);
+  color: var(--ink-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.shell-agent-dock-body {
+  padding: 6px 12px 10px;
+  overflow-y: auto;
+  max-height: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.shell-agent-dock-empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.shell-agent-dock-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius);
+  background: var(--card);
+  border: 1px solid var(--glass-border);
+  font-size: 12px;
+}
+
+.shell-agent-dock-row-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+
+.shell-agent-dock-row-name {
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shell-agent-dock-row-meta {
+  font-size: 11px;
+  color: var(--ink-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shell-agent-dock-state {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--glass-chip);
+  color: var(--ink-muted);
+  flex: none;
+}
+
+.shell-agent-dock-state[data-state="working"] {
+  color: var(--accent-text);
+}
+
+.shell-agent-dock-state[data-state="blocked"] {
+  color: var(--warn);
+}
+
+.shell-agent-dock-resizer {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+}
+
+.canvas-page.ui-hidden .shell-agent-dock {
+  opacity: 0;
+  pointer-events: none;
+}

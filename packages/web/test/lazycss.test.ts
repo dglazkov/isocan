@@ -73,8 +73,13 @@ import { classesOf, eagerWebFiles, namedBy, sources } from "./cssuse.ts";
  *
  * 317 became 316 on 21 Oct 2026: `.scrubber.at-top` moved out of `styles.css`
  * into `scrubber.css` beside History's own rules.
+ *
+ * 316 became 365 on 22 Nov 2026: Open Stitch Phase 1A lazy-loaded seven
+ * existing entry doors (ContextMenu, HelpModal, ShareModal, GroupModal, etc.)
+ * to trim the entry JS bundle below baseline, which moved their existing
+ * `styles.css` rules into the lazy-only count until those sheets split out.
  */
-const CEILING = 316;
+const CEILING = 365;
 
 const eagerFiles = eagerWebFiles();
 const isLazyWeb = (file: string) => file.startsWith("packages/web/src/") && !eagerFiles.has(file);

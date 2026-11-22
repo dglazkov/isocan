@@ -305,6 +305,11 @@ interface UiStore {
    * where its playhead is standing lives in `canvasStore.past`, because that
    * is canvas state and every reader of the canvas has to see it. */
   historyOpen: boolean;
+  /** Transient Hide-UI mode (`⌘\` / `Ctrl+\`): tucks away chrome while keeping
+   *  the canvas live. Never persisted across reloads. */
+  uiHidden: boolean;
+  setUiHidden: (hidden: boolean) => void;
+  toggleUiHidden: () => void;
   /** Controls this browser has hidden — ids from `lib/chrome.ts`. Local, per
    *  browser, like the theme: taste, not a canvas fact. */
   hiddenChrome: string[];
@@ -795,6 +800,9 @@ export const useUiStore = create<UiStore>((set, get) => {
     followingActorId: null,
     marksOpen: false,
     historyOpen: false,
+    uiHidden: false,
+    setUiHidden: (uiHidden) => set({ uiHidden }),
+    toggleUiHidden: () => set((s) => ({ uiHidden: !s.uiHidden })),
     hiddenChrome: readHiddenChrome(),
     experiments: readIdList(EXPERIMENTS_KEY),
     collapsedComments: [],

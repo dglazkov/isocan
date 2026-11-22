@@ -119,6 +119,7 @@ export const GROUND_MEAN: Record<CanvasTheme, string> = {
   aurora: "#071214",
   pond: "#102625",
   zen: "#b5ac9a",
+  stitch: "#f1f3f4",
 };
 
 /**

@@ -118,6 +118,8 @@ interface OwnAsk {
   model?: (provider: TextProvider) => string | undefined;
   fallbacks?: boolean;
   images?: readonly TextImage[];
+  /** Per-user BYOK override (Open Stitch phase 0.3): spends the caller's own key instead of the home's. */
+  overrideKey?: { key: string; provider: TextProvider };
 }
 
 const WINDOW_MS = 60_000;
@@ -191,12 +193,14 @@ export class TextModel {
    * the provider's words, never the key.
    */
   async write(request: { prompt: string; schema: JsonSchema }, own: OwnAsk = {}): Promise<Written> {
-    const resolved = this.resolve();
+    const resolved = own.overrideKey
+      ? { key: own.overrideKey.key, source: "env" as const, provider: own.overrideKey.provider }
+      : this.resolve();
     if (!resolved) throw new Error("the text model has no key");
     const { key } = resolved;
-    const named = this.opts.provider ? this.opts.provider() : undefined;
+    const named = own.overrideKey ? undefined : (this.opts.provider ? this.opts.provider() : undefined);
     const provider = named ?? resolved.provider ?? textProvider(key);
-    const model = own.model?.(provider) ?? (this.opts.model ? this.opts.model() : undefined) ?? resolved.model;
+    const model = own.model?.(provider) ?? (this.opts.model ? this.opts.model() : undefined) ?? ("model" in resolved ? resolved.model : undefined);
     // Read what each answer says it cost, on a copy, so the generator reads the answer as it always did.
     let usage: Written["usage"];
     const send = this.opts.fetch ?? globalThis.fetch;

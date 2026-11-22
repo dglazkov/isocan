@@ -132,10 +132,11 @@ import { AgentTray } from "../components/LazyAgentTray.tsx";
 import { ContextPanel } from "../components/LazyContextPanel.tsx";
 import { PersonasPanel } from "../components/LazyPersonasPanel.tsx";
 import { ExtensionPanel } from "../components/LazyExtensionPanel.tsx";
-import { ReactionBar, restoreReactionBar } from "../components/ReactionBar.tsx";
-import { CommentToasts } from "../components/CommentToasts.tsx";
-import { OfflineBar } from "../components/OfflineBar.tsx";
-import { SprintChip } from "../components/SprintChip.tsx";
+import { ReactionBar } from "../components/LazyReactionBar.tsx";
+import { restoreReactionBar } from "../lib/reactionbar.ts";
+import { CommentToasts } from "../components/LazyCommentToasts.tsx";
+import { OfflineBar } from "../components/LazyOfflineBar.tsx";
+import { SprintChip } from "../components/LazySprintChip.tsx";
 import { unreadThreads, useUnreadStore } from "../stores/unreadStore.ts";
 import { crossesCover, hasTextSelection, isTyping } from "../lib/keys.ts";
 import { recordVisit } from "../lib/recents.ts";
@@ -329,6 +330,7 @@ function CanvasSurface({
   /* Read here rather than inside the panel, because the panel is no longer
      mounted while it is shut — the flag has to be the thing that mounts it. */
   const helpOpen = useUiStore((s) => s.helpOpen);
+  const uiHidden = useUiStore((s) => s.uiHidden);
   const setHistoryOpen = useUiStore((s) => s.setHistoryOpen);
   const moduleDialogOpen = useUiStore((s) => s.moduleDialog !== null);
   const semanticZoom = useUiStore((s) => s.experiments).includes("semantic.zoom");
@@ -1227,7 +1229,7 @@ function CanvasSurface({
     // steps aside for the panel eases to its new place, which is right for the
     // one step of opening and wrong for a width changing every frame.
     <div
-      className={`canvas-page${phone ? " phone-layout" : ""}${panelResizing ? " resizing-panel" : ""}${canEdit ? "" : " read-only"}`}
+      className={`canvas-page${phone ? " phone-layout" : ""}${panelResizing ? " resizing-panel" : ""}${canEdit ? "" : " read-only"}${uiHidden ? " ui-hidden" : ""}`}
       data-ground-tone={groundTone}
       data-ground-sample={groundSample}
       style={groundMid as CSSProperties | undefined}

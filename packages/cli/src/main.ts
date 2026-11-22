@@ -21,6 +21,8 @@ import { noteOnBench, registerBench } from "./bench.ts";
 import { summaryColumn, summaryReport, summaryStatsReport } from "./summary.ts";
 import { registerKeys } from "./keys.ts";
 import { registerModel } from "./model.ts";
+import { registerModels } from "./models.ts";
+import { registerJobs } from "./jobs.ts";
 import { registerTweak } from "./tweak.ts";
 import { makeTextAnchor, resolveTextAnchor, quoteRange, SOURCE_PATH_PROP, threadTargetItem } from "@isocan/core";
 // The copy lint's tells: slop.ts is eager already, so it is handed to the lazy lint rather than imported by it.
@@ -546,6 +548,7 @@ import { AcpAgentProcess, adapterEnv } from "./acp.ts";
 import { agentSessionOf, keysMovedLines, machineAgentKey, moveToMachineKeys } from "./agent-key.ts";
 import { openInBrowser } from "./browser.ts";
 import { registerOperator, sweptLine } from "./operator.ts";
+import { registerHouseCommand } from "./house.ts";
 import { run } from "./run.ts";
 import { runPackageScript } from "./package-script.ts";
 import { adapterFor, defaultLine, noDefaultLine, noNeedLine, passedEnv, scanHarnesses, setDefaultHarness, storedAgentKeys, type AdapterSpec } from "./harnesses.ts";
@@ -581,6 +584,9 @@ import {
   type Build,
 } from "./managed.ts";
 import { findOnPath, globalBinDir, rootOfBin } from "./onpath.ts";
+import { applyTitleSourceOption, moveWithMakeRoomGroup, planMakeRoomDisplacements, resolveActualSize } from "./physics.ts";
+import { awaitPointPaintAck, buildReplyReceipt, ensureAgentStation, handlePreconditionConflict, makeWaitAgentChecker, parseDoingVerb, parseExpectFlag, receiptConfirmationLine, runContextGraph, runContextView } from "./agent-semantics.ts";
+import { handleForActor } from "@isocan/core";
 import { installAntigravityPlugin } from "./antigravity-plugin.ts";
 import { defaultSize, mimeFor } from "./mime.ts";
 import { mimeFromName } from "@isocan/core";
@@ -1417,7 +1423,15 @@ program
   .action(
     run(async () => {
       const { serveStdio } = await import("@isocan/mcp");
-      await serveStdio({ version: buildStamp().version });
+      // The CLI's own registry, handed over rather than twinned: every module
+      // loaded here — built in or `isocan module add`ed — that declares
+      // `tools` is a module whose verbs this server offers too
+      // (`docs/projects/modules/mcp.md`).
+      const modules = [
+        ...CLI_MODULES.map((m) => ({ name: m.core.name, tools: m.tools ?? [] })),
+        ...runtimeModules.map((m) => ({ name: m.name, tools: m.tools ?? [] })),
+      ].filter((m) => m.tools.length > 0);
+      await serveStdio({ version: buildStamp().version, modules });
       // Resolves when the transport closes, which is when the host hung up.
       await new Promise<void>(() => {});
     }),
@@ -4127,6 +4141,7 @@ program
 
 // ---------- the operator: `registerOperator`, in operator.ts ----------
 registerOperator(program, ctxOf);
+registerHouseCommand(program, ctxOf);
 
 /** A browser tab or a machine, in one word. The carrier IS the answer — a
  * cookie badge is a browser by construction, because nothing else has a
@@ -5260,9 +5275,10 @@ canvas
   .option("--space <name-or-id>", "create in this space, inheriting its access with no birth link grant; requires an owner")
   .option("-d, --description <text>")
   .option("--legacy", "create a deliberate compatibility canvas; group writes require migration")
+  .option("--welcome", "seed the new canvas with a Welcome to Open Stitch guide card")
   .option("--prop <k=v>", "set a property (repeatable)", collectProp, {})
   .action(
-    run(async (title: string, opts: { description?: string; prop: Record<string, string>; legacy?: boolean; space?: string }, cmd: Command) => {
+    run(async (title: string, opts: { description?: string; prop: Record<string, string>; legacy?: boolean; welcome?: boolean; space?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const space = opts.space === undefined ? null : await resolveSpace(ctx, opts.space);
       const canvasId = newCanvasId();
@@ -5274,6 +5290,10 @@ canvas
         ...(opts.description !== undefined ? { description: opts.description } : {}),
         ...(Object.keys(opts.prop).length > 0 ? { properties: opts.prop } : {}),
       }, undefined, space?.id);
+      if (opts.welcome) {
+        const { seedWelcomeItem } = await import("./welcome.ts");
+        await seedWelcomeItem({ uploadBlob: (id, data, mime, name) => ctx.client.uploadBlob(id, Buffer.from(data), mime, name), sendOp: (id, op) => sendOp(ctx, id, op) }, canvasId);
+      }
       if (ctx.json) return printJson({ canvasId, ...(space ? { spaceId: space.id } : {}) });
       console.log(`created canvas ${canvasId} — "${title}"${space ? ` in ${space.name}; access comes from the space` : ""}`);
       const config = await readConfig(ctx.home);
@@ -7649,6 +7669,7 @@ program
   .option("--to-root", "take it out of every group, straight to the canvas (implies --out)")
   .option("--dry-run", "with group --in or --out: report resolved membership and placement without writing")
   .option("--cell <row,col>", "with --in: into one cell of the sheet's grid, counted from 1")
+  .option("--make-room", "push colliding neighbours aside cleanly in the same undo step")
   .allowUnknownOption() // lets negative coordinates through: isocan mv itm -80 420
   .action(
     run(
@@ -7657,7 +7678,7 @@ program
         x: string | undefined,
         y: string | undefined,
         more: string[],
-        opts: { by?: string; in?: string; out?: boolean; toRoot?: boolean; cell?: string; dryRun?: boolean; beside?: string; side?: string },
+        opts: { by?: string; in?: string; out?: boolean; toRoot?: boolean; cell?: string; dryRun?: boolean; beside?: string; side?: string; makeRoom?: boolean },
         cmd: Command,
       ) => {
         // `x,y` is how `--at` and `--by` say a point, so `mv itm 300,200`
@@ -7727,6 +7748,7 @@ program
           return besideBox({ width: moving.width, height: moving.height }, anchor, side);
         })();
         if (beside && snapshot.project.groupMode === "groups") {
+          if (opts.makeRoom) return reportCanvasGroup(ctx, await moveWithMakeRoomGroup(ctx, p.id, snapshot.canvas, resolveItem(snapshot, ref), beside, opts));
           return reportCanvasGroup(
             ctx,
             await new CanvasGroups(ctx.client, p.id, () => ctx.actor).move(ref, { at: beside }, opts),
@@ -7751,6 +7773,11 @@ program
           if (opts.by && (x !== undefined || y !== undefined)) throw new Error("choose positional x y or --by, not both");
           if (!opts.by && (x === undefined || y === undefined)) throw new Error("give x and y, or a delta with --by");
           const destination = opts.by ? { by: parseXY(opts.by) } : { at: parseXY(`${x},${y}`) };
+          if (opts.makeRoom) {
+            const item = resolveItem(snapshot, ref);
+            const target = "by" in destination ? { x: item.x + destination.by.x, y: item.y + destination.by.y } : destination.at;
+            return reportCanvasGroup(ctx, await moveWithMakeRoomGroup(ctx, p.id, snapshot.canvas, item, target, opts));
+          }
           return reportCanvasGroup(ctx, await new CanvasGroups(ctx.client, p.id, () => ctx.actor).move(ref, destination, opts));
         }
         if (opts.dryRun) throw new Error("mv --dry-run requires a group-enabled canvas");
@@ -7794,9 +7821,11 @@ program
         const dx = target.x - item.x;
         const dy = target.y - item.y;
         const marks = annotationsOf(snapshot.canvas, item.id);
+        const pushed = opts.makeRoom ? planMakeRoomDisplacements(snapshot.canvas, item, target, marks) : [];
         const moves = [
           { itemId: item.id, ...target },
           ...marks.map((mark) => ({ itemId: mark.id, x: mark.x + dx, y: mark.y + dy })),
+          ...pushed,
         ];
         const targetSpot = target as { x: number; y: number; resizedArea?: { width: number; height: number }; shifts?: Array<{ itemId: string; x: number; y: number }> };
         const group = (into && targetSpot.resizedArea) ? newGroupId() : undefined;
@@ -8281,6 +8310,8 @@ program
   .option("--prop <k=v>", "set a property (repeatable)", collectProp, {})
   .option("--rm-prop <key>", "remove a property (repeatable)", (v: string, prev: string[]) => [...prev, v], [])
   .option("--size <WxH>", "resize, e.g. 480x360; groups scale their contents")
+  .option("--actual-size", "reset to 100% natural or kind-calibrated size")
+  .option("--source <source>", "with --title: title provenance for CAS (user | agent | auto)")
   .option("--dry-run", "preview a metadata/size update without writing on a group canvas")
   .option(
     "--file <path>",
@@ -8313,6 +8344,8 @@ program
           prop: Record<string, string>;
           rmProp: string[];
           size?: string;
+          actualSize?: boolean;
+          source?: string;
           dryRun?: boolean;
           keepFilename?: boolean;
           file?: string;
@@ -8335,6 +8368,12 @@ program
           status: `updating "${truncate(item.title || item.id, 24)}"…`,
         });
         const patch = metaPatch(opts);
+        const titleCas = applyTitleSourceOption(item, opts, patch);
+        if (titleCas.blocked) {
+          console.log(`kept title on ${item.id} (titleSource "${titleCas.currentSource}" outranks "${titleCas.incoming}")`);
+          if (!Object.keys(patch).length && !opts.size && !opts.actualSize && !opts.visual && !opts.file && !opts.visualFile && !opts.face && !opts.wireframe && !opts.midFi && !opts.hiFi && !opts.prototype) return;
+        }
+        if (opts.size && opts.actualSize) throw new Error("choose --size or --actual-size, not both");
         if (opts.face !== undefined) {
           const trimmedFace = opts.face.trim();
           if (trimmedFace === "" || trimmedFace === "auto" || trimmedFace === "clear") {
@@ -8404,10 +8443,11 @@ program
           for (const warning of warnings) console.error(`warning: ${warning}`);
         }
         const refit =
-          !opts.size && (patch.properties || patch.removeProperties) && isTextItem(item)
+          !opts.size && !opts.actualSize && (patch.properties || patch.removeProperties) && isTextItem(item)
             ? textNodeRefit(item, await currentText(ctx, p.id, item), patch)
             : null;
-        const requestedSize = opts.size ? sizeFor(opts.size, { width: 0, height: 0 }) : (refit ?? undefined);
+        const actual = opts.actualSize ? await resolveActualSize(ctx, p.id, item) : undefined;
+        const requestedSize = opts.size ? sizeFor(opts.size, { width: 0, height: 0 }) : (actual ?? refit ?? undefined);
         if (snapshot.project.groupMode === "groups" && !opts.visual) {
           if (!Object.keys(patch).length && !requestedSize && !faces) throw new Error("nothing to change");
           if (!Object.keys(patch).length && !faces && requestedSize) return reportCanvasGroup(ctx, await new CanvasGroups(ctx.client, p.id, () => ctx.actor).resize(item.id, requestedSize, opts));
@@ -8485,6 +8525,9 @@ program
             height: Number(match[2]),
           });
           did = true;
+        } else if (actual) {
+          await sendOp(ctx, p.id, { type: "item.resize", itemId: item.id, ...actual });
+          did = true;
         } else if (refit) {
           await sendOp(ctx, p.id, { type: "item.resize", itemId: item.id, ...refit });
         }
@@ -8504,6 +8547,7 @@ program
   .option("--prototype <file>", "attach or update prototype face on the new version")
   .option("--face <face>", "set active face (wireframe, mid-fi, hi-fi, prototype, visual, source)")
   .option("--if-version <versionId>", "edit only if this is still the item's current version — otherwise write nothing and exit 4")
+  .option("--expect <ver>", "require this version id or content hash before applying (409 conflict on mismatch)")
   .option("--if-meta <json>", `with --if-version: also require this exact {"title","properties"} — what the last --json answer printed`)
   .option("--title <title>", "with --if-version: retitle in the same act")
   .option("--prop <k=v>", "with --if-version: set a property in the same act (repeatable)", collectProp, {})
@@ -8526,7 +8570,7 @@ when a person renamed or re-tagged the card. It never falls back to an
 unconditional edit.`,
   )
   .action(
-    run(async (ref: string, file: string | undefined, opts: { visual?: string; wireframe?: string; midFi?: string; hiFi?: string; prototype?: string; face?: string; ifVersion?: string; ifMeta?: string; title?: string; prop: Record<string, string>; rmProp: string[]; opId?: string }, cmd: Command) => {
+    run(async (ref: string, file: string | undefined, opts: { visual?: string; wireframe?: string; midFi?: string; hiFi?: string; prototype?: string; face?: string; ifVersion?: string; expect?: string; ifMeta?: string; title?: string; prop: Record<string, string>; rmProp: string[]; opId?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const patch = metaPatch(opts);
       const chosenFace = opts.face !== undefined ? parseFaceChoice(opts.face) : undefined;
@@ -8713,7 +8757,13 @@ unconditional edit.`,
           throw err;
         }
       }
-      await sendOp(ctx, p.id, { type: "item.addVersion", itemId: item.id, version });
+      const expectPrecondition = opts.expect ? parseExpectFlag(opts.expect) : undefined;
+      try {
+        await sendOp(ctx, p.id, { type: "item.addVersion", itemId: item.id, version, ...(expectPrecondition ? { expect: expectPrecondition } : {}) });
+      } catch (err) {
+        if (handlePreconditionConflict(ctx, err)) return;
+        throw err;
+      }
       if (chosenFace) {
         const facePatch: MetaPatch = { properties: { [FACE_PROP]: chosenFace } };
         if (snapshot.project.groupMode === "groups") await new CanvasGroups(ctx.client, p.id, () => ctx.actor).update(item.id, { patch: facePatch });
@@ -10436,6 +10486,9 @@ const context = program
   .description("Read ambient memory or a complete group context manifest")
   .option("--in <group>", "read this group and its complete subtree")
   .option("--include-excluded", "include excluded entries in an explicit --in scope")
+  .option("--graph", "emit the structured context graph (items, edges, clusters, stations, leases, free regions)")
+  .option("--nav", "with --graph: emit the compact navigation index")
+  .option("--view", "read the live Follow-Me viewport visibility readout")
   .option("--canvas <canvas>");
 
 registerContextReads(context, ctxOf);
@@ -10449,6 +10502,8 @@ registerBench(program, ctxOf);
 registerKeys(program);
 // ---------- the local judge's model: `registerModel`, in model.ts (local-judge phase 0) ----------
 registerModel(program);
+registerModels(program); // the model manifest, role by role: `models.ts` (Open Stitch phase 0.4)
+registerJobs(program, ctxOf); // home-polled async jobs: `jobs.ts` (Open Stitch phase 0.2)
 // ---------- live UI Devtools: `registerTweak`, in tweak.ts ----------
 registerTweak(program, ctxOf);
 
@@ -10577,7 +10632,9 @@ context
     run(async (_opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const p = await resolveCanvas(ctx);
-      const options = cmd.optsWithGlobals() as { in?: string; includeExcluded?: boolean };
+      const options = cmd.optsWithGlobals() as { in?: string; includeExcluded?: boolean; graph?: boolean; nav?: boolean; view?: boolean };
+      if (options.view) return runContextView(ctx, p.id);
+      if (options.graph) return runContextGraph(ctx, p.id, { nav: Boolean(options.nav) });
       if (options.in !== undefined) return reportContext(ctx, await new CanvasHandle(ctx, p).context(options));
       if (options.includeExcluded) throw new Error("--include-excluded requires --in <group>");
       const layers = await new CanvasHandle(ctx, p).contextSummary({ guideVersion: describeBuild(buildStamp()) }, { personal: { actorId: ctx.actor.id } });
@@ -12573,21 +12630,25 @@ comment
   .description("Reply to a thread")
   .option("--in <group>", "attach this group and its complete subtree as frozen context")
   .option("--include-excluded", "explicitly include excluded context in this request")
+  .option("--receipt <item>", "attach a structured edit receipt for this item")
   .action(
-    run(async (threadRef: string, text: string, opts: { in?: string; includeExcluded?: boolean }, cmd: Command) => {
+    run(async (threadRef: string, text: string, opts: { in?: string; includeExcluded?: boolean; receipt?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const thread = resolveThread(snapshot, threadRef);
       const comment = await newComment(ctx, p.id, snapshot, text, { in: opts.in, includeExcluded: opts.includeExcluded });
+      const attachedReceipt = opts.receipt ? buildReplyReceipt(snapshot, opts.receipt, text) : undefined;
+      if (attachedReceipt) comment.receipt = attachedReceipt;
       const receipt = await sendOp(ctx, p.id, {
         type: "thread.reply",
         threadId: thread.id,
         comment,
       });
-      if (ctx.json) return printJson({ threadId: thread.id, commentId: comment.id, ...contextReceipt(receipt) });
+      if (ctx.json) return printJson({ threadId: thread.id, commentId: comment.id, ...(attachedReceipt ? { receipt: attachedReceipt } : {}), ...contextReceipt(receipt) });
       // The id is here because a note you post while working is one you will
       // want to rewrite: `comment edit <thread> <comment> "…"`.
       console.log(`replied to ${thread.id} (${comment.id})`);
+      if (attachedReceipt) console.log(`  ${receiptConfirmationLine(attachedReceipt)}`);
       // The receipt is the moment an agent feels finished — and the moment
       // it walks off the canvas, leaving a human talking to a face that
       // isn't listening. So the last line it reads here is the next move.
@@ -12918,8 +12979,10 @@ session
   .command("start")
   .description("Appear on the canvas; ops will move your cursor as you work")
   .option("--label <label>", "display name override")
+  .option("--station", "create or update an agent station group on the canvas")
+  .option("--role <role>", "with --station: role shown on the station title band")
   .action(
-    run(async (opts: { label?: string }, cmd: Command) => {
+    run(async (opts: { label?: string; station?: boolean; role?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       // Appearing is the start of work: an unbound directory gets its canvas
       // here if the handshake didn't already make one (#60).
@@ -12928,15 +12991,25 @@ session
       if (existing) {
         await ctx.client.endSession(existing.canvasId, existing.sessionId).catch(() => {});
       }
-      const created = await ctx.client.createSession(p.id, ctx.actor, opts.label, ctx.harness ?? undefined);
+      const station = opts.station
+        ? await ensureAgentStation(ctx, p.id, { ...(opts.role ? { role: opts.role } : {}) })
+        : null;
+      const handle = station?.handle ?? handleForActor(ctx.actor.id);
+      const created = await ctx.client.createSession(p.id, ctx.actor, opts.label, ctx.harness ?? undefined, undefined, handle);
       await writeSessionFile(ctx.home, ctx.actor.id, {
         canvasId: p.id,
         sessionId: created.sessionId,
         ...(opts.label !== undefined ? { label: opts.label } : {}),
       });
+      if (ctx.json && station) {
+        return printJson({ sessionId: created.sessionId, ttlMs: created.ttlMs, handle, station });
+      }
       console.log(
         `session ${created.sessionId} live on "${p.title}" — cursor follows your ops (ttl ${Math.round(created.ttlMs / 1000)}s, any command refreshes it)`,
       );
+      if (station) {
+        console.log(`station @${station.handle} · ${station.role} (${station.stationItemId})`);
+      }
     }),
   );
 
@@ -12969,6 +13042,7 @@ session
   .option("--out", "zoom out on a framed canvas pane")
   .option("--selection", "zoom a framed canvas pane to fit the current selection")
   .option("--follow", "follow this session's cursor in a framed canvas pane")
+  .option("--ack", "wait for a client paint acknowledgement and report applied vs rendered")
   .action(
     run(
       async (
@@ -12981,6 +13055,7 @@ session
           out?: boolean;
           selection?: boolean;
           follow?: boolean;
+          ack?: boolean;
         },
         cmd: Command,
       ) => {
@@ -12998,7 +13073,9 @@ session
             itemId: item.id,
             zoom: Boolean(opts.zoom),
           });
-          console.log(`pointing at ${item.id}${opts.zoom ? " (zoomed)" : ""}`);
+          const ack = opts.ack ? await awaitPointPaintAck(ctx, p.id) : null;
+          if (ctx.json && ack) return printJson({ itemId: item.id, zoomed: Boolean(opts.zoom), ack });
+          console.log(`pointing at ${item.id}${opts.zoom ? " (zoomed)" : ""}${ack ? ` [${ack.status} seq=${ack.paintedSeq}/${ack.seq}]` : ""}`);
           return;
         }
         const active = await requireSession(ctx, p.id);
@@ -13092,11 +13169,13 @@ session
   .description("Show yourself busy — cursor animates around an item (or --at a spot) until you move, finish an op, or go idle")
   .option("--at <x,y>", "work at a freestanding canvas location instead of an item")
   .option("--say <status>", "status line to show while working")
+  .option("--doing <verb>", "explicit honest presence verb (thinking, reading, writing, generating, coding, verifying, coordinating, idle, done)")
   .action(
-    run(async (ref: string | undefined, opts: { at?: string; say?: string }, cmd: Command) => {
+    run(async (ref: string | undefined, opts: { at?: string; say?: string; doing?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       if (!ref && !opts.at) throw new Error("pass an item or --at x,y");
+      const doing = opts.doing !== undefined ? parseDoingVerb(opts.doing) : undefined;
       let activity: import("@isocan/core").PresenceActivity;
       let cursor: { x: number; y: number };
       let where: string;
@@ -13117,10 +13196,11 @@ session
       await touchSession(ctx, p.id, {
         activity,
         cursor,
+        ...(doing !== undefined ? { action: doing, handle: handleForActor(ctx.actor.id) } : {}),
         ...(opts.say !== undefined ? { status: opts.say } : {}),
       });
       await touchBridge(ctx, p.id, bridgeMsg);
-      console.log(`working on ${where}${opts.say ? ` — ${opts.say}` : ""}`);
+      console.log(`working on ${where}${doing ? ` [${doing}]` : ""}${opts.say ? ` — ${opts.say}` : ""}`);
     }),
   );
 
@@ -13882,6 +13962,9 @@ command or reply. No \`session start\` needed after a wake.`,
               (waitRules?.items?.length ?? 0) > 0 ||
               (waitRules?.areas?.length ?? 0) > 0;
             const snapshot = needCanvas ? await snapOf(entry.canvasId)() : null;
+            const isAgent = op.type === "thread.create" || op.type === "thread.reply"
+              ? await makeWaitAgentChecker(ctx.client, snapshot)
+              : undefined;
             const reason = dispatchReason(
               op,
               entry.envelope.actor.id,
@@ -13889,6 +13972,7 @@ command or reply. No \`session start\` needed after a wake.`,
                 actorId: ctx.actor.id,
                 names: selfNames,
                 rules: waitRules,
+                ...(isAgent ? { isAgent } : {}),
                 ...(snapshot?.joined !== undefined ? { joined: snapshot.joined } : {}),
               },
               snapshot?.canvas ?? null,

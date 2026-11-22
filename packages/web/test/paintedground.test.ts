@@ -17,7 +17,7 @@
 import { existsSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { THEMES, themeLabel } from "@isocan/core";
+import { isSurfaceTheme, THEMES, themeLabel } from "@isocan/core";
 
 import { PAINTED } from "../src/components/themes/PaintedGround.tsx";
 import { rules, selectorsOf, sheets } from "./cssrules.ts";
@@ -50,6 +50,11 @@ const publicDir = fileURLToPath(new URL("../public/", import.meta.url));
 describe("every ground this build offers can actually be drawn", () => {
   it("has a picture on disk for every painted name", () => {
     for (const theme of THEMES) {
+      if (isSurfaceTheme(theme)) {
+        const rule = sheets.flatMap((s) => rules(s.text)).find((r) => selectorsOf(r).includes(`.canvas-theme-${theme}`));
+        expect(rule, `${theme} is a CSS surface theme and needs a .canvas-theme-${theme} rule`).toBeTruthy();
+        continue;
+      }
       const art = PAINTED[theme];
       expect(art, `${theme} is offered in the picker and has no art`).toBeTruthy();
       const file = `${publicDir}grounds/${theme}.jpg`;

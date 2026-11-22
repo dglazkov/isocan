@@ -25,10 +25,13 @@ import { designRepairsRoute, type DesignRepairsResponse } from "@isocan/core/des
 import { recapHeadRoute, type RecapHeadResponse } from "@isocan/core";
 import type { SummaryEntry, SummaryMake, SummaryRead, SummaryStats, SummaryWait } from "@isocan/core/semantic-zoom";
 import type { ImageRequest, ImageResponse, SwatchesRequest, SwatchesResponse } from "@isocan/core/mood";
+import type { KeyProvider, UserKeyDeleteResponse, UserKeyPutResponse, UserKeysListing } from "@isocan/core/keys";
 
-/** Core's `IMAGE_ROUTE` and `SWATCHES_ROUTE` (`@isocan/core/mood`), spelled here for `summariesPath`'s reason: a runtime import of that subpath would re-cut the CLI bundle. The mood CLI test walks the real routes, so a drift fails there. */
-const imagePath = "/api/image";
-const swatchesPath = "/api/image/swatches";
+/** Core's `IMAGE_ROUTE` and `SWATCHES_ROUTE` (`@isocan/core/mood`) — the mood module's own routes since 19 Nov 2026 — spelled here for `summariesPath`'s reason: a runtime import of that subpath would re-cut the CLI bundle. The mood CLI test walks the real routes, so a drift fails there. */
+const imagePath = "/api/m/mood/image";
+const swatchesPath = "/api/m/mood/swatches";
+/** Core's `USER_KEYS_ROUTE` (`@isocan/core/keys`), spelled here for the same bundle-budget reason; `user-keys.test.ts` walks it against the real server. */
+const userKeysPath = "/api/me/keys";
 /** Core's `summariesRoute`, spelled here: see `DaemonRoutes.summaries` for why it is not imported. */
 const summariesPath = (canvasId: string) => `/api/projects/${encodeURIComponent(canvasId)}/summaries`;
 import type {
@@ -105,6 +108,12 @@ import type {
   OperatorRefuseRequest,
   OperatorRefuseResponse,
   TakedownsResponse,
+  JobAbandonRequest,
+  JobResponse,
+  JobRetryRequest,
+  JobsListResponse,
+  NodeLease,
+  PaintAckResult,
 } from "@isocan/core";
 import {
   BADGE_ENDED,
@@ -155,6 +164,12 @@ import {
   passesRoute,
   passRoute,
   SERVING_ROUTE,
+  jobsRoute,
+  jobRoute,
+  jobAbandonRoute,
+  jobRetryRoute,
+  leasesRoute,
+  paintAckRoute,
 } from "@isocan/core";
 import type { BadgeStore, BuildStamp, StoredBadge, UpgradeVerdict } from "@isocan/core";
 import { ApiError, askTheDoor, bearerHeader } from "@isocan/core";
@@ -399,9 +414,11 @@ export class DaemonRoutes {
       throw new ApiError(401, json.error, BADGE_ENDED, "operator");
     }
     const recovered =
-      res.status === 401
-        ? await this.reBadge(signal)
-        : json?.code === "not-your-actor" && (await this.reclaimIdentity());
+      res.status === 401 && json?.code === "identity-required"
+        ? await this.reclaimIdentity()
+        : res.status === 401
+          ? await this.reBadge(signal)
+          : json?.code === "not-your-actor" && (await this.reclaimIdentity());
     if (recovered) {
       signal?.throwIfAborted();
       res = await send();
@@ -710,13 +727,51 @@ export class DaemonRoutes {
     /** "rc": a parked `isocan rc` announcing itself — a process fact on the
      * presence plane, rendered nowhere. Defaults to "cli". */
     kind?: "cli" | "rc",
+    handle?: string,
   ): Promise<CreateSessionResponse> {
     return this.request("POST", `/api/projects/${canvasId}/sessions`, {
       actor,
       ...(label !== undefined ? { label } : {}),
       ...(harness !== undefined ? { harness } : {}),
       ...(kind !== undefined ? { kind } : {}),
+      ...(handle !== undefined ? { handle } : {}),
     });
+  }
+
+  /** Active ephemeral 30-second soft node leases on `canvasId`. */
+  leases(canvasId: string): Promise<{ leases: NodeLease[] }> {
+    return this.request("GET", leasesRoute(canvasId));
+  }
+
+  /** Acquire or renew a soft node lease on `itemId` for `handle`. */
+  acquireLease(
+    canvasId: string,
+    body: { itemId: string; handle: string; ttlMs?: number; actorId?: string },
+  ): Promise<{ acquired: boolean; lease: NodeLease; holder?: NodeLease }> {
+    return this.request("POST", leasesRoute(canvasId), body);
+  }
+
+  /** Release a soft node lease on `itemId`. */
+  releaseLease(canvasId: string, itemId: string, handle?: string): Promise<{ released: boolean }> {
+    const query = handle ? `?handle=${encodeURIComponent(handle)}` : "";
+    return this.request("DELETE", `${leasesRoute(canvasId)}/${encodeURIComponent(itemId)}${query}`);
+  }
+
+  /** Record an ephemeral paint acknowledgement up to `seq`. */
+  recordPaintAck(canvasId: string, seq: number): Promise<{ ok: true; canvasId: string; paintedSeq: number }> {
+    return this.request("POST", paintAckRoute(canvasId), { seq });
+  }
+
+  /** Read or await a paint acknowledgement (`rendered` vs `applied`). */
+  paintAckStatus(
+    canvasId: string,
+    opts: { seq?: number; waitMs?: number } = {},
+  ): Promise<PaintAckResult | { canvasId: string; paintedSeq: number }> {
+    const params = new URLSearchParams();
+    if (opts.seq !== undefined) params.set("seq", String(opts.seq));
+    if (opts.waitMs !== undefined) params.set("waitMs", String(opts.waitMs));
+    const suffix = params.toString() ? `?${params.toString()}` : "";
+    return this.request("GET", `${paintAckRoute(canvasId)}${suffix}`);
   }
 
   updateSession(
@@ -1245,7 +1300,7 @@ export class DaemonRoutes {
   }
 
   /**
-   * **Draw a mood-board spread** (`POST /api/image`, moodboard phase 0): the
+   * **Draw a mood-board spread** (`POST /api/m/mood/image`, moodboard phase 0): the
    * home wraps the words in its template, spends its Gemini key, and adds the
    * tiles as `actor`; the answer names them. Refusals arrive as the home's
    * codes (`image-refused`, `image-owner-only`, `image-unavailable`, …).
@@ -1255,7 +1310,7 @@ export class DaemonRoutes {
   }
 
   /**
-   * **Read dominant colour swatches from an image item** (`POST /api/image/swatches`,
+   * **Read dominant colour swatches from an image item** (`POST /api/m/mood/swatches`,
    * moodboard phase 2): uses `sharp` when the home has it, or falls back to a
    * picture-capable text model (`estimated: true`).
    */
@@ -1597,6 +1652,54 @@ export class DaemonRoutes {
       ? `?${TAKEDOWNS_CANVAS_PARAM}=${encodeURIComponent(canvasId)}`
       : "";
     return this.request("GET", `${TAKEDOWNS_ROUTE}${suffix}`);
+  }
+
+  /** Per-user BYOK keys stored for the authenticated caller on this home (`GET /api/me/keys`). */
+  async listUserKeys(): Promise<UserKeysListing> {
+    return this.request("GET", userKeysPath);
+  }
+
+  /** Store a sealed per-user BYOK key for the authenticated caller (`PUT /api/me/keys/:provider`). */
+  async setUserKey(provider: KeyProvider, key: string): Promise<UserKeyPutResponse> {
+    return this.request("PUT", `${userKeysPath}/${encodeURIComponent(provider)}`, { key });
+  }
+
+  /** Remove the authenticated caller's per-user BYOK key (`DELETE /api/me/keys/:provider`). */
+  async deleteUserKey(provider: KeyProvider): Promise<UserKeyDeleteResponse> {
+    return this.request("DELETE", `${userKeysPath}/${encodeURIComponent(provider)}`);
+  }
+
+  /** List async jobs recorded on this canvas's items (`GET /api/projects/:id/jobs`). */
+  async listJobs(canvasId: string): Promise<JobsListResponse> {
+    return this.request("GET", jobsRoute(canvasId));
+  }
+
+  /** Inspect a single async job on this canvas (`GET /api/projects/:id/jobs/:jobId`). */
+  async getJob(canvasId: string, jobId: string): Promise<JobResponse> {
+    return this.request("GET", jobRoute(canvasId, jobId));
+  }
+
+  /** Abandon an active async job (`POST /api/projects/:id/jobs/:jobId/abandon`). */
+  async abandonJob(canvasId: string, jobId: string, body?: JobAbandonRequest): Promise<JobResponse> {
+    return this.request("POST", jobAbandonRoute(canvasId, jobId), body ?? {});
+  }
+
+  /** Retry a terminal async job on the same item (`POST /api/projects/:id/jobs/:jobId/retry`). */
+  async retryJob(canvasId: string, jobId: string, body?: JobRetryRequest): Promise<JobResponse> {
+    return this.request("POST", jobRetryRoute(canvasId, jobId), body ?? {});
+  }
+
+  /** Call a module's server route (`/api/m/<module>/<path>`) through the daemon's authenticated transport. */
+  async moduleRequest<T>(
+    method: "GET" | "POST",
+    route: string,
+    body?: unknown,
+    signal?: AbortSignal,
+  ): Promise<T> {
+    if (!route.startsWith("/api/m/")) {
+      throw new Error(`moduleRequest expects a /api/m/<module>/<path> route, got "${route}"`);
+    }
+    return this.request<T>(method, route, body, signal);
   }
 
   async uploadBlob(

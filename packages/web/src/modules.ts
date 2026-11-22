@@ -113,6 +113,19 @@ const BEHIND_EXPERIMENT: Record<string, string> = {
   mood: "moodboard",
   motion: "motion",
   exact: "exact",
+  describe: "modules.describe",
+  video: "modules.video",
+  audio: "modules.audio",
+  model3d: "modules.model3d",
+  workbench: "modules.workbench",
+  memory: "modules.memory",
+  image: "modules.image",
+  research: "modules.research",
+  "media-edit": "modules.media-edit",
+  "design-system": "modules.design-system",
+  workspace: "modules.workspace",
+  clipper: "modules.clipper",
+  prototype: "modules.prototype",
 };
 
 /**
@@ -135,6 +148,19 @@ const EXPERIMENT_HALVES: Record<string, () => Promise<{ default: ShellModule }>>
   moodboard: () => import("@isocan/mood/web") as Promise<{ default: ShellModule }>,
   motion: () => import("@isocan/motion/web") as Promise<{ default: ShellModule }>,
   exact: () => import("@isocan/exact/web") as Promise<{ default: ShellModule }>,
+  "modules.describe": () => import("@isocan/describe/web") as Promise<{ default: ShellModule }>,
+  "modules.video": () => import("@isocan/video/web") as Promise<{ default: ShellModule }>,
+  "modules.audio": () => import("@isocan/audio/web") as Promise<{ default: ShellModule }>,
+  "modules.model3d": () => import("@isocan/model3d/web") as Promise<{ default: ShellModule }>,
+  "modules.workbench": () => import("@isocan/workbench/web") as Promise<{ default: ShellModule }>,
+  "modules.memory": () => import("@isocan/memory/web") as Promise<{ default: ShellModule }>,
+  "modules.image": () => import("@isocan/image/web") as Promise<{ default: ShellModule }>,
+  "modules.research": () => import("@isocan/research/web") as Promise<{ default: ShellModule }>,
+  "modules.media-edit": () => import("@isocan/media-edit/web") as Promise<{ default: ShellModule }>,
+  "modules.design-system": () => import("@isocan/design-system/web") as Promise<{ default: ShellModule }>,
+  "modules.workspace": () => import("@isocan/workspace/web") as Promise<{ default: ShellModule }>,
+  "modules.clipper": () => import("@isocan/clipper/web") as Promise<{ default: ShellModule }>,
+  "modules.prototype": () => import("@isocan/prototype/web") as Promise<{ default: ShellModule }>,
 };
 
 /**
