@@ -91,6 +91,8 @@ const ModuleWorkspaceView = lazy(() =>
 import { modules, moduleWorkspace } from "../modules.ts";
 /** Module chrome loads when a module supplies it or a person opens its dialog. */
 const ModuleDialogs = lazy(() => import("../components/ModuleDialogs.tsx").then((m) => ({ default: m.ModuleDialogs })));
+const PromptPill = lazy(() => import("../components/shell/PromptPill.tsx"));
+const AgentDock = lazy(() => import("../components/shell/AgentDock.tsx"));
 import { useChromeHidden } from "../lib/hideable.ts";
 import { Viewer } from "../components/LazyViewer.tsx";
 import { usePhone } from "../lib/phone.ts";
@@ -1296,6 +1298,16 @@ function CanvasSurface({
       {canEdit && <TrashPanel key={canvasId} canvasId={canvasId} actor={actor} />}
       <RailStrip canvasId={canvasId} actor={actor} />
       <ReactionBar canvasId={canvasId} />
+      {!phone && canEdit && (
+        <Suspense fallback={null}>
+          <PromptPill canvasId={canvasId!} actor={actor} initialFolded />
+        </Suspense>
+      )}
+      {!phone && (
+        <Suspense fallback={null}>
+          <AgentDock canvasId={canvasId!} actor={actor} />
+        </Suspense>
+      )}
       </>}
       {/* Native collaboration and files remain reachable from the launcher
           while a module owns the canvas chrome. */}
