@@ -25,19 +25,19 @@
   --stitch-fs-prompt: 14px;
 }
 
-.canvas-theme.canvas-theme-stitch {
+.canvas-theme-stitch {
   background-color: var(--theme-stitch);
   background-image: radial-gradient(circle, var(--stitch-dot) 1px, transparent 1px);
   background-size: 24px 24px;
 }
 
-:root[data-theme="dark"] .canvas-theme.canvas-theme-stitch {
+:root[data-theme="dark"] .canvas-theme-stitch {
   background-color: var(--stitch-floor);
 }
 
 /* Solid object frames and Stitch selection accent when Stitch ground is worn.
    Zero stacking-context properties on .canvas-page (layers.test.ts). */
-.canvas-page:has(.canvas-theme-stitch) {
+.canvas-page:has( .canvas-theme-stitch) {
   --card: var(--stitch-surface);
   --accent: var(--stitch-accent);
   --focus: var(--stitch-accent);
