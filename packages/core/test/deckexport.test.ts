@@ -78,8 +78,11 @@ describe("the one file that plays the deck", () => {
     expect(html).toContain("video/mp4 — not something a deck can show");
   });
 
-  it("flips with the keys the presenter uses, and prints one slide to a landscape sheet", () => {
+  it("flips with the keys the presenter uses, jumps on 1–8 and 9, and prints one slide to a landscape sheet", () => {
     expect(html).toContain('"ArrowRight", "ArrowDown", "PageDown"');
+    expect(html).toContain("if (e.metaKey || e.ctrlKey || e.altKey) return;");
+    expect(html).toContain('e.key.length === 1 && e.key >= "1" && e.key <= "9"');
+    expect(html).toContain("if (d === 9) { if (slides.length > 0) show(slides.length - 1); }");
     expect(html).toContain("@page { size: 13.333in 7.5in; margin: 0; }");
     expect(html).toContain("break-after: page;");
     expect(html).toContain("<title>Season planning</title>");

@@ -148,6 +148,37 @@ export function deckStep(canvas: CanvasContents, currentId: string, delta: 1 | -
   return order[at + delta] ?? null;
 }
 
+/** One of the number keys a presenter presses to jump straight to a slide. */
+export type SlideDigit = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+
+/**
+ * **Jump straight to a slide by number, the way Chrome's tabs answer 1–9.**
+ *
+ * `1` through `8` name the first eight slides in reading order, and stay put
+ * when the deck has fewer slides than the digit asked for. `9` always names
+ * the LAST slide — slide 3 of a three-slide deck, slide 20 of a twenty-slide
+ * one — so `1` and `9` are always the two ends of the talk, however long the
+ * deck grew.
+ *
+ * Null when the deck is empty, the digit reaches past it, or the presenter is
+ * already on that slide — pressing `1` on the title stays put rather than
+ * playing a transition onto itself. `forward` says which way along the deck
+ * the jump went, so a directional push still answers "which way did I go".
+ */
+export function deckJump(
+  canvas: CanvasContents,
+  currentId: string | null,
+  digit: SlideDigit,
+): { item: Item; forward: boolean } | null {
+  const order = deck(canvas);
+  if (order.length === 0) return null;
+  const targetIndex = digit === 9 ? order.length - 1 : digit - 1;
+  const item = order[targetIndex];
+  if (!item || item.id === currentId) return null;
+  const at = currentId ? order.findIndex((s) => s.id === currentId) : -1;
+  return { item, forward: targetIndex > at };
+}
+
 // ---------- the transition between slides ----------
 
 /**

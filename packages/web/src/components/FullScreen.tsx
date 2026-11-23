@@ -18,7 +18,7 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { FrameAnchor } from "../lib/frameanchor.ts";
 import type { Actor, Item } from "@isocan/core";
-import { deckTransitionOf, sourceOf, canvasPath, deckStep, itemPath, workbenchItemPath, nodeCapabilitiesFor, isFramedItem, noteFor, visualFaceOf, isDesignSystem, isTextItem } from "@isocan/core";
+import { deckJump, deckTransitionOf, sourceOf, canvasPath, deckStep, itemPath, workbenchItemPath, nodeCapabilitiesFor, isFramedItem, noteFor, visualFaceOf, isDesignSystem, isTextItem } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { useFocusStore } from "../stores/focusStore.ts";
@@ -33,7 +33,7 @@ import { findNextItem, type Direction } from "../lib/spatialnav.ts";
 import { FLIP_NEXT, FLIP_PREV, REST_AFTER_MS, flipTo, framingOf } from "../lib/deckflip.ts";
 import { revealItem } from "../lib/zoomactions.ts";
 import { isTyping } from "../lib/keys.ts";
-import { nextInLoop, reclaimKeyboard, spaceTogglesChrome } from "../lib/presenting.ts";
+import { nextInLoop, reclaimKeyboard, slideDigitFromKey, spaceTogglesChrome } from "../lib/presenting.ts";
 
 const DIRECTIONS = new Set<string>(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
 
@@ -199,6 +199,16 @@ export function FullScreen({
         e.stopPropagation();
         const ui = useUiStore.getState();
         ui.setAutoAdvance(!ui.autoAdvance);
+        return;
+      }
+      const digit = slideDigitFromKey(e);
+      if (digit !== null) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.repeat) return;
+        const canvas = useCanvasStore.getState().canvas;
+        const jump = canvas ? deckJump(canvas, itemId, digit) : null;
+        if (jump) turnTo(jump.item, jump.forward);
         return;
       }
       // Bare arrows flip the deck (#87): the items marked as slides, in

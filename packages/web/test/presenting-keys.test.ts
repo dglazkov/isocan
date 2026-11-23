@@ -18,7 +18,7 @@
 
 import { afterEach, describe, expect, it } from "vitest";
 import type { CanvasContents, Item } from "@isocan/core";
-import { AUTO_ADVANCE_DEFAULT_S, autoAdvanceSeconds, nextInLoop, reclaimKeyboard, spaceTogglesChrome, stageFrameHolding } from "../src/lib/presenting.ts";
+import { AUTO_ADVANCE_DEFAULT_S, autoAdvanceSeconds, nextInLoop, reclaimKeyboard, slideDigitFromKey, spaceTogglesChrome, stageFrameHolding } from "../src/lib/presenting.ts";
 
 /**
  * **Presenting keeps the keyboard, and a deck left running loops.**
@@ -128,6 +128,38 @@ describe("Space and the bar", () => {
     const button = document.createElement("button");
     document.body.append(button);
     expect(space(button)).toBe(true);
+    button.remove();
+  });
+});
+
+describe("number keys while presenting", () => {
+  const press = (key: string, target: EventTarget | null = document.body, mods: Partial<KeyboardEvent> = {}) =>
+    slideDigitFromKey({ key, metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, target, ...mods });
+
+  it("reads bare 1 through 9, and neither 0 nor non-digit keys", () => {
+    for (const d of [1, 2, 3, 4, 5, 6, 7, 8, 9] as const) {
+      expect(press(String(d))).toBe(d);
+    }
+    for (const other of ["0", "10", "F1", "a", " ", "ArrowRight"]) {
+      expect(press(other), other).toBeNull();
+    }
+  });
+
+  it("leaves modified numbers to the browser's tabs and the canvas's zoom keys", () => {
+    for (const mod of ["metaKey", "ctrlKey", "altKey", "shiftKey"] as const) {
+      expect(press("1", document.body, { [mod]: true }), mod).toBeNull();
+      expect(press("9", document.body, { [mod]: true }), mod).toBeNull();
+    }
+  });
+
+  it("leaves digits to a field being typed in, and still answers over a clicked button", () => {
+    const input = document.createElement("input");
+    const button = document.createElement("button");
+    document.body.append(input, button);
+    expect(press("9", input)).toBeNull();
+    expect(press("1", input)).toBeNull();
+    expect(press("9", button)).toBe(9);
+    input.remove();
     button.remove();
   });
 });

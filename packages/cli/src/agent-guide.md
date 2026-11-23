@@ -3274,7 +3274,8 @@ speaks in the thread.
 ## The slide deck
 
 A canvas gets presented, and full screen is the projector: bare arrows (and a
-clicker's Page Up/Down) flip from item to item, each filling the window. With
+clicker's Page Up/Down) flip from item to item, `1`–`8` jump straight to those
+slides and `9` jumps to the last one, each filling the window. With
 nothing marked they flip through **everything**, in reading order — rows top
 to bottom, left to right. Marking narrows the walk to just the slides:
 

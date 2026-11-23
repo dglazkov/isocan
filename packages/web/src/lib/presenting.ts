@@ -14,7 +14,8 @@
  * limitations under the License.
  */
 
-import { deck, deckStep, type CanvasContents, type Item } from "@isocan/core";
+import { deck, deckStep, type CanvasContents, type Item, type SlideDigit } from "@isocan/core";
+import { isTyping } from "./keys.ts";
 
 /**
  * **The slide's frame, when it is holding the keyboard.**
@@ -88,4 +89,22 @@ export function spaceTogglesChrome(e: Pick<KeyboardEvent, "code" | "key" | "meta
   const control = el.closest("button, a, [role='button']");
   if (control && control.matches(":focus-visible")) return false;
   return true;
+}
+
+/**
+ * **A bare number key while presenting, read as a slide jump (`deckJump`).**
+ *
+ * `1`–`8` name those slides and `9` names the last, like Chrome's `⌘1`–`⌘9`
+ * for tabs — which is also why any modifier returns null: `⌘1` and `Ctrl+1`
+ * belong to the browser's tabs, and `⇧1`/`⇧2` to the canvas's zoom family.
+ * Typing into a field (the auto-advance seconds box, a title rename) keeps its
+ * digits; a button merely left focused by a click does not need them.
+ */
+export function slideDigitFromKey(
+  e: Pick<KeyboardEvent, "key" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey" | "target">,
+): SlideDigit | null {
+  if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return null;
+  if (e.key.length !== 1 || e.key < "1" || e.key > "9") return null;
+  if (isTyping(e.target)) return null;
+  return Number(e.key) as SlideDigit;
 }

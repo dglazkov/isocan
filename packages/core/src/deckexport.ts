@@ -155,6 +155,14 @@ ${slides}
     }
     var next = ["ArrowRight", "ArrowDown", "PageDown", " "], prev = ["ArrowLeft", "ArrowUp", "PageUp"];
     window.addEventListener("keydown", function (e) {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (!e.shiftKey && e.key.length === 1 && e.key >= "1" && e.key <= "9") {
+        e.preventDefault();
+        var d = Number(e.key);
+        if (d === 9) { if (slides.length > 0) show(slides.length - 1); }
+        else if (d <= slides.length) show(d - 1);
+        return;
+      }
       if (next.indexOf(e.key) >= 0) { e.preventDefault(); show(at + 1); }
       else if (prev.indexOf(e.key) >= 0) { e.preventDefault(); show(at - 1); }
       else if (e.key === "Home") show(0);
