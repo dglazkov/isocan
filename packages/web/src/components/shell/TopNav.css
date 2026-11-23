@@ -34,8 +34,8 @@
 .shell-topnav-inline {
   display: inline-flex;
   align-items: center;
-  gap: var(--pill-inset);
-  max-width: min(56vw, 680px);
+  gap: 6px;
+  max-width: min(68vw, 960px);
   min-width: 0;
   color: var(--ink);
   font-size: 12px;
@@ -65,7 +65,7 @@
 .shell-topnav-tablist {
   display: inline-flex;
   align-items: center;
-  gap: var(--pill-inset);
+  gap: 6px;
   overflow-x: auto;
   scrollbar-width: none;
   min-width: 0;
@@ -79,15 +79,15 @@
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: var(--pill-inset);
+  gap: 6px;
   height: calc(var(--pill-h) - var(--radius));
-  padding: 0 var(--radius);
+  padding: 0 12px;
   border-radius: 999px;
   border: 1px solid transparent;
   background: transparent;
   color: var(--ink-muted);
   font-size: 12px;
-  max-width: 180px;
+  max-width: 280px;
   cursor: pointer;
 }
 
