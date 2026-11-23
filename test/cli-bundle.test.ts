@@ -183,7 +183,7 @@ describe("the release CLI is a bundle", () => {
     }
   }, 120_000);
 
-  it("loads under 41 modules to print a version, and none of them through tsx", () => {
+  it("loads under 42 modules to print a version, and none of them through tsx", () => {
     const loaded = modulesLoadedBy(bundle, ["--version"]);
     const ours = loaded.filter((url) => url.endsWith(".ts"));
     const tsx = loaded.filter((url) => url.includes("/tsx/"));
@@ -195,7 +195,16 @@ describe("the release CLI is a bundle", () => {
     // something reaches it, so this counts what the command actually needed.
     // 40 since the entry became a stub that turns the compile cache on before
     // main's chunk is compiled: one more file, 60 ms less.
-    expect(loaded.length, `${loaded.length} modules for --version`).toBeLessThan(41);
+    // 41 since the model manifest (`core/src/models.ts`, Open Stitch phase
+    // 0.4): the one table every spender reads is reached by the startup graph
+    // (the barrel, mood, semantic-zoom) AND by the lazy text/judge chunk
+    // (`@isocan/core/jev`), so esbuild gives it a 6.5 KB file of its own.
+    // Folding it into a startup chunk would mean jev reaching the barrel,
+    // which it keeps away from on purpose (a first visit's bytes).
+    // 46 since Open Stitch Phases 0–6 added 13 CLI modules + @isocan/house-agent
+    // (sharing subpaths like context-graph, context-budget, session-driver with
+    // lazy chunks, so esbuild emits 5 small shared chunks).
+    expect(loaded.length, `${loaded.length} modules for --version`).toBeLessThan(48);
   }, 120_000);
 
   it("keeps a compile cache, so the next command skips compiling the chunks", () => {
@@ -242,7 +251,9 @@ describe("the release CLI is a bundle", () => {
       .filter((url) => url.startsWith("file:") && url.includes("/dist/"))
       .reduce((bytes, url) => bytes + statSync(fileURLToPath(url)).size, 0);
     const mb = startup / 1024 / 1024;
-    expect(mb, `${mb.toFixed(2)} MB read to print a version`).toBeLessThan(5.1);
+    // 5.6 MB on 22 Nov 2026: Open Stitch Phases 0–6 added 13 CLI modules +
+    // @isocan/house-agent (~30 KB each, 5.45 MB measured vs 5.026 MB prior).
+    expect(mb, `${mb.toFixed(2)} MB read to print a version`).toBeLessThan(5.6);
   }, 120_000);
 
   it("declares nothing an install has to resolve, and drops what an install never runs", () => {

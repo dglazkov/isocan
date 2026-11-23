@@ -20,32 +20,15 @@ import { reactionGroups } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { glideToBox } from "../lib/zoomactions.ts";
+import { openReactionBar, restoreReactionBar } from "../lib/reactionbar.ts";
 import { ItemThumb } from "./ItemThumb.tsx";
+
+export { openReactionBar, restoreReactionBar };
 
 /** How many marks the bar shows before it folds. Enough for a team's whole
  * vocabulary at a glance; past it, the tail is a click away rather than a
  * scroll nobody reaches the end of. */
 const SHOWN_GROUPS = 5;
-
-const KEY = (canvasId: string) => `isocan.reactions.${canvasId}`;
-
-export function openReactionBar(canvasId: string, open: boolean): void {
-  try {
-    if (open) localStorage.setItem(KEY(canvasId), "1");
-    else localStorage.removeItem(KEY(canvasId));
-  } catch {
-    // Storage denied: the choice holds for this session and no longer.
-  }
-  useUiStore.getState().setMarksOpen(open);
-}
-
-export function restoreReactionBar(canvasId: string): void {
-  try {
-    useUiStore.getState().setMarksOpen(localStorage.getItem(KEY(canvasId)) === "1");
-  } catch {
-    useUiStore.getState().setMarksOpen(false);
-  }
-}
 
 /**
  * The canvas grouped by the marks on it.

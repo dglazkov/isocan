@@ -241,6 +241,15 @@ interface UiStore {
   minimapFold: MinimapFold;
   /** Whether the dot grid lights up under the pointer. */
   cursorGlow: boolean;
+  /** Pin the top floating clusters into a single full-width OS1-style sticky header. */
+  stickyHeader: boolean;
+  setStickyHeader: (on: boolean) => void;
+  /** Pure full-screen Chat mode covering the canvas with a centered 640px thread. */
+  chatFullScreen: boolean;
+  setChatFullScreen: (on: boolean) => void;
+  /** The full Settings modal (Profile, Preferences, Models, Integrations, Memory). */
+  settingsOpen: boolean;
+  setSettingsOpen: (on: boolean) => void;
   /** Full screen shows the slide's speaker note to the presenter (N). A
    *  mode you flip, remembered per browser like the minimap. */
   presenterNotes: boolean;
@@ -305,6 +314,11 @@ interface UiStore {
    * where its playhead is standing lives in `canvasStore.past`, because that
    * is canvas state and every reader of the canvas has to see it. */
   historyOpen: boolean;
+  /** Transient Hide-UI mode (`⌘\` / `Ctrl+\`): tucks away chrome while keeping
+   *  the canvas live. Never persisted across reloads. */
+  uiHidden: boolean;
+  setUiHidden: (hidden: boolean) => void;
+  toggleUiHidden: () => void;
   /** Controls this browser has hidden — ids from `lib/chrome.ts`. Local, per
    *  browser, like the theme: taste, not a canvas fact. */
   hiddenChrome: string[];
@@ -549,6 +563,7 @@ const HIDDEN_CHROME_KEY = "isocan.hiddenChrome";
 const EXPERIMENTS_KEY = "isocan.experiments";
 /** The cursor glow, which some people find delightful and some find busy. */
 const GLOW_KEY = "isocan.cursorGlow";
+const STICKY_HEADER_KEY = "isocan.stickyHeader";
 const LIVE_DOCS_KEY = "isocan.liveDocs";
 
 /** A list of ids in local storage; anything unreadable is the empty list,
@@ -779,6 +794,11 @@ export const useUiStore = create<UiStore>((set, get) => {
     minimapOpen: minimapShown(minimapFold),
     minimapFold,
     cursorGlow: readFlag(GLOW_KEY, true),
+    stickyHeader: readFlag(STICKY_HEADER_KEY, false),
+    chatFullScreen: false,
+    setChatFullScreen: (chatFullScreen) => set({ chatFullScreen }),
+    settingsOpen: false,
+    setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
     presenterNotes: readFlag(PRESENTER_NOTES_KEY, false),
     autoAdvance: false,
     autoAdvanceSeconds: readAutoAdvanceSeconds(),
@@ -795,6 +815,9 @@ export const useUiStore = create<UiStore>((set, get) => {
     followingActorId: null,
     marksOpen: false,
     historyOpen: false,
+    uiHidden: false,
+    setUiHidden: (uiHidden) => set({ uiHidden }),
+    toggleUiHidden: () => set((s) => ({ uiHidden: !s.uiHidden })),
     hiddenChrome: readHiddenChrome(),
     experiments: readIdList(EXPERIMENTS_KEY),
     collapsedComments: [],
@@ -1018,6 +1041,10 @@ export const useUiStore = create<UiStore>((set, get) => {
     setCursorGlow: (cursorGlow) => {
       writeFlag(GLOW_KEY, cursorGlow);
       set({ cursorGlow });
+    },
+    setStickyHeader: (stickyHeader) => {
+      writeFlag(STICKY_HEADER_KEY, stickyHeader);
+      set({ stickyHeader });
     },
     setMinimapOpen: (open) => {
       const { fold, store } = chooseMinimap(get().minimapFold, open);

@@ -154,8 +154,8 @@ describe("installable straight from git", () => {
         if (imp === pkg.name) continue;
         // @isocan/server reaches @isocan/cloudstore by dynamic import only on Cloud Run (tested below).
         if (pkg.name === "@isocan/server" && imp === "@isocan/cloudstore") continue;
-        // Build-time modules are coupled exclusively by the two module lists (test/modules.test.ts).
-        if ((pkg.name === "@isocan/web" || pkg.name === "@isocan/cli") && moduleNames.has(imp)) continue;
+        // Build-time modules are coupled exclusively by the three module lists (test/modules.test.ts).
+        if ((pkg.name === "@isocan/web" || pkg.name === "@isocan/cli" || pkg.name === "@isocan/server") && moduleNames.has(imp)) continue;
         if (!runtimeDeclared.has(imp)) {
           missing.push(`${relDir}/package.json is missing runtime dependency "${imp}"`);
         }

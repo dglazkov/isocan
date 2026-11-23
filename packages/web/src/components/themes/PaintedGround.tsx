@@ -22,6 +22,7 @@ import "./snow.css";
 import "./aurora.css";
 import "./pond.css";
 import "./zen.css";
+import "./stitch.css";
 
 /**
  * **A ground somebody painted** (#195, art delivered 8 Sep 2026).
@@ -128,6 +129,18 @@ export function PaintedGround({ theme, anchor }: { theme: CanvasTheme; anchor: T
    * depend on a zoom it is not in, so it needs a size of its own.
    */
   const pinned = anchor === "window";
+  if (theme === "stitch") {
+    const step = pinned ? 24 : Math.max(8, 24 * scale);
+    return (
+      <div
+        className="canvas-theme canvas-theme-stitch"
+        style={{
+          backgroundSize: `${step}px ${step}px`,
+          backgroundPosition: pinned ? "0 0" : `${tx}px ${ty}px`,
+        }}
+      />
+    );
+  }
   const art = PAINTED[theme];
   if (art === undefined) return null;
 

@@ -24,11 +24,13 @@ import { removeKey, setKeySharing, writeKey } from "@isocan/core/keystore";
 import {
   deltaE,
   IMAGE_BAD_REQUEST,
+  IMAGE_ENDPOINT,
   IMAGE_MODEL_DEFAULT,
   IMAGE_OWNER_ONLY,
   IMAGE_RATE_LIMITED,
   IMAGE_REFUSED,
   IMAGE_ROUTE,
+  IMAGE_ROUTE_LEGACY,
   IMAGE_SWATCHES_UNAVAILABLE,
   IMAGE_UNAVAILABLE,
   IMAGE_UPSTREAM,
@@ -39,11 +41,10 @@ import {
 } from "@isocan/core/mood";
 import type { CanvasSnapshotResponse, Item } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
-import { IMAGE_ENDPOINT } from "../src/image.ts";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
 
 /**
- * **`POST /api/image`** (moodboard phase 0; design §2). The mood board's
+ * **`POST /api/m/mood/image`** (moodboard phase 0; design §2; the mood module's own route since 19 Nov 2026). The mood board's
  * spread: the person's words wrapped in core's template once per axis, drawn
  * with this home's Gemini key, each picture a blob and an image item with
  * its provenance, laid out as a tray, all one undo — behind the voice
@@ -282,6 +283,16 @@ describe("the image route: a spread of pictures, never the key", () => {
     expect(limited.json.code).toBe(IMAGE_RATE_LIMITED);
     expect(calls).toHaveLength(3);
   });
+
+  it("still answers at the old path for one release — the same handler, the same door", async () => {
+    // A CLI built before 19 Nov 2026 asks at `/api/image`; the home answers as at `/api/m/mood/image`. Remove with the alias (`server-modules.ts`).
+    const res = await fetch(`${base}${IMAGE_ROUTE_LEGACY}`, { method: "POST", headers: { "Content-Type": "application/json", ...owner.headers }, body: JSON.stringify({ canvasId: CANVAS, actor: priya, prompt: WORDS, n: 1 }) });
+    const text = await res.text();
+    bodies.push(text);
+    expect(res.status, text).toBe(200);
+    expect((JSON.parse(text) as ImageResponse).items).toHaveLength(1);
+    expect(await tiles()).toHaveLength(1);
+  });
 });
 
 function makeTricolorPng(width = 60, height = 60): Buffer {
@@ -324,7 +335,7 @@ function makeTricolorPng(width = 60, height = 60): Buffer {
   ]);
 }
 
-describe("POST /api/image/swatches: sharp primary path and textModel fallback", () => {
+describe("POST /api/m/mood/swatches: sharp primary path and textModel fallback", () => {
   const TRICOLOR_PNG = makeTricolorPng(60, 60);
 
   async function addImageItem(targetBase: string, badge: TestBadge): Promise<string> {

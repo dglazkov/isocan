@@ -121,6 +121,39 @@
   border-bottom: 1px solid var(--glass-border);
 }
 
+.ui-devtools-presets {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pill-inset);
+}
+
+.ui-devtools-preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pill-inset);
+}
+
+.ui-devtools-preset {
+  padding: var(--pill-inset) var(--radius);
+  border-radius: 999px;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-chip);
+  color: var(--ink-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.ui-devtools-preset:hover {
+  background: var(--glass-chip-hover);
+  color: var(--ink);
+}
+
+.ui-devtools-preset.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
 .ui-devtools-body {
   flex: 1;
   overflow-y: auto;

@@ -236,12 +236,20 @@ export async function claimSessionIdentity(
   const bound = new Set(bindings.map((b) => b.key));
   const session =
     present.find((s) => s.deliberate) ?? present.find((s) => !bound.has(s.key)) ?? present[0]!;
+  const isHouseRoleClaim =
+    typeof options.as === "string" &&
+    !options.as.startsWith("usr_") &&
+    options.as.trim().replace(/^@+/, "").toLowerCase() === "house";
   const op: ActorClaimOp = {
     type: "actor.claim",
     sessionKey: session.key,
-    ...(options.name !== undefined ? { name: options.name } : {}),
+    ...(isHouseRoleClaim
+      ? { name: options.name ?? "house" }
+      : {
+          ...(options.name !== undefined ? { name: options.name } : {}),
+          ...(options.as !== undefined ? { as: options.as } : {}),
+        }),
     ...(options.fresh ? { fresh: true } : {}),
-    ...(options.as !== undefined ? { as: options.as } : {}),
     ...(options.canvasId !== undefined ? { canvasId: options.canvasId } : {}),
   };
   const { envelope } = await client.claimActor(op);

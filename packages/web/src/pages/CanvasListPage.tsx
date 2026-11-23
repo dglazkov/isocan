@@ -61,6 +61,7 @@ const ShareDialog = lazy(() =>
   import("../components/ShareDialog.tsx").then((m) => ({ default: m.ShareDialog })),
 );
 const PublicCatalogue = lazy(() => import("../components/PublicCatalogue.tsx").then((m) => ({ default: m.PublicCatalogue })));
+const HomeInbox = lazy(() => import("../components/shell/HomeInbox.tsx"));
 import { GroupsPanel } from "../components/GroupsPanel.tsx";
 import { useActorColors } from "../lib/colors.ts";
 import { faceMarkClass, faceMarkStyle } from "../lib/face.ts";
@@ -954,6 +955,7 @@ export function CanvasListPage({
        * answer.
        */}
       {inboxOn && <Inbox actor={actor} />}
+      <Suspense fallback={null}><HomeInbox actor={actor} canvases={canvases ?? []} /></Suspense>
       <h2 className="working-canvases-head">Your canvases</h2>
       {(browsing || hasShelf) && (
         <div className="canvas-browse">

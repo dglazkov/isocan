@@ -29,6 +29,7 @@ import { annotationsOf } from "./annotation.ts";
 import { AREA_FILENAME, AREA_MIME, AREA_PROPERTIES, freeSpotIn, inArea } from "./area.ts";
 import { isGroupItem } from "./canvas-group-kit.ts";
 import { newItemId, newVersionId } from "./ids.ts";
+import { modelFor } from "./models.ts";
 import type { Actor, CanvasContents, Item } from "./model.ts";
 import type { Operation } from "./ops.ts";
 import { nearestFreeSpot, PLACEMENT_GAP } from "./placement.ts";
@@ -48,14 +49,24 @@ export {
   parseMoodSwatches,
   rgbToLab,
   SWATCHES_ROUTE,
+  SWATCHES_ROUTE_LEGACY,
   swatchesFromRgba,
   type MoodSwatch,
   type SwatchesRequest,
   type SwatchesResponse,
 } from "./mood-swatches.ts";
 
-/** The route's path. */
-export const IMAGE_ROUTE = "/api/image";
+/**
+ * The route's path. Since 19 Nov 2026 the mood module's own
+ * (the mood module's `./server` half, mounted at `/api/m/mood/image`; Open Stitch phase
+ * 0.1). The old spellings, `IMAGE_ROUTE_LEGACY` and `SWATCHES_ROUTE_LEGACY`,
+ * are thin aliases on the home for one release.
+ */
+export const IMAGE_ROUTE = "/api/m/mood/image";
+/** Where the image route answered before 19 Nov 2026. Forwarded to `IMAGE_ROUTE`; remove with the release after module API 0.2.12. */
+export const IMAGE_ROUTE_LEGACY = "/api/image";
+/** Where pictures are drawn: Google's Interactions API, which the mood module's server half posts to with the key in `x-goog-api-key`. */
+export const IMAGE_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/interactions";
 
 /** The body is malformed: no canvas, no words, `n` out of range, an actor missing. */
 export const IMAGE_BAD_REQUEST = "image-bad-request";
@@ -126,8 +137,9 @@ const MOOD_DIAL_REACH: Readonly<Record<MoodDial, string>> = {
  * Dion decided Flash by default (§8); Pro (`gemini-3-pro-image`, $0.134 a 1K
  * image on the same page) is for *Redraw in Pro*, a later phase. The id is
  * configuration — `ISOCAN_IMAGE_MODEL` wins — because Google's naming moves.
+ * The id itself is the manifest's `image` row (`models.ts`); the price table stays here.
  */
-export const IMAGE_MODEL_DEFAULT = "gemini-nano-banana-2.1";
+export const IMAGE_MODEL_DEFAULT = modelFor("image").id;
 
 /** US dollars per 1K image, by model id, from the pricing page above. A model not listed has no price this build knows. */
 const IMAGE_PRICE_USD: Readonly<Record<string, number>> = {

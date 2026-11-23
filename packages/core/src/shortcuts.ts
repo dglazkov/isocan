@@ -71,6 +71,7 @@ export const SHORTCUTS: Shortcut[] = [
   { keys: ["F", "⇧2"], does: "Fit the selection", group: "Moving around", note: "With nothing selected, fits everything" },
   { keys: ["⌘0", "0", "⇧1"], does: "Fit everything", group: "Moving around" },
   { keys: ["W"], does: "Workbench — the agent room", group: "Moving around", note: "Who is here to work and what each is doing, the main thread beside them, and one item on a stage. A single selection comes along as the stage's focus; Esc steps back out" },
+  { keys: ["⌘\\"], does: "Hide or show the interface", group: "Moving around", note: "Tucks away bars and panels while keeping the canvas live; press ⌘\\ or Esc to bring them back" },
   { keys: ["⇧0"], does: "Actual size (100%)", group: "Moving around" },
   {
     keys: ["⌘O"],

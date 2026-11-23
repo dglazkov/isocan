@@ -18,14 +18,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { promises as fsp } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { LIVE_TOKEN_BAD_REQUEST, LIVE_TOKEN_OWNER_ONLY, LIVE_TOKEN_RATE_LIMITED, LIVE_TOKEN_ROUTE, LIVE_TOKEN_UNAVAILABLE, LIVE_TOKEN_UPSTREAM, ownerOnlySentence } from "@isocan/core/keys";
+import { LIVE_TOKEN_BAD_REQUEST, LIVE_TOKEN_ENDPOINT, LIVE_TOKEN_OWNER_ONLY, LIVE_TOKEN_RATE_LIMITED, LIVE_TOKEN_ROUTE, LIVE_TOKEN_ROUTE_LEGACY, LIVE_TOKEN_UNAVAILABLE, LIVE_TOKEN_UPSTREAM, ownerOnlySentence } from "@isocan/core/keys";
 import { removeKey, setKeySharing, writeKey } from "@isocan/core/keystore";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
-import { LIVE_TOKEN_ENDPOINT } from "../src/live-token.ts";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
 
 /**
- * **`POST /api/voice/token`** (keys phase 4). The talk module asks here once
+ * **`POST /api/m/talk/token`** (keys phase 4; the talk module's own route since 19 Nov 2026, via its `./server` half). The talk module asks here once
  * per session for a short-lived Gemini Live token, so the browser never holds
  * a key. The route is `/api/text`'s door: the canvas named and editable, the
  * stored key spent only for this machine's person unless sharing is on, an
@@ -174,5 +173,17 @@ describe("the voice token route: a one-use Live token, never the key", () => {
     expect(refused.status).toBe(502);
     expect(refused.json.code).toBe(LIVE_TOKEN_UPSTREAM);
     expect(refused.json.error).toContain("API key not valid: [key]");
+  });
+
+  it("still answers at the old path for one release — the same handler, the same door", async () => {
+    // A browser built before 19 Nov 2026 asks at `/api/voice/token`; the home answers as at `/api/m/talk/token`. Remove with the alias (`server-modules.ts`).
+    const res = await fetch(`${base}${LIVE_TOKEN_ROUTE_LEGACY}`, { method: "POST", headers: { "Content-Type": "application/json", ...owner.headers }, body: JSON.stringify({ canvasId: CANVAS }) });
+    const text = await res.text();
+    bodies.push(text);
+    expect(res.status, text).toBe(200);
+    expect((JSON.parse(text) as { token: string }).token).toBe("auth_tokens/acme-1");
+    const stranger = await fetch(`${base}${LIVE_TOKEN_ROUTE_LEGACY}`, { method: "POST", headers: { "Content-Type": "application/json", ...(await collaborator()).headers }, body: JSON.stringify({ canvasId: CANVAS }) });
+    expect(stranger.status).toBe(403);
+    bodies.push(await stranger.text());
   });
 });

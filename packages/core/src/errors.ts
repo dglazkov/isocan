@@ -37,6 +37,7 @@ export const REFUSED = "refused";
 type OpErrorCode =
   | "design-intent-conflict"
   | "edit-conflict"
+  | "precondition-conflict"
   | "unknown-item"
   | "unknown-version"
   | "unknown-thread"
@@ -121,6 +122,21 @@ export class GroupConflictError extends OpValidationError {
   constructor(message: string) {
     super("group-conflict", message);
     this.name = "GroupConflictError";
+  }
+}
+
+/** An item op's `expect` precondition disagreed with the item's live state (HTTP 409). */
+export class PreconditionConflictError extends OpValidationError {
+  constructor(
+    public readonly itemId: string,
+    message: string,
+    public readonly details?: {
+      expected?: { versionId?: string; contentHash?: string; updatedAt?: string };
+      actual?: { versionId?: string; contentHash?: string; updatedAt?: string };
+    },
+  ) {
+    super("precondition-conflict", message);
+    this.name = "PreconditionConflictError";
   }
 }
 

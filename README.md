@@ -1189,6 +1189,8 @@ isocan home [<url>|--clear]        # where each canvas here lives; set where
 isocan keys [ls]|set|rm|test <provider>  # model keys on this machine (~/.isocan/keys.json);
                                    # set reads stdin or a hidden prompt, never argv
 isocan keys share on|off           # may collaborators spend the stored keys (off: only you)
+isocan models [--json]             # which model answers each role, who serves it, key here or not
+isocan job ls|status|cancel|retry  # inspect, abandon, or retry (--model) home-polled async jobs
 isocan share [<email>] [--as own|edit|read|view] [--link on|off|edit|read|view]
              [--revoke <email> [--bar]] [--bar <email>] [--unbar <email>]
                                    # the address, and who may enter this canvas

@@ -4,7 +4,7 @@
 app and choose **Configure voice** (⌘K, Canvas group) — that is the settings
 door (the model); the floating mic is the talking. The dialog opens a
 Gemini Live session from that browser with a one-use token the home mints
-(`POST /api/voice/token`) from the Gemini key in its Model keys (`isocan keys
+(`POST /api/m/talk/token`) from the Gemini key in its Model keys (`isocan keys
 set gemini` on the machine that holds the canvas) — no key reaches the
 browser — and hands the model the canvas's operations as tools, so a spoken
 request lands as the same operations a click would send, carrying the
@@ -25,3 +25,7 @@ An agent measures the resolver without a browser:
 exported record; `scripts/fast-path-act.ts` runs the acting path end to end
 on a throwaway daemon. The browser's voice `undo` retracts the viewer's last
 change, as ⌘Z does.
+
+Subcommands for choreography and co-listening:
+- `isocan voice disposition [--initiative <0..1>] [--curiosity <0..1>] [--divergence <0..1>] [--depth <0..1>] [--partnering <0..1>]` — normalizes the 5-axis disposition and prints the Live prompt hint.
+- `isocan voice control <item> <play|pause|seek|rate|volume|status|find_by_transcript> [--time <sec>] [--rate <n>] [--volume <0..1>] [--query <text>]` — builds an ephemeral co-listening media command (never written to the oplog).

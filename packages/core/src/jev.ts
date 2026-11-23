@@ -40,11 +40,12 @@
  */
 import type { TextRequest, TextResponse } from "./text.ts";
 import { textProviderFor } from "./keys.ts";
+import { modelFor } from "./models.ts";
 
 /** Where Jev answers for a caller holding its own key — the CLI and the measurement scripts; the web never calls it (the home does). */
 export const JEV_URL = "https://api.typesafe.ai/v1/systemone";
-/** The vendor's moving alias, named in every request so an upgrade needs no deploy; the versioned model that answered comes back as `by`. */
-export const JEV_MODEL = "jev-latest";
+/** The vendor's moving alias, named in every request so an upgrade needs no deploy; the versioned model that answered comes back as `by`. The manifest's `judge` row (`models.ts`). */
+export const JEV_MODEL = modelFor("judge").id;
 /** $ per input token — $0.042 per million, output billed at zero (judge phase 0). */
 export const JEV_INPUT_PRICE = 0.042 / 1_000_000;
 
@@ -734,12 +735,19 @@ export function stubTextGenerator(seed = 1): TextGenerator {
 }
 
 /**
+ * The model the OpenAI-shaped generator asks when `ISOCAN_TEXT_MODEL` names
+ * none: the manifest's `text` row's fallback (`models.ts`) — the other
+ * provider's default, for a home whose text key is not Claude's.
+ */
+export const OPENAI_TEXT_MODEL = modelFor("text").fallbacks[0]!;
+
+/**
  * Standard HTTPS JSON-schema `TextGenerator` using `fetch` with zero SDK dependencies.
  * Reads `ISOCAN_TEXT_API_KEY` and `ISOCAN_TEXT_MODEL` when not passed in `opts`.
  */
 export function httpTextGenerator(opts: HttpTextGeneratorOptions = {}): TextGenerator {
   const apiKey = opts.apiKey ?? textEnv("ISOCAN_TEXT_API_KEY") ?? "";
-  const model = opts.model ?? textEnv("ISOCAN_TEXT_MODEL") ?? "gpt-4o-mini";
+  const model = opts.model ?? textEnv("ISOCAN_TEXT_MODEL") ?? OPENAI_TEXT_MODEL;
   const endpoint = opts.endpoint ?? textEnv("ISOCAN_TEXT_ENDPOINT") ?? "https://api.openai.com/v1/chat/completions";
   const fetchFn = opts.fetch ?? globalThis.fetch;
 
@@ -793,9 +801,9 @@ export const CLAUDE_MESSAGES_URL = "https://api.anthropic.com/v1/messages";
  * Claude Opus 5.5, the current default model (the `claude-api` skill's
  * recommendation, 2 Oct 2026). Its cost lever is `CLAUDE_TEXT_EFFORT`, not a
  * smaller model: a screen's labels are short structured copy, which low effort
- * writes well and fast.
+ * writes well and fast. The id lives in the manifest's `text` row (`models.ts`).
  */
-export const CLAUDE_TEXT_MODEL = "claude-opus-5-5";
+export const CLAUDE_TEXT_MODEL = modelFor("text").id;
 
 /**
  * How hard Claude thinks before writing a screen's words. Low: the output is a

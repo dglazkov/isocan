@@ -103,6 +103,7 @@ describe("the tone of every ground", () => {
       aurora: "dark",
       pond: "dark",
       zen: "light",
+      stitch: "light",
       "dot grid (light app)": "light",
       "dot grid (dark app)": "dark",
       "picture (brightest)": "dark",

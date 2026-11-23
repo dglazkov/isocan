@@ -55,3 +55,5 @@ export const isOpId = (value: unknown): value is string =>
 export const newActorId = () => newId("usr");
 /** `cli_` — one browser tab, so it can recognise its own ops when they are broadcast back. */
 export const newClientId = () => newId("cli");
+/** `job_` — a home-polled async job tracked in an item's `job.*` properties. */
+export const newJobId = () => newId("job");

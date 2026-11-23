@@ -15,7 +15,7 @@
  */
 
 import { groupsEnabled, openGroupCreation } from "../lib/canvasgroups.ts";
-import { useRef } from "react";
+import { Suspense, lazy, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   GROUND_MAX_BYTES,
@@ -47,6 +47,8 @@ import { CanvasPresence, CanvasTitle, ShareButton} from "./CanvasCrumb.tsx";
 import { canEditNow, useCanEdit } from "../lib/capability.ts";
 import { moduleProjectViews } from "../modules.ts";
 
+const TopNav = lazy(() => import("./shell/TopNav.tsx"));
+
 /**
  * The top bar: where you are (canvas name, whether you're live, who's here) and
  * what you bring onto the canvas (File, Site, Main). Interaction tools live on
@@ -64,6 +66,7 @@ export function Toolbar({
   const unreadNews = useUnreadNews();
   const canEdit = useCanEdit();
   const navigate = useNavigate();
+  const stickyHeader = useUiStore((s) => s.stickyHeader);
   /**
    * **The picker for a ground of your own** (#204 phase 2).
    *
@@ -80,64 +83,39 @@ export function Toolbar({
    */
   const groundInput = useRef<HTMLInputElement>(null);
 
-  return (
-    /**
-     * **Three floating clusters, not a bar.**
-     *
-     * This was a full-width slab with its own ground and a hairline under it,
-     * which cut the canvas off at 48px and made the top of the surface
-     * somebody else's. The canvas runs edge to edge now and the controls sit
-     * ON it, in groups, wearing the same frosted slab the rail wears — one
-     * language for everything that floats.
-     *
-     * The clusters carry the grouping the bar used to state with a `spacer`:
-     * what you are LOOKING AT on the left, what you can DO on the right. That
-     * was already true and invisible; separating them says it.
-     *
-     * **Nothing moved out of reach.** Every control the bar had is still here
-     * and still one click away. Folding Files, trash and the rest behind a
-     * `···` is the other half of phase 6 and the place "do not lose features"
-     * is most at risk, so it is deliberately not bundled into a restyle.
-     */
-    <div className="toolbar" onContextMenu={(e) => showMenu(e, "the top edge")}>
-      <div className="bar-cluster floats">
-        <Link className="home" to="/" title="All canvases" aria-label="All canvases">
-          <HomeGlyph />
-        </Link>
-        <CanvasTitle actor={actor} />
-        {canvas && (
-          <button
-            className="btn drawer-handle"
-            title="Files, trash, the map and the shortcut list"
-            aria-label="More"
-            aria-haspopup="menu"
-            onClick={async (e) => {
-              const r = e.currentTarget.getBoundingClientRect();
-              // Read the button's box before the await: the element is still
-              // here, but `currentTarget` is not once the handler yields.
-              const { chromeMenu } = await import("../lib/menuentries.tsx");
-              const contents = useCanvasStore.getState().canvas;
-              const views = contents ? moduleProjectViews(canvas, contents) : [];
-              /* The Groups rows, built here because they read the selection
-                 and need a `navigate`. Same lazy import the button used, and
-                 the leading `Groups` separator is dropped: inside a submenu
-                 already called Groups it names itself twice. A write nobody
-                 is allowed to make is left out rather than shown greyed, which
-                 is what the button did. */
-              const { canvasGroupEntries } = await import("../lib/canvasgroupmenus.ts");
-              const selected = useUiStore
-                .getState()
-                .selectedItemIds.map((id) => contents?.items[id])
-                .filter((item) => !!item);
-              const groups = [
-                {
-                  label: "New group",
-                  writes: true,
-                  ...(!groupsEnabled() ? { value: "Preview conversion first" } : {}),
-                  run: () => openGroupCreation(),
-                },
-                ...canvasGroupEntries(selected, { canvasId: canvas.id, actor, navigate }),
-              ]
+  const moreButton = canvas ? (
+    <button
+      className="btn drawer-handle"
+      title="Files, trash, the map and the shortcut list"
+      aria-label="More"
+      aria-haspopup="menu"
+      onClick={async (e) => {
+        const r = e.currentTarget.getBoundingClientRect();
+        // Read the button's box before the await: the element is still
+        // here, but `currentTarget` is not once the handler yields.
+        const { chromeMenu } = await import("../lib/menuentries.tsx");
+        const contents = useCanvasStore.getState().canvas;
+        const views = contents ? moduleProjectViews(canvas, contents) : [];
+        /* The Groups rows, built here because they read the selection
+           and need a `navigate`. Same lazy import the button used, and
+           the leading `Groups` separator is dropped: inside a submenu
+           already called Groups it names itself twice. A write nobody
+           is allowed to make is left out rather than shown greyed, which
+           is what the button did. */
+        const { canvasGroupEntries } = await import("../lib/canvasgroupmenus.ts");
+        const selected = useUiStore
+          .getState()
+          .selectedItemIds.map((id) => contents?.items[id])
+          .filter((item) => !!item);
+        const groups = [
+          {
+            label: "New group",
+            writes: true,
+            ...(!groupsEnabled() ? { value: "Preview conversion first" } : {}),
+            run: () => openGroupCreation(),
+          },
+          ...canvasGroupEntries(selected, { canvasId: canvas.id, actor, navigate }),
+        ]
                 .filter((entry) => !("separator" in entry))
                 .filter((entry) => !("writes" in entry && entry.writes) || canEditNow());
               /* What the parent row says beside its own name, so the answer to
@@ -230,36 +208,37 @@ export function Toolbar({
           >
             ···
           </button>
-        )}
+  ) : null;
+
+  return (
+    <div
+      className="toolbar"
+      data-sticky={stickyHeader ? "true" : undefined}
+      onContextMenu={(e) => showMenu(e, "the top edge")}
+    >
+      <div className="bar-cluster floats">
+        <Suspense
+          fallback={
+            <>
+              <Link className="home" to="/" title="All canvases" aria-label="All canvases">
+                <HomeGlyph />
+              </Link>
+              <CanvasTitle actor={actor} />
+              {moreButton}
+            </>
+          }
+        >
+          <TopNav
+            inline
+            actor={actor}
+            moreSlot={moreButton}
+          />
+        </Suspense>
       </div>
       <span className="spacer" />
-      {/* **Two clusters, not one.**
-          `⌗ Workbench  ● live  Share` put a STATUS between two buttons, which
-          reads as a broken row — you scan buttons, hit a green dot, and have
-          to start again. Workbench navigates and stands alone; `live`, the
-          faces and your own badge are one subject — who is in the room — and
-          Share belongs with them because it is that subject from the other
-          side: who may come in. */}
-      {/* The way into the workbench, said out loud. It was `W` and nothing
-          else — a door only people who had read the shortcut list could find
-          — and the workbench has had a visible `← Canvas` since the day it
-          shipped, so the two directions were not even the same kind of thing.
-          Deliberately NOT a segmented pill beside `Chat | Files`: those
-          toggle a dock and can both be off, this navigates and one view is
-          always true. Same shape would promise the same rules. */}
-      {/* Share is the one thing left in the bar that DOES something — the
-          workbench moved into the drawer, where the rest of the going-places
-          lives. `live`, the faces and your own badge share the other pill,
-          because those are things you read. */}
-      <div className="bar-cluster floats">
-        <ShareButton actor={actor} />
-      </div>
       <div className="bar-cluster floats presence-cluster">
-      {/* RIGHT: things you look up, and the way out. Nothing here MAKES an
-          item any more — the two that did (upload, then Site) both went to
-          the tool rail, which is where a canvas keeps the things that put
-          content on it. */}
-      <CanvasPresence actor={actor} onIdentity={onIdentity} />
+        <ShareButton actor={actor} />
+        <CanvasPresence actor={actor} onIdentity={onIdentity} />
       </div>
       {canvas && (
         <input

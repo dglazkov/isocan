@@ -1,0 +1,27 @@
+{
+  "name": "@isocan/workbench",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Agent sessions, terminals, and OpenNode materialization on the canvas",
+  "exports": {
+    "./core": "./src/core.ts",
+    "./web": "./src/web.tsx",
+    "./cli": "./src/cli.ts",
+    "./server": "./src/server.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "isocan": {
+    "engines": "^0.2.12"
+  },
+  "dependencies": {
+    "@isocan/core": "*",
+    "nanoid": "^5.0.9",
+    "zod": "^4.5.1"
+  },
+  "peerDependencies": {
+    "react": "^18.3.1"
+  }
+}

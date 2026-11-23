@@ -17,6 +17,7 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { claimSession, connect } from "@isocan/api";
 import { createServer } from "./server.ts";
+import type { McpModule } from "./tools.ts";
 
 /**
  * **Attach the server to stdio and stay up.**
@@ -46,11 +47,12 @@ import { createServer } from "./server.ts";
  * until it says otherwise, and `phases.md` records why that is the default
  * rather than a compromise.
  */
-export async function serveStdio(options: { version?: string } = {}): Promise<void> {
+export async function serveStdio(options: { version?: string; modules?: readonly McpModule[] } = {}): Promise<void> {
   const server = createServer({
     home: (identity, signal) => connect({ ...(identity ? { identity } : {}), ...(signal ? { signal } : {}) }),
     claim: (identity, name) => claimSession({ identity, name }),
     ...(options.version !== undefined ? { version: options.version } : {}),
+    ...(options.modules !== undefined ? { modules: options.modules } : {}),
   });
   await server.connect(new StdioServerTransport());
 }

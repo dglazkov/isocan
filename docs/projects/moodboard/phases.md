@@ -122,3 +122,4 @@ naming the colour and that no tile holds it; a person's walk in
 ### Trajectory
 
 - **2026-10-17** — Open: run the end-to-end human walk in [`docs/verify/2026-10-17-moodboard.md`](../../verify/2026-10-17-moodboard.md) with a billing-enabled Gemini API key.
+- **2026-11-19** — The image and swatches routes are the mood module's own: `POST /api/m/mood/image` and `/api/m/mood/swatches` (`@isocan/mood/server`, which took the bodies of `server/src/image.ts`, `mood-swatches.ts` and the two blocks of `model-routes.ts`; mounted by `packages/server/src/module-routes.ts` behind the same door — Open Stitch phase 0.1). `/api/image` and `/api/image/swatches` answer as aliases for one release. `sharp` stays the home's and is lent to the module as a seam (`host.options.loadSharp`).

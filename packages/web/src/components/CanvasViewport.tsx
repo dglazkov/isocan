@@ -139,8 +139,8 @@ import { CursorGlow } from "./CursorGlow.tsx";
 const CanvasThemeLayer = lazy(() =>
   import("./CanvasThemeLayer.tsx").then((m) => ({ default: m.CanvasThemeLayer })),
 );
-import { InkLayer, SketchBar } from "./InkLayer.tsx";
-import { EdgeRadar } from "./EdgeRadar.tsx";
+import { InkLayer, SketchBar } from "./LazyInkLayer.tsx";
+import { EdgeRadar } from "./LazyEdgeRadar.tsx";
 
 // WebKit-only trackpad pinch event; not in the standard TS DOM lib.
 interface GestureEvent extends UIEvent {
