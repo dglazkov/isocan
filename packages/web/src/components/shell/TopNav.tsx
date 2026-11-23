@@ -16,6 +16,7 @@
 
 import "./TopNav.css";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 const SettingsShell = lazy(() => import("./SettingsShell.tsx"));
 import { useLocation, useMatch, useNavigate } from "react-router-dom";
@@ -68,6 +69,14 @@ export interface TopNavProps {
   actor: Actor;
   /** Optional right-cluster controls mounted inside the top pill. */
   rightSlot?: ReactNode;
+  /** When true, renders inline inside Toolbar's top-left pill instead of a second fixed pill. */
+  inline?: boolean;
+  /** Optional canvas menu button (`···`) appended to the inline tab strip. */
+  moreSlot?: ReactNode;
+  /** Optional external control for opening SettingsShell from Toolbar's right pill. */
+  settingsOpen?: boolean;
+  /** Called when externally controlled SettingsShell closes. */
+  onSettingsClose?: () => void;
   /** Optional controlled initial tab state (useful in tests). */
   initialState?: ProjectTabsState;
   /** Optional navigation override (defaults to react-router `navigate`). */
@@ -88,6 +97,10 @@ export interface TopNavProps {
 export function TopNav({
   actor,
   rightSlot,
+  inline = false,
+  moreSlot,
+  settingsOpen: controlledSettingsOpen,
+  onSettingsClose,
   initialState,
   onNavigate,
   onCreateCanvas,
@@ -185,7 +198,7 @@ export function TopNav({
   if (onMotionRender || onModulePage || capability === "view") return null;
 
   if (uiHidden) {
-    return (
+    const restoreBtn = (
       <button
         type="button"
         className="shell-restore-ui"
@@ -196,6 +209,7 @@ export function TopNav({
         Show UI · ⌘\
       </button>
     );
+    return inline && typeof document !== "undefined" ? createPortal(restoreBtn, document.body) : restoreBtn;
   }
 
   // Only show the tab pill once at least one tab is open (or when rightSlot is provided).
@@ -266,103 +280,116 @@ export function TopNav({
     }
   }
 
-  return (
-    <>
-    <div className="shell-topnav-wrap">
-      <nav className="shell-topnav" aria-label="Open canvases">
-        <button
-          type="button"
-          className={`shell-topnav-btn${tabsState.activeId === null ? " active" : ""}`}
-          title="Home — all canvases"
-          aria-label="Home"
-          onClick={() => {
-            commitTabs((prev) => activateProjectTab(prev, null));
-            go("/");
-          }}
-        >
-          <HomeGlyph size={14} />
-        </button>
+  const modalOpen = controlledSettingsOpen ?? settingsOpen;
+  const closeSettings = () => {
+    setSettingsOpen(false);
+    onSettingsClose?.();
+  };
 
-        <div className="shell-topnav-tablist" role="tablist" aria-label="Canvas tabs">
-          {tabsState.tabs.map((tab) => {
-            const active = tabsState.activeId === tab.id;
-            const editing = editingId === tab.id;
-            return (
-              <div
-                key={tab.id}
-                ref={(el) => {
-                  if (el) tabRefs.current.set(tab.id, el);
-                  else tabRefs.current.delete(tab.id);
-                }}
-                role="tab"
-                tabIndex={active ? 0 : -1}
-                aria-selected={active}
-                className={`shell-tab${active ? " active" : ""}`}
-                onClick={() => {
-                  if (!editing) handleSelectTab(tab.id);
-                }}
-                onDoubleClick={() => {
-                  setEditingId(tab.id);
-                  setDraftTitle(tab.title);
-                }}
-                onKeyDown={(e) => {
-                  if (!editing) onTabKeyDown(e, tab.id);
+  const settingsModal = modalOpen ? (
+    <Suspense fallback={null}>
+      <SettingsShell open={modalOpen} actor={actor} onClose={closeSettings} />
+    </Suspense>
+  ) : null;
+
+  const navContent = (
+    <>
+      <button
+        type="button"
+        className={`shell-topnav-btn${tabsState.activeId === null ? " active" : ""}`}
+        title="Home — all canvases"
+        aria-label="Home"
+        onClick={() => {
+          commitTabs((prev) => activateProjectTab(prev, null));
+          go("/");
+        }}
+      >
+        <HomeGlyph size={14} />
+      </button>
+
+      <div className="shell-topnav-tablist" role="tablist" aria-label="Canvas tabs">
+        {tabsState.tabs.map((tab) => {
+          const active = tabsState.activeId === tab.id;
+          const editing = editingId === tab.id;
+          return (
+            <div
+              key={tab.id}
+              ref={(el) => {
+                if (el) tabRefs.current.set(tab.id, el);
+                else tabRefs.current.delete(tab.id);
+              }}
+              role="tab"
+              tabIndex={active ? 0 : -1}
+              aria-selected={active}
+              className={`shell-tab${active ? " active" : ""}`}
+              onClick={() => {
+                if (!editing) handleSelectTab(tab.id);
+              }}
+              onDoubleClick={() => {
+                setEditingId(tab.id);
+                setDraftTitle(tab.title);
+              }}
+              onKeyDown={(e) => {
+                if (!editing) onTabKeyDown(e, tab.id);
+              }}
+            >
+              {tab.activity !== "idle" && (
+                <span
+                  className="shell-tab-dot"
+                  data-activity={tab.activity}
+                  title={tab.activity}
+                  aria-label={tab.activity}
+                />
+              )}
+              {editing ? (
+                <input
+                  className="shell-tab-rename"
+                  aria-label="Rename canvas tab"
+                  value={draftTitle}
+                  autoFocus
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => setDraftTitle(e.target.value)}
+                  onBlur={() => void commitRename(tab.id)}
+                  onKeyDown={(e) => {
+                    e.stopPropagation();
+                    if (e.key === "Enter") void commitRename(tab.id);
+                    else if (e.key === "Escape") setEditingId(null);
+                  }}
+                />
+              ) : (
+                <span className="shell-tab-title">{tab.title}</span>
+              )}
+              <button
+                type="button"
+                className="shell-tab-close"
+                title={`Close ${tab.title}`}
+                aria-label={`Close ${tab.title}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleCloseTab(tab.id);
                 }}
               >
-                {tab.activity !== "idle" && (
-                  <span
-                    className="shell-tab-dot"
-                    data-activity={tab.activity}
-                    title={tab.activity}
-                    aria-label={tab.activity}
-                  />
-                )}
-                {editing ? (
-                  <input
-                    className="shell-tab-rename"
-                    aria-label="Rename canvas tab"
-                    value={draftTitle}
-                    autoFocus
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={(e) => setDraftTitle(e.target.value)}
-                    onBlur={() => void commitRename(tab.id)}
-                    onKeyDown={(e) => {
-                      e.stopPropagation();
-                      if (e.key === "Enter") void commitRename(tab.id);
-                      else if (e.key === "Escape") setEditingId(null);
-                    }}
-                  />
-                ) : (
-                  <span className="shell-tab-title">{tab.title}</span>
-                )}
-                <button
-                  type="button"
-                  className="shell-tab-close"
-                  title={`Close ${tab.title}`}
-                  aria-label={`Close ${tab.title}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleCloseTab(tab.id);
-                  }}
-                >
-                  ×
-                </button>
-              </div>
-            );
-          })}
-        </div>
+                ×
+              </button>
+            </div>
+          );
+        })}
+      </div>
 
-        <button
-          type="button"
-          className="shell-topnav-btn"
-          title="New canvas"
-          aria-label="New canvas"
-          disabled={creating}
-          onClick={() => void handleNewCanvas()}
-        >
-          +
-        </button>
+      <button
+        type="button"
+        className="shell-topnav-btn"
+        title="New canvas"
+        aria-label="New canvas"
+        disabled={creating}
+        onClick={() => void handleNewCanvas()}
+      >
+        +
+      </button>
 
+      {inline ? (
+        moreSlot
+      ) : (
         <div className="shell-topnav-right">
           <button
             type="button"
@@ -393,13 +420,32 @@ export function TopNav({
           </button>
           {rightSlot}
         </div>
-      </nav>
-    </div>
-    {settingsOpen && (
-      <Suspense fallback={null}>
-        <SettingsShell open={settingsOpen} actor={actor} onClose={() => setSettingsOpen(false)} />
-      </Suspense>
-    )}
+      )}
+    </>
+  );
+
+  const portalledModal =
+    settingsModal && typeof document !== "undefined" ? createPortal(settingsModal, document.body) : settingsModal;
+
+  if (inline) {
+    return (
+      <>
+        <nav className="shell-topnav-inline" aria-label="Open canvases">
+          {navContent}
+        </nav>
+        {portalledModal}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div className="shell-topnav-wrap">
+        <nav className="shell-topnav" aria-label="Open canvases">
+          {navContent}
+        </nav>
+      </div>
+      {portalledModal}
     </>
   );
 }

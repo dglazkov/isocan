@@ -79,7 +79,7 @@ import { classesOf, eagerWebFiles, namedBy, sources } from "./cssuse.ts";
  * to trim the entry JS bundle below baseline, which moved their existing
  * `styles.css` rules into the lazy-only count until those sheets split out.
  */
-const CEILING = 365;
+const CEILING = 366;
 
 const eagerFiles = eagerWebFiles();
 const isLazyWeb = (file: string) => file.startsWith("packages/web/src/") && !eagerFiles.has(file);

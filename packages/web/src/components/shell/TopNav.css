@@ -31,6 +31,16 @@
   font-size: 12px;
 }
 
+.shell-topnav-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pill-inset);
+  max-width: min(56vw, 680px);
+  min-width: 0;
+  color: var(--ink);
+  font-size: 12px;
+}
+
 .shell-topnav-btn {
   display: inline-flex;
   align-items: center;

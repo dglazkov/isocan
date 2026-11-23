@@ -60,7 +60,6 @@ import { TermsPage } from "./pages/TermsPage.tsx";
  * already loads its palette and its workbench.
  */
 const Navigation = lazy(() => import("./components/Navigation.tsx").then((m) => ({ default: m.Navigation })));
-const TopNav = lazy(() => import("./components/shell/TopNav.tsx"));
 const LensPage = lazy(() => import("./pages/LensPage.tsx").then((m) => ({ default: m.LensPage })));
 const CanvasListPage = lazy(() =>
   import("./pages/CanvasListPage.tsx").then((m) => ({ default: m.CanvasListPage })),
@@ -181,7 +180,6 @@ export function App({ arrival, signIn }: { arrival: Arrival; signIn: SignIn }) {
         {(who) => (
           <>
           <Suspense fallback={null}><Navigation key={who.id} actor={who} /></Suspense>
-          <Suspense fallback={null}><TopNav key={`topnav-${who.id}`} actor={who} /></Suspense>
           <Suspense fallback={null}>
           <Routes>
             <Route path="/" element={<CanvasListPage actor={who} onIdentity={setActor} />} />
