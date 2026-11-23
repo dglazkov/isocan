@@ -2908,6 +2908,8 @@ img { height: auto; }
   display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px; flex: none; padding: 10px 12px;
   border-top: 1px solid var(--line-soft);
 }
+.main-panel form .mention-input { border-color: transparent; outline: none; }
+.main-panel form .btn.primary { border-radius: 999px; }
 
 /* #item reference as a card — the Claude-Artifact idiom, so it's familiar. */
 .mt-card {
