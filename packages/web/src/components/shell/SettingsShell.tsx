@@ -19,7 +19,7 @@ import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "re
 import type { Actor } from "@isocan/core";
 import { STITCH_PRESETS, type StitchPresetId } from "@isocan/core/stitch-tokens";
 import { EXPERIMENTS } from "../../lib/experiments.ts";
-import { DISPLAY_SWITCHES, showAllChrome } from "../../lib/hideable.ts";
+import { DISPLAY_SWITCHES, HIDEABLE, showAllChrome } from "../../lib/hideable.ts";
 import { type ThemePref, useTheme } from "../../lib/theme.ts";
 import { openUiDevtools } from "../../lib/uitweaks.ts";
 import { useUiStore } from "../../stores/uiStore.ts";
@@ -113,6 +113,8 @@ export function SettingsShell({
   const setMinimapOpen = useUiStore((s) => s.setMinimapOpen);
   const stickyHeader = useUiStore((s) => s.stickyHeader);
   const setStickyHeader = useUiStore((s) => s.setStickyHeader);
+  const hiddenChrome = useUiStore((s) => s.hiddenChrome);
+  const setChromeHidden = useUiStore((s) => s.setChromeHidden);
 
   useEffect(() => {
     if (!open) return;
@@ -169,6 +171,22 @@ export function SettingsShell({
                     onChange={(e) => setStickyHeader(e.target.checked)}
                   />
                 </label>
+                {HIDEABLE.map((entry) => {
+                  const visible = !hiddenChrome.includes(entry.id);
+                  return (
+                    <label key={entry.id} className="shell-settings-row">
+                      <span>
+                        <strong>{entry.name}</strong>
+                        <span className="shell-settings-hint"> — {entry.stillReachable}</span>
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={visible}
+                        onChange={(e) => setChromeHidden(entry.id, !e.target.checked)}
+                      />
+                    </label>
+                  );
+                })}
                 <div className="shell-settings-row">
                   <span>Restore any hidden interface chrome</span>
                   <button type="button" className="btn" onClick={() => showAllChrome()}>
@@ -328,6 +346,8 @@ export function SettingsShell({
     setExperiment,
     stickyHeader,
     setStickyHeader,
+    hiddenChrome,
+    setChromeHidden,
     extraSections,
   ]);
 
