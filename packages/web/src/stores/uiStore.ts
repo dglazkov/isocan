@@ -241,6 +241,9 @@ interface UiStore {
   minimapFold: MinimapFold;
   /** Whether the dot grid lights up under the pointer. */
   cursorGlow: boolean;
+  /** Pin the top floating clusters into a single full-width OS1-style sticky header. */
+  stickyHeader: boolean;
+  setStickyHeader: (on: boolean) => void;
   /** Full screen shows the slide's speaker note to the presenter (N). A
    *  mode you flip, remembered per browser like the minimap. */
   presenterNotes: boolean;
@@ -554,6 +557,7 @@ const HIDDEN_CHROME_KEY = "isocan.hiddenChrome";
 const EXPERIMENTS_KEY = "isocan.experiments";
 /** The cursor glow, which some people find delightful and some find busy. */
 const GLOW_KEY = "isocan.cursorGlow";
+const STICKY_HEADER_KEY = "isocan.stickyHeader";
 const LIVE_DOCS_KEY = "isocan.liveDocs";
 
 /** A list of ids in local storage; anything unreadable is the empty list,
@@ -784,6 +788,7 @@ export const useUiStore = create<UiStore>((set, get) => {
     minimapOpen: minimapShown(minimapFold),
     minimapFold,
     cursorGlow: readFlag(GLOW_KEY, true),
+    stickyHeader: readFlag(STICKY_HEADER_KEY, false),
     presenterNotes: readFlag(PRESENTER_NOTES_KEY, false),
     autoAdvance: false,
     autoAdvanceSeconds: readAutoAdvanceSeconds(),
@@ -1026,6 +1031,10 @@ export const useUiStore = create<UiStore>((set, get) => {
     setCursorGlow: (cursorGlow) => {
       writeFlag(GLOW_KEY, cursorGlow);
       set({ cursorGlow });
+    },
+    setStickyHeader: (stickyHeader) => {
+      writeFlag(STICKY_HEADER_KEY, stickyHeader);
+      set({ stickyHeader });
     },
     setMinimapOpen: (open) => {
       const { fold, store } = chooseMinimap(get().minimapFold, open);

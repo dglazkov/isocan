@@ -1344,6 +1344,20 @@ img { height: auto; }
      read as tighter to the top than to the left. */
   height: var(--pill-h); padding: var(--pill-inset);
 }
+/* Optional OS1-style single full-width sticky header (Settings → Preferences → Sticky header). */
+.toolbar[data-sticky="true"] {
+  position: fixed; top: 0; left: 0; right: 0; height: 44px;
+  padding: 0 12px;
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+  border-bottom: 1px solid var(--glass-border);
+  pointer-events: auto;
+}
+.toolbar[data-sticky="true"] .bar-cluster {
+  background: transparent; border-color: transparent; box-shadow: none;
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+}
 /* Inside a cluster the buttons stop being boxes. The cluster is the box, and
    a bordered chip inside a bordered pill is two frames around one control —
    the "nested box" that made the old bar read as heavy. What a button keeps

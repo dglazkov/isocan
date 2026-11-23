@@ -67,6 +67,7 @@ export function Toolbar({
   const canEdit = useCanEdit();
   const navigate = useNavigate();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const stickyHeader = useUiStore((s) => s.stickyHeader);
   /**
    * **The picker for a ground of your own** (#204 phase 2).
    *
@@ -211,7 +212,11 @@ export function Toolbar({
   ) : null;
 
   return (
-    <div className="toolbar" onContextMenu={(e) => showMenu(e, "the top edge")}>
+    <div
+      className="toolbar"
+      data-sticky={stickyHeader ? "true" : undefined}
+      onContextMenu={(e) => showMenu(e, "the top edge")}
+    >
       <div className="bar-cluster floats">
         <Suspense
           fallback={

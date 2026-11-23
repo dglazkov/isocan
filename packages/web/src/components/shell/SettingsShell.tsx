@@ -111,6 +111,8 @@ export function SettingsShell({
   const setCursorGlow = useUiStore((s) => s.setCursorGlow);
   const minimapOpen = useUiStore((s) => s.minimapOpen);
   const setMinimapOpen = useUiStore((s) => s.setMinimapOpen);
+  const stickyHeader = useUiStore((s) => s.stickyHeader);
+  const setStickyHeader = useUiStore((s) => s.setStickyHeader);
 
   useEffect(() => {
     if (!open) return;
@@ -156,6 +158,17 @@ export function SettingsShell({
                     </label>
                   );
                 })}
+                <label className="shell-settings-row">
+                  <span>
+                    <strong>Sticky header</strong>
+                    <span className="shell-settings-hint"> — pin all top pills into a single full-width bar along the top edge</span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={stickyHeader}
+                    onChange={(e) => setStickyHeader(e.target.checked)}
+                  />
+                </label>
                 <div className="shell-settings-row">
                   <span>Restore any hidden interface chrome</span>
                   <button type="button" className="btn" onClick={() => showAllChrome()}>
@@ -313,6 +326,8 @@ export function SettingsShell({
     actor.name,
     experiments,
     setExperiment,
+    stickyHeader,
+    setStickyHeader,
     extraSections,
   ]);
 
