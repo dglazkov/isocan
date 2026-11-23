@@ -251,15 +251,6 @@ export function Toolbar({
         >
           Settings
         </button>
-        <button
-          type="button"
-          className="btn"
-          title="Hide interface (⌘\)"
-          aria-label="Hide interface"
-          onClick={() => useUiStore.getState().toggleUiHidden()}
-        >
-          ⌘\
-        </button>
       </div>
       {canvas && (
         <input
