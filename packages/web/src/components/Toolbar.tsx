@@ -15,7 +15,7 @@
  */
 
 import { groupsEnabled, openGroupCreation } from "../lib/canvasgroups.ts";
-import { Suspense, lazy, useRef, useState } from "react";
+import { Suspense, lazy, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   GROUND_MAX_BYTES,
@@ -66,7 +66,6 @@ export function Toolbar({
   const unreadNews = useUnreadNews();
   const canEdit = useCanEdit();
   const navigate = useNavigate();
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const stickyHeader = useUiStore((s) => s.stickyHeader);
   /**
    * **The picker for a ground of your own** (#204 phase 2).
@@ -233,8 +232,6 @@ export function Toolbar({
             inline
             actor={actor}
             moreSlot={moreButton}
-            settingsOpen={settingsOpen}
-            onSettingsClose={() => setSettingsOpen(false)}
           />
         </Suspense>
       </div>
@@ -242,15 +239,6 @@ export function Toolbar({
       <div className="bar-cluster floats presence-cluster">
         <ShareButton actor={actor} />
         <CanvasPresence actor={actor} onIdentity={onIdentity} />
-        <button
-          type="button"
-          className="btn"
-          title="Settings"
-          aria-label="Settings"
-          onClick={() => setSettingsOpen(true)}
-        >
-          Settings
-        </button>
       </div>
       {canvas && (
         <input

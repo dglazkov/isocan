@@ -124,6 +124,7 @@ export function TopNav({
   const toggleUiHidden = useUiStore((s) => s.toggleUiHidden);
   const setUiHidden = useUiStore((s) => s.setUiHidden);
   const setPaletteOpen = useUiStore((s) => s.setPaletteOpen);
+  const storeSettingsOpen = useUiStore((s) => s.settingsOpen);
 
   const [tabsState, setTabsState] = useState<ProjectTabsState>(() => initialState ?? loadStoredTabs());
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -285,9 +286,10 @@ export function TopNav({
     }
   }
 
-  const modalOpen = controlledSettingsOpen ?? settingsOpen;
+  const modalOpen = controlledSettingsOpen ?? (settingsOpen || storeSettingsOpen);
   const closeSettings = () => {
     setSettingsOpen(false);
+    useUiStore.getState().setSettingsOpen(false);
     onSettingsClose?.();
   };
 

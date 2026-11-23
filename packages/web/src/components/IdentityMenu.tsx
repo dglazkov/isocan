@@ -473,6 +473,16 @@ export function IdentityMenu({
           title="The agents you have, and whether anything could answer for one right now"
           onClick={() => setBench(true)}
         />
+        <Action
+          icon={<SettingsMark />}
+          label="Settings…"
+          note="Preferences, sticky header, models, integrations and memory."
+          title="Open Settings"
+          onClick={() => {
+            useUiStore.getState().setSettingsOpen(true);
+            onClose();
+          }}
+        />
         {canvasId && (
           <Action
             icon={<MachineMark />}
@@ -739,6 +749,16 @@ const KeyMark = () => (
   <Mark>
     <circle cx="5.2" cy="10.8" r="2.8" />
     <path d="M7.2 8.8 13.6 2.4M11.4 4.6l1.8 1.8M9.6 6.4l1.4 1.4" />
+  </Mark>
+);
+
+/** Sliders: full application settings. */
+const SettingsMark = () => (
+  <Mark>
+    <path d="M2.4 4.5h11.2M2.4 8h11.2M2.4 11.5h11.2" />
+    <circle cx="5.5" cy="4.5" r="1.4" fill="var(--card)" />
+    <circle cx="10.5" cy="8" r="1.4" fill="var(--card)" />
+    <circle cx="6.5" cy="11.5" r="1.4" fill="var(--card)" />
   </Mark>
 );
 

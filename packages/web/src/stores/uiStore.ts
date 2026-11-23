@@ -247,6 +247,9 @@ interface UiStore {
   /** Pure full-screen Chat mode covering the canvas with a centered 640px thread. */
   chatFullScreen: boolean;
   setChatFullScreen: (on: boolean) => void;
+  /** The full Settings modal (Profile, Preferences, Models, Integrations, Memory). */
+  settingsOpen: boolean;
+  setSettingsOpen: (on: boolean) => void;
   /** Full screen shows the slide's speaker note to the presenter (N). A
    *  mode you flip, remembered per browser like the minimap. */
   presenterNotes: boolean;
@@ -794,6 +797,8 @@ export const useUiStore = create<UiStore>((set, get) => {
     stickyHeader: readFlag(STICKY_HEADER_KEY, false),
     chatFullScreen: false,
     setChatFullScreen: (chatFullScreen) => set({ chatFullScreen }),
+    settingsOpen: false,
+    setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
     presenterNotes: readFlag(PRESENTER_NOTES_KEY, false),
     autoAdvance: false,
     autoAdvanceSeconds: readAutoAdvanceSeconds(),
