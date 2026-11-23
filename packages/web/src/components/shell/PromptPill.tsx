@@ -26,7 +26,7 @@ import {
 } from "react";
 import type { Actor } from "@isocan/core";
 import { postToMain } from "../../lib/mainthread.ts";
-import { openPanel } from "../../lib/panels.ts";
+import { chatHiddenNow, openPanel } from "../../lib/panels.ts";
 import { useCanvasStore } from "../../stores/canvasStore.ts";
 import { useUiStore } from "../../stores/uiStore.ts";
 import {
@@ -290,24 +290,28 @@ export function PromptPill({
                   >
                     {effectiveSize === "wide" ? "480px" : "640px"}
                   </button>
-                  <button
-                    type="button"
-                    className="shell-prompt-size-btn"
-                    title="Open Chat panel"
-                    aria-label="Open Chat panel"
-                    onClick={() => openPanel(canvasId, "main")}
-                  >
-                    Chat
-                  </button>
-                  <button
-                    type="button"
-                    className="shell-prompt-size-btn"
-                    title="Full-screen chat"
-                    aria-label="Full-screen chat"
-                    onClick={() => useUiStore.getState().setChatFullScreen(true)}
-                  >
-                    ⤢
-                  </button>
+                  {!chatHiddenNow() && (
+                    <>
+                      <button
+                        type="button"
+                        className="shell-prompt-size-btn"
+                        title="Open Chat panel"
+                        aria-label="Open Chat panel"
+                        onClick={() => openPanel(canvasId, "main")}
+                      >
+                        Chat
+                      </button>
+                      <button
+                        type="button"
+                        className="shell-prompt-size-btn"
+                        title="Full-screen chat"
+                        aria-label="Full-screen chat"
+                        onClick={() => useUiStore.getState().setChatFullScreen(true)}
+                      >
+                        ⤢
+                      </button>
+                    </>
+                  )}
                 </div>
 
                 <button
