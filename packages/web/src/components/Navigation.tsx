@@ -145,7 +145,7 @@ export function Navigation({ actor }: { actor: Actor }) {
       ? `${count} new · ${unread.filter((entry) => entry.reason === "mentioned").length} naming you`
       : "Nothing new";
   return <>
-    {!phone && <Suspense fallback={null}><TopNav actor={actor} /></Suspense>}
+    {!phone && !addressed && <Suspense fallback={null}><TopNav actor={actor} /></Suspense>}
     {inboxOn && pathname !== "/" && !onModulePage && <button
       className={`btn navigation-inbox${canvasId ? " on-canvas" : ""}${count > 0 ? " has-new" : ""}`}
       onClick={() => setOpen((was) => !was)}

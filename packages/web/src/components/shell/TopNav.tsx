@@ -131,6 +131,7 @@ export function TopNav({
   const [creating, setCreating] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const tabRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const closingIdRef = useRef<string | null>(null);
 
   const go = useCallback(
     (path: string) => {
@@ -153,10 +154,13 @@ export function TopNav({
   const recordTitle = record?.title;
   useEffect(() => {
     if (pathname === "/") {
+      closingIdRef.current = null;
       commitTabs((prev) => (prev.activeId === null ? prev : activateProjectTab(prev, null)));
       return;
     }
     if (!activeCanvasId) return;
+    if (closingIdRef.current === activeCanvasId) return;
+    closingIdRef.current = null;
     const title = recordId === activeCanvasId ? recordTitle ?? null : null;
     commitTabs((prev) => {
       const existing = prev.tabs.find((t) => t.id === activeCanvasId);
@@ -221,6 +225,7 @@ export function TopNav({
   }
 
   function handleCloseTab(id: string): void {
+    closingIdRef.current = id;
     const next = closeProjectTab(tabsState, id);
     setTabsState(next);
     saveStoredTabs(next);
