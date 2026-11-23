@@ -17,7 +17,7 @@
 import "./touch-controls.css";
 import "./canvas-tools.css";
 import { selectCreatedItems } from "../lib/groupplacement.ts";
-import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import type { Actor, Placement } from "@isocan/core";
 import { type Tool, useUiStore } from "../stores/uiStore.ts";
 import { addFailure, addFiles } from "../lib/upload.ts";
@@ -38,6 +38,32 @@ import { useNavigate } from "react-router-dom";
 import { modulePagePath } from "@isocan/core";
 import { moduleProjectViews } from "../modules.ts";
 import { DesignSystemsButton } from "./DesignSystemsButton.tsx";
+
+const TOOL_RAIL_POS_KEY = "isocan.toolRail.pos";
+
+function readToolRailPos(): { x: number; y: number } | null {
+  try {
+    const raw = localStorage.getItem(TOOL_RAIL_POS_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { x?: unknown; y?: unknown };
+    if (typeof parsed.x === "number" && typeof parsed.y === "number" && Number.isFinite(parsed.x) && Number.isFinite(parsed.y)) {
+      return { x: parsed.x, y: parsed.y };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function clampToolRailPos(x: number, y: number, w: number, h: number): { x: number; y: number } {
+  const margin = 12;
+  const maxX = Math.max(margin, window.innerWidth - w - margin);
+  const maxY = Math.max(margin, window.innerHeight - h - margin);
+  return {
+    x: Math.min(Math.max(margin, Math.round(x)), maxX),
+    y: Math.min(Math.max(margin, Math.round(y)), maxY),
+  };
+}
 
 /**
  * The tool rail (right edge): the pointer's mode, Figma-style. Select is the
@@ -241,9 +267,71 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
     }
   }
 
+  const railRef = useRef<HTMLDivElement>(null);
+  const [railPos, setRailPos] = useState<{ x: number; y: number } | null>(() => readToolRailPos());
+
+  const onGripPointerDown = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    const rail = railRef.current;
+    if (!rail) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const target = e.currentTarget;
+    const pointerId = e.pointerId;
+    try {
+      target.setPointerCapture?.(pointerId);
+    } catch {
+      // Ignore synthetic events in tests.
+    }
+    const rect = rail.getBoundingClientRect();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const originX = rect.left;
+    const originY = rect.top;
+    let latest = { x: originX, y: originY };
+
+    const onMove = (ev: PointerEvent) => {
+      latest = clampToolRailPos(originX + (ev.clientX - startX), originY + (ev.clientY - startY), rect.width, rect.height);
+      setRailPos(latest);
+    };
+    const onEnd = () => {
+      try {
+        target.releasePointerCapture?.(pointerId);
+      } catch {
+        // Ignore if already released.
+      }
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onEnd);
+      window.removeEventListener("pointercancel", onEnd);
+      try {
+        localStorage.setItem(TOOL_RAIL_POS_KEY, JSON.stringify(latest));
+      } catch {
+        // Ignore storage errors.
+      }
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onEnd);
+    window.addEventListener("pointercancel", onEnd);
+  }, []);
+
+  const resetRailPos = useCallback(() => {
+    setRailPos(null);
+    try {
+      localStorage.removeItem(TOOL_RAIL_POS_KEY);
+    } catch {
+      // Ignore storage errors.
+    }
+  }, []);
+
+  const railStyle: CSSProperties | undefined = railPos
+    ? { position: "fixed", left: railPos.x, top: railPos.y, right: "auto", bottom: "auto", margin: 0 }
+    : undefined;
+
   return (
     <div
+      ref={railRef}
       className={`tool-rail floats${more ? " tools-expanded" : ""}`}
+      style={railStyle}
       role="toolbar"
       aria-label="Canvas tools"
       aria-orientation="vertical"
@@ -251,6 +339,14 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
       // hidden from it (only when something is).
       onContextMenu={(e) => showMenu(e, "the rail")}
     >
+      <div
+        className="tool-rail-grip"
+        role="separator"
+        aria-label="Drag to move toolbar (double-click to reset)"
+        title="Drag to move toolbar · double-click to reset"
+        onPointerDown={onGripPointerDown}
+        onDoubleClick={resetRailPos}
+      />
       {TOOLS.map((t) => (
         <div key={t.tool} className="tool-slot" data-tool={t.tool}>
           <button
