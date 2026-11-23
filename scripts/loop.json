@@ -1,0 +1,29 @@
+{
+  "name": "isocan",
+  "lessons": "docs/reviews/lessons.md",
+  "shape": "projects",
+  "loop": {
+    "intro": [
+      "What [Stitch Loop](https://jules.google.com/jitro) found in this codebase,",
+      "**ranked by us, not by Loop**. Each finding is a file in [`loop/`](loop/)",
+      "holding Loop's claim, our read of it against the code, and the decision.",
+      "Loop's own rank is kept only for comparison. Declined and stale findings are",
+      "dismissed in Loop, and every decision is sent back to it as a context so its",
+      "next pass knows why. `node scripts/loop.mjs pull` fetches; `decide <slug>",
+      "<decision>` decides — and deciding is a person's, because it is sent to a",
+      "workspace other people read."
+    ],
+    "hedge": true,
+    "contexts": [
+      {
+        "source": "isocan:measures",
+        "description": "isocan's own measures, each a number the repo can reproduce with node scripts/measure.mjs: the operation vocabulary, the web-only operations, the core's runtime dependencies, colour literals, unused and undocumented exports, and the lines in the files every feature must edit.",
+        "command": "node scripts/loop-measures.mjs"
+      }
+    ],
+    "afterRender": "node scripts/roadmap.mjs",
+    "afterRenderWrites": [
+      "docs/ROADMAP.md"
+    ]
+  }
+}

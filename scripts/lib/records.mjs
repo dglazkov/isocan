@@ -17,8 +17,7 @@ const STATUS_LINE = /^\*\*Status:\s*([A-Z][A-Z-]*(?: [A-Z][A-Z-]+)*)/;
 
 /**
  * The phase sections of a phases.md (`## Phase N …` or `## N. …`), outside
- * fenced code: [{ id, title, heading, word, status, line }]. Matches
- * `phaseSections` in `scripts/plates/lib.mjs`.
+ * fenced code: [{ id, title, heading, word, status, line }].
  */
 export function phaseSections(text) {
   const lines = String(text ?? "").split(/\r?\n/);
