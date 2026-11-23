@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { environmentValue } from './plates/names.mjs';
+import { environmentValue } from './names.mjs';
 // Loop findings: pull, triage, decide, push back. Managed by plates (practice
 // `loop`); plates render rewrites this file, so change it in plates, not here.
 //
