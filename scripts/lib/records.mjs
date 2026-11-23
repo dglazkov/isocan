@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-/** The Status words a phases.md uses, mapped to plates/front-matter status. */
+/** The Status words a phases.md uses, mapped to front-matter status. */
 export const PHASE_WORDS = Object.freeze({
   CLOSED: "built",
   "PART-DONE": "partial",
