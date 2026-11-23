@@ -244,6 +244,9 @@ interface UiStore {
   /** Pin the top floating clusters into a single full-width OS1-style sticky header. */
   stickyHeader: boolean;
   setStickyHeader: (on: boolean) => void;
+  /** Pure full-screen Chat mode covering the canvas with a centered 640px thread. */
+  chatFullScreen: boolean;
+  setChatFullScreen: (on: boolean) => void;
   /** Full screen shows the slide's speaker note to the presenter (N). A
    *  mode you flip, remembered per browser like the minimap. */
   presenterNotes: boolean;
@@ -789,6 +792,8 @@ export const useUiStore = create<UiStore>((set, get) => {
     minimapFold,
     cursorGlow: readFlag(GLOW_KEY, true),
     stickyHeader: readFlag(STICKY_HEADER_KEY, false),
+    chatFullScreen: false,
+    setChatFullScreen: (chatFullScreen) => set({ chatFullScreen }),
     presenterNotes: readFlag(PRESENTER_NOTES_KEY, false),
     autoAdvance: false,
     autoAdvanceSeconds: readAutoAdvanceSeconds(),

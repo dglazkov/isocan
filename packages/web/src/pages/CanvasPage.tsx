@@ -93,6 +93,7 @@ import { modules, moduleWorkspace } from "../modules.ts";
 const ModuleDialogs = lazy(() => import("../components/ModuleDialogs.tsx").then((m) => ({ default: m.ModuleDialogs })));
 const PromptPill = lazy(() => import("../components/shell/PromptPill.tsx"));
 const AgentDock = lazy(() => import("../components/shell/AgentDock.tsx"));
+const FullScreenChat = lazy(() => import("../components/shell/FullScreenChat.tsx"));
 import { useChromeHidden } from "../lib/hideable.ts";
 import { Viewer } from "../components/LazyViewer.tsx";
 import { usePhone } from "../lib/phone.ts";
@@ -333,6 +334,9 @@ function CanvasSurface({
      mounted while it is shut — the flag has to be the thing that mounts it. */
   const helpOpen = useUiStore((s) => s.helpOpen);
   const uiHidden = useUiStore((s) => s.uiHidden);
+  const mainPanelOpen = useUiStore((s) => s.mainPanelOpen);
+  const chatAt = useUiStore((s) => s.chatAt);
+  const chatFullScreen = useUiStore((s) => s.chatFullScreen);
   const setHistoryOpen = useUiStore((s) => s.setHistoryOpen);
   const moduleDialogOpen = useUiStore((s) => s.moduleDialog !== null);
   const semanticZoom = useUiStore((s) => s.experiments).includes("semantic.zoom");
@@ -957,7 +961,8 @@ function CanvasSurface({
         // Watching is the outermost mode: Esc hands the camera back first.
         // A mark being placed is the innermost: it is the thing under the
         // pointer right now.
-        if (ui.cursorSignalEditing || ui.cursorSignal) { clearCursorSignal(); }
+        if (ui.chatFullScreen) ui.setChatFullScreen(false);
+        else if (ui.cursorSignalEditing || ui.cursorSignal) { clearCursorSignal(); }
         else if (ui.drag || ui.resize || ui.groupPreview) { ui.setDrag(null); ui.setResize(null); ui.setGroupPreview(null); ui.setGroupDropTarget(null); ui.setGuides([]); }
         else if (ui.stamp) ui.setStamp(null);
         else if (ui.renamingItemId) ui.setRenaming(null);
@@ -1298,7 +1303,7 @@ function CanvasSurface({
       {canEdit && <TrashPanel key={canvasId} canvasId={canvasId} actor={actor} />}
       <RailStrip canvasId={canvasId} actor={actor} />
       <ReactionBar canvasId={canvasId} />
-      {!phone && canEdit && (
+      {!phone && canEdit && !mainPanelOpen && chatAt !== "bottom" && !chatFullScreen && (
         <Suspense fallback={null}>
           <PromptPill canvasId={canvasId!} actor={actor} initialFolded />
         </Suspense>
@@ -1309,6 +1314,11 @@ function CanvasSurface({
         </Suspense>
       )}
       </>}
+      {!phone && chatFullScreen && (
+        <Suspense fallback={null}>
+          <FullScreenChat canvasId={canvasId!} actor={actor} />
+        </Suspense>
+      )}
       {/* Native collaboration and files remain reachable from the launcher
           while a module owns the canvas chrome. */}
       <DesignComparisonHost canvasId={canvasId} actor={actor} />
