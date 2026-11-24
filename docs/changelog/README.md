@@ -17,6 +17,7 @@ screen per day, one row per week, open to anyone with the address.
 
 | Day | | What happened |
 | --- | --- | --- |
+| **[20 Nov](2026-11-20.md)** | *Draft* | Not written up yet: the day's commits, quoted in full. Whoever writes the entry replaces this row. |
 | **[19 Nov](2026-11-19.md)** | *Draft* | Not written up yet: the day's commits, quoted in full. Whoever writes the entry replaces this row. |
 | **[18 Nov](2026-11-18.md)** | Answer the overdue lint and bundle findings | Exact film memo dependencies are explicit; release notes and their CSS load when opened. Entry JavaScript shrinks by 970 bytes before the agreed ceiling moves to 749,400, with the measurement and retained costs recorded. |
 | **[17 Nov](2026-11-17.md)** | *Draft* | Not written up yet: the day's commits, quoted in full. Whoever writes the entry replaces this row. |
