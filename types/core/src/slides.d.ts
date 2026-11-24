@@ -112,18 +112,18 @@ export declare function deckStep(canvas: CanvasContents, currentId: string, delt
  * `push` is the default and the one stored as an absence, so every canvas
  * made before this existed keeps flipping exactly as it did.
  *
- * Four of these are 3D, and they are the fun ones on purpose: a talk is a
- * show. `morph` is the one that takes the slide APART — its pieces lift off
- * the page, travel to their places on the next slide, and come together flat
- * (`morph.ts`); depth, cube and flip turn the slide whole.
- * They cost time, which is why the web's rapid-flip rule still cuts when
- * somebody hammers → to reach slide 14.
+ * Three of the 2D motions (`poof`, `drift`, `rise`) keep the slide surface
+ * steady and move only its content pieces — ideal when slides share the same
+ * or a similar background (`morph.ts`). Four more are 3D (`morph`, `depth`,
+ * `cube`, `flip`) for when a talk wants a show. They cost time, which is why
+ * the web's rapid-flip rule still cuts when somebody hammers → to reach slide
+ * 14.
  */
 export declare const DECK_TRANSITION_PROP = "deckTransition";
 /** The motions this build can draw, in the order a menu offers them. A
  *  closed list for `CURSORS`' reason: a canvas naming a motion nothing can
  *  draw would flip as a cut and nobody would know why. */
-export declare const DECK_TRANSITIONS: readonly ["push", "fade", "zoom", "morph", "depth", "cube", "flip", "cut"];
+export declare const DECK_TRANSITIONS: readonly ["push", "fade", "wipe", "zoom", "poof", "drift", "rise", "morph", "depth", "cube", "flip", "cut"];
 /** One of the motions this build can draw — not a string, so a surface
  *  cannot offer or store a name the other cannot draw. */
 export type DeckTransition = (typeof DECK_TRANSITIONS)[number];
@@ -135,6 +135,9 @@ export declare function isDeckTransition(value: string): value is DeckTransition
 /** Does this one leave the flat plane? The 3D ones are the slow, showy
  *  ones, and the menu says so beside their names. */
 export declare function isDeckTransition3d(transition: DeckTransition): boolean;
+/** Does this one animate the slide's individual content pieces (via slide
+ *  twins) rather than moving the whole 2D surface as one rectangle? */
+export declare function isDeckTransitionPiece(transition: DeckTransition): boolean;
 /** What a motion is called where somebody picks it. */
 export declare function deckTransitionLabel(transition: DeckTransition): string;
 /** One line on what it looks like, for the CLI listing and the menu's tip. */

@@ -74,18 +74,27 @@ interface MorphKeyframe {
     transform: string;
     opacity: number;
 }
+/** One piece's animation track: keyframes plus optional timing so fast 2D
+ *  content swaps can run 2-keyframe staggered compositor animations instead
+ *  of sampling every beat. */
+interface MorphTrack {
+    i: number;
+    frames: MorphKeyframe[];
+    delay?: number;
+    duration?: number;
+    easing?: string;
+}
 /** Everything one slide's runtime plays: its pieces and its ground. */
 interface MorphSide {
-    tracks: Array<{
-        i: number;
-        frames: MorphKeyframe[];
-    }>;
-    /** The slide's own background, as a layer of its own: it drops away
-     *  beneath the pieces as they lift, which is most of what makes them read
-     *  as LIFTING rather than merely growing. */
+    tracks: MorphTrack[];
+    /** The slide's own background (and any full-bleed backdrop), as a layer of
+     *  its own: in `morph` it drops away beneath the pieces; in 2D content
+     *  swaps (`poof`, `drift`, `rise`) it stays steady and quietly dissolves
+     *  only when the two slides wear different grounds. */
     ground: MorphKeyframe[];
 }
-/** Both sides, and the tilt the surface puts on the two frames together. */
+/** Both sides, and any whole-frame tilt the surface puts on the two frames
+ *  together (empty for flat 2D piece swaps). */
 interface MorphPlan {
     out: MorphSide;
     in: MorphSide;
@@ -95,8 +104,8 @@ interface MorphPlan {
     }>;
 }
 /** How many pieces a slide may offer. Past this the motion is noise, and
- *  the message carrying the plan stops being small. */
-export declare const MORPH_MAX_PIECES = 160;
+ *  every extra promoted layer costs GPU memory across mounted twins. */
+export declare const MORPH_MAX_PIECES = 64;
 /**
  * **Which piece on slide A becomes which piece on slide B.**
  *
@@ -135,6 +144,21 @@ export declare const MORPH_BEATS: {
  * `dir` is which way the deck went; the layers lean away from it.
  */
 export declare function morphPlan(a: MorphScene, b: MorphScene, dir: "next" | "prev", samples?: number): MorphPlan;
+/** The fast, flat 2D content-swap transitions: background stays steady while
+ *  only the slide's pieces leave and join. */
+export type PieceSwapKind = "poof" | "drift" | "rise";
+/**
+ * **Subtle 2D content-swap plans (`poof`, `drift`, `rise`)** — no 3D tilt,
+ * no surface seam, and only 2 keyframes per root piece so every track runs
+ * natively on the compositor thread.
+ *
+ * The slide's background (and any full-bleed backdrop) stays motionless on
+ * `out` and gently dissolves across the middle on `in`: when both slides wear
+ * the same or a similar background, the surface looks completely still while
+ * the content pieces leave and join. Persistent chrome in the same spot
+ * (`anchoredSets`) stays pinned too.
+ */
+export declare function pieceSwapPlan(kind: PieceSwapKind, a: MorphScene, b: MorphScene, dir: "next" | "prev", totalMs?: number): MorphPlan;
 /**
  * **What a slide's runtime said, made safe to plan with.** The runtime runs
  * inside the slide's own document, next to the slide's own scripts, so its
