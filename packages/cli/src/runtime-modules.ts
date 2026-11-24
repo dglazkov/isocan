@@ -46,6 +46,8 @@ export interface LoadedRuntimeModule {
   refused: string | null;
   /** Working-directory templates its cli half offers the rc (proposed: `templates`). */
   templates?: CliModule["templates"];
+  /** The MCP tools its cli half declares, for `isocan mcp` (module API 0.2.12). */
+  tools?: CliModule["tools"];
 }
 
 declare global {
@@ -72,6 +74,7 @@ export async function loadRuntimeModules(home: string, host: CliHost): Promise<L
     registerModuleBase(manifest.name, dir);
     let guide: string | null = null;
     let templates: CliModule["templates"] | undefined;
+    let tools: CliModule["tools"] | undefined;
     if (manifest.guide) {
       try {
         guide = readFileSync(path.join(dir, manifest.guide), "utf8");
@@ -87,12 +90,13 @@ export async function loadRuntimeModules(home: string, host: CliHost): Promise<L
         record?.register?.(host);
         if (!guide && typeof record?.guide === "string") guide = record.guide;
         if (record?.templates?.length) templates = record.templates;
+        if (record?.tools?.length) tools = record.tools;
       } catch (err) {
         loaded.push({ ...row, guide: null, refused: `its cli half would not load — ${(err as Error).message}` });
         continue;
       }
     }
-    loaded.push({ ...row, guide, refused: null, ...(templates ? { templates } : {}) });
+    loaded.push({ ...row, guide, refused: null, ...(templates ? { templates } : {}), ...(tools ? { tools } : {}) });
   }
   return loaded;
 }

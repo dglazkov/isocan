@@ -58,6 +58,7 @@ describe("the tone of a ground", () => {
       aurora: "dark",
       pond: "dark",
       zen: "light",
+      stitch: "light",
     });
   });
 

@@ -46,7 +46,7 @@ import { moodModule } from "./core.ts";
  * reaching for more like a picture or pushing it along a dial
  * (moodboard phases 0–1; `docs/projects/moodboard/design.md` §1–§3, §7).
  *
- * The CLI composes nothing: the words go to `POST /api/image`, which wraps
+ * The CLI composes nothing: the words go to `POST /api/m/mood/image`, which wraps
  * them in core's template, refuses what the deny-list catches before any
  * spend, draws, and adds the tiles. What this half owns is the ceremony in
  * front of the spend: **the cost is said first**, and a run nobody can be

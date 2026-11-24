@@ -64,6 +64,7 @@
   /* Pond and Zen garden (living grounds phase 4): the means of their stills. */
   --theme-pond: #102625;
   --theme-zen: #b5ac9a;
+  --theme-stitch: #f1f3f4;
   /* Deep space (#195). The same value on either ground, deliberately: a
      starfield is a PICTURE, not a surface that follows the app's theme, and a
      white sky is a different picture rather than a light-mode one. Declared in
@@ -417,6 +418,7 @@
   /* Pond and Zen garden (living grounds phase 4): the means of their stills. */
   --theme-pond: #102625;
   --theme-zen: #b5ac9a;
+  --theme-stitch: #f1f3f4;
   /* Deep space (#195). The same value on either ground, deliberately: a
      starfield is a PICTURE, not a surface that follows the app's theme, and a
      white sky is a different picture rather than a light-mode one. Declared in
@@ -707,7 +709,8 @@ img { height: auto; }
 .identity-popover {
   position: absolute; top: calc(100% + 8px); right: 0; z-index: var(--z-popover);
   width: 260px; padding: 12px;
-  background: var(--glass);
+  /* Layer the glass sheen over solid --card so dense menus (Share, Profile) stay crisp over bright canvas items. */
+  background: var(--glass), var(--card);
   -webkit-backdrop-filter: var(--glass-filter);
   backdrop-filter: var(--glass-filter);
   border: 1px solid var(--glass-border); border-radius: 10px;
@@ -1342,6 +1345,20 @@ img { height: auto; }
      read as tighter to the top than to the left. */
   height: var(--pill-h); padding: var(--pill-inset);
 }
+/* Optional OS1-style single full-width sticky header (Settings → Preferences → Sticky header). */
+.toolbar[data-sticky="true"] {
+  position: fixed; top: 0; left: 0; right: 0; height: 44px;
+  padding: 0 12px;
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+  border-bottom: 1px solid var(--glass-border);
+  pointer-events: auto;
+}
+.toolbar[data-sticky="true"] .bar-cluster {
+  background: transparent; border-color: transparent; box-shadow: none;
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+}
 /* Inside a cluster the buttons stop being boxes. The cluster is the box, and
    a bordered chip inside a bordered pill is two frames around one control —
    the "nested box" that made the old bar read as heavy. What a button keeps
@@ -1605,8 +1622,9 @@ img { height: auto; }
    as put down rather than let go (the settle is `.item`'s own transition) —
    and reduced motion swaps it instantly. */
 .item.lifted { box-shadow: var(--shadow-lift); transition-duration: 120ms; z-index: 2; }
+.item.make-room-shifted { transition: left 140ms cubic-bezier(0.2, 0, 0, 1), top 140ms cubic-bezier(0.2, 0, 0, 1); }
 @media (prefers-reduced-motion: reduce) {
-  .item, .item.lifted { transition: none; }
+  .item, .item.lifted, .item.make-room-shifted { transition: none; }
 }
 /* The read-only canvas (roles phase 1): nothing here is a handle, so nothing
    here wears a grab cursor. The daemon refuses the write; this stops the
@@ -2906,6 +2924,8 @@ img { height: auto; }
   display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px; flex: none; padding: 10px 12px;
   border-top: 1px solid var(--line-soft);
 }
+.main-panel form .mention-input { border-color: transparent; outline: none; }
+.main-panel form .btn.primary { border-radius: 999px; }
 
 /* #item reference as a card — the Claude-Artifact idiom, so it's familiar. */
 .mt-card {
@@ -3752,6 +3772,9 @@ button.mt-card:hover { border-color: var(--accent); }
 .module-overlays-left { left: calc(var(--edge) + 56px); }
 .module-overlays-right { right: calc(var(--edge) + 60px); }
 .module-overlay { pointer-events: auto; position: relative; display: flex; flex-direction: column; }
+/* Hide empty overlay shells when a module's overlay component returns null —
+   without this, <FloatingHandles /> alone renders a hollow glass pill beside the rail. */
+.module-overlay:not(:has(> :not(.float-handle))) { display: none; }
 
 .tool-rail {
   position: absolute; right: var(--edge); top: var(--edge); bottom: var(--edge);

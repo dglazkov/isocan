@@ -148,11 +148,46 @@ line is a list rather than a promise.
 
 ## What a module may not add
 
-**Operations, ever.** **Protocol messages.** **Server routes, at first** — a
-route is a door and the desk's whole job is that every door runs the same
-test; if a second real module ever needs one it is `/api/m/<name>/…` behind
-the same badge check. **A hidden store** — module state is an item, visible
-and versioned. **Reading the desk.**
+**Operations, ever.** **Protocol messages.** **A hidden store** — module
+state is an item, visible and versioned. **Reading the desk.**
+
+**A server route, only through the home's door.** This read *"server routes,
+at first — a route is a door and the desk's whole job is that every door runs
+the same test; if a second real module ever needs one it is `/api/m/<name>/…`
+behind the same badge check"* until 19 Nov 2026, when talk's voice token and
+mood's pictures — two routes that spent a model key and so lived in the
+server with the module's name on them — forced the door to exist (Open Stitch
+phase 0.1). The rule for what such a route may do:
+
+- **The home runs the door, not the handler.** A `ServerModule` (`./server`)
+  declares routes — `method`, a relative `path`, whose key it spends
+  (`spend: "none" | "owner" | "shared"`, and the `provider`), a `rate`, and
+  the words for its refusals — and the home mounts each at
+  `/api/m/<name>/<path>` behind the model routes' own sequence: the route's
+  free refusals (`check`), the takedown and the refused badge, the admission
+  and the edit rung, forwarding to the canvas's home, owner-only spend, that
+  a key exists, the badge's rate. All of it before the handler runs, so a
+  handler cannot forget a step and two modules cannot drift.
+- **`"owner"` is `/api/text`'s rule** (`docs/projects/keys/design.md`): an
+  environment key serves every editor; a stored key pays for the machine's
+  person, or everyone once they shared it. `"shared"` drops the owner's
+  exception — a stored key serves only when shared — for a route that acts
+  for other people. `"none"` spends nothing and names no provider.
+- **The handler is handed a small host** (`ServerHost`): the key it was
+  cleared to spend (`keyFor`), the badge and `speaksFor`, a read-only
+  `canvas`, `readBlob`/`putBlob`, `submit` (an op as the caller, in a
+  `group`), the home's `text` model under its own rules, the `fetch` and
+  `now` the home was given, and the module's seams. It answers a status and
+  a body. The `CliHost` rule holds: a module that wants more is asking for a
+  helper to be promoted, a review question and not a private import.
+- **The list is a third twin.** `packages/server/src/server-modules.ts`
+  names the modules whose server half this build carries, beside the web's
+  and the CLI's lists; `test/modules.test.ts` holds a `./server` export and a
+  list entry to both-or-neither, and the server names a module nowhere else.
+- **A server route adds no op, no message, no store.** What it writes is
+  `submit`; what it reads is the canvas. A hosted home with no key for the
+  provider answers 503 in the route's words, exactly as the home's own routes
+  do.
 
 ## Two trust classes
 

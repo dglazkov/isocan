@@ -37,6 +37,7 @@ import { groupDescendants, isGroupItem } from "./canvas-groups.ts";
 import { isDrawingItem } from "./drawing.ts";
 import type { JsonSchema } from "./jev.ts";
 import type { CanvasContents, Item } from "./model.ts";
+import { modelFor } from "./models.ts";
 import { isTextItem, textDrawSize, TEXT_SIZE } from "./textnode.ts";
 
 /** Bumped on any change to the prompt's words; part of every content key, so a bump re-summarises everything at once, on purpose. */
@@ -66,9 +67,10 @@ export const SUMMARY_QUIET_MS = 30_000;
  * The model a summary asks for when `ISOCAN_SUMMARY_MODEL` names none and the
  * home's text key is Claude's: the cheapest tier. A summary is a short,
  * high-volume, low-stakes call; `/api/text`'s own default is the most capable
- * tier, which is wrong for this (design §7).
+ * tier, which is wrong for this (design §7). The id is the manifest's
+ * `summary` row (`models.ts`).
  */
-export const SUMMARY_MODEL = "claude-haiku-5-5";
+export const SUMMARY_MODEL = modelFor("summary").id;
 
 /**
  * The system line a summary is asked under. `/api/text`'s generator sends a

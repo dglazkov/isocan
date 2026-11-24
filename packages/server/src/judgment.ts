@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { JUDGMENT_PER_MINUTE, JUDGMENT_UPSTREAM } from "@isocan/core";
+import { JUDGMENT_PER_MINUTE, JUDGMENT_UPSTREAM, modelFor } from "@isocan/core";
 import { resolveKey } from "@isocan/core/keystore";
 import { warnRefusedKeys } from "./text.ts";
 
@@ -45,8 +45,8 @@ import { warnRefusedKeys } from "./text.ts";
  * else. `JudgmentOptions.url` overrides it for a test's fake transport.
  */
 export const JUDGE_URL = "https://api.typesafe.ai/v1/systemone";
-/** The model a question file that names none is asked of — the vendor's moving alias, so a home follows its upgrades without a deploy. */
-const JUDGE_MODEL = "jev-latest";
+/** The model a question file that names none is asked of — the vendor's moving alias, so a home follows its upgrades without a deploy. The manifest's `judge` row (`@isocan/core/models`). */
+const JUDGE_MODEL = modelFor("judge").id;
 
 /**
  * **How a home's judge is configured** — the daemon passes it through from
@@ -137,8 +137,8 @@ export class Judge {
    * advice); any other refusal, and an unreachable judge, comes back as
    * `judgment-upstream` with the judge's words — never the key.
    */
-  async ask(request: { model?: string; state: unknown; questions: Record<string, unknown> }): Promise<Judged> {
-    const key = this.key();
+  async ask(request: { model?: string; state: unknown; questions: Record<string, unknown> }, overrideKey?: string): Promise<Judged> {
+    const key = overrideKey?.trim() || this.key();
     if (!key) throw new Error("the judge has no key");
     const doFetch = this.opts.fetch ?? fetch;
     const backoff = this.opts.backoff ?? [500, 1000, 2000];

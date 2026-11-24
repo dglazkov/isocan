@@ -9,7 +9,10 @@ were read on 12 September: two clear, the third clear for the agent-side
 sandbox and still shut for the browser-frame one. The
 [agent-side half is built](#phase-5--sandboxes-the-agent-side-half); the frame
 half stays gated behind extensions stages 3–4 and a CSP line. See
-[the gate check](#the-gate-check-12-september-2026).
+[the gate check](#the-gate-check-12-september-2026). On 19 November the
+server seam landed from outside this project (see the finding below).
+
+**Finding, 19 Nov 2026 (Open Stitch phase 0.1):** a module may now own a server route — `./server` exports a `ServerModule`, the home mounts it at `/api/m/<name>/…` behind the model routes' own door (check, admission, edit rung, home forwarding, owner-only spend, rate — all before the handler), and `packages/server/src/server-modules.ts` is the third twin list; talk's voice token and mood's image and swatches routes are the first tenants, with the old `/api/voice/token`, `/api/image` and `/api/image/swatches` paths aliased for one release (module API 0.2.12; [design](design.md#what-a-module-may-not-add), [authoring](authoring.md#serverts--the-servermodule-record-optional)).
 
 ## Phase 1 — the registries, and the mind map as the first internal module ✅
 
@@ -466,3 +469,17 @@ the extensions walk was re-cut to build it first (extensions phases 3, 4 and
 panels — the old stage 3 — are last and wait on evidence, and nothing here
 needs them. So this half waits on work now rather than on an ordering, and the
 work is being done in the extensions project.
+
+## Phase 6 — a module's verbs, for an agent over MCP ✅
+
+**Status: CLOSED.** 19 Nov 2026, as Open Stitch phase 0.5 — the design is
+[`mcp.md`](mcp.md).
+
+`isocan mcp` never read the module registry: sixteen built-in tools, and
+nothing a module added. `CliModule.tools` (module API 0.2.12) declares the
+verb's MCP twin beside the verb; the CLI hands its own module list — built-in
+and runtime — to the server, which registers each as `<module>_<verb>` with
+the built-ins' `session` and `canvas` arguments and identity rule. The
+stickers module is the proof: `stickers_drop` over a spawned `isocan mcp`
+lands the item `isocan sticker drop` lands. Removing the module removes the
+tool; there is no third list to keep in step.

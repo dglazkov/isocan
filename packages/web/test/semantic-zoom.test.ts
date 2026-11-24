@@ -98,9 +98,13 @@ describe("off costs nothing", () => {
 
   it("keeps the experiment list's sentences out of the first visit: only Settings imports it", () => {
     const importers = files(".").filter((file) => /from "(\.\.?\/)+(lib\/)?experiments\.ts"/.test(read(file)));
-    expect(importers).toEqual([path.join("components", "IdentityMenu.tsx")]);
+    expect(importers).toEqual([
+      path.join("components", "IdentityMenu.tsx"),
+      path.join("components", "shell", "SettingsShell.tsx"),
+    ]);
     expect(read("components/CanvasCrumb.tsx")).toMatch(/lazy\(\(\) => import\("\.\/IdentityMenu\.tsx"\)/);
     expect(read("pages/CanvasListPage.tsx")).toMatch(/lazy\(\(\) => import\("\.\.\/components\/IdentityMenu\.tsx"\)/);
+    expect(read("components/shell/TopNav.tsx")).toMatch(/lazy\(\(\) => import\("\.\/SettingsShell\.tsx"\)/);
   });
 
   it("the summary is marked as one: ≈, and an accessible name that says Summary of", () => {

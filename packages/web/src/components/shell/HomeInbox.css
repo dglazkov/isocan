@@ -1,0 +1,122 @@
+/* Collapsible Cross-Canvas Waiting Inbox on Home (Open Stitch Phase 1A).
+   Loaded lazily with HomeInbox.tsx. Uses only existing :root tokens. */
+
+.shell-home-inbox {
+  margin: var(--radius) 0 var(--edge);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--ink);
+  overflow: hidden;
+}
+
+.shell-home-inbox-head {
+  display: flex;
+  align-items: center;
+  gap: var(--radius);
+  width: 100%;
+  padding: var(--radius) var(--edge);
+  border: none;
+  background: var(--chip);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.shell-home-inbox-head:hover {
+  background: var(--chip-hover);
+}
+
+.shell-home-inbox-badge {
+  padding: 0 var(--radius);
+  border-radius: 999px;
+  background: var(--accent-wash);
+  color: var(--accent-text);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.shell-home-inbox-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.shell-home-inbox-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pill-inset);
+  padding: var(--radius) var(--edge);
+  border-top: 1px solid var(--line-soft);
+}
+
+.shell-home-inbox-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--radius);
+  font-size: 12px;
+}
+
+.shell-home-inbox-kind {
+  padding: 0 var(--radius);
+  border-radius: 999px;
+  background: var(--chip);
+  color: var(--ink-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.shell-home-inbox-kind[data-kind="ask"] {
+  background: var(--accent-wash);
+  color: var(--accent-text);
+}
+
+.shell-home-inbox-link {
+  color: var(--accent-text);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.shell-home-inbox-link:hover {
+  text-decoration: underline;
+}
+
+.shell-home-inbox-when {
+  margin-left: auto;
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.shell-home-inbox-body {
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.shell-home-inbox-reply {
+  display: flex;
+  align-items: center;
+  gap: var(--pill-inset);
+}
+
+.shell-home-inbox-input {
+  flex: 1;
+  min-width: 0;
+  padding: var(--pill-inset) var(--radius);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--ground);
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.shell-home-inbox-sent {
+  color: var(--good);
+  font-size: 11px;
+}
+
+.shell-home-inbox-err {
+  color: var(--danger);
+  font-size: 11px;
+}

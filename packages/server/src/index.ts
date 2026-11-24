@@ -117,3 +117,12 @@ export * from "./personas.ts";
 export * from "./personal-desk.ts";
 
 export type { CanvasLifecycle } from "./store.ts";
+export {
+  DEFAULT_JOB_POLL_MS,
+  JobBadRequestError,
+  JobConflictError,
+  JobManager,
+  JobNotFoundError,
+} from "./jobs.ts";
+export type { JobClock, JobDaemonOptions, JobManagerOptions } from "./jobs.ts";
+export { DEFAULT_LEASE_TTL_MS, LeaseManager, type LeaseAcquireResult } from "./leases.ts";

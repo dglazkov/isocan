@@ -131,6 +131,71 @@ export const EXPERIMENTS: readonly Experiment[] = [
     withParent: true,
   },
   {
+    id: "modules.describe",
+    name: "Describe for agents",
+    what: "Generate caption-first `agentDescription` text on images, videos, documents, and screens using your Gemini key so agents can reason about visual items.",
+  },
+  {
+    id: "modules.video",
+    name: "Video generation",
+    what: "Generate video clips as home-polled async jobs from the palette or CLI — closing the tab never stops a running generation, and finished MP4s land as new versions.",
+  },
+  {
+    id: "modules.audio",
+    name: "Audio, music & speech",
+    what: "Audio clip cards with inline playback, Lyria 3 music generation, Gemini TTS speech synthesis, and audio transcription into canvas context.",
+  },
+  {
+    id: "modules.model3d",
+    name: "3D models (GLB 2.0)",
+    what: "Self-contained GLB 2.0 3D model items with binary containment validation, a lightweight orbit viewer card, and camera pose capture.",
+  },
+  {
+    id: "modules.workbench",
+    name: "Workbench (Agent Sessions)",
+    what: "Run and steer local agent and terminal sessions (Antigravity, Gemini CLI, Claude Code, PTY) on the canvas with live dev-server preview and OpenNode emit.",
+  },
+  {
+    id: "modules.memory",
+    name: "Memory as items",
+    what: "Canvas reflections, private personal observations, pointer cards that hydrate only for their owner, and cross-canvas memory search.",
+  },
+  {
+    id: "modules.image",
+    name: "Single image generation & edit",
+    what: "Generate a single image or stack an edited version onto a selected image item using your Gemini key, with idempotent retries.",
+  },
+  {
+    id: "modules.research",
+    name: "Grounded research jobs",
+    what: "Run home-polled grounded research queries that land cited Markdown reports with source links on the canvas.",
+  },
+  {
+    id: "modules.media-edit",
+    name: "Media editing (FFmpeg)",
+    what: "Trim, stitch, mux, and extract still frames from video and audio items locally on the home with full provenance.",
+  },
+  {
+    id: "modules.design-system",
+    name: "Design system & mockups",
+    what: "Generate structured design system sticker sheets with DESIGN.md, run fresh-context design critiques, and explore 2–4 direction mockups.",
+  },
+  {
+    id: "modules.workspace",
+    name: "Workspace (Docs, Sheets, Slides)",
+    what: "Import Google Docs, Sheets, and Slides onto the canvas and re-sync them into new item versions with source provenance.",
+  },
+  {
+    id: "modules.clipper",
+    name: "Browser clipper",
+    what: "Capture web pages, text selections, HTML snapshots, and images onto the canvas via CLI, MCP, or the Chrome MV3 extension.",
+  },
+  {
+    id: "modules.prototype",
+    name: "HTML prototype tiers",
+    what: "Generate self-contained sandboxed HTML prototypes across quick and standard tiers, or delegate app-tier builds to a workbench session.",
+  },
+  {
     id: "presentation.transitions",
     name: "Presentation Transitions",
     what: "Choose how full screen moves between slides — Push, Fade, Zoom, Depth, Cube, Flip, Morph or None — from the bar and the drawer. Off while the motions settle: a deck of screens does not push smoothly yet. Off, a deck of screens dissolves and a deck of pictures pushes, as it always has.",

@@ -27,6 +27,7 @@ import { Inbox } from "./Inbox.tsx";
 import { usePhone } from "../lib/phone.ts";
 
 const CommandPalette = lazy(() => import("./CommandPalette.tsx").then((m) => ({ default: m.CommandPalette })));
+const TopNav = lazy(() => import("./shell/TopNav.tsx"));
 
 /** A single owner across the home, lens, and canvas. The palette stays lazy;
  * the only background work is a slow, visible-tab inbox read. */
@@ -88,13 +89,20 @@ export function Navigation({ actor }: { actor: Actor }) {
   }, [actor.id, setMode, inboxOn]);
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
       const ui = useUiStore.getState();
+      if (e.key === "Escape" && ui.uiHidden) {
+        e.preventDefault();
+        ui.setUiHidden(false);
+        return;
+      }
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
       if (ui.contextMenu || ui.groupDialog) return;
       if (e.key.toLowerCase() === "k") {
         e.preventDefault(); ui.setPaletteOpen(ui.paletteOpen ? null : "commands");
       } else if (e.key.toLowerCase() === "o") {
         e.preventDefault(); ui.setPaletteOpen(ui.paletteOpen === "canvases" ? null : "canvases");
+      } else if (e.key === "\\") {
+        e.preventDefault(); ui.toggleUiHidden();
       }
     }
     window.addEventListener("keydown", onKeyDown, true);
@@ -137,6 +145,7 @@ export function Navigation({ actor }: { actor: Actor }) {
       ? `${count} new · ${unread.filter((entry) => entry.reason === "mentioned").length} naming you`
       : "Nothing new";
   return <>
+    {!phone && !addressed && <Suspense fallback={null}><TopNav actor={actor} /></Suspense>}
     {inboxOn && pathname !== "/" && !onModulePage && <button
       className={`btn navigation-inbox${canvasId ? " on-canvas" : ""}${count > 0 ? " has-new" : ""}`}
       onClick={() => setOpen((was) => !was)}

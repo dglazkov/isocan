@@ -15,6 +15,7 @@
   "dependencies": {
     "@isocan/api": "*",
     "@isocan/core": "*",
+    "@isocan/house-agent": "*",
     "@isocan/mcp": "*",
     "@isocan/rc": "*",
     "@isocan/server": "*",

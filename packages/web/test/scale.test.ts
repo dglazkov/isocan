@@ -246,8 +246,11 @@ describe("spacing", () => {
     // 1490 -> 1720 on 15 Oct 2026 when focus.css landed for FocusHeader,
     // NodeFocusChat, and the Image/DesignSystem/Screen focus studios, all
     // on existing steps (measured at 1,690).
+    // 1720 -> 1800 on 22 Nov 2026 when Open Stitch Phase 1A/2B added lazy
+    // shell sheets (TopNav, HomeInbox, PromptPill, AgentDock, SettingsShell,
+    // HouseMeta), all on existing steps (measured at 1,766).
     expect(spacing.length).toBeGreaterThan(SPACING_STEPS * 4);
-    expect(spacing.length).toBeLessThan(1720);
+    expect(spacing.length).toBeLessThan(1800);
   });
 });
 

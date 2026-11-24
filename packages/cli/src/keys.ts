@@ -132,9 +132,11 @@ the key from stdin when piped, or a hidden prompt — never from the command
 line, which your shell keeps in its history.
 
   isocan keys                                  # the same as ls
+  isocan keys ls --mine                        # your per-user BYOK keys sealed on the active home
   pbpaste | isocan keys set anthropic          # or: isocan keys set anthropic, then paste
+  pbpaste | isocan keys set gemini --mine      # store sealed for your identity on the active home
   isocan keys test anthropic                   # one cheap call: accepted, or why not
-  isocan keys rm gemini
+  isocan keys rm gemini [--mine]
   isocan keys share on                         # collaborators may spend them too (off by default)
   isocan keys agents on                        # summoned agents get them too (off by default; bills the keys)`,
     );
@@ -142,7 +144,13 @@ line, which your shell keeps in its history.
   keys
     .command("ls", { isDefault: true })
     .description("Each provider: set or not, its last four characters, when it was added, what uses it, and whether the environment overrides it")
-    .action(async (_opts: unknown, cmd: Command) => {
+    .option("--mine", "list your per-user BYOK keys sealed on the active home (/api/me/keys)")
+    .action(async (opts: { mine?: boolean }, cmd: Command) => {
+      if (opts.mine) {
+        const { listMineKeys } = await import("./user-keys.ts");
+        await listMineKeys(cmd);
+        return;
+      }
       const k = await load();
       const file = k.keysFile(home());
       let stored: KeyFile = {};
@@ -182,17 +190,23 @@ line, which your shell keeps in its history.
     .command("set <provider> [value...]")
     .description("Store a provider's key — from stdin when piped, else a hidden prompt; never from the command line")
     .option("--model <model>", "the model this provider's spenders ask (the text model's; ISOCAN_TEXT_MODEL still wins)")
-    .action(async (raw: string, value: string[] | undefined, opts: { model?: string }, cmd: Command) => {
+    .option("--mine", "store this key sealed for your identity on the active home (/api/me/keys)")
+    .action(async (raw: string, value: string[] | undefined, opts: { model?: string; mine?: boolean }, cmd: Command) => {
       const k = await load();
       const provider = providerOf(k, raw);
       if (value && value.length > 0) {
         throw new Error(
-          `refusing a key on the command line — it is in your shell's history now, so rotate it, and nothing was stored. Pipe it in (\`pbpaste | isocan keys set ${provider}\`) or run \`isocan keys set ${provider}\` and paste it at the prompt`,
+          `refusing a key on the command line — it is in your shell's history now, so rotate it, and nothing was stored. Pipe it in (\`pbpaste | isocan keys set ${provider}${opts.mine ? " --mine" : ""}\`) or run \`isocan keys set ${provider}${opts.mine ? " --mine" : ""}\` and paste it at the prompt`,
         );
       }
       const typed = process.stdin.isTTY ? await promptHidden(`${k.KEY_PROVIDER_INFO[provider].label} key (not shown): `) : await readPiped();
       const key = typed.trim();
       if (!key) throw new Error(`no key given for ${provider} — nothing was stored`);
+      if (opts.mine) {
+        const { setMineKey } = await import("./user-keys.ts");
+        await setMineKey(cmd, provider, key);
+        return;
+      }
       const file = await k.writeKey(home(), provider, key, opts.model);
       const overridden = k.envKeyFor(provider, process.env);
       if (cmd.optsWithGlobals().json) {
@@ -206,9 +220,15 @@ line, which your shell keeps in its history.
   keys
     .command("rm <provider>")
     .description("Remove a provider's stored key")
-    .action(async (raw: string, _opts: unknown, cmd: Command) => {
+    .option("--mine", "remove your per-user BYOK key from the active home (/api/me/keys)")
+    .action(async (raw: string, opts: { mine?: boolean }, cmd: Command) => {
       const k = await load();
       const provider = providerOf(k, raw);
+      if (opts.mine) {
+        const { removeMineKey } = await import("./user-keys.ts");
+        await removeMineKey(cmd, provider);
+        return;
+      }
       const removed = await k.removeKey(home(), provider);
       if (cmd.optsWithGlobals().json) return printJson({ provider, removed });
       console.log(removed ? `${provider}: removed` : `${provider}: no stored key — nothing to remove`);

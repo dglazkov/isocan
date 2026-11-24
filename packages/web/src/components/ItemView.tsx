@@ -113,6 +113,9 @@ import { useOnWall, useRoundMarks, useSprint, useVotesHiddenOn, voteMark } from 
 import { useDismissOnOutside } from "../lib/dismiss.ts";
 import { beginGroupGesture } from "../lib/groupgestures.ts";
 import { DRAG_SLOP } from "../lib/gesture.ts";
+import { createMakeRoomDragSession } from "../gestures/makeRoomDrag.ts";
+import { NODE_HOLD_LIFT_MS } from "../gestures/nodePress.ts";
+import { createResizeModifierSession } from "../gestures/resizeModifiers.ts";
 import { useCanEdit } from "../lib/capability.ts";
 import { glideToBox } from "../lib/zoomactions.ts";
 
@@ -257,8 +260,9 @@ function ItemViewInner({
     (s) => Boolean(item.containerId && s.selectedItemIds.length === 1 && s.selectedItemIds[0] === item.containerId),
   );
   const drag = useUiStore((s) => (s.drag?.itemIds.includes(item.id) ? s.drag : null));
+  const makeRoom = useUiStore((s) => s.makeRoomOffsets?.get(item.id) ?? null);
   // Held, not merely carried: see `DragState.lift` and `.item.lifted`.
-  const lifted = useUiStore((s) => !!(s.drag?.lift?.includes(item.id) || s.groupPreview?.lift?.includes(item.id)));
+  const lifted = useUiStore((s) => !!(s.drag?.lift?.includes(item.id) || s.groupPreview?.lift?.includes(item.id) || s.holdLiftedId === item.id));
   const resize = useUiStore((s) => (s.resize?.itemId === item.id ? s.resize : null));
   const groupBox = useUiStore((s) => s.groupPreview?.boxes.get(item.id));
   const dropTarget = useUiStore((s) => s.groupDropTargetId === item.id);
@@ -300,8 +304,8 @@ function ItemViewInner({
   // When the label was last pressed, for spotting a double-press on it.
   const labelPress = useRef(0);
 
-  const x = groupBox?.x ?? display.x + (drag?.dx ?? 0) + (resize?.dx ?? 0);
-  const y = groupBox?.y ?? display.y + (drag?.dy ?? 0) + (resize?.dy ?? 0);
+  const x = (groupBox?.x ?? display.x + (drag?.dx ?? 0) + (resize?.dx ?? 0)) + (makeRoom?.dx ?? 0);
+  const y = (groupBox?.y ?? display.y + (drag?.dy ?? 0) + (resize?.dy ?? 0)) + (makeRoom?.dy ?? 0);
   // A stacked group is drawn as one card at its own origin; its frame is kept.
   const stackBox = groupStackBox(item);
   const width = stackBox?.width ?? groupBox?.width ?? resize?.width ?? display.width;
@@ -735,16 +739,31 @@ function ItemViewInner({
     frame.setPointerCapture(e.pointerId);
     const start = { x: e.clientX, y: e.clientY };
     let moved = false;
+    const holdTimer = window.setTimeout(() => {
+      if (!moved) useUiStore.getState().setHoldLiftedId(item.id);
+    }, NODE_HOLD_LIFT_MS);
     const draggingIds = new Set(dragIds);
     const capturedItems = semantic?.start.canvas.items;
     const capturedMoving = capturedItems ? unionBox(dragIds.map((id) => capturedItems[id]).filter((one) => one !== undefined)) : null;
     const capturedOthers = capturedItems ? Object.values(capturedItems).filter((other) => !draggingIds.has(other.id)) : null;
+    const makeRoomSession = !semantic && canvasNow
+      ? createMakeRoomDragSession({
+          movedIds: draggingIds,
+          allItems: Object.values(canvasNow.items).map((it) => ({
+            id: it.id, x: it.x, y: it.y, width: it.width, height: it.height,
+          })),
+          onPreviewChange: (offsets) =>
+            useUiStore.getState().setMakeRoomOffsets(offsets.size > 0 ? new Map(offsets) : null),
+        })
+      : null;
 
-    // The last move, so ⌘ going down or up under a still hand re-reads the
-    // destination at once, the way Shift's snapping already does.
+    // The last move, so ⌘ or Alt going down or up under a still hand re-reads
+    // the destination or make-room displacements at once.
     let last: PointerEvent | null = null;
     function onKey(ev: KeyboardEvent) {
-      if (last && moved && (ev.key === "Meta" || ev.key === "Control")) onMove({ clientX: last.clientX, clientY: last.clientY, shiftKey: last.shiftKey, altKey: last.altKey, metaKey: ev.metaKey, ctrlKey: ev.ctrlKey });
+      if (last && moved && (ev.key === "Meta" || ev.key === "Control" || ev.key === "Alt")) {
+        onMove({ clientX: last.clientX, clientY: last.clientY, shiftKey: last.shiftKey, altKey: ev.altKey, metaKey: ev.metaKey, ctrlKey: ev.ctrlKey });
+      }
     }
     function onMove(ev: Pick<PointerEvent, "clientX" | "clientY" | "shiftKey" | "altKey" | "metaKey" | "ctrlKey">) {
       const ui = useUiStore.getState();
@@ -752,6 +771,10 @@ function ItemViewInner({
       if (semantic && !semantic.active()) return;
       const scale = ui.viewport.scale;
       if (!moved && Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < DRAG_SLOP) return;
+      if (!moved) {
+        window.clearTimeout(holdTimer);
+        if (ui.holdLiftedId === item.id) ui.setHoldLiftedId(null);
+      }
       if (!moved) semantic?.lift();
       moved = true;
       let dx = (ev.clientX - start.x) / scale;
@@ -773,6 +796,7 @@ function ItemViewInner({
         dx += snap.dx;
         dy += snap.dy;
         ui.setGuides(snap.guides, snap.spacing);
+        makeRoomSession?.update({ x: moving.x + dx, y: moving.y + dy, width: moving.width, height: moving.height }, ev.altKey);
       }
       let destination: string | null | undefined;
       if (semantic) {
@@ -792,8 +816,10 @@ function ItemViewInner({
       publishDrag(lift, dx, dy, destination);
     }
     function onUp(ev: PointerEvent) {
+      window.clearTimeout(holdTimer);
       publishDrag();
       const state = useUiStore.getState();
+      if (state.holdLiftedId === item.id) state.setHoldLiftedId(null);
       // A Shift-click that never became a drag: now it takes the item out.
       if (e.shiftKey && chosen === was && !moved && ev.type === "pointerup") state.toggleSelect(targetId);
       if (semantic) {
@@ -806,22 +832,29 @@ function ItemViewInner({
       // a gesture the browser took away, or a press that never moved.
       const final = state.drag;
       const canvas = useCanvasStore.getState().canvas;
-      const moves = ev.type === "pointerup" && moved && final && canvas
-        ? final.itemIds.flatMap((itemId) => {
-            const dragged = canvas.items[itemId];
-            return dragged ? [{ itemId, x: Math.round(dragged.x + final.dx), y: Math.round(dragged.y + final.dy) }] : [];
-          })
-        : [];
+      if (ev.type !== "pointerup" || !moved || !final || !canvas) {
+        makeRoomSession?.cancel();
+        state.setDrag(null);
+        return;
+      }
+      const draggedMoves = final.itemIds.flatMap((itemId) => {
+        const dragged = canvas.items[itemId];
+        return dragged ? [{ itemId, x: Math.round(dragged.x + final.dx), y: Math.round(dragged.y + final.dy) }] : [];
+      });
+      const result = makeRoomSession ? makeRoomSession.commit(draggedMoves) : { moves: draggedMoves, pushedCount: 0, toast: null };
       // Fold the final position into the replica BEFORE dropping the drag
       // override — otherwise the item flashes at its old position until the
       // WS echo lands.
-      if (moves.length) void sendEchoed(canvasId, actor, moves.length === 1 ? { type: "item.move", ...moves[0]! } : { type: "items.move", moves });
+      if (result.moves.length) {
+        void sendEchoed(canvasId, actor, result.moves.length === 1 ? { type: "item.move", ...result.moves[0]! } : { type: "items.move", moves: result.moves });
+      }
+      if (result.toast) setNotice(result.toast.message);
       state.setDrag(null);
     }
     // A gesture the browser takes away must not leave guides on screen or an
     // item frozen mid-drag: pointercancel ends it too (`follow`).
     const signal = follow(frame, onMove, onUp);
-    if (semantic) { window.addEventListener("keydown", onKey, { signal }); window.addEventListener("keyup", onKey, { signal }); }
+    if (semantic || makeRoomSession) { window.addEventListener("keydown", onKey, { signal }); window.addEventListener("keyup", onKey, { signal }); }
   }
 
   function onResizeDown(corner: "nw" | "ne" | "sw" | "se", e: React.PointerEvent) {
@@ -846,24 +879,35 @@ function ItemViewInner({
       });
       return;
     }
-    const start = { x: e.clientX, y: e.clientY, width: item.width, height: item.height };
-    // Sign multipliers: which way the pointer delta affects width/height.
-    const sx = corner === "nw" || corner === "sw" ? -1 : 1;
-    const sy = corner === "nw" || corner === "ne" ? -1 : 1;
+    const start = { x: e.clientX, y: e.clientY };
+    const startRect = { x: item.x, y: item.y, width: item.width, height: item.height };
+    const lockAspect = kind === "image" || kind === "video";
+    const session = createResizeModifierSession({
+      start: startRect,
+      handle: corner,
+      bounds: { minW: MIN_W, minH: MIN_H },
+      lockAspect,
+      initialModifiers: { proportional: e.shiftKey, fromCenter: e.altKey },
+      onChange: (box) => {
+        useUiStore.getState().setResize({
+          itemId: item.id,
+          width: Math.round(box.width),
+          height: Math.round(box.height),
+          dx: Math.round(box.x - startRect.x),
+          dy: Math.round(box.y - startRect.y),
+        });
+      },
+    });
 
     function onMove(ev: PointerEvent) {
       const scale = useUiStore.getState().viewport.scale;
-      const rawDx = (ev.clientX - start.x) / scale;
-      const rawDy = (ev.clientY - start.y) / scale;
-      const newW = Math.max(MIN_W, Math.round(start.width + rawDx * sx));
-      const newH = Math.max(MIN_H, Math.round(start.height + rawDy * sy));
-      // Origin offset: the difference between requested and clamped size,
-      // only on axes where the corner moves the origin.
-      const dx = sx === -1 ? -(newW - start.width) : 0;
-      const dy = sy === -1 ? -(newH - start.height) : 0;
-      useUiStore.getState().setResize({ itemId: item.id, width: newW, height: newH, dx, dy });
+      session.update(
+        { dx: (ev.clientX - start.x) / scale, dy: (ev.clientY - start.y) / scale },
+        { proportional: ev.shiftKey, fromCenter: ev.altKey },
+      );
     }
     function onUp(ev: PointerEvent) {
+      session.dispose();
       const state = useUiStore.getState();
       const final = state.resize;
       if (ev.type !== "pointercancel" && final && (final.width !== item.width || final.height !== item.height)) {
@@ -874,7 +918,7 @@ function ItemViewInner({
           height: final.height,
         } as const;
         void sendEchoed(canvasId, actor, resizeOp);
-        // Corners other than SE shift the origin.
+        // Corners other than SE (or Option/Alt center-resize) shift the origin.
         if (final.dx !== 0 || final.dy !== 0) {
           const moveOp = {
             type: "item.move",
@@ -996,7 +1040,7 @@ function ItemViewInner({
 
   return (
     <div
-      className={`item${selected ? " selected" : ""}${entered ? " entered" : ""}${drag ? " dragging" : ""}${lifted ? " lifted" : ""}${isInk ? " ink" : ""}${isText ? " textnode" : ""}${paper ? ` paper paper-${paper}` : ""}${isAreaItem ? " area" : ""}${gisted ? " gisted" : ""}${isCanvasGroup ? ` canvas-group${floor ? "" : " pressable"}${stackBox ? " stacked" : ""}` : ""}${dropTarget ? " group-drop-target" : ""}${aimed}${tint ? ` paper-${tint}` : ""}${isMark ? " annotation" : ""}${renaming ? " renaming" : ""}${peeked ? " peeked" : ""}${settling ? " settling" : ""}${reach !== null ? " reaching" : ""}${isSlide(item) ? " slide" : ""}${away ? " away" : ""}${arrived.current ? " arrived" : ""}`}
+      className={`item${selected ? " selected" : ""}${entered ? " entered" : ""}${drag ? " dragging" : ""}${lifted ? " lifted" : ""}${makeRoom ? " make-room-shifted" : ""}${isInk ? " ink" : ""}${isText ? " textnode" : ""}${paper ? ` paper paper-${paper}` : ""}${isAreaItem ? " area" : ""}${gisted ? " gisted" : ""}${isCanvasGroup ? ` canvas-group${floor ? "" : " pressable"}${stackBox ? " stacked" : ""}` : ""}${dropTarget ? " group-drop-target" : ""}${aimed}${tint ? ` paper-${tint}` : ""}${isMark ? " annotation" : ""}${renaming ? " renaming" : ""}${peeked ? " peeked" : ""}${settling ? " settling" : ""}${reach !== null ? " reaching" : ""}${isSlide(item) ? " slide" : ""}${away ? " away" : ""}${arrived.current ? " arrived" : ""}`}
       data-item-id={item.id}
       data-group-id={isCanvasGroup ? item.id : undefined}
       data-presentation={detail}

@@ -22,8 +22,10 @@
  * and JSON serialization on `moodSwatches`.
  */
 
-/** Route that computes swatches for an image item on the daemon. */
-export const SWATCHES_ROUTE = "/api/image/swatches";
+/** Route that computes swatches for an image item on the daemon — the mood module's own since 19 Nov 2026 (`/api/m/mood/swatches`). */
+export const SWATCHES_ROUTE = "/api/m/mood/swatches";
+/** Where the swatches route answered before 19 Nov 2026. Forwarded to `SWATCHES_ROUTE`; remove with the release after module API 0.2.12. */
+export const SWATCHES_ROUTE_LEGACY = "/api/image/swatches";
 
 /** Refusal code when neither `sharp` nor a picture-capable text model is available. */
 export const IMAGE_SWATCHES_UNAVAILABLE = "image-swatches-unavailable";

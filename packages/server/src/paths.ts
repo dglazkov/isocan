@@ -73,6 +73,8 @@ export const summaryStatsFile = (home: string, id: string) =>
 export const parkCursorsFile = (home: string) => path.join(home, "park-cursors.json");
 export const daemonFile = (home: string) => path.join(home, "daemon.json");
 export const daemonLogFile = (home: string) => path.join(home, "daemon.log");
+/** Active home-polled async jobs persisted across daemon restarts (Open Stitch phase 0.2). */
+export const jobsFile = (home: string) => path.join(home, "jobs.json");
 export const identityFile = (home: string) => path.join(home, "identity.json");
 /** The actor registry snapshot: which session key speaks as whom (#57). */
 export const actorsFile = (home: string) => path.join(home, "actors.json");

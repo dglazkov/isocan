@@ -38,6 +38,7 @@ import {
   inkBounds,
   isBesideSide,
   itemColour,
+  modelFor,
   normalizeSiteUrl,
   siteLabel,
   type BesideSide,
@@ -133,9 +134,9 @@ export interface PlannedOp {
  * API docs; the docs call `gemini-3.1-flash-live-preview` a legacy preview
  * and recommend 3.8 Live. A preview name moves; `--model` and
  * `LiveSessionOptions.model` exist so a person can move with it without a
- * release.
+ * release. The id is the manifest's `live` row (`@isocan/core/models`).
  */
-export const LIVE_MODEL = "models/gemini-3.8-live";
+export const LIVE_MODEL = modelFor("live").id;
 
 /* ---- liveUrl ---- */
 export function liveUrl(key: string, host = "generativelanguage.googleapis.com"): string {
@@ -149,7 +150,7 @@ export function liveUrl(key: string, host = "generativelanguage.googleapis.com")
 /**
  * **The Live socket opened with a one-use token instead of a key** (keys
  * phase 4). A browser holds no key: the daemon mints an ephemeral token
- * (`auth_tokens/…`, `POST /api/voice/token`) and the page presents it as
+ * (`auth_tokens/…`, `POST /api/m/talk/token`) and the page presents it as
  * `access_token` on the CONSTRAINED method, which ephemeral tokens are valid
  * for only on `v1alpha` — the spelling `@google/genai`'s `live.connect` uses
  * when its key starts `auth_tokens/`.

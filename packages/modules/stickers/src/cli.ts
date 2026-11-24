@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import { z } from "zod";
 import guideText from "../agent-guide.md";
 import type { CliModule, CliHost } from "@isocan/cli/modulehost";
 import { STICKERS, STICKER_MIME, STICKER_SIZE, findSticker, stickerFile, stickersCore } from "./core.ts";
@@ -90,6 +91,45 @@ export const stickersCli: CliModule = {
       );
   },
   guide: guideText,
+  /**
+   * **The same drop, for an agent that reached the canvas over `isocan mcp`**
+   * (`docs/projects/modules/mcp.md`). One tool, because one verb acts; `ls`'s
+   * answer is in the guide and in the refusal below. The body is the verb's
+   * body through the API's `add` rather than the host's `sendOp` — the same
+   * `item.add` with the same mime, size and title, so an item dropped from a
+   * manager is indistinguishable from one dropped from a terminal.
+   */
+  tools: [
+    {
+      name: "drop",
+      title: "Drop a sticker",
+      description:
+        "Put an emoji sticker on the canvas as an item — by id, by name, or the emoji itself. Omit x and y to land beside the leftmost item; name a group with `in` to insert into it. The same act as `isocan sticker drop`.",
+      inputSchema: {
+        sticker: z.string().trim().min(1).describe(`Which: one of ${STICKERS.map((s) => s.id).join(", ")}, its name, or the emoji.`),
+        x: z.number().optional().describe("World x of the sticker's top-left corner."),
+        y: z.number().optional().describe("World y; give both x and y or neither."),
+        in: z.string().optional().describe("A canvas group id or unique reference to insert into."),
+      },
+      run: async ({ sticker: which, x, y, in: group }: { sticker: string; x?: number; y?: number; in?: string }, host) => {
+        const sticker = findSticker(which);
+        if (!sticker) throw new Error(`no sticker "${which}" — try one of ${STICKERS.map((s) => s.id).join(", ")}, or the emoji itself`);
+        if ((x === undefined) !== (y === undefined)) throw new Error("give both x and y, or neither");
+        const canvas = await host.canvas();
+        const file = stickerFile(sticker);
+        const item = await canvas.add({
+          content: file.body,
+          mime: STICKER_MIME,
+          filename: file.filename,
+          title: sticker.name,
+          size: { ...STICKER_SIZE },
+          ...(x !== undefined && y !== undefined ? { at: { x, y } } : {}),
+          ...(group === undefined ? {} : { in: group }),
+        });
+        return { itemId: item.id, sticker: sticker.id, title: item.title, x: item.x, y: item.y, containerId: item.containerId ?? null };
+      },
+    },
+  ],
 };
 
 export default stickersCli;

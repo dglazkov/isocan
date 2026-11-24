@@ -41,6 +41,7 @@ const sources = new Map([
   ["@isocan/core/packageroot", new URL("../../core/src/packageroot.ts", import.meta.url).href],
   ["@isocan/api", new URL("../../api/src/index.ts", import.meta.url).href],
   ["@isocan/core", new URL("../../core/src/index.ts", import.meta.url).href],
+  ["@isocan/house-agent", new URL("../../house-agent/src/index.ts", import.meta.url).href],
   ["@isocan/mcp", new URL("../../mcp/src/index.ts", import.meta.url).href],
   ["@isocan/rc", new URL("../../rc/src/index.ts", import.meta.url).href],
   ["@isocan/server/daemon", new URL("../../server/src/daemon.ts", import.meta.url).href],

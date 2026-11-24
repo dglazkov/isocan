@@ -1031,6 +1031,12 @@ export function attachWebSockets(
         })();
         return;
       }
+      if (message.type === "paint.ack") {
+        if (typeof message.seq === "number" && Number.isInteger(message.seq) && message.seq >= 0) {
+          presence.recordPaintAck(canvasId!, message.seq);
+        }
+        return;
+      }
       if (message.type !== "presence" || !message.sessionId || !message.actor?.id) return;
       const actor = message.actor;
       const revision = ++presenceRevision;
@@ -1054,6 +1060,7 @@ export function attachWebSockets(
           ...(message.signal !== undefined ? { signal: message.signal } : {}),
           // Every beat is the whole state, so a beat without a drag ends one.
           drag: message.drag ?? null,
+          ...(message.viewport !== undefined ? { viewport: message.viewport } : {}),
         });
       };
       if (vouched.has(actor.id)) { void beat().catch(() => {}); return; }

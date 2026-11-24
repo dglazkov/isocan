@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>isocan Clipper</title>
+    <style>
+      body { font-family: system-ui, sans-serif; width: 280px; margin: 12px; display: flex; flex-direction: column; gap: 8px; }
+      label { display: flex; flex-direction: column; font-size: 12px; gap: 2px; }
+      input { padding: 6px; font-size: 12px; }
+      button { padding: 8px; font-weight: 600; cursor: pointer; }
+      #status { font-size: 12px; min-height: 16px; }
+    </style>
+  </head>
+  <body>
+    <label>Home URL <input id="home" placeholder="http://127.0.0.1:4173" /></label>
+    <label>Canvas ID <input id="canvas" placeholder="prj_..." /></label>
+    <label>Bearer Token <input id="token" type="password" placeholder="Optional badge token" /></label>
+    <button id="clip" type="button">Clip active tab</button>
+    <div id="status" role="status"></div>
+    <script type="module">
+      const homeEl = document.getElementById("home");
+      const canvasEl = document.getElementById("canvas");
+      const tokenEl = document.getElementById("token");
+      const statusEl = document.getElementById("status");
+      chrome.storage?.local.get(["home", "canvas", "token"], (saved) => {
+        if (saved.home) homeEl.value = saved.home;
+        if (saved.canvas) canvasEl.value = saved.canvas;
+        if (saved.token) tokenEl.value = saved.token;
+      });
+      document.getElementById("clip").addEventListener("click", () => {
+        const config = { home: homeEl.value.trim(), canvasId: canvasEl.value.trim(), token: tokenEl.value.trim() };
+        chrome.storage?.local.set({ home: config.home, canvas: config.canvasId, token: config.token });
+        statusEl.textContent = "Clipping…";
+        chrome.runtime.sendMessage({ type: "clipper:capture", ...config }, (res) => {
+          statusEl.textContent = res?.ok ? `Clipped ${res.itemId}` : (res?.error ?? "Clip failed");
+        });
+      });
+    </script>
+  </body>
+</html>
