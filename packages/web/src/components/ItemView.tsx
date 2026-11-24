@@ -774,8 +774,8 @@ function ItemViewInner({
       if (!moved) {
         window.clearTimeout(holdTimer);
         if (ui.holdLiftedId === item.id) ui.setHoldLiftedId(null);
-        semantic?.lift();
       }
+      if (!moved) semantic?.lift();
       moved = true;
       let dx = (ev.clientX - start.x) / scale;
       let dy = (ev.clientY - start.y) / scale;
