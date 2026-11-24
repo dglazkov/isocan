@@ -125,6 +125,12 @@ interface UiStore {
   selectedItemIds: string[];
   fannedItemId: string | null;
   drag: DragState | null;
+  /** Live neighbour displacements while Option/Alt is held during a drag (ADR 0288). */
+  makeRoomOffsets: ReadonlyMap<string, { dx: number; dy: number }> | null;
+  setMakeRoomOffsets: (offsets: ReadonlyMap<string, { dx: number; dy: number }> | null) => void;
+  /** Item lifted by a 200ms stationary press-and-hold before drag travel begins (ADR 0289). */
+  holdLiftedId: string | null;
+  setHoldLiftedId: (id: string | null) => void;
   resize: ResizeState | null;
   /** A group gesture's live boxes. `lift` is set by a pointer drag once the
    * press has become one — the gesture's roots, so a dragged group lifts its
@@ -751,6 +757,10 @@ export const useUiStore = create<UiStore>((set, get) => {
     selectedItemIds: [],
     fannedItemId: null,
     drag: null,
+    makeRoomOffsets: null,
+    setMakeRoomOffsets: (makeRoomOffsets) => set({ makeRoomOffsets }),
+    holdLiftedId: null,
+    setHoldLiftedId: (holdLiftedId) => set({ holdLiftedId }),
     resize: null,
     groupPreview: null,
     groupDropTargetId: null,

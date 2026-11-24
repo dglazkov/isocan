@@ -1621,8 +1621,9 @@ img { height: auto; }
    as put down rather than let go (the settle is `.item`'s own transition) —
    and reduced motion swaps it instantly. */
 .item.lifted { box-shadow: var(--shadow-lift); transition-duration: 120ms; z-index: 2; }
+.item.make-room-shifted { transition: left 140ms cubic-bezier(0.2, 0, 0, 1), top 140ms cubic-bezier(0.2, 0, 0, 1); }
 @media (prefers-reduced-motion: reduce) {
-  .item, .item.lifted { transition: none; }
+  .item, .item.lifted, .item.make-room-shifted { transition: none; }
 }
 /* The read-only canvas (roles phase 1): nothing here is a handle, so nothing
    here wears a grab cursor. The daemon refuses the write; this stops the

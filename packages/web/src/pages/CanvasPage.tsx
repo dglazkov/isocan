@@ -885,11 +885,32 @@ function CanvasSurface({
         // ⌘/Ctrl + arrow walks the selection to the next item that way.
         e.preventDefault();
         jump(e.key as Direction);
-      } else if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && !e.shiftKey && !e.altKey && ui.selectedItemIds.length === 1 && useCanvasStore.getState().canvas?.items[ui.selectedItemIds[0]!]?.groupLayout?.display === "stack") {
-        // ← → on a selected stack flip which card is in front (this viewer's
+      } else if (
+        (e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "[" || e.key === "]") &&
+        !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey &&
+        ui.selectedItemIds.length === 1 &&
+        useCanvasStore.getState().canvas?.items[ui.selectedItemIds[0]!]?.groupLayout?.display === "stack"
+      ) {
+        // ← → and [ ] on a selected stack flip which card is in front (this viewer's
         // view, never stored); ↑ ↓ and ⇧-arrows still move it.
         e.preventDefault();
-        window.dispatchEvent(new CustomEvent("isocan:stack-flip", { detail: { groupId: ui.selectedItemIds[0], step: e.key === "ArrowRight" ? 1 : -1 } }));
+        const step = e.key === "ArrowRight" || e.key === "]" ? 1 : -1;
+        window.dispatchEvent(new CustomEvent("isocan:stack-flip", { detail: { groupId: ui.selectedItemIds[0], step } }));
+      } else if (
+        (e.key === "[" || e.key === "]") &&
+        !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey &&
+        ui.selectedItemIds.length === 1 &&
+        canEditNow()
+      ) {
+        // [ / ] on a selected multi-version item cycles its active version in place.
+        const chosen = useCanvasStore.getState().canvas?.items[ui.selectedItemIds[0]!];
+        if (chosen && chosen.versions.length > 1) {
+          e.preventDefault();
+          const idx = chosen.versions.findIndex((v) => v.id === chosen.currentVersionId);
+          const step = e.key === "]" ? 1 : -1;
+          const next = chosen.versions[((idx < 0 ? 0 : idx) + step + chosen.versions.length) % chosen.versions.length]!;
+          void sendEchoed(canvasId!, actor, { type: "item.setCurrentVersion", itemId: chosen.id, versionId: next.id });
+        }
       } else if (NUDGES[e.key]) {
         // Arrows nudge the selection; with nothing selected they are the
         // browser's again (and scrolling a canvas page does nothing anyway).
