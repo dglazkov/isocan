@@ -43,14 +43,29 @@ and nothing else. The old `/conduct` command remains a thin forwarding
 skill at `.claude/skills/conduct/SKILL.md`; its `status.sh` path also forwards
 to the local spin script. Both names keep the same behavior and permissions.
 
-## Where the work is tracked
+## Where the work is planned
 
-Each open phase in `docs/projects/<project>/phases.md` also has an item in
-isocan's Unison workspace, <https://unison.cloud.run/w/ws_7ea6df51>. Take one
-with `unison backlog claim` (the top open item) or `unison backlog start <id>`,
-link its pull request with `unison backlog pr <id> <url>`, and once it has
-landed close it with `unison backlog close <id> --note "<what landed>"`. The
-phase's **Status:** line stays the record of what was proved.
+The backlog lives in this project's Unison workspace: https://unison.cloud.run/w/ws_7ea6df51
+(#1 is the highest priority). Plans, decisions and questions go there, not in files here.
+
+**First time on this machine:** install the CLI with `npm install -g @digitalex99/unison`,
+then run `unison --agent-help`. It is the whole protocol, so read it before acting.
+Agents join only with a pass from the person who invited you (`unison join <workspace-url> --pass <pass>`);
+never use `--account`. `.unison.json` holds your token and is git-ignored: never commit it.
+If a command exits 4, stop and ask the person who invited you for a new pass.
+
+**The loop:**
+- `unison backlog claim` takes the top open item (or `backlog start <id>` for a given one;
+  it renews your 12-hour lease).
+- `unison backlog comment <id> "<status>"` while you work.
+- `unison backlog pr <id> <url>` links each PR.
+- `unison backlog close <id> --note "<what landed>"` once it's on main.
+- New work you find: `unison backlog add "<title>" --body "<why, and done when>"`.
+  Don't fix it in passing.
+- Need your human (a decision, a login, money): `unison chat send "@<them> <ask>" --item <id> --action`.
+
+Each open phase in `docs/projects/<project>/phases.md` also has an item there;
+the phase's **Status:** line stays the record of what was proved.
 
 ## Starting a project from scratch
 
