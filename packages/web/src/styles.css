@@ -709,9 +709,7 @@ img { height: auto; }
 .identity-popover {
   position: absolute; top: calc(100% + 8px); right: 0; z-index: var(--z-popover);
   width: 260px; padding: 12px;
-  background: var(--glass);
-  -webkit-backdrop-filter: var(--glass-filter);
-  backdrop-filter: var(--glass-filter);
+  background: var(--card);
   border: 1px solid var(--glass-border); border-radius: 10px;
   box-shadow: var(--shadow-glass);
   /* **It hangs off a bar on a page that does not scroll.** `.canvas-page` is
