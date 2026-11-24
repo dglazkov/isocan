@@ -3771,6 +3771,9 @@ button.mt-card:hover { border-color: var(--accent); }
 .module-overlays-left { left: calc(var(--edge) + 56px); }
 .module-overlays-right { right: calc(var(--edge) + 60px); }
 .module-overlay { pointer-events: auto; position: relative; display: flex; flex-direction: column; }
+/* Hide empty overlay shells when a module's overlay component returns null —
+   without this, <FloatingHandles /> alone renders a hollow glass pill beside the rail. */
+.module-overlay:not(:has(> :not(.float-handle))) { display: none; }
 
 .tool-rail {
   position: absolute; right: var(--edge); top: var(--edge); bottom: var(--edge);
