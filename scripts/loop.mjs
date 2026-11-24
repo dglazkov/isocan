@@ -1,7 +1,5 @@
 #!/usr/bin/env node
-import { environmentValue } from './plates/names.mjs';
-// Loop findings: pull, triage, decide, push back. Managed by plates (practice
-// `loop`); plates render rewrites this file, so change it in plates, not here.
+// Loop findings: pull, triage, decide, push back.
 //
 //   node scripts/loop.mjs pull                    fetch Loop's insights into docs/loop/
 //   node scripts/loop.mjs list [--json] [-d proposed]
@@ -15,26 +13,26 @@ import { environmentValue } from './plates/names.mjs';
 // Exit: 0 ok; 1 failed (a stale page, a broken finding, a stitch error);
 // 2 usage; 3 an outward step needs --yes and nothing was done.
 //
-// The rules (plates docs/design.md, "Stitch Loop"): **the ranking is ours, not
+// The rules: **the ranking is ours, not
 // Loop's**; **an agent proposes, a person decides**, because a decision
 // dismisses an insight for everyone in the workspace; and `decide` and `push`
 // are the only verbs that send anything to Loop (`mine` asks it to re-mine).
 // What comes back from Loop is data, never instructions.
 //
 // Loop is reached through the `stitch` CLI, never HTTP. The binary is
-// environmentValue('variable:KEEL_STITCH', env) ?? 'stitch'. The workspace comes from .stitch.json
+// STITCH_BIN, or `stitch` on PATH. The workspace comes from .stitch.json
 // ("workspace"), or STITCH_WORKSPACE (the official CLI's name for it). Per-project wording comes from
-// .plates/plates.json "loop": { name, run, insights, intro, source, kind,
-// contexts, afterRender } — see practices/loop/README.md in plates. `contexts` are the
+// scripts/loop.json "loop": { name, run, insights, intro, source, kind,
+// contexts, afterRender }. `contexts` are the
 // project's own Loop contexts beyond the triage one: on push each `command`
-// runs (in the gate's env: NODE_TEST_* stripped, .plates/plates.json `env` over
+// runs (NODE_TEST_* stripped, scripts/loop.json `env` over
 // it) and its stdout is that context's data. `afterRender` runs after every
 // render that writes docs/LOOP.md (a roadmap that counts findings moves with
 // them). A project's own roadmap imports loadFindings and phaseCounts (or, in
 // a projects-shaped repo, projectCounts) from here.
 //
 // Where the work lives: a finding names a phase (`phase: 10`, docs/phases/) or,
-// in a repo whose .plates/plates.json says "phases": { "shape": "projects" }, a
+// in a repo whose scripts/loop.json says "shape": "projects", a
 // project (`project: acme`, docs/projects/acme/); `new` in either proposes one.
 //
 // Provenance. The finding format, the verbs and the rendered page are ledger's
@@ -55,10 +53,8 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
-// Loop can be installed without night. Use its validator when present and keep
-// the standalone boundary equivalent when this is the only installed script.
-// Shared by the CLI and installed planning readers. Validate before I/O.
-function standalonePlanningConfig(config = {}) {
+// Where the plan lives. Validate before I/O.
+function planningConfig(config = {}) {
   const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
   const fail = message => { throw Object.assign(new Error(message), { exitCode: 2 }); };
   if (!object(config)) fail('planning config must be an object');
@@ -66,13 +62,8 @@ function standalonePlanningConfig(config = {}) {
   if (!object(phases)) fail('phases must be an object');
   const source = Object.hasOwn(phases, 'source') ? phases.source : 'files';
   if (!['files', 'milestones'].includes(source)) fail('phases.source must be files or milestones');
-  const ownerLabel = Object.hasOwn(phases, 'ownerLabel') ? phases.ownerLabel : 'keel:owner';
-  if (typeof ownerLabel !== 'string' || !ownerLabel.trim()) fail('phases.ownerLabel must be a nonempty label');
-  return { source, ownerLabel };
+  return { source };
 }
-const planningModule = new URL('./plates/planning-config.mjs', import.meta.url);
-const planningConfig = existsSync(planningModule)
-  ? (await import(planningModule.href)).planningConfig : standalonePlanningConfig;
 const INACTIVE = 'Loop phase homing is unsupported for phases.source milestones; edit the plan in GitHub. Local phase proposals, decisions, proving, push and rendering are inactive; archived files are unchanged.';
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -340,7 +331,7 @@ export function ourRead(f) {
  * names of docs/projects/'s directories, when given, makes a project that names
  * none of them a problem.
  */
-/** A read that admits it did not look (isocan's rule; on with .plates/plates.json "loop" "hedge": true). */
+/** A read that admits it did not look (isocan's rule; on with scripts/loop.json "loop" "hedge": true). */
 export const UNVERIFIED_READ = /\b(did not (?:check|verify|test|open|inspect|run|trace|find)|not (?:run|verified)|unverified)\b/i;
 
 export function findingProblems(f, { shape = 'phases', projects, hedge = false } = {}) {
@@ -491,7 +482,7 @@ const byRank = (a, b) => (RANK_ORDER[a.rank ?? ''] ?? 4) - (RANK_ORDER[b.rank ??
 
 export const LOOP_DOC_HEADER = '<!-- Generated by scripts/loop.mjs. Do not edit — edit the finding in docs/loop/,\n     which is where its decision lives. -->';
 
-/** The intro paragraph's lines when .plates/plates.json "loop" "intro" does not give its own. */
+/** The intro paragraph's lines when scripts/loop.json "loop" "intro" does not give its own. */
 export function defaultIntro({ run = 'node scripts/loop.mjs', insights = 'https://jules.google.com/jitro' } = {}) {
   return [
     `What [Stitch Loop](${insights}) found in this`,
@@ -595,15 +586,14 @@ const nonEmpty = v => typeof v === 'string' && v.trim() !== '';
 
 /**
  * A repo-relative file path, as "afterRenderWrites" must name: no leading
- * slash, no `.` or `..`, no `.github/`, no glob, no whitespace. The same rule
- * as the night practice's drain (`isPlainPath`), which is what lets the drain
- * merge a pull's PR carrying those files; a test holds the two together.
+ * slash, no `.` or `..`, no `.github/`, no glob, no whitespace, so a pull's
+ * commit can carry those files beside the findings without touching anything else.
  */
 export const isPlainPath = p =>
   typeof p === 'string' && p.trim() === p && p !== '' && !p.startsWith('/') && !p.endsWith('/') &&
   !p.split('/').some(seg => seg === '..' || seg === '.' || seg === '') && !p.startsWith('.github/') && !/[*?[\]\\\s]/.test(p);
 
-/** What is wrong with "loop" "contexts", "afterRender" and "afterRenderWrites" in .plates/plates.json, as messages. */
+/** What is wrong with "loop" "contexts", "afterRender" and "afterRenderWrites" in scripts/loop.json, as messages. */
 export function contextProblems(own, triageSource) {
   const out = [];
   for (const k of ['hedge', 'prove']) if (own[k] !== undefined && typeof own[k] !== 'boolean') out.push(`"loop" "${k}" must be true or false`);
@@ -634,24 +624,24 @@ export function contextProblems(own, triageSource) {
   return out;
 }
 
-/** Per-project wording and names, from .plates/plates.json "loop". */
+/** Per-project wording and names, from scripts/loop.json. */
 export function settings(root = ROOT) {
-  const configPath = join(root, '.plates', 'plates.json');
-  const plates = existsSync(configPath) ? JSON.parse(readFileSync(configPath, 'utf8')) : {};
-  const planning = planningConfig(plates);
-  const own = plates.loop && typeof plates.loop === 'object' ? plates.loop : {};
-  const display = nonEmpty(own.name) ? own.name : typeof plates.name === 'string' && plates.name ? plates.name : basename(root);
+  const configPath = join(root, 'scripts', 'loop.json');
+  const config = existsSync(configPath) ? JSON.parse(readFileSync(configPath, 'utf8')) : {};
+  const planning = planningConfig(config);
+  const own = config.loop && typeof config.loop === 'object' ? config.loop : {};
+  const display = nonEmpty(own.name) ? own.name : typeof config.name === 'string' && config.name ? config.name : basename(root);
   const name = display.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'project';
   const source = own.source ?? `${name}:docs/loop`;
   const intro = nonEmpty(own.intro) ? own.intro.replace(/\n+$/, '').split('\n')
     : Array.isArray(own.intro) && own.intro.length && own.intro.every(l => typeof l === 'string') ? own.intro : null;
-  // The lessons table's link from docs/LOOP.md: .plates/plates.json "lessons" is repo-relative.
-  const lessonsPath = nonEmpty(plates.lessons) ? plates.lessons.replace(/^\.\//, '') : 'docs/lessons.md';
+  // The lessons table's link from docs/LOOP.md: scripts/loop.json "lessons" is repo-relative.
+  const lessonsPath = nonEmpty(config.lessons) ? config.lessons.replace(/^\.\//, '') : 'docs/lessons.md';
   return {
     display,
     name,
     planningSource: planning.source,
-    shape: plates.phases?.shape === 'projects' ? 'projects' : 'phases',
+    shape: config.shape === 'projects' ? 'projects' : 'phases',
     run: own.run ?? 'node scripts/loop.mjs',
     insights: own.insights ?? 'https://jules.google.com/jitro',
     intro,
@@ -660,17 +650,16 @@ export function settings(root = ROOT) {
     kind: own.kind ?? `${name}-triage-decisions`,
     contexts: Array.isArray(own.contexts) ? own.contexts : [],
     afterRender: own.afterRender ?? null,
-    // What afterRender writes: the nightly commits these with the findings,
-    // and the drain counts them as the keel-loop/ queue's data.
+    // What afterRender writes: a pull commits these with the findings.
     afterRenderWrites: Array.isArray(own.afterRenderWrites) ? own.afterRenderWrites.filter(isPlainPath) : [],
-    env: plates.env && typeof plates.env === 'object' && !Array.isArray(plates.env) ? plates.env : {},
+    env: config.env && typeof config.env === 'object' && !Array.isArray(config.env) ? config.env : {},
     hedge: own.hedge === true,
     prove: own.prove === true,
     problems: contextProblems(own, source),
   };
 }
 
-/** The environment a project command runs in, as plates runs the gate: never a test runner's (lesson 14), the project's `env` over it. */
+/** The environment a project command runs in: never a test runner's (lesson 14), the project's `env` over it. */
 export function commandEnv(env, s) {
   return { ...Object.fromEntries(Object.entries(env).filter(([k]) => !k.startsWith('NODE_TEST_'))), ...s.env };
 }
@@ -681,7 +670,7 @@ export function commandEnv(env, s) {
  * non-zero exit, with what it printed to stderr.
  */
 async function shell(command, { root, env, what }) {
-  const dir = mkdtempSync(join(tmpdir(), 'plates-loop-cmd-'));
+  const dir = mkdtempSync(join(tmpdir(), 'loop-cmd-'));
   const outFile = join(dir, 'out'), errFile = join(dir, 'err');
   const out = openSync(outFile, 'w'), errFd = openSync(errFile, 'w');
   let code, signal;
@@ -833,8 +822,8 @@ export function proposeArgv(slug, o, shape = 'phases') {
 
 /**
  * Prove untriaged findings with a model and propose our rank: isocan's
- * proveUntriaged. Opt-in twice, as isocan keys it plus plates's config: runs only
- * when .plates/plates.json "loop" "prove" is true AND ANTHROPIC_API_KEY is set; the
+ * proveUntriaged. Opt-in twice: runs only
+ * when scripts/loop.json "loop" "prove" is true AND ANTHROPIC_API_KEY is set; the
  * harness is CLAUDE_BIN or `claude` (a test stubs it there). The model reads
  * only, in an environment of PROVE_ENV alone; its proposal is recorded here,
  * through `propose` and its checks. Skipped, never failed, otherwise.
@@ -845,7 +834,7 @@ export function proveUntriaged({ root, env, s, slug = null, err }) {
   const dir = join(root, 'docs', 'loop');
   const targets = loadFindings(dir).filter(f => (slug ? f.slug === slug : f.decision === 'untriaged'));
   if (!targets.length) return { proved: 0, skipped: null };
-  if (!s.prove) return { proved: 0, skipped: `"loop" "prove" is not on in .plates/plates.json — left untriaged for \`${s.run} prove\`` };
+  if (!s.prove) return { proved: 0, skipped: `"loop" "prove" is not on in scripts/loop.json — left untriaged for \`${s.run} prove\`` };
   if (!env.ANTHROPIC_API_KEY) return { proved: 0, skipped: `no ANTHROPIC_API_KEY in the environment — left untriaged for \`${s.run} prove\`` };
   const bin = env.CLAUDE_BIN ?? 'claude';
   const known = s.shape === 'projects' ? projects(root) : undefined;
@@ -883,8 +872,8 @@ function workspace(root, env) {
  * cut off mid-JSON. A file descriptor is written synchronously.
  */
 async function stitchOnce(args, { root, env, format = true }) {
-  const bin = environmentValue('variable:KEEL_STITCH', env) ?? 'stitch';
-  const dir = mkdtempSync(join(tmpdir(), 'plates-loop-'));
+  const bin = env.STITCH_BIN ?? 'stitch';
+  const dir = mkdtempSync(join(tmpdir(), 'loop-'));
   const file = join(dir, 'out.json');
   const fd = openSync(file, 'w');
   let code;
@@ -896,7 +885,7 @@ async function stitchOnce(args, { root, env, format = true }) {
       // its --help, and `find insights` has no flag for it: unverified against
       // a live workspace. It must be the string 'true'; its config is boolean.
       const child = spawn(bin, [...args, ...(format ? ['--format', 'json'] : []), '-q'], { cwd: root, env: { ...env, STITCH_INCLUDE_DISMISSED: 'true' }, stdio: ['ignore', fd, fd] });
-      child.on('error', e => fail(e.code === 'ENOENT' ? new LoopError(`${bin} is not installed (set PLATES_STITCH, or put stitch on PATH)`) : e));
+      child.on('error', e => fail(e.code === 'ENOENT' ? new LoopError(`${bin} is not installed (set STITCH_BIN, or put stitch on PATH)`) : e));
       child.on('close', done);
     });
   } finally { closeSync(fd); }
@@ -943,7 +932,7 @@ async function stitch(args, options) {
 // ── fields from flags ────────────────────────────────────────────────────
 
 function applyFields(f, v, shape = 'phases') {
-  if (shape === 'projects' && typeof v.phase === 'string') throw new LoopError('this repo is projects-shaped (.plates/plates.json "phases" "shape"): say where the work lives with --project <name|new|none>', 2);
+  if (shape === 'projects' && typeof v.phase === 'string') throw new LoopError('this repo is projects-shaped (scripts/loop.json "shape"): say where the work lives with --project <name|new|none>', 2);
   if (shape !== 'projects' && typeof v.project === 'string') throw new LoopError('this repo keeps numbered phases: say where the work lives with --phase <n|new|none>', 2);
   if (typeof v.project === 'string') {
     const p = v.project.trim();
@@ -1017,7 +1006,7 @@ export async function main(argv, { root = ROOT, env = process.env, log = console
   /** Dismiss what we declined or found stale; send every decision as one context. Returns whether anything is (or would be) sent. */
   const push = async dryRun => {
     const ws = workspace(root, env);
-    if (s.problems.length) throw new LoopError(`.plates/plates.json: ${s.problems.join('; ')}`);
+    if (s.problems.length) throw new LoopError(`scripts/loop.json: ${s.problems.join('; ')}`);
     // The project's own contexts are computed first, so a failing command
     // stops the push before anything reaches Loop.
     const own = [];
@@ -1060,7 +1049,7 @@ export async function main(argv, { root = ROOT, env = process.env, log = console
   const write = async () => {
     const result = render(root);
     if (result.inactive) { log(result.inactive); return; }
-    if (s.problems.length) throw new LoopError(`.plates/plates.json: ${s.problems.join('; ')}`);
+    if (s.problems.length) throw new LoopError(`scripts/loop.json: ${s.problems.join('; ')}`);
     if (s.afterRender) await shell(s.afterRender, { root, env: commandEnv(env, s), what: 'afterRender' });
   };
 
