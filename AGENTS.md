@@ -46,7 +46,8 @@ to the local spin script. Both names keep the same behavior and permissions.
 ## Where the work is planned
 
 The backlog lives in this project's Unison workspace: https://unison.cloud.run/w/ws_7ea6df51
-(#1 is the highest priority). Plans, decisions and questions go there, not in files here.
+(#1 is the highest priority). Work is claimed and tracked there; each project's plan stays in
+`docs/projects/<name>/phases.md`, and each open phase has an item in the workspace.
 
 **First time on this machine:** install the CLI with `npm install -g @digitalex99/unison`,
 then run `unison --agent-help`. It is the whole protocol, so read it before acting.
@@ -64,8 +65,7 @@ If a command exits 4, stop and ask the person who invited you for a new pass.
   Don't fix it in passing.
 - Need your human (a decision, a login, money): `unison chat send "@<them> <ask>" --item <id> --action`.
 
-Each open phase in `docs/projects/<project>/phases.md` also has an item there;
-the phase's **Status:** line stays the record of what was proved.
+A phase's **Status:** line in `phases.md` stays the record of what was proved.
 
 ## Starting a project from scratch
 
