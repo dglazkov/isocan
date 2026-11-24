@@ -18,8 +18,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   deckStep,
   deckTransitionOf,
+  isDeckTransitionPiece,
   itemPath,
   morphPlan,
+  pieceSwapPlan,
   sceneFromMessage,
   visualFaceOf,
   type Item,
@@ -70,13 +72,17 @@ interface Box {
  * that live slide, so the stage simply stops covering it. Not ready, and the
  * answer is no: the flip fades, because a presenter's arrow never waits.
  *
- * Renders nothing and loads nothing unless the canvas chose `morph`.
+ * The same twins play the flat content swaps — `poof`, `drift`, `rise` —
+ * where the slide's surface holds still and only its pieces leave and join
+ * (`pieceSwapPlan`): no tilt, two keyframes a piece, staggered.
+ *
+ * Renders nothing and loads nothing unless the canvas chose one of those.
  */
 export function MorphStage({ canvasId, itemId }: { canvasId: string; itemId: string }) {
   const canvas = useCanvasStore((s) => s.canvas);
   // Behind Presentation Transitions (`lib/deckflip.ts`): off, no twin mounts.
   const transitionsOn = useTransitionsOn();
-  const morphing = useCanvasStore((s) => deckTransitionOf(s.record ?? {}) === "morph") && transitionsOn;
+  const morphing = useCanvasStore((s) => isDeckTransitionPiece(deckTransitionOf(s.record ?? {}))) && transitionsOn;
   const still = useMemo(() => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches, []);
   const active = morphing && !still;
 
@@ -193,7 +199,7 @@ export function MorphStage({ canvasId, itemId }: { canvasId: string; itemId: str
     let done = 0;
     let giveUp = 0;
     const post = (hash: string, message: object) => frames.current.get(hash)?.contentWindow?.postMessage(message, "*");
-    setMorphPlayer((path, dir, go) => {
+    setMorphPlayer((path, dir, transition, go) => {
       const now = latest.current;
       const from = now.slides.find((s) => s.itemId === now.itemId)?.hash;
       const to = now.slides.find((s) => itemPath(canvasId, s.itemId) === path)?.hash;
@@ -203,8 +209,11 @@ export function MorphStage({ canvasId, itemId }: { canvasId: string; itemId: str
       const out = frames.current.get(from);
       const into = frames.current.get(to);
       if (!a || !b || !out?.contentWindow || !into?.contentWindow) return false;
-      const plan = morphPlan(a, b, dir);
-      const ms = DECK_TRANSITION_MS.morph;
+      const ms = DECK_TRANSITION_MS[transition];
+      const plan =
+        transition === "poof" || transition === "drift" || transition === "rise"
+          ? pieceSwapPlan(transition, a, b, dir, ms)
+          : morphPlan(a, b, dir);
       armedBy.current = new Set();
       let started = false;
       const start = () => {
@@ -213,8 +222,11 @@ export function MorphStage({ canvasId, itemId }: { canvasId: string; itemId: str
         clearTimeout(giveUp);
         post(from, { type: "isocan:morph:play" });
         post(to, { type: "isocan:morph:play" });
-        // The two frames tilt as one.
-        sceneAnims = [out, into].map((frame) => frame.animate(plan.scene, { duration: ms, fill: "both", easing: "linear" }));
+        // The two frames tilt as one — the morph only; a flat swap's surface
+        // holds still.
+        sceneAnims = plan.scene.length
+          ? [out, into].map((frame) => frame.animate(plan.scene, { duration: ms, fill: "both", easing: "linear" }))
+          : [];
         setPlaying({ from, to, armed: true });
         document.documentElement.dataset.morph = "playing";
         go();

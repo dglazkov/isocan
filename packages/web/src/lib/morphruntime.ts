@@ -30,7 +30,8 @@ import { MORPH_MAX_PIECES } from "@isocan/core";
  * 1. once the page has loaded and its fonts are in, it lists the slide's
  *    pieces — runs of words, pictures, decorated boxes — with where each one
  *    sits, and posts the list (`isocan:morph:scene`);
- * 2. when ARMED with keyframes (`isocan:morph:arm`), it sets them on those
+ * 2. when ARMED with keyframes (`isocan:morph:arm`) — the morph's, or a
+ *    flat content swap's (`poof`, `drift`, `rise`) — it sets them on those
  *    same elements paused at their first frame, paints that frame, and says
  *    so (`isocan:morph:armed`); on `isocan:morph:play` it lets them run, and
  *    on `isocan:morph:reset` it stops them, which leaves the page as it was.
@@ -143,9 +144,12 @@ addEventListener("message",function(e){
   if(d.type!=="isocan:morph:arm"||!d.side)return;
   reset();prep();pose(true);var ms=+d.ms||1400;
   anims.push(ground.animate(d.side.ground,{duration:ms,fill:"both",easing:"linear"}));
+  /* A track may carry its own timing: the flat content swaps run two
+     keyframes per piece, staggered, on the compositor; the morph samples
+     the whole beat linearly. */
   d.side.tracks.forEach(function(t){
     var el=els[t.i];if(!el)return;
-    anims.push(el.animate(t.frames,{duration:ms,fill:"both",easing:"linear"}));
+    anims.push(el.animate(t.frames,{duration:+t.duration||ms,delay:+t.delay||0,fill:"both",easing:t.easing||"linear"}));
   });
   anims.forEach(function(a){a.pause();a.currentTime=0});
   requestAnimationFrame(function(){requestAnimationFrame(function(){parent.postMessage({type:"isocan:morph:armed"},"*")})});

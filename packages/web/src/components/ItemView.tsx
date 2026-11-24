@@ -2327,6 +2327,9 @@ function HtmlView({
       ref={setStack}
       data-flip={motion?.dir}
       data-transition={motion?.transition}
+      // The slide on screen has been shown: what is under it is covered, so
+      // a warm neighbour may stand there painted (presentation.css).
+      data-settled={shown.has(visible) ? "" : undefined}
       style={motion ? ({ "--deck-ms": `${motion.ms}ms` } as React.CSSProperties) : undefined}
     >
       {mounted.map((one) => (
