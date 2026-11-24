@@ -3296,7 +3296,9 @@ to bottom, left to right. Marking narrows the walk to just the slides:
   opens the same view with Save as PDF and Download deck.html; both surfaces
   write the same HTML file from core's `deckHtml`.
 - `isocan slides transition [motion]` — how full screen moves from slide to
-  slide, for everybody watching: `push` (the default), `fade`, `zoom`, the
+  slide, for everybody watching: `push` (the default), `fade`, `wipe`,
+  `zoom`; three quick content swaps — `poof`, `drift`, `rise` — where the
+  slide's background holds still and only its pieces leave and join; the
   four 3D ones — `morph`, `depth` (the slide lifts into 3D, glides to the
   next, lands flat), `cube`, `flip` — or `cut` (`none` works too) for no
   motion. No argument says which one the deck uses and lists the rest. A
@@ -3315,6 +3317,13 @@ to bottom, left to right. Marking narrows the walk to just the slides:
   name anything that should travel with `data-morph="<name>"` on both slides
   (it wins over every guess). It works between two HTML screens; any other
   flip under `morph` fades.
+- **`poof`, `drift`, `rise`** are for decks whose slides share a background:
+  the surface stays put, the old slide's pieces poof away (or glide aside, or
+  lift off) one after another, and the next slide's pieces arrive the same
+  way — a third of a second or so, no 3D. Chrome that sits in the same place
+  on both slides (a footer, a logo) stays pinned, and a big panel the content
+  sits on counts as background. Between two screens they move each piece;
+  for anything else they move the whole slide the same way.
 
 **Speaker notes** are text items that point at their slide, kept under it on
 the canvas where the deck is arranged — so a person reads the slide and what

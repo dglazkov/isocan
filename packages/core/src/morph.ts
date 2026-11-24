@@ -79,16 +79,29 @@ interface MorphKeyframe {
   opacity: number;
 }
 
+/** One piece's animation track: keyframes plus optional timing so fast 2D
+ *  content swaps can run 2-keyframe staggered compositor animations instead
+ *  of sampling every beat. */
+interface MorphTrack {
+  i: number;
+  frames: MorphKeyframe[];
+  delay?: number;
+  duration?: number;
+  easing?: string;
+}
+
 /** Everything one slide's runtime plays: its pieces and its ground. */
 interface MorphSide {
-  tracks: Array<{ i: number; frames: MorphKeyframe[] }>;
-  /** The slide's own background, as a layer of its own: it drops away
-   *  beneath the pieces as they lift, which is most of what makes them read
-   *  as LIFTING rather than merely growing. */
+  tracks: MorphTrack[];
+  /** The slide's own background (and any full-bleed backdrop), as a layer of
+   *  its own: in `morph` it drops away beneath the pieces; in 2D content
+   *  swaps (`poof`, `drift`, `rise`) it stays steady and quietly dissolves
+   *  only when the two slides wear different grounds. */
   ground: MorphKeyframe[];
 }
 
-/** Both sides, and the tilt the surface puts on the two frames together. */
+/** Both sides, and any whole-frame tilt the surface puts on the two frames
+ *  together (empty for flat 2D piece swaps). */
 interface MorphPlan {
   out: MorphSide;
   in: MorphSide;
@@ -96,8 +109,8 @@ interface MorphPlan {
 }
 
 /** How many pieces a slide may offer. Past this the motion is noise, and
- *  the message carrying the plan stops being small. */
-export const MORPH_MAX_PIECES = 160;
+ *  every extra promoted layer costs GPU memory across mounted twins. */
+export const MORPH_MAX_PIECES = 64;
 
 const norm = (s: string | undefined) => (s ?? "").replace(/\s+/g, " ").trim().toLowerCase();
 const centre = (p: MorphPiece) => ({ x: p.x + p.w / 2, y: p.y + p.h / 2 });
@@ -256,7 +269,7 @@ function css(own: Map2, piece: MorphPiece): string {
  *
  * `dir` is which way the deck went; the layers lean away from it.
  */
-export function morphPlan(a: MorphScene, b: MorphScene, dir: "next" | "prev", samples = 24): MorphPlan {
+export function morphPlan(a: MorphScene, b: MorphScene, dir: "next" | "prev", samples = 14): MorphPlan {
   const sign: 1 | -1 = dir === "next" ? 1 : -1;
   const w = b.w || a.w;
   const h = b.h || a.h;
@@ -348,6 +361,205 @@ export function morphPlan(a: MorphScene, b: MorphScene, dir: "next" | "prev", sa
       const r = (n: number) => Math.round(n * 100) / 100;
       return { offset, transform: `perspective(1800px) rotateX(${r(20 * t)}deg) rotateY(${r(-14 * sign * t)}deg) scale(${r(1 - 0.2 * t)})` };
     }),
+  };
+}
+
+/** The fast, flat 2D content-swap transitions: background stays steady while
+ *  only the slide's pieces leave and join. */
+export type PieceSwapKind = "poof" | "drift" | "rise";
+
+/** A big decorated box — a panel or card most of the slide sits on — is part
+ *  of the surface, not content: it stays put with the ground while the pieces
+ *  on it leave and join. */
+function isBackdrop(p: MorphPiece, scene: MorphScene): boolean {
+  return p.kind === "box" && p.w * p.h > 0.45 * scene.w * scene.h;
+}
+
+/** The pieces a content swap moves: every piece that is not surface and has
+ *  no moving piece above it. A piece on a backdrop counts as top-level, so a
+ *  deck whose content sits on one big card still comes apart piece by piece.
+ *  The returned pieces keep their own `parent`; a backdrop never moves, so a
+ *  piece's own transform is also its absolute one. */
+function swapRoots(scene: MorphScene): MorphPiece[] {
+  const byI = new Map(scene.pieces.map((p) => [p.i, p]));
+  return scene.pieces.filter((p) => {
+    if (isBackdrop(p, scene)) return false;
+    for (let q = byI.get(p.parent); q; q = byI.get(q.parent)) if (!isBackdrop(q, scene)) return false;
+    return true;
+  });
+}
+
+/** Two root pieces are anchored when they are the same content in the same
+ *  place (within 12px) — e.g. a persistent footer, header, or brand mark — so
+ *  they stay rock-steady instead of blinking out and back in. */
+function anchoredSets(a: readonly MorphPiece[], b: readonly MorphPiece[]): { a: Set<number>; b: Set<number> } {
+  const sameSpot = (pa: MorphPiece, pb: MorphPiece) =>
+    Math.abs(pa.x - pb.x) <= 12 &&
+    Math.abs(pa.y - pb.y) <= 12 &&
+    Math.abs(pa.w - pb.w) <= 12 &&
+    Math.abs(pa.h - pb.h) <= 12;
+  const sameContent = (pa: MorphPiece, pb: MorphPiece) => {
+    if (pa.kind !== pb.kind || pa.tag !== pb.tag) return false;
+    if (pa.key && pa.key === pb.key) return true;
+    if (pa.kind === "media") return Boolean(pa.src) && pa.src === pb.src;
+    if (pa.kind === "text") return norm(pa.text) !== "" && norm(pa.text) === norm(pb.text);
+    return false;
+  };
+  const outA = new Set<number>();
+  const outB = new Set<number>();
+  for (const pa of a) {
+    for (const pb of b) {
+      if (outB.has(pb.i)) continue;
+      if (sameContent(pa, pb) && sameSpot(pa, pb)) {
+        outA.add(pa.i);
+        outB.add(pb.i);
+        break;
+      }
+    }
+  }
+  return { a: outA, b: outB };
+}
+
+/** Centre-scaled transform for `transform-origin: 0 0`: keeps the piece's
+ *  visual centre fixed while contracting or blooming in place. */
+function centreScale(p: MorphPiece, s: number): string {
+  const r = (n: number) => Math.round(n * 100) / 100;
+  return `translate3d(${r(((1 - s) * p.w) / 2)}px,${r(((1 - s) * p.h) / 2)}px,0) scale(${s})`;
+}
+
+const IDENTITY_TRANSFORM = "translate3d(0px,0px,0) scale(1)";
+
+/**
+ * **Subtle 2D content-swap plans (`poof`, `drift`, `rise`)** — no 3D tilt,
+ * no surface seam, and only 2 keyframes per root piece so every track runs
+ * natively on the compositor thread.
+ *
+ * The slide's background (and any full-bleed backdrop) stays motionless on
+ * `out` and gently dissolves across the middle on `in`: when both slides wear
+ * the same or a similar background, the surface looks completely still while
+ * the content pieces leave and join. Persistent chrome in the same spot
+ * (`anchoredSets`) stays pinned too.
+ */
+export function pieceSwapPlan(
+  kind: PieceSwapKind,
+  a: MorphScene,
+  b: MorphScene,
+  dir: "next" | "prev",
+  totalMs = 460,
+): MorphPlan {
+  const sign: 1 | -1 = dir === "next" ? 1 : -1;
+  const rootsA = swapRoots(a);
+  const rootsB = swapRoots(b);
+  const anchored = anchoredSets(rootsA, rootsB);
+
+  // Visual stagger order: reading order (rows top-to-bottom, left-to-right),
+  // reversed along the travel axis when stepping backward.
+  const order = (list: MorphPiece[]) =>
+    [...list].sort((p, q) => {
+      if (kind === "drift") return sign * (p.x - q.x || p.y - q.y);
+      const row = Math.floor(p.y / 48) - Math.floor(q.y / 48);
+      return kind === "rise" ? sign * (row || p.x - q.x) : row || p.x - q.x;
+    });
+
+  const outDur = Math.round(totalMs * 0.36);
+  const outSpread = Math.min(Math.round(totalMs * 0.16), Math.max(0, rootsA.length - 1) * 12);
+  const inBase = Math.round(totalMs * 0.3);
+  const inDur = Math.round(totalMs * 0.48);
+  const inSpread = Math.min(totalMs - inBase - inDur, Math.max(0, rootsB.length - 1) * 16);
+
+  const outEase = "cubic-bezier(0.4, 0, 1, 1)";
+  const inEase = "cubic-bezier(0.22, 1, 0.36, 1)";
+
+  const leaveTransform = (p: MorphPiece) =>
+    kind === "poof"
+      ? centreScale(p, 0.92)
+      : kind === "drift"
+        ? `translate3d(${-sign * 32}px,0px,0) scale(1)`
+        : `translate3d(0px,${-sign * 16}px,0) scale(1)`;
+
+  const enterTransform = (p: MorphPiece) =>
+    kind === "poof"
+      ? centreScale(p, 0.92)
+      : kind === "drift"
+        ? `translate3d(${sign * 36}px,0px,0) scale(1)`
+        : `translate3d(0px,${sign * 22}px,0) scale(1)`;
+
+  const movingA = order(rootsA.filter((p) => !anchored.a.has(p.i)));
+  const movingB = order(rootsB.filter((p) => !anchored.b.has(p.i)));
+  const stepA = movingA.length > 1 ? outSpread / (movingA.length - 1) : 0;
+  const stepB = movingB.length > 1 ? inSpread / (movingB.length - 1) : 0;
+
+  const outTracks: MorphTrack[] = [
+    ...rootsA
+      .filter((p) => anchored.a.has(p.i))
+      .map((p) => ({
+        i: p.i,
+        frames: [
+          { offset: 0, transform: IDENTITY_TRANSFORM, opacity: 1 },
+          { offset: 1, transform: IDENTITY_TRANSFORM, opacity: 1 },
+        ],
+      })),
+    ...movingA.map((p, idx) => ({
+      i: p.i,
+      delay: Math.round(idx * stepA),
+      duration: outDur,
+      easing: outEase,
+      frames: [
+        { offset: 0, transform: IDENTITY_TRANSFORM, opacity: 1 },
+        { offset: 1, transform: leaveTransform(p), opacity: 0 },
+      ],
+    })),
+  ];
+
+  const inGround: MorphKeyframe[] = [
+    { offset: 0, transform: "none", opacity: 0 },
+    { offset: 0.32, transform: "none", opacity: 0 },
+    { offset: 0.62, transform: "none", opacity: 1 },
+    { offset: 1, transform: "none", opacity: 1 },
+  ];
+
+  const inTracks: MorphTrack[] = [
+    // A slide's backdrop cards are part of its surface: on the way in they
+    // arrive with its ground, never ahead of what is still leaving.
+    ...b.pieces
+      .filter((p) => isBackdrop(p, b))
+      .map((p) => ({
+        i: p.i,
+        easing: "ease-in-out",
+        frames: inGround.map((f) => ({ ...f, transform: IDENTITY_TRANSFORM })),
+      })),
+    ...rootsB
+      .filter((p) => anchored.b.has(p.i))
+      .map((p) => ({
+        i: p.i,
+        easing: "ease-in-out",
+        frames: inGround.map((f) => ({ ...f, transform: IDENTITY_TRANSFORM })),
+      })),
+    ...movingB.map((p, idx) => ({
+      i: p.i,
+      delay: Math.round(inBase + idx * stepB),
+      duration: inDur,
+      easing: inEase,
+      frames: [
+        { offset: 0, transform: enterTransform(p), opacity: 0 },
+        { offset: 1, transform: IDENTITY_TRANSFORM, opacity: 1 },
+      ],
+    })),
+  ];
+
+  return {
+    out: {
+      tracks: outTracks,
+      ground: [
+        { offset: 0, transform: "none", opacity: 1 },
+        { offset: 1, transform: "none", opacity: 1 },
+      ],
+    },
+    in: {
+      tracks: inTracks,
+      ground: inGround,
+    },
+    scene: [],
   };
 }
 

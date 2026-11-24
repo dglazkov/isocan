@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { FrameAnchor } from "../lib/frameanchor.ts";
 import type { Actor, Item } from "@isocan/core";
@@ -30,7 +30,7 @@ import { MorphStage } from "./MorphStage.tsx";
 import { FocusHeader } from "./FocusHeader.tsx";
 import { useCanEdit } from "../lib/capability.ts";
 import { findNextItem, type Direction } from "../lib/spatialnav.ts";
-import { FLIP_NEXT, FLIP_PREV, REST_AFTER_MS, flipTo, framingOf } from "../lib/deckflip.ts";
+import { DECK_TRANSITION_MS, FLIP_NEXT, FLIP_PREV, REST_AFTER_MS, flipTo, framingOf, useTransitionsOn } from "../lib/deckflip.ts";
 import { revealItem } from "../lib/zoomactions.ts";
 import { isTyping } from "../lib/keys.ts";
 import { nextInLoop, reclaimKeyboard, spaceTogglesChrome } from "../lib/presenting.ts";
@@ -92,12 +92,31 @@ export function FullScreen({
 
   const item = useCanvasStore((s) => s.canvas?.items[itemId] ?? null);
   const canEdit = useCanEdit();
+  const transitionsOn = useTransitionsOn();
+  // Defer updating the hidden canvas underneath until a slide transition has
+  // settled, and snap (0ms) instead of running a 500ms rAF viewport glide:
+  // re-rendering and panning the invisible canvas during every flip stole
+  // frames right off the transition. Flushed immediately on Esc so leaving
+  // mid-flip still lands on the slide you ended on.
+  const pendingReveal = useRef<{ id: string; timer: number } | null>(null);
+  const flushReveal = () => {
+    const pending = pendingReveal.current;
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    pendingReveal.current = null;
+    useUiStore.getState().select(pending.id);
+    revealItem(pending.id, 0);
+  };
+  useEffect(() => () => flushReveal(), []);
 
   useEffect(() => {
     useFocusStore.getState().syncItem(itemId);
   }, [itemId]);
 
-  const back = () => navigate(canvasPath(canvasId));
+  const back = () => {
+    flushReveal();
+    navigate(canvasPath(canvasId));
+  };
 
   /**
    * Turn the deck to `next` the way an arrow does: the selection and the camera
@@ -109,15 +128,20 @@ export function FullScreen({
   const turnTo = (next: Item, forward: boolean) => {
     const canvas = useCanvasStore.getState().canvas;
     if (!canvas) return;
-    useUiStore.getState().select(next.id);
-    revealItem(next.id);
     const here = canvas.items[itemId];
+    const transition = deckTransitionOf(useCanvasStore.getState().record ?? {});
+    if (pendingReveal.current) clearTimeout(pendingReveal.current.timer);
+    const delay = transitionsOn ? DECK_TRANSITION_MS[transition] + 80 : 220;
+    pendingReveal.current = {
+      id: next.id,
+      timer: window.setTimeout(flushReveal, delay),
+    };
     flipTo(
       navigate,
       itemPath(canvasId, next.id),
       forward ? "next" : "prev",
       framingOf(here !== undefined && isFramedItem(here), isFramedItem(next)),
-      deckTransitionOf(useCanvasStore.getState().record ?? {}),
+      transition,
     );
   };
 
@@ -406,7 +430,11 @@ export function FullScreen({
   // like (see ArtifactStage). The bar renders either way: the way back must
   // not depend on the item existing.
   return (
-    <div data-presented-item={itemId ?? undefined} className={`fullscreen${phone ? " touch-presenting" : ""}${resting ? " resting" : ""}`}>
+    <div
+      data-presented-item={itemId ?? undefined}
+      data-deck-transitions={transitionsOn ? "" : undefined}
+      className={`fullscreen${phone ? " touch-presenting" : ""}${resting ? " resting" : ""}`}
+    >
       {phone ? <Suspense><PhonePresenting canvasId={canvasId} itemId={itemId} title={item?.title ?? "Presentation"} onExit={back} /></Suspense> : (
         <FocusHeader
           canvasId={canvasId}

@@ -23,75 +23,91 @@
 
 /* ---------- the deck flip ----------
    Here rather than in styles.css since 19 Oct 2026: this sheet loads with
-   `FullScreen` and `Viewer`, the only two places a slide is flipped, and nine
-   motions' keyframes are bytes a first visit to a canvas should not pay. */
-/* A flip MOVES (lib/deckflip.ts), and how is the canvas's choice — push by
-   default, or fade, zoom, or one of the three that leave the glass: depth,
-   cube and flip (core's `DECK_TRANSITIONS`). Each motion is ONE pair of
-   keyframes per direction, worn by two different things:
+   `FullScreen` and `Viewer`, the only two places a slide is flipped, and the
+   motions' keyframes are bytes a first visit to a canvas should not pay.
+
+   A flip MOVES (lib/deckflip.ts), and how is the canvas's choice (core's
+   `DECK_TRANSITIONS`). Each whole-slide motion is ONE pair of keyframes per
+   direction, worn by two different things:
 
    - images and text ride a view transition, so the pair is the
      `::view-transition-old/new(slide)` snapshots, steered by `data-flip` and
-     `data-transition` on the root. The name is on `.fullscreen-stage` — one
-     per document, whichever face of the deck is up — so only the slide
-     travels: the bar and the chrome are pinned still by the `root` rule,
-     scoped to `data-flip` so no future view transition inherits it.
-   - screens and sites cannot be photographed (a cross-origin frame
-     snapshots blank), so their pair is the two LIVE frames in the pool —
-     `.deck-out` and `.deck-in` in a `.deck-moving` stack, which carries the
-     same two attributes (`HtmlView`).
+     `data-transition` on the root;
+   - screens and sites cannot be photographed, so their pair is the two LIVE
+     frames in the pool — `.deck-out` and `.deck-in` in a `.deck-moving`
+     stack, which carries the same two attributes (`HtmlView`).
 
-   Every 3D keyframe carries its own `perspective()`, so neither wearer needs
-   a parent to set one up. The length is `--deck-ms`, written from
-   `DECK_TRANSITION_MS` so the pool and the drawing cannot disagree about when
-   the outgoing slide may go. The push keeps its original beat — 220ms with a
-   hard ease-out reads as snappy rather than staged.
+   `poof`, `drift` and `rise` are really piece-by-piece swaps (MorphStage);
+   what is here is their whole-slide stand-in, for images, text, and the
+   first beat before a deck's twins are warm.
+
+   **Smoothness, measured 24 Nov 2026** ("the transitions are a lil janky"):
+
+   1. Every animated property is transform or opacity — compositor-only, so
+      the motion keeps its frames while React renders the next slide. The
+      one exception is `wipe`'s `clip-path`, a clip on an existing layer.
+   2. A frame that gets its FIRST transform is re-attached by the browser and
+      drawn blank for a beat (measured on the morph, 19 Oct). So in full
+      screen with transitions on, every live frame is its own layer from the
+      start (`will-change`), and the stack's clip is permanent rather than
+      switched on at the start of each move.
+   3. Only the two frames in the move show. The pool keeps warm neighbours
+      painted under the slide; a push used to slide the outgoing page off
+      and reveal a THIRD slide beneath it.
+   4. Curves decelerate hard (an expo-out for arrivals, a short ease-in for
+      departures), so a move reads as decided rather than floaty, and the
+      lengths in `DECK_TRANSITION_MS` stay under a third of a second for the
+      flat ones.
 
    No reduced-motion block: deckflip.ts never starts a motion for someone who
    asked for reduced motion, so there is nothing here to switch off. */
-/* The beat when nothing has set one — the push's. flipTo writes the chosen
-   motion's length on the root and the pool writes it on its stack. */
-html { --deck-ms: 220ms; }
+html { --deck-ms: 300ms; }
 html[data-flip]::view-transition-old(root),
 html[data-flip]::view-transition-new(root) { animation: none; }
-/* The slide's pair is clipped to the stage, so a slide turning in 3D never
-   swings over the bar; and composited normally, because the default
-   `plus-lighter` would brighten every pixel where the two overlap. */
-html[data-flip]::view-transition-image-pair(slide) { overflow: clip; }
+/* Clipped to the stage, so nothing swings over the bar; composited normally,
+   because the default `plus-lighter` brightens every pixel the two overlap. */
+html[data-flip]::view-transition-image-pair(slide) { overflow: clip; isolation: auto; }
 html[data-flip]::view-transition-old(slide),
 html[data-flip]::view-transition-new(slide),
 .deck-moving > .deck-out,
 .deck-moving > .deck-in {
   animation-duration: var(--deck-ms);
-  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
   animation-fill-mode: both;
   mix-blend-mode: normal;
   pointer-events: none;
 }
-/* The live pair moves inside its own box, and the box clips: a page swung
-   halfway off the stage must not stretch the stage's scroll area. It is
-   painted with the ground full screen stands on, because under the stack
-   lies the arriving slide's still picture (`.html-snapshot`) — flat and
-   whole, so a page turning in 3D in front of it read as two slides at once.
-   The ground is what a snapshot transition shows behind its slides too. */
-.html-view-stack.deck-moving { overflow: clip; background: var(--ground); }
-/* Depth reads as depth because the slide casts a shadow on the dark behind
-   it — the one cue a flat slide never needed. */
-html[data-flip][data-transition="depth"]::view-transition-old(slide),
-html[data-flip][data-transition="depth"]::view-transition-new(slide),
-html[data-flip][data-transition="cube"]::view-transition-old(slide),
-html[data-flip][data-transition="cube"]::view-transition-new(slide),
-html[data-flip][data-transition="flip"]::view-transition-old(slide),
-html[data-flip][data-transition="flip"]::view-transition-new(slide),
-.deck-moving:is([data-transition="depth"], [data-transition="cube"], [data-transition="flip"]) > :is(.deck-out, .deck-in) {
-  box-shadow: var(--shadow-lift);
-  backface-visibility: hidden;
-}
-/* The slow ones ease in AND out: a turn that starts at full speed looks like
-   a glitch, not a decision. */
+/* Departures accelerate away rather than decelerate — the eye follows the
+   arrival, and a leaving slide that lingers reads as lag. */
+html[data-flip]::view-transition-old(slide),
+.deck-moving > .deck-out { animation-timing-function: cubic-bezier(0.4, 0, 0.8, 0.6); }
+/* Point 2 above: layers before the move, never at its start. */
+[data-deck-transitions] .fullscreen-stage .html-view-stack { overflow: clip; }
+[data-deck-transitions] .fullscreen-stage .html-view { will-change: transform, opacity; }
+/* **A slide warmed for the next flip is painted, not merely loaded.** The
+   pool hides a frame it has never shown (`.arriving`) with opacity 0 — and a
+   browser does not paint what is fully transparent, so the arriving slide
+   got its FIRST paint mid-push: a white page sliding in, filling up as it
+   went (measured 24 Nov 2026, push and wipe both). A warm neighbour sits
+   under the slide on screen (`z-index` 1 to its 2, `aria-hidden`), and that
+   slide is an opaque page, so it can stand at full opacity there — painted,
+   and invisible until the move uncovers it. Only once the slide on screen
+   has itself been shown (`data-settled`): on a first load it may still be
+   arriving, and nothing may show through it. */
+[data-deck-transitions] .fullscreen-stage .html-view-stack[data-settled] > .html-view.arriving[aria-hidden="true"] { opacity: 1; }
+/* Point 3: the stage shows the two pages in the move and nothing else. */
+.deck-moving > .html-view:not(.deck-out):not(.deck-in) { opacity: 0; transition: none; }
+.html-view-stack.deck-moving { background: var(--ground); }
+.deck-moving > .deck-out,
+.deck-moving > .deck-in { transition: none; }
+
+/* The 3D ones keep a shadow and ease in AND out: a turn that starts at full
+   speed looks like a glitch, not a decision. */
 html[data-flip]:is([data-transition="depth"], [data-transition="cube"], [data-transition="flip"])::view-transition-old(slide),
 html[data-flip]:is([data-transition="depth"], [data-transition="cube"], [data-transition="flip"])::view-transition-new(slide),
 .deck-moving:is([data-transition="depth"], [data-transition="cube"], [data-transition="flip"]) > :is(.deck-out, .deck-in) {
+  box-shadow: var(--shadow-lift);
+  backface-visibility: hidden;
   animation-timing-function: cubic-bezier(0.65, 0, 0.35, 1);
 }
 /* The cube turns about the edge the two faces share. */
@@ -118,8 +134,16 @@ html[data-flip="prev"][data-transition="push"]::view-transition-new(slide),
 html[data-flip][data-transition="fade"]::view-transition-old(slide),
 .deck-moving[data-transition="fade"] > .deck-out { animation-name: deck-hold; }
 html[data-flip][data-transition="fade"]::view-transition-new(slide),
-.deck-moving[data-transition="fade"] > .deck-in { animation-name: deck-fade-in; }
-/* Zoom: forward falls back and rises; backward is the same film reversed. */
+.deck-moving[data-transition="fade"] > .deck-in { animation-name: deck-fade-in; animation-timing-function: cubic-bezier(0.33, 0, 0.2, 1); }
+/* Wipe: the new slide is revealed across the old one along the way you went,
+   with the old one held whole underneath. */
+html[data-flip][data-transition="wipe"]::view-transition-old(slide),
+.deck-moving[data-transition="wipe"] > .deck-out { animation-name: deck-hold; }
+html[data-flip="next"][data-transition="wipe"]::view-transition-new(slide),
+.deck-moving[data-flip="next"][data-transition="wipe"] > .deck-in { animation-name: deck-wipe-from-right; animation-timing-function: cubic-bezier(0.65, 0, 0.35, 1); }
+html[data-flip="prev"][data-transition="wipe"]::view-transition-new(slide),
+.deck-moving[data-flip="prev"][data-transition="wipe"] > .deck-in { animation-name: deck-wipe-from-left; animation-timing-function: cubic-bezier(0.65, 0, 0.35, 1); }
+/* Zoom: a few percent of scale and a cross-fade — subtle, not a fly-through. */
 html[data-flip="next"][data-transition="zoom"]::view-transition-old(slide),
 .deck-moving[data-flip="next"][data-transition="zoom"] > .deck-out { animation-name: deck-zoom-fall; }
 html[data-flip="next"][data-transition="zoom"]::view-transition-new(slide),
@@ -128,6 +152,27 @@ html[data-flip="prev"][data-transition="zoom"]::view-transition-old(slide),
 .deck-moving[data-flip="prev"][data-transition="zoom"] > .deck-out { animation-name: deck-zoom-lift; }
 html[data-flip="prev"][data-transition="zoom"]::view-transition-new(slide),
 .deck-moving[data-flip="prev"][data-transition="zoom"] > .deck-in { animation-name: deck-zoom-land; }
+/* The piece swaps' stand-ins: the same feel, worn by the whole slide. */
+html[data-flip][data-transition="poof"]::view-transition-old(slide),
+.deck-moving[data-transition="poof"] > .deck-out { animation-name: deck-poof-out; }
+html[data-flip][data-transition="poof"]::view-transition-new(slide),
+.deck-moving[data-transition="poof"] > .deck-in { animation-name: deck-poof-in; }
+html[data-flip="next"][data-transition="drift"]::view-transition-old(slide),
+.deck-moving[data-flip="next"][data-transition="drift"] > .deck-out { animation-name: deck-drift-out-left; }
+html[data-flip="next"][data-transition="drift"]::view-transition-new(slide),
+.deck-moving[data-flip="next"][data-transition="drift"] > .deck-in { animation-name: deck-drift-in-right; }
+html[data-flip="prev"][data-transition="drift"]::view-transition-old(slide),
+.deck-moving[data-flip="prev"][data-transition="drift"] > .deck-out { animation-name: deck-drift-out-right; }
+html[data-flip="prev"][data-transition="drift"]::view-transition-new(slide),
+.deck-moving[data-flip="prev"][data-transition="drift"] > .deck-in { animation-name: deck-drift-in-left; }
+html[data-flip="next"][data-transition="rise"]::view-transition-old(slide),
+.deck-moving[data-flip="next"][data-transition="rise"] > .deck-out { animation-name: deck-rise-out-up; }
+html[data-flip="next"][data-transition="rise"]::view-transition-new(slide),
+.deck-moving[data-flip="next"][data-transition="rise"] > .deck-in { animation-name: deck-rise-in-up; }
+html[data-flip="prev"][data-transition="rise"]::view-transition-old(slide),
+.deck-moving[data-flip="prev"][data-transition="rise"] > .deck-out { animation-name: deck-rise-out-down; }
+html[data-flip="prev"][data-transition="rise"]::view-transition-new(slide),
+.deck-moving[data-flip="prev"][data-transition="rise"] > .deck-in { animation-name: deck-rise-in-down; }
 html[data-flip="next"][data-transition="depth"]::view-transition-old(slide),
 .deck-moving[data-flip="next"][data-transition="depth"] > .deck-out { animation-name: deck-depth-out-left; }
 html[data-flip="next"][data-transition="depth"]::view-transition-new(slide),
@@ -153,33 +198,50 @@ html[data-flip="prev"][data-transition="flip"]::view-transition-old(slide),
 html[data-flip="prev"][data-transition="flip"]::view-transition-new(slide),
 .deck-moving[data-flip="prev"][data-transition="flip"] > .deck-in { animation-name: deck-flip-in-left; }
 
-/* The recede scales to 0.98 on its way out — a faint depth cue that says the
-   old slide fell behind, at no cost in time. */
-@keyframes deck-recede-left { to { transform: translateX(-25%) scale(0.98); opacity: 0; } }
-@keyframes deck-recede-right { to { transform: translateX(25%) scale(0.98); opacity: 0; } }
-/* The enter replaces the default cross-fade entirely: it arrives opaque,
-   because a push that also fades is a slide you watch appear twice. */
-@keyframes deck-enter-right { from { transform: translateX(100%); } }
-@keyframes deck-enter-left { from { transform: translateX(-100%); } }
+/* **An arriving page never starts wholly out of view.** Chrome stops
+   rendering a cross-origin frame that is entirely off the stage — a push that
+   began at 100% moved the next page in as a WHITE sheet, filled in a few
+   frames later, and a wipe that began fully clipped did the same (measured
+   24 Nov 2026; zoom and the content swaps, which start on the stage, never
+   did). So every arrival begins with a sliver still on the glass. Nobody sees
+   a few pixels at the edge in the first frame of a third-of-a-second move;
+   everybody sees a white page. */
+/* Push: the new slide arrives whole from the side you went; the old one
+   recedes a quarter and lets go. `translate3d` keeps both on the GPU. */
+@keyframes deck-recede-left { to { transform: translate3d(-24%, 0, 0) scale(0.985); opacity: 0; } }
+@keyframes deck-recede-right { to { transform: translate3d(24%, 0, 0) scale(0.985); opacity: 0; } }
+@keyframes deck-enter-right { from { transform: translate3d(99.4%, 0, 0); } }
+@keyframes deck-enter-left { from { transform: translate3d(-99.4%, 0, 0); } }
 @keyframes deck-hold { from { opacity: 1; } to { opacity: 1; } }
 @keyframes deck-fade-in { from { opacity: 0; } }
-@keyframes deck-zoom-fall { to { transform: scale(0.86); opacity: 0; } }
-@keyframes deck-zoom-rise { from { transform: scale(1.1); opacity: 0; } }
-@keyframes deck-zoom-lift { to { transform: scale(1.1); opacity: 0; } }
-@keyframes deck-zoom-land { from { transform: scale(0.86); opacity: 0; } }
-/* **Depth** — the 2D slide becomes 3D, travels, and becomes 2D again.
-   Three beats: both slides sink back off the glass and turn toward the way
-   you are going; they glide across, side by side, like cards on a table seen
-   from above; the new one turns flat and rises to fill the screen. The
-   transform list is the same shape in every keyframe so each beat
-   interpolates function by function rather than as a matrix. */
+@keyframes deck-wipe-from-right { from { clip-path: inset(0 0 0 99.4%); } to { clip-path: inset(0 0 0 0); } }
+@keyframes deck-wipe-from-left { from { clip-path: inset(0 99.4% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes deck-zoom-fall { to { transform: scale(0.96); opacity: 0; } }
+@keyframes deck-zoom-rise { from { transform: scale(1.04); opacity: 0; } }
+@keyframes deck-zoom-lift { to { transform: scale(1.04); opacity: 0; } }
+@keyframes deck-zoom-land { from { transform: scale(0.96); opacity: 0; } }
+/* The out half is done by 55%, the in half starts at 30%: an overlap short
+   enough that the two pictures never sit half-and-half for long. */
+@keyframes deck-poof-out { 0% { transform: scale(1); opacity: 1; } 55%, 100% { transform: scale(0.97); opacity: 0; } }
+@keyframes deck-poof-in { 0%, 30% { transform: scale(0.98); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+@keyframes deck-drift-out-left { 0% { transform: translate3d(0, 0, 0); opacity: 1; } 55%, 100% { transform: translate3d(-3%, 0, 0); opacity: 0; } }
+@keyframes deck-drift-out-right { 0% { transform: translate3d(0, 0, 0); opacity: 1; } 55%, 100% { transform: translate3d(3%, 0, 0); opacity: 0; } }
+@keyframes deck-drift-in-right { 0%, 30% { transform: translate3d(3.5%, 0, 0); opacity: 0; } 100% { transform: translate3d(0, 0, 0); opacity: 1; } }
+@keyframes deck-drift-in-left { 0%, 30% { transform: translate3d(-3.5%, 0, 0); opacity: 0; } 100% { transform: translate3d(0, 0, 0); opacity: 1; } }
+@keyframes deck-rise-out-up { 0% { transform: translate3d(0, 0, 0); opacity: 1; } 55%, 100% { transform: translate3d(0, -2%, 0); opacity: 0; } }
+@keyframes deck-rise-out-down { 0% { transform: translate3d(0, 0, 0); opacity: 1; } 55%, 100% { transform: translate3d(0, 2%, 0); opacity: 0; } }
+@keyframes deck-rise-in-up { 0%, 30% { transform: translate3d(0, 3%, 0); opacity: 0; } 100% { transform: translate3d(0, 0, 0); opacity: 1; } }
+@keyframes deck-rise-in-down { 0%, 30% { transform: translate3d(0, -3%, 0); opacity: 0; } 100% { transform: translate3d(0, 0, 0); opacity: 1; } }
+/* **Depth** — the 2D slide becomes 3D, travels, and becomes 2D again. Same
+   transform list in every keyframe so each beat interpolates function by
+   function rather than as a matrix. */
 @keyframes deck-depth-out-left {
   0% { transform: perspective(2000px) translateX(0) translateZ(0) rotateY(0deg); }
   30% { transform: perspective(2000px) translateX(0) translateZ(-700px) rotateY(-22deg); }
   72%, 100% { transform: perspective(2000px) translateX(-118%) translateZ(-700px) rotateY(-22deg); }
 }
 @keyframes deck-depth-in-right {
-  0%, 28% { transform: perspective(2000px) translateX(118%) translateZ(-700px) rotateY(-22deg); }
+  0%, 28% { transform: perspective(2000px) translateX(104%) translateZ(-700px) rotateY(-22deg); }
   70% { transform: perspective(2000px) translateX(0) translateZ(-700px) rotateY(-22deg); }
   100% { transform: perspective(2000px) translateX(0) translateZ(0) rotateY(0deg); }
 }
@@ -189,19 +251,16 @@ html[data-flip="prev"][data-transition="flip"]::view-transition-new(slide),
   72%, 100% { transform: perspective(2000px) translateX(118%) translateZ(-700px) rotateY(22deg); }
 }
 @keyframes deck-depth-in-left {
-  0%, 28% { transform: perspective(2000px) translateX(-118%) translateZ(-700px) rotateY(22deg); }
+  0%, 28% { transform: perspective(2000px) translateX(-104%) translateZ(-700px) rotateY(22deg); }
   70% { transform: perspective(2000px) translateX(0) translateZ(-700px) rotateY(22deg); }
   100% { transform: perspective(2000px) translateX(0) translateZ(0) rotateY(0deg); }
 }
-/* **Cube** — the two slides are adjacent faces, and the cube turns a
-   quarter. Each face swings about the edge they share, away from you, so
-   the shared edge is the corner nearest the room. */
+/* **Cube** — adjacent faces, a quarter turn about the shared edge. */
 @keyframes deck-cube-out-left { to { transform: perspective(1800px) translateX(-100%) rotateY(-90deg); } }
-@keyframes deck-cube-in-right { from { transform: perspective(1800px) translateX(100%) rotateY(90deg); } }
+@keyframes deck-cube-in-right { from { transform: perspective(1800px) translateX(99%) rotateY(86deg); } }
 @keyframes deck-cube-out-right { to { transform: perspective(1800px) translateX(100%) rotateY(90deg); } }
-@keyframes deck-cube-in-left { from { transform: perspective(1800px) translateX(-100%) rotateY(-90deg); } }
-/* **Flip** — one card, the next slide on its back. It lifts as it turns,
-   and each face hides once it is turned away (`backface-visibility`). */
+@keyframes deck-cube-in-left { from { transform: perspective(1800px) translateX(-99%) rotateY(-86deg); } }
+/* **Flip** — one card, the next slide on its back. */
 @keyframes deck-flip-out-left {
   0% { transform: perspective(2000px) translateZ(0) rotateY(0deg); }
   50% { transform: perspective(2000px) translateZ(-400px) rotateY(-90deg); }
