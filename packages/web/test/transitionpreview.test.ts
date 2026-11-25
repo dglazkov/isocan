@@ -23,6 +23,7 @@ const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.met
 const preview = read("../src/components/TransitionPreview.tsx");
 const header = read("../src/components/FocusHeader.tsx");
 const full = read("../src/components/FullScreen.tsx");
+const focusCss = loadedWith("focus.css");
 const css = loadedWith("transition-preview.css");
 
 /**
@@ -79,5 +80,16 @@ describe("the Transition menu", () => {
   it("keeps its keys from the deck underneath", () => {
     // Full screen listens in capture: without this, ↓ in the menu flips a slide.
     expect(full).toContain(`if ((e.target as Element | null)?.closest?.('[role="menu"]')) return;`);
+  });
+
+  it("wraps preview copy, prevents horizontal scrolling, and uses an opaque card ground", () => {
+    // `.focus-header-right` sets `white-space: nowrap` and `.floats` creates a
+    // backdrop root; without resetting both, the preview description overflows
+    // into the list, scrolls the menu right on focus, and bleeds slide text.
+    expect(focusCss).toMatch(/\.focus-version-menu \{[^}]*white-space:\s*normal/);
+    expect(focusCss).toMatch(/\.focus-version-menu \{[^}]*background:\s*var\(--card\)/);
+    expect(focusCss).toMatch(/\.focus-transition-menu\.with-preview \{[^}]*overflow:\s*hidden/);
+    expect(css).toMatch(/\.tp-panel \{[^}]*white-space:\s*normal/);
+    expect(css).toMatch(/\.tp-copy \{[^}]*white-space:\s*normal/);
   });
 });

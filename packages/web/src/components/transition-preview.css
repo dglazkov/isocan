@@ -7,7 +7,7 @@
    exactly as they move a real slide. Theme tokens only: the miniature is a
    diagram of a slide, not somebody's design, and it must read on both
    grounds. */
-.tp-panel { display: flex; flex-direction: column; gap: 8px; width: 224px; padding: 2px; }
+.tp-panel { display: flex; flex-direction: column; gap: 8px; width: 224px; flex: none; white-space: normal; }
 .tp-stage {
   position: relative; width: 224px; height: 140px; overflow: hidden;
   border-radius: var(--radius); background: var(--line);
@@ -35,7 +35,7 @@
 .tp-piece[data-tone="card-a"]::before { background: var(--good); }
 .tp-piece[data-tone="card-b"]::before { background: var(--accent); }
 
-.tp-copy { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 6px; padding: 0 2px; }
+.tp-copy { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 6px; padding: 0 2px; min-width: 0; white-space: normal; overflow-wrap: break-word; }
 .tp-copy strong { font-size: 13px; color: var(--ink); }
 .tp-copy small { font-size: 11px; color: var(--ink-soft); }
 .tp-copy p { flex-basis: 100%; margin: 0; font-size: 12px; line-height: 1.4; color: var(--ink-soft); }
