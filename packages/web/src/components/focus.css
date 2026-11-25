@@ -1434,3 +1434,8 @@
 /* The deck's transition picker hangs from the right-hand cluster, so it opens
    leftward rather than off the edge of the window. */
 .focus-transition-menu { left: auto; right: 0; min-width: 180px; }
+/* The menu grows a second column for it: the preview on the left, where a
+   right-anchored menu has room, the list on the right. */
+.focus-transition-menu.with-preview { flex-direction: row; align-items: flex-start; gap: 8px; max-height: none; }
+.focus-transition-list { display: flex; flex-direction: column; gap: 2px; min-width: 150px; max-height: min(420px, calc(100dvh - 96px)); overflow-y: auto; }
+

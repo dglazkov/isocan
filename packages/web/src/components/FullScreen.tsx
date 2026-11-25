@@ -161,6 +161,10 @@ export function FullScreen({
   // started from.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      // An open menu in the bar (the Transition picker) keeps its own keys:
+      // its arrows walk its rows and its Esc closes it, rather than flipping
+      // the deck or leaving full screen underneath it.
+      if ((e.target as Element | null)?.closest?.('[role="menu"]')) return;
       if (e.key === "Escape") {
         e.preventDefault();
         e.stopPropagation();
@@ -378,6 +382,13 @@ export function FullScreen({
     let timer = 0;
     const rest = () => {
       clearTimeout(timer);
+      // Not while a menu in the bar is open (the Transition picker): somebody
+      // holding still to watch its preview is using the chrome, not done
+      // with it. Ask again on the next beat.
+      if (document.querySelector('.fs-bar [role="menu"]')) {
+        timer = window.setTimeout(rest, REST_AFTER_MS);
+        return;
+      }
       restingNow = true;
       setResting(true);
     };

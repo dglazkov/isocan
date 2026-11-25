@@ -15,7 +15,7 @@
  */
 
 import "./focus.css";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   DECK_TRANSITIONS,
@@ -29,6 +29,7 @@ import {
   shortcut,
   workbenchItemPath,
   type Actor,
+  type DeckTransition,
   type Item,
 } from "@isocan/core";
 import { CanvasPresence, CanvasTitle, ShareButton } from "./CanvasCrumb.tsx";
@@ -41,6 +42,8 @@ import { useFocusStore } from "../stores/focusStore.ts";
 import { itemThreadsFor } from "../lib/nodechat.ts";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
 import { useTransitionsOn } from "../lib/deckflip.ts";
+/** Loaded the first time the Transition menu opens — nobody else pays for it. */
+const TransitionPreview = lazy(() => import("./TransitionPreview.tsx"));
 
 export interface FocusHeaderProps {
   canvasId: string;
@@ -102,6 +105,9 @@ export function FocusHeader({
   const [versionsOpen, setVersionsOpen] = useState(false);
   const versionWrapRef = useRef<HTMLSpanElement>(null);
   const [transitionsOpen, setTransitionsOpen] = useState(false);
+  /** The row the preview is playing — the pointer's or the keyboard's. */
+  const [previewed, setPreviewed] = useState<DeckTransition | null>(null);
+  const transitionListRef = useRef<HTMLDivElement>(null);
   const transitionWrapRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
@@ -129,6 +135,10 @@ export function FocusHeader({
       }
     }
     window.addEventListener("pointerdown", onPointerDown);
+    // Open on the current choice, with the keyboard already in the list, so
+    // the arrows walk the rows (and the preview) rather than the deck.
+    setPreviewed(null);
+    transitionListRef.current?.querySelector<HTMLButtonElement>("[aria-checked=true]")?.focus();
     return () => window.removeEventListener("pointerdown", onPointerDown);
   }, [transitionsOpen]);
 
@@ -385,24 +395,53 @@ export function FocusHeader({
               Transition: {deckTransitionLabel(deckTransition)}
             </button>
             {transitionsOpen && (
-              <div className="focus-version-menu focus-transition-menu" role="menu" aria-label="Slide transition">
-                {DECK_TRANSITIONS.map((transition) => (
-                  <button
-                    key={transition}
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={transition === deckTransition}
-                    className={`focus-version-row${transition === deckTransition ? " current" : ""}`}
-                    title={deckTransitionHint(transition)}
-                    onClick={() => {
+              /* A preview beside the list (TransitionPreview): whichever row
+                 the pointer or the keyboard is on plays in miniature, with its
+                 one-line description, so nobody has to pick a name blind. */
+              <div className="focus-version-menu focus-transition-menu with-preview">
+                <Suspense fallback={<div className="tp-panel" />}>
+                  <TransitionPreview transition={previewed ?? deckTransition} />
+                </Suspense>
+                <div
+                  className="focus-transition-list"
+                  role="menu"
+                  aria-label="Slide transition"
+                  ref={transitionListRef}
+                  onKeyDown={(e) => {
+                    const rows = [...(transitionListRef.current?.querySelectorAll<HTMLButtonElement>("[role=menuitemradio]") ?? [])];
+                    const at = rows.indexOf(document.activeElement as HTMLButtonElement);
+                    const go = (n: number) => rows[(n + rows.length) % rows.length]?.focus();
+                    if (e.key === "ArrowDown") go(at + 1);
+                    else if (e.key === "ArrowUp") go(at - 1);
+                    else if (e.key === "Home") go(0);
+                    else if (e.key === "End") go(rows.length - 1);
+                    else if (e.key === "Escape") {
                       setTransitionsOpen(false);
-                      void sendEchoed(canvasId, actor, { type: "project.update", patch: deckTransitionPatch(transition) });
-                    }}
-                  >
-                    <span>{deckTransitionLabel(transition)}</span>
-                    {isDeckTransition3d(transition) && <small>3D</small>}
-                  </button>
-                ))}
+                      transitionWrapRef.current?.querySelector<HTMLButtonElement>(".fullscreen-transition")?.focus();
+                    } else return;
+                    e.preventDefault();
+                  }}
+                >
+                  {DECK_TRANSITIONS.map((transition) => (
+                    <button
+                      key={transition}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={transition === deckTransition}
+                      aria-description={deckTransitionHint(transition)}
+                      className={`focus-version-row${transition === deckTransition ? " current" : ""}`}
+                      onMouseEnter={() => setPreviewed(transition)}
+                      onFocus={() => setPreviewed(transition)}
+                      onClick={() => {
+                        setTransitionsOpen(false);
+                        void sendEchoed(canvasId, actor, { type: "project.update", patch: deckTransitionPatch(transition) });
+                      }}
+                    >
+                      <span>{deckTransitionLabel(transition)}</span>
+                      {isDeckTransition3d(transition) && <small>3D</small>}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </span>
