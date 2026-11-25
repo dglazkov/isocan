@@ -48,9 +48,14 @@ export async function waitForResolvedFeedback(
     while (!controller.signal.aborted) {
       const batch = await whileActive(() => client.watchLog({ only: [canvasId], cursors: { [canvasId]: cursor }, waitMs: Math.min(timeoutMs, 30_000) }, controller.signal), controller.signal);
       const snapshot = batch.entries.length ? await whileActive(() => client.snapshot(canvasId, controller.signal), controller.signal) : null;
+      const kinds = batch.entries.length
+        ? await whileActive(() => client.actorKinds().catch(() => ({} as Record<string, string>)), controller.signal)
+        : {};
       if (controller.signal.aborted) break;
+      const isAgent = (id: string) =>
+        kinds[id] === "agent" || Boolean(snapshot?.canvas.agents?.[id]);
       const entries = batch.entries.filter((entry) => dispatchReason(entry.envelope.op, entry.envelope.actor.id, {
-        actorId: actor.id, names: namesFor(actor), ...(snapshot?.joined ? { joined: snapshot.joined } : {}),
+        actorId: actor.id, names: namesFor(actor), isAgent, ...(snapshot?.joined ? { joined: snapshot.joined } : {}),
       }, snapshot?.canvas) !== null);
       cursor = batch.cursors[canvasId] ?? cursor;
       if (entries.length) return { status: "feedback", cursor, entries };

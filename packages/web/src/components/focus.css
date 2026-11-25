@@ -1,13 +1,160 @@
 /* Focus Header & Node-Anchored Chat (`docs/projects/node-focus/design.md`) */
 
+.focus-header > .spacer {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.focus-header-left {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.focus-header-right {
+  flex: none;
+  white-space: nowrap;
+}
+
+.focus-header-right > *,
+.focus-header-right .btn,
+.focus-header-right .fullscreen-notes-toggle,
+.focus-header .fullscreen-back {
+  flex: none;
+  white-space: nowrap;
+}
+
+.focus-header .canvas-name {
+  flex: 0 2 auto;
+  min-width: 0;
+}
+
+.focus-header .canvas-name .title {
+  max-width: min(260px, 20vw);
+  margin-right: 0;
+}
+
+.focus-header[data-density="medium"] .canvas-name .title {
+  max-width: min(170px, 16vw);
+}
+
+.focus-header[data-density="compact"] .canvas-name,
+.focus-header[data-density="compact"] .focus-crumb-sep,
+.focus-header[data-density="tight"] .canvas-name,
+.focus-header[data-density="tight"] .focus-crumb-sep {
+  display: none;
+}
+
+.focus-crumb-sep {
+  flex: none;
+  color: var(--ink-muted);
+  font-size: 12px;
+  user-select: none;
+}
+
 .focus-header .fullscreen-title {
-  display: inline-flex;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.focus-header .fullscreen-title .kind-icon {
+  flex: none;
+}
+
+.focus-header .fullscreen-title > b {
+  min-width: 0;
+}
+
+.focus-header .fullscreen-title i {
+  flex: 0 3 auto;
+  min-width: 0;
+  max-width: 160px;
+}
+
+.focus-caret {
+  margin-left: 4px;
+  color: var(--ink-soft);
+  font-size: 10px;
+}
+
+.focus-header[data-density="medium"] .focus-transition-prefix {
+  display: none;
+}
+
+.focus-header[data-density="tight"] {
+  gap: 6px;
+}
+
+.focus-header[data-density="tight"] .fs-cluster {
+  gap: 5px;
+  padding: 4px 7px;
+}
+
+.focus-header[data-density="tight"] .fullscreen-back {
+  padding: 6px 8px;
+}
+
+.focus-header[data-density="tight"] .focus-back-label,
+.focus-header[data-density="tight"] .share-label {
+  display: none;
+}
+
+.focus-deck-more {
+  min-width: 30px;
+  padding: 6px 8px;
+  letter-spacing: 0.08em;
+}
+
+.focus-deck-menu {
+  left: auto;
+  right: 0;
+  min-width: 240px;
+  max-height: min(460px, calc(100dvh - 88px));
+}
+
+.focus-deck-menu-row {
+  display: flex;
   align-items: center;
   gap: 6px;
 }
 
+.focus-deck-menu-row .fullscreen-autoadvance-field {
+  border-left: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 5px 7px 5px 5px;
+}
+
+.focus-deck-menu-grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.focus-deck-menu-heading {
+  padding: 6px 8px 2px;
+  margin-top: 4px;
+  border-top: 1px solid var(--line);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.focus-deck-menu-transitions {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .focus-title-btn {
   appearance: none;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   background: transparent;
   border: 1px solid transparent;
   border-radius: 5px;
@@ -39,6 +186,7 @@
   position: relative;
   display: inline-flex;
   align-items: center;
+  flex: none;
 }
 
 .focus-version-pill {
@@ -70,17 +218,22 @@
   z-index: var(--z-popover);
   min-width: 240px;
   max-height: 280px;
+  overflow-x: hidden;
   overflow-y: auto;
   padding: 6px;
   border-radius: var(--radius);
-  border: 1px solid var(--glass-border);
-  background: var(--glass);
-  -webkit-backdrop-filter: var(--glass-filter);
-  backdrop-filter: var(--glass-filter);
-  box-shadow: var(--shadow-glass);
+  /* Opaque `--card` rather than `--glass`: this menu lives inside `.floats`,
+     whose own `backdrop-filter` creates a backdrop root that prevents any
+     child `backdrop-filter` from blurring the slide underneath. */
+  border: 1px solid var(--line);
+  background: var(--card);
+  box-shadow: var(--shadow-pop);
   display: flex;
   flex-direction: column;
   gap: 2px;
+  /* Reset `white-space: nowrap` inherited from `.focus-header-right` so
+     descriptions and multi-line content inside menus wrap normally. */
+  white-space: normal;
 }
 
 .focus-version-row {
@@ -117,6 +270,8 @@
 .focus-mode-switch {
   display: inline-flex;
   align-items: center;
+  flex: none;
+  white-space: nowrap;
   padding: 2px;
   border-radius: var(--radius);
   border: 1px solid var(--line);
@@ -155,6 +310,8 @@
   appearance: none;
   display: inline-flex;
   align-items: center;
+  flex: none;
+  white-space: nowrap;
   gap: 6px;
   height: 28px;
   padding: 0 10px;
@@ -1434,3 +1591,10 @@
 /* The deck's transition picker hangs from the right-hand cluster, so it opens
    leftward rather than off the edge of the window. */
 .focus-transition-menu { left: auto; right: 0; min-width: 180px; }
+/* The menu grows a second column for it: the preview on the left, where a
+   right-anchored menu has room, the list on the right. The outer box does not
+   scroll — `.focus-transition-list` scrolls vertically on its own — so focusing
+   the active row on open can never pan the preview off-screen. */
+.focus-transition-menu.with-preview { flex-direction: row; align-items: flex-start; gap: 10px; max-height: none; overflow: hidden; }
+.focus-transition-list { display: flex; flex-direction: column; gap: 2px; min-width: 150px; flex-shrink: 0; max-height: min(420px, calc(100dvh - 96px)); overflow-x: hidden; overflow-y: auto; padding-left: 8px; border-left: 1px solid var(--line-soft); }
+

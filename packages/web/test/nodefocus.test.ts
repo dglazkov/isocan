@@ -37,6 +37,7 @@ import {
   resolveNodeFocus,
 } from "../src/lib/focusRegistry.ts";
 import { addModule, moduleFocusFor } from "../src/modules.ts";
+import { headerDensityFor, isFilenameRedundant } from "../src/components/FocusHeader.tsx";
 
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
 
@@ -256,5 +257,24 @@ describe("Phase 2 — Node-Anchored Chat (anchorItemId === item.id & FocusSubtar
     const parsed = parseSubtargetPrefix(`${prefix}\nCheck contrast against surface.`);
     expect(parsed.subtarget).toEqual(sub);
     expect(parsed.rest).toBe("Check contrast against surface.");
+  });
+});
+
+describe("FocusHeader responsive density and filename deduplication", () => {
+  it("buckets header widths into wide, medium, compact, and tight tiers", () => {
+    expect(headerDensityFor(1600)).toBe("wide");
+    expect(headerDensityFor(1360)).toBe("wide");
+    expect(headerDensityFor(1200)).toBe("medium");
+    expect(headerDensityFor(1020)).toBe("medium");
+    expect(headerDensityFor(900)).toBe("compact");
+    expect(headerDensityFor(760)).toBe("compact");
+    expect(headerDensityFor(680)).toBe("tight");
+  });
+
+  it("treats slugified copies of the item title as redundant filenames", () => {
+    expect(isFilenameRedundant("03 · Acme slide title", "03-acme-slide-title.html")).toBe(true);
+    expect(isFilenameRedundant("Acme Overview", "acme-overview-v2.html")).toBe(true);
+    expect(isFilenameRedundant("Landing Hero", "index.html")).toBe(false);
+    expect(isFilenameRedundant("Pricing Matrix", "chart.svg")).toBe(false);
   });
 });

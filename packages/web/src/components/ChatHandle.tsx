@@ -57,18 +57,31 @@ export function ChatHandle({ canvasId }: { canvasId: string }) {
   return (
     head &&
         createPortal(
-          <button
-            type="button"
-            className="main-close chat-move"
-            title="Move to bottom"
-            aria-label="Move the Chat to the bottom"
-            onClick={() => placeChat(canvasId, "bottom")}
-          >
-            <svg viewBox="0 0 16 16" width={13} height={13} aria-hidden fill="none" stroke="currentColor" strokeWidth={1.5}>
-              <rect x="1.5" y="2.5" width="13" height="11" rx="2" />
-              <path d="M5 10.5h6" />
-            </svg>
-          </button>,
+          <>
+            <button
+              type="button"
+              className="main-close"
+              title="Full-screen chat"
+              aria-label="Open full-screen chat"
+              onClick={() => useUiStore.getState().setChatFullScreen(true)}
+            >
+              <svg viewBox="0 0 16 16" width={13} height={13} aria-hidden fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10 2.5h3.5V6M6 13.5H2.5V10M13.5 2.5L9.5 6.5M2.5 13.5l4-4" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              className="main-close chat-move"
+              title="Move to bottom"
+              aria-label="Move the Chat to the bottom"
+              onClick={() => placeChat(canvasId, "bottom")}
+            >
+              <svg viewBox="0 0 16 16" width={13} height={13} aria-hidden fill="none" stroke="currentColor" strokeWidth={1.5}>
+                <rect x="1.5" y="2.5" width="13" height="11" rx="2" />
+                <path d="M5 10.5h6" />
+              </svg>
+            </button>
+          </>,
           head,
         )
   );

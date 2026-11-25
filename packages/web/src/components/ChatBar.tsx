@@ -15,8 +15,11 @@
  */
 
 import "./chat-bar.css";
-import { useEffect, useRef, type FocusEvent, type KeyboardEvent, type PointerEvent } from "react";
+import { lazy, Suspense, useEffect, useRef, type FocusEvent, type KeyboardEvent, type PointerEvent } from "react";
 import type { Actor } from "@isocan/core";
+
+const PromptPill = lazy(() => import("./shell/PromptPill.tsx"));
+const AgentDock = lazy(() => import("./shell/AgentDock.tsx"));
 import { mainThread } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -34,7 +37,16 @@ import { ChatHandle } from "./ChatHandle.tsx";
  */
 export default function ChatPlace({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   const at = useUiStore((s) => s.chatAt);
+  const stitchShell = useUiStore((s) => s.experiments.includes("shell.stitch"));
   if (chatHiddenNow()) return null;
+  if (stitchShell) {
+    return (
+      <Suspense fallback={null}>
+        <PromptPill canvasId={canvasId} actor={actor} />
+        <AgentDock canvasId={canvasId} actor={actor} />
+      </Suspense>
+    );
+  }
   return at === "bottom" ? <ChatBar canvasId={canvasId} actor={actor} /> : <ChatHandle canvasId={canvasId} />;
 }
 

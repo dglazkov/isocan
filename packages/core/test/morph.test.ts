@@ -15,7 +15,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { MORPH_BEATS, morphPlan, pairPieces, sceneFromMessage, type MorphPiece, type MorphScene } from "../src/morph.ts";
+import { MORPH_BEATS, morphPlan, pairPieces, pieceSwapPlan, sceneFromMessage, type MorphPiece, type MorphScene } from "../src/morph.ts";
 
 /**
  * The morph's head: which piece becomes which, and where every piece is at
@@ -163,5 +163,81 @@ describe("sceneFromMessage", () => {
     expect(got.pieces[1]!.parent).toBe(-1); // pointed at a refused piece
     expect(got.pieces[2]!.parent).toBe(0);
     expect(got.pieces[1]!.text!.length).toBe(160);
+  });
+});
+
+/**
+ * The flat content swaps (`poof`, `drift`, `rise`): the surface holds still,
+ * and only the slide's pieces leave and join. Fast, so each piece is two
+ * keyframes with its own delay — the compositor plays them, nothing samples.
+ */
+describe("pieceSwapPlan", () => {
+  const a = scene([
+    piece({ kind: "box", tag: "main", cls: "panel", x: 40, y: 40, w: 1200, h: 720 }), // backdrop
+    piece({ parent: 0, text: "Old title", x: 100, y: 100, w: 600, h: 80 }),
+    piece({ parent: 0, kind: "media", tag: "img", src: "chart.png", x: 100, y: 300, w: 400, h: 300 }),
+    piece({ text: "Acme · 2026", tag: "footer", x: 40, y: 770, w: 200, h: 20 }), // same on both
+  ]);
+  const b = scene([
+    piece({ kind: "box", tag: "main", cls: "panel", x: 40, y: 40, w: 1200, h: 720 }),
+    piece({ parent: 0, text: "New title", x: 100, y: 100, w: 600, h: 80 }),
+    piece({ parent: 0, text: "A new point", tag: "p", x: 100, y: 260, w: 600, h: 40 }),
+    piece({ text: "Acme · 2026", tag: "footer", x: 40, y: 770, w: 200, h: 20 }),
+  ]);
+
+  for (const kind of ["poof", "drift", "rise"] as const) {
+    const plan = pieceSwapPlan(kind, a, b, "next", 460);
+
+    it(`${kind}: has no tilt, and keeps A's ground still`, () => {
+      expect(plan.scene).toEqual([]);
+      expect(plan.out.ground.every((f) => f.opacity === 1 && f.transform === "none")).toBe(true);
+    });
+
+    it(`${kind}: moves the pieces ON the backdrop, never the backdrop itself`, () => {
+      const outIds = plan.out.tracks.map((t) => t.i);
+      expect(outIds).not.toContain(0);
+      expect(outIds).toEqual(expect.arrayContaining([1, 2]));
+      // On the way in, the backdrop arrives with the ground, not with the pieces.
+      const backdrop = plan.in.tracks.find((t) => t.i === 0)!;
+      expect(backdrop.frames.map((f) => f.opacity)).toEqual(plan.in.ground.map((f) => f.opacity));
+    });
+
+    it(`${kind}: pins chrome that sits in the same place on both slides`, () => {
+      const footerOut = plan.out.tracks.find((t) => t.i === 3)!;
+      expect(footerOut.frames.every((f) => f.opacity === 1)).toBe(true);
+      expect(footerOut.delay).toBeUndefined();
+    });
+
+    it(`${kind}: each moving piece is two keyframes, staggered, inside the length`, () => {
+      const moving = [...plan.out.tracks, ...plan.in.tracks].filter((t) => t.duration !== undefined);
+      expect(moving.length).toBe(4);
+      for (const t of moving) {
+        expect(t.frames).toHaveLength(2);
+        expect((t.delay ?? 0) + t.duration!).toBeLessThanOrEqual(460);
+      }
+      const leaving = plan.out.tracks.filter((t) => t.duration !== undefined);
+      expect(leaving.every((t) => t.frames[0]!.opacity === 1 && t.frames[1]!.opacity === 0)).toBe(true);
+      const arriving = plan.in.tracks.filter((t) => t.duration !== undefined);
+      expect(arriving.every((t) => t.frames[0]!.opacity === 0 && t.frames[1]!.opacity === 1)).toBe(true);
+      // The arrivals start after the departures are under way.
+      expect(Math.min(...arriving.map((t) => t.delay!))).toBeGreaterThan(0);
+      // And both land at rest: the last frame is the identity.
+      expect(arriving.every((t) => t.frames[1]!.transform === "translate3d(0px,0px,0) scale(1)")).toBe(true);
+    });
+  }
+
+  it("poof contracts about each piece's own centre", () => {
+    const plan = pieceSwapPlan("poof", a, b, "next");
+    const title = plan.out.tracks.find((t) => t.i === 1)!;
+    // A 600×80 piece at 0.92 keeps its centre: shift by 4% of each side.
+    expect(title.frames[1]!.transform).toBe("translate3d(24px,3.2px,0) scale(0.92)");
+  });
+
+  it("drift and rise travel with the deck, and back the other way", () => {
+    const next = pieceSwapPlan("drift", a, b, "next");
+    const prev = pieceSwapPlan("drift", a, b, "prev");
+    expect(next.out.tracks.find((t) => t.i === 1)!.frames[1]!.transform).toContain("translate3d(-32px");
+    expect(prev.out.tracks.find((t) => t.i === 1)!.frames[1]!.transform).toContain("translate3d(32px");
+    expect(pieceSwapPlan("rise", a, b, "next").in.tracks.find((t) => t.i === 1)!.frames[0]!.transform).toContain("22px");
   });
 });

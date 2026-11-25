@@ -78,7 +78,10 @@ function glideTo(target: Viewport, durationMs = GLIDE_MS): void {
   gliding = 0; shiftX = 0; shiftY = 0; glideStage = stageRect();
   const ui = useUiStore.getState();
   const from = ui.viewport;
-  if (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+  if (
+    durationMs <= 0 ||
+    (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches)
+  ) {
     ui.setViewport(target);
     return;
   }

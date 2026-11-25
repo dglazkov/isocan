@@ -506,6 +506,10 @@ export interface Comment {
   /** Item ids #-referenced in the body, resolved at authoring time against
    * the live items the author could see. Absent on older comments. */
   items?: string[];
+  /** Structured edit receipt posted by an agent reply (Open Stitch Phase 2A). */
+  receipt?: import("./receipts.ts").CommentReceipt;
+  /** Structured patch proposal posted by an agent reply (Open Stitch Phase 2A). */
+  proposal?: import("./receipts.ts").CommentProposal;
   /** Writer-resolved request scope, retained independently of live item versions. */
   context?: import("./canvas-group-context.ts").ContextManifest;
   createdAt: string;

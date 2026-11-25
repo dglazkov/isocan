@@ -27,8 +27,9 @@ import type {
   CanvasState,
 } from "./model.ts";
 import { emptyCanvas, mainThread } from "./model.ts";
-import type { MetaPatch, NewComment, NewVersion, OpEnvelope } from "./ops.ts";
-import { OpValidationError, unknownOperation } from "./errors.ts";
+import type { ItemPrecondition, MetaPatch, NewComment, NewVersion, OpEnvelope } from "./ops.ts";
+import { OpValidationError, PreconditionConflictError, unknownOperation } from "./errors.ts";
+import { validateCommentProposal, validateCommentReceipt } from "./receipts.ts";
 import { BEYOND_CEILING } from "./ceiling.ts";
 import { questionnaireQuestionMarkdown, validateQuestionnaireComment, questionnaireStates, rejectQuestionnaireMetadata } from "./questionnaire.ts";
 import { DesignPartnerContractError, parseDesignQuestionSet, parseDesignResponse } from "./design-partner.ts";
@@ -318,16 +319,23 @@ export function reduceOperation(state: CanvasState | null, envelope: OpEnvelope)
       });
     }
 
-    case "item.move":
+    case "item.move": {
       requireFinite({ x: op.x, y: op.y }, "item.move");
-      return putItem({ ...getItem(op.itemId), x: op.x, y: op.y, ...stamp });
+      const item = getItem(op.itemId);
+      assertItemExpect(item, op.expect);
+      return putItem({ ...item, x: op.x, y: op.y, ...stamp });
+    }
 
-    case "item.resize":
+    case "item.resize": {
       requireFinite({ width: op.width, height: op.height }, "item.resize");
-      return putItem({ ...getItem(op.itemId), width: op.width, height: op.height, ...stamp });
+      const item = getItem(op.itemId);
+      assertItemExpect(item, op.expect);
+      return putItem({ ...item, width: op.width, height: op.height, ...stamp });
+    }
 
     case "item.update": {
       const item = getItem(op.itemId);
+      assertItemExpect(item, op.expect);
       const updatedVersions =
         op.filename === undefined && op.faces === undefined
           ? item.versions
@@ -364,6 +372,7 @@ export function reduceOperation(state: CanvasState | null, envelope: OpEnvelope)
     case "item.edit":
     case "item.addVersion": {
       const item = getItem(op.itemId);
+      if (op.type === "item.addVersion") assertItemExpect(item, op.expect);
       if (op.type === "item.edit") {
         const expected = op.expectedMetadata;
         if (item.currentVersionId !== op.expectedVersionId ||
@@ -432,6 +441,7 @@ export function reduceOperation(state: CanvasState | null, envelope: OpEnvelope)
 
     case "item.delete": {
       const item = getItem(op.itemId);
+      assertItemExpect(item, op.expect);
       const items = { ...canvas.items };
       delete items[op.itemId];
       return withCanvas({
@@ -825,6 +835,8 @@ function toComment(c: NewComment, actor: Actor, ts: string): Comment {
     comment.at = Math.round(c.at * 1000) / 1000;
   }
   if (c.items?.length) comment.items = [...c.items];
+  if (c.receipt !== undefined) comment.receipt = validateCommentReceipt(c.receipt);
+  if (c.proposal !== undefined) comment.proposal = validateCommentProposal(c.proposal);
   const context = c.context;
   if (context) {
     validateContextManifest(context, context.canvasId);
@@ -900,5 +912,41 @@ function requireVersion(item: Item, versionId: string): void {
 function requireBody(body: string): void {
   if (body.trim().length === 0) {
     throw new OpValidationError("empty-body", "comment body cannot be empty");
+  }
+}
+
+/**
+ * Enforce an optional `expect` optimistic-concurrency precondition against an
+ * item's live state. Throws {@link PreconditionConflictError} on any mismatch
+ * so concurrent agents or actor-scoped undo never silently clobber an edit.
+ */
+function assertItemExpect(item: Item, expect: ItemPrecondition | undefined): void {
+  if (!expect) return;
+  const current = item.versions.find((v) => v.id === item.currentVersionId);
+  const actual = {
+    versionId: item.currentVersionId,
+    ...(current ? { contentHash: current.blobHash } : {}),
+    updatedAt: item.updatedAt,
+  };
+  if (expect.versionId !== undefined && item.currentVersionId !== expect.versionId) {
+    throw new PreconditionConflictError(
+      item.id,
+      `precondition failed for "${item.title || item.id}": expected version ${expect.versionId}, found ${item.currentVersionId}`,
+      { expected: expect, actual },
+    );
+  }
+  if (expect.contentHash !== undefined && current?.blobHash !== expect.contentHash) {
+    throw new PreconditionConflictError(
+      item.id,
+      `precondition failed for "${item.title || item.id}": expected contentHash ${expect.contentHash}, found ${current?.blobHash ?? "none"}`,
+      { expected: expect, actual },
+    );
+  }
+  if (expect.updatedAt !== undefined && item.updatedAt !== expect.updatedAt) {
+    throw new PreconditionConflictError(
+      item.id,
+      `precondition failed for "${item.title || item.id}": expected updatedAt ${expect.updatedAt}, found ${item.updatedAt}`,
+      { expected: expect, actual },
+    );
   }
 }

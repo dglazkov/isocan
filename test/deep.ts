@@ -232,11 +232,13 @@ export const FAST_SPAWNERS: readonly FastSpawner[] = [
   { file: "packages/cli/test/grid.test.ts", secs: 9.4, why: "a single case that walks once" },
   { file: "packages/cli/test/tidy.test.ts", secs: 8.7, why: "tidy in place: four short walks per canvas mode (text, set, tidy, undo, redo) on one in-process daemon each; measured 14 October" },
   { file: "packages/cli/test/model.test.ts", secs: 0.4, why: "local-judge phase 0: three short walks of `isocan model` — no daemon, no network; measured 7 October" },
+  { file: "packages/cli/test/models.test.ts", secs: 3.5, why: "Open Stitch phase 0.4: five short walks of `isocan models` over a synthetic keys.json — no daemon, no network; measured 19 November" },
   { file: "packages/cli/test/conditional-edit.test.ts", secs: 2.3, why: "one daemon in process; about fifteen `edit` spawns for the conditional path, each a fraction of a second" },
   { file: "packages/cli/test/mood.test.ts", secs: 1.4, why: "moodboard phase 0: one in-process daemon with Google faked at the image model's fetch, six short walks of `isocan mood explore` and `ls`; measured 16 October" },
   { file: "packages/cli/test/motion.test.ts", secs: 2.7, why: "motion phase 0: one in-process daemon, about a dozen short walks of `isocan add`, `motion new`, `show` and `get` over three synthetic SVGs; measured 22 October" },
   { file: "packages/cli/test/summary.test.ts", secs: 6.7, why: "semantic-zoom phase 4: one in-process daemon with a stub model, a dozen short walks of `isocan summary` and `ls --summaries`; measured 14 October" },
   { file: "packages/cli/test/keys.test.ts", secs: 6.9, why: "keys phase 1: a dozen short walks of `isocan keys` — no daemon knock — plus one in-process daemon for the no-restart proof; measured 2 October" },
+  { file: "packages/cli/test/user-keys.test.ts", secs: 4.5, why: "Open Stitch phase 0.3: one in-process daemon and a handful of `isocan keys --mine` walks over sealed per-user BYOK keys" },
   { file: "packages/cli/test/tools.test.ts", secs: 7.7, why: "three cases sharing one daemon" },
   { file: "packages/cli/test/panels.test.ts", secs: 9.3, why: "three cases, the tools file's shape; 18 September, and NOT measured on the run that built this list — it is 16.4s on the machine where tools.test.ts is 13.6s, scaled by that anchor to the 7.7 recorded there. The closest file to the line after correspondence, so it is one to re-measure rather than trust" },
   { file: "packages/web/test/choose.test.ts", secs: 5.4, why: "two cases on one daemon, nine spawns: the item menu's \"Choose this variation\" held equal to `isocan choose`, and one undo of it" },
@@ -275,6 +277,7 @@ export const FAST_SPAWNERS: readonly FastSpawner[] = [
   { file: "packages/mcp/test/stdio-feedback-setup.test.ts", secs: 2.9, why: "one `isocan mcp` child, asked for its feedback setup and closed" },
   { file: "packages/mcp/test/stdio-personal.test.ts", secs: 4.8, why: "one `isocan mcp` child against a personal home, a handful of calls" },
   { file: "packages/mcp/test/stdio-sessions.test.ts", secs: 5.0, why: "`isocan mcp` children per session, a few calls each, no seeded history" },
+  { file: "packages/mcp/test/stdio-module-tools.test.ts", secs: 5.5, why: "one `isocan mcp` child, which loads the CLI's module list; one claim, two sticker drops and a refusal; measured 19 November beside a running typecheck at 10 s, alone at about half that" },
 ];
 
 /**

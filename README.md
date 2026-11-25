@@ -600,7 +600,10 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   button hands the slide the whole screen; and Back leaves the presentation.
 - **Slide transitions**: how the deck moves between slides is a canvas setting,
   so the presenter and every viewer see the same motion — Push (the default),
-  Fade, Zoom, None, and four that leave the glass: **Morph** (the slide comes
+  Fade, Wipe, Zoom, None; three quick content swaps for slides that share a
+  background — **Poof**, **Drift** and **Rise**, where the surface holds
+  still and only the pieces leave and join, chrome in the same place stays
+  pinned; and four that leave the glass: **Morph** (the slide comes
   apart — its pieces lift off the page, the ones both slides share fly to
   their new places, and everything settles flat as the next slide; name a
   piece `data-morph="…"` on both slides to pair it by hand), **Depth** (the
@@ -1189,6 +1192,8 @@ isocan home [<url>|--clear]        # where each canvas here lives; set where
 isocan keys [ls]|set|rm|test <provider>  # model keys on this machine (~/.isocan/keys.json);
                                    # set reads stdin or a hidden prompt, never argv
 isocan keys share on|off           # may collaborators spend the stored keys (off: only you)
+isocan models [--json]             # which model answers each role, who serves it, key here or not
+isocan job ls|status|cancel|retry  # inspect, abandon, or retry (--model) home-polled async jobs
 isocan share [<email>] [--as own|edit|read|view] [--link on|off|edit|read|view]
              [--revoke <email> [--bar]] [--bar <email>] [--unbar <email>]
                                    # the address, and who may enter this canvas

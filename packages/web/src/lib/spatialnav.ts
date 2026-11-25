@@ -116,17 +116,6 @@ function separation(
   }
 }
 
-/** How many items lie that way — what lets the pad say there is more than the
- *  one the key would land on. Counted with `isToward`, so it can never
- *  disagree with where the arrow actually goes. */
-export function countToward(
-  current: Rect,
-  candidates: readonly Rect[],
-  direction: Direction,
-): number {
-  return candidates.filter((n) => n.id !== current.id && isToward(current, n, direction)).length;
-}
-
 /**
  * The item the selection should move to, or null when there is nothing that
  * way. `current` may be the bounding box of a multi-item selection.

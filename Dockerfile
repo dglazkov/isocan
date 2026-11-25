@@ -73,6 +73,7 @@ COPY packages/api/package.json        packages/api/package.json
 COPY packages/mcp/package.json        packages/mcp/package.json
 COPY packages/rc/package.json         packages/rc/package.json
 COPY packages/voice-agent/package.json packages/voice-agent/package.json
+COPY packages/house-agent/package.json packages/house-agent/package.json
 # The modules are workspaces too (`packages/modules/*`). With these lines
 # missing `npm ci` does NOT refuse — it quietly plans the tree without them,
 # so no `node_modules/@isocan/<module>` link exists and `npm run build` below
@@ -94,6 +95,19 @@ COPY packages/modules/motion/package.json packages/modules/motion/package.json
 COPY packages/modules/exact/package.json packages/modules/exact/package.json
 COPY packages/modules/critique/package.json packages/modules/critique/package.json
 COPY packages/modules/lottie/package.json packages/modules/lottie/package.json
+COPY packages/modules/describe/package.json packages/modules/describe/package.json
+COPY packages/modules/video/package.json packages/modules/video/package.json
+COPY packages/modules/audio/package.json packages/modules/audio/package.json
+COPY packages/modules/model3d/package.json packages/modules/model3d/package.json
+COPY packages/modules/workbench/package.json packages/modules/workbench/package.json
+COPY packages/modules/memory/package.json packages/modules/memory/package.json
+COPY packages/modules/image/package.json packages/modules/image/package.json
+COPY packages/modules/research/package.json packages/modules/research/package.json
+COPY packages/modules/media-edit/package.json packages/modules/media-edit/package.json
+COPY packages/modules/design-system/package.json packages/modules/design-system/package.json
+COPY packages/modules/workspace/package.json packages/modules/workspace/package.json
+COPY packages/modules/clipper/package.json packages/modules/clipper/package.json
+COPY packages/modules/prototype/package.json packages/modules/prototype/package.json
 
 # --ignore-scripts: the root `prepare` (scripts/prepare.mjs) exists to build the
 # web bundle for people installing from git, and it does it by shelling out to

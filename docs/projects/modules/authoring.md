@@ -50,9 +50,12 @@ already print. A new palette action is an op the CLI could already send. If
 what you want cannot be described that way, it is a product change: make it
 in the product, with an op if it needs one, and then a module may use it.
 
-**A module may never add** an operation, a protocol message, a server route,
-a hidden store, or a read of the identity desk. Module state is an item,
-visible and versioned. Property keys a module writes are namespaced
+**A module may never add** an operation, a protocol message, a hidden
+store, or a read of the identity desk. Module state is an item, visible and
+versioned. A server route it may add only through the home's door — a
+`./server` half whose routes the home mounts at `/api/m/<name>/…` behind its
+own checks (see [`./server`](#serverts--the-servermodule-record-optional)
+below, and `design.md` "What a module may not add"). Property keys a module writes are namespaced
 (`whiteboard.grid`, never `grid`) and are yours forever: keys replay, and a
 removed module's keys must read as orphaned rather than be reused by the
 next one.
@@ -68,15 +71,17 @@ packages/modules/<name>/
   src/core.ts         the pure facts, and the CoreModule record — default export
   src/web.tsx         the WebModule record — default export
   src/cli.ts          the CliModule record — default export
+  src/server.ts       the ServerModule record — default export; OPTIONAL, only for a route that spends a key
   test/               vitest, picked up by the root config
 ```
 
-Three entry points, one per surface that loads it. `core.ts` must not
-import React or Node; `web.tsx` may import React; `cli.ts` may import Node.
-All three may import `@isocan/core`. `cli.ts` may import types (only types)
-from `@isocan/cli/modulehost`. Nothing in a module imports from
-`packages/web/src` or `packages/cli/src` — a module knows core and its own
-files, and is handed everything else.
+Three entry points, one per surface that loads it — and an optional fourth
+for the home. `core.ts` must not import React or Node; `web.tsx` may import
+React; `cli.ts` and `server.ts` may import Node. All of them may import
+`@isocan/core`. `cli.ts` may import types (only types) from
+`@isocan/cli/modulehost`. Nothing in a module imports from
+`packages/web/src`, `packages/cli/src` or `packages/server/src` — a module
+knows core and its own files, and is handed everything else.
 
 **Default exports matter.** The build script reads `core.ts`'s default
 export to write the manifest, and the runtime loaders read `web.tsx`'s and
@@ -381,6 +386,31 @@ watching rc cannot start from an absent or old directory. Indeterminate
 transport results retain that prepared row; definite rejection rolls back
 only the preparation that still owns it.
 
+`CliModule.tools` (module API 0.2.12, [`mcp.md`](mcp.md)) is the same verbs
+for an agent that reaches the canvas over `isocan mcp` instead of holding the
+CLI. Each is `{ name, title?, description, inputSchema, readOnly?, run(args,
+host) }`: the verb half of the name (`isocan mcp` registers
+`<module>_<name>`), a zod shape for the verb's own arguments — `session` and
+`canvas` are added by the server and may not be redeclared — and the act.
+`run` is handed `{ canvas(), home(), session, signal }`: the API's
+`CanvasHandle`, already opened as the call's identity, so the body is the
+verb's body through `@isocan/api` (`canvas.add(…)`) rather than `sendOp`.
+Throw to refuse. One tool per verb an agent would need; a listing verb whose
+answer is in the guide needs none.
+
+```ts
+tools: [{
+  name: "new",
+  description: "Start a whiteboard from a few words, as this call's identity.",
+  inputSchema: { words: z.string().min(1) },
+  run: async ({ words }: { words: string }, host) => {
+    const canvas = await host.canvas();
+    const item = await canvas.add({ content: words, mime: "text/markdown", title: "Board" });
+    return { itemId: item.id };
+  },
+}],
+```
+
 A module that wants a helper not on this list is asking for one to be
 promoted — a review question, not a private import. `runFenced` is what that
 looks like when the answer is yes: it was promoted for
@@ -486,16 +516,79 @@ in your `agent-guide.md` (`isocan board new`), and the section is printed
 after the base guide only while the module is loaded. `surface.test.ts`
 reads verbs from every module's `cli.ts` and enforces it.
 
-## Registering: the two lists
+## `server.ts` — the `ServerModule` record (optional)
 
-A build-time module is one line in each list, and those two lines are the
-whole coupling:
+Most modules never need this. Add it when a verb or a dialog must spend a
+model key — a key lives on the home and never reaches a browser, so the
+thing that spends it has to run there. Talk's one-use Live token and mood's
+spread of pictures are the two that forced it (19 Nov 2026, Open Stitch
+phase 0.1); read `packages/modules/talk/src/server.ts` for the small shape
+and `packages/modules/mood/src/server.ts` for one that reads a blob, draws,
+uploads and submits.
+
+```ts
+import type { ServerModule } from "@isocan/core";
+
+export const myServer: ServerModule = {
+  name: "@isocan/my-module",
+  routes: [
+    {
+      method: "POST",
+      path: "draw",                 // mounted at POST /api/m/my-module/draw
+      spend: "owner",               // "none" | "owner" (default) | "shared"
+      provider: "gemini",           // required unless spend is "none"
+      rate: { perMinute: 3 },       // per badge, counted only once every check passed
+      bodyLimit: 16 * 1024,
+      says: {                       // your codes — the ones your web/cli halves read
+        badRequest: { code: "my-bad-request", error: "a draw names the canvas it is for (`canvasId`)" },
+        ownerOnly: "my-owner-only",
+        unavailable: { code: "my-unavailable", error: "this home has no Gemini key — …" },
+        rateLimited: { code: "my-rate-limited", error: "this badge has drawn enough this minute — …" },
+      },
+      check: ({ body }) => /* refusals that cost nothing: the shape, a deny-list */ null,
+      handler: async (req, host) => {
+        const key = await host.keyFor("gemini");   // what the home cleared you to spend
+        const res = await host.fetch(ENDPOINT, { headers: { "x-goog-api-key": key! }, /* … */ });
+        return { status: 200, body: { /* … */ } };
+      },
+    },
+  ],
+};
+export default myServer;
+```
+
+**You do not write the door.** Before `handler` runs the home has already
+run, in `/api/text`'s order: your `check`; that a canvas is named (`canvasId`
+in a POST body, `?canvasId=` on a GET); the takedown and the refused badge;
+the admission and the edit rung; forwarding to the canvas's home when it is
+not here (with `spend: "none"`, always; otherwise unless this machine holds a
+key the badge may spend); owner-only spend; that a key exists; the rate. A
+refusal is answered in your `says` words, or the home's own `module-…` codes
+when you give none. The `ServerHost` you are handed — `keyFor`, `badgeId`,
+`speaksFor`, `canvas`, `readBlob`, `putBlob`, `submit`, `text`, `fetch`,
+`now`, `options`, `log` — is the whole surface; `options` is the seam bag the
+home was given for your module (a test's fake transport arrives through
+`host.fetch`, its clock through `host.now`). Call `speaksFor(actorId)` before
+spending on an actor's behalf, as mood does; `submit` refuses an actor the
+badge does not claim, but by then the key is spent.
+
+Add `"./server": "./src/server.ts"` to `exports`, and the line in the
+server list (next section). Nothing in `server.ts` imports `@isocan/server`
+— it is handed the host. `npm test` holds a `./server` export and a list
+entry to both-or-neither.
+
+## Registering: the lists
+
+A build-time module is one line in each list, and those lines are the whole
+coupling — two for every module, a third only for one with a `./server` half:
 
 ```ts
 // packages/web/src/modules.ts
 const LIST: ShellModule[] = [mindmapWeb, mermaidWeb, documentsWeb, myWeb];
 // packages/cli/src/modules.ts
 export const CLI_MODULES: readonly CliModule[] = [mindmapCli, mermaidCli, documentsCli, myCli];
+// packages/server/src/server-modules.ts — only with ./server
+export const SERVER_MODULES: readonly ServerModuleEntry[] = [{ module: talkServer, seams: (o) => o.liveToken }, { module: myServer }];
 ```
 
 Plus: add `"packages/modules/<name>/package.json"` to the Dockerfile's
@@ -566,8 +659,9 @@ does not load runtime modules; whether it ever should is a decision the
 ## The guards that will hold you
 
 - `test/modules.test.ts`: your package name appears outside your directory
-  only in the two lists (comments included — write `@isocan/<name>` in
-  prose); you are in both lists or neither; each half has a default export;
+  only in the lists (comments included — write `@isocan/<name>` in
+  prose); you are in both lists or neither, and in the server list exactly
+  when you export `./server`; each half has a default export;
   your manifest is copied in the Dockerfile; a `cli.ts` has an
   `agent-guide.md` beside it.
 - `packages/cli/test/surface.test.ts`: every verb your `cli.ts` registers is
@@ -585,13 +679,15 @@ does not load runtime modules; whether it ever should is a decision the
 ## Checklist
 
 1. `packages/modules/<name>/` with `package.json` (`"type": "module"`,
-   `exports` for `./core`, `./web`, `./cli`), `tsconfig.json`, `agent-guide.md`.
+   `exports` for `./core`, `./web`, `./cli` — and `./server` only if a route
+   spends a key), `tsconfig.json`, `agent-guide.md`.
 2. `src/core.ts`: the `CoreModule` record, default-exported. Namespace your keys.
 3. `src/web.tsx`: the `WebModule` record, default-exported; facts as props;
    heavy libraries behind `React.lazy`; effects keyed on `blobHash`.
 4. `src/cli.ts`: `register(host)`; the guide read from `../agent-guide.md`;
    default-exported.
-5. One line in each list; one `COPY` line in the Dockerfile; `npm install`.
+5. One line in each list (and the server list, with a `./server`); one
+   `COPY` line in the Dockerfile; `npm install`.
 6. Tests in `test/`; run `npx vitest run packages/modules/<name>
    test/modules.test.ts packages/cli/test/surface.test.ts`.
 7. Prove removal once by hand: take the directory and the two lines out,

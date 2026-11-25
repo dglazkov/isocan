@@ -21,6 +21,7 @@
   padding: var(--edge) var(--edge) 0;
   background: none; border: none;
 }
+.wb-bar > .spacer { flex: 1 1 0; min-width: 0; }
 /* The columns keep the gap the bar started, so the room breathes on the same
    rhythm as the canvas rather than running its panels into the window. */
 .workbench .wb-body { padding: var(--edge); gap: var(--edge); }

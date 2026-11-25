@@ -17,7 +17,8 @@
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { waitForResolvedFeedback, type CanvasHandle, type ExplicitIdentity, type Home } from "@isocan/api";
-import type { Actor } from "@isocan/core";
+import { buildContextGraph, renderContextGraph, type Actor } from "@isocan/core";
+import { BUILT_IN_TOOLS, moduleToolName, type McpModule, type McpToolHost } from "./tools.ts";
 
 /**
  * **The canvas, as tools an agent can call** (#220, phase 2).
@@ -65,6 +66,14 @@ export interface ServerDeps {
   /** Reported on `initialize`, so a host can say which build it is talking
    * to. */
   version?: string;
+  /**
+   * **The modules loaded where this server runs**, each with the tools its
+   * `cli.ts` declares (`docs/projects/modules/mcp.md`). `isocan mcp` hands
+   * over the CLI's own registry — build-time and runtime modules alike — so
+   * the tool list is the verb list, by construction rather than by a second
+   * list kept in step. Absent, the sixteen built-ins are the whole surface.
+   */
+  modules?: readonly McpModule[];
 }
 
 /** The MCP-shaped answer for a value: JSON in a text block, which is what
@@ -184,12 +193,31 @@ export function createServer(deps: ServerDeps): McpServer {
     {
       title: "Read a canvas",
       description:
-        "What is on a canvas: every item with its id, title, kind and position. The map, not the contents — use read_item for one item's text.",
-      inputSchema: { ...canvasArg, in: z.string().optional().describe("Read direct members of this canvas group (or legacy sheet)."), recursive: z.boolean().optional().describe("Include nested descendants of the named group.") },
+        "What is on a canvas: every item with its id, title, kind and position. Pass graph: true for the full context graph (with edges, clusters, stations, leases, Follow-Me view, and suggestedFreeRegions).",
+      inputSchema: {
+        ...canvasArg,
+        in: z.string().optional().describe("Read direct members of this canvas group (or legacy sheet)."),
+        recursive: z.boolean().optional().describe("Include nested descendants of the named group."),
+        graph: z.boolean().optional().describe("Return the structured context graph and rendered text (Open Stitch Phase 2A)."),
+        nav: z.boolean().optional().describe("With graph: true, emit the compact navigation index mode."),
+      },
     },
-    async ({ canvas, session, in: group, recursive }, extra) =>
+    async ({ canvas, session, in: group, recursive, graph, nav }, extra) =>
       answering(async () => {
         const handle = await canvasOf(canvas, session, "read", extra.signal);
+        if (graph) {
+          const snapshot = await handle.ctx.client.snapshot(handle.id, extra.signal);
+          const [sessions, leaseRes] = await Promise.all([
+            handle.ctx.client.listSessions(handle.id).catch(() => []),
+            handle.ctx.client.leases(handle.id).catch(() => ({ leases: [] })),
+          ]);
+          const built = buildContextGraph(snapshot, {
+            presence: sessions,
+            leases: leaseRes.leases,
+            mode: nav ? "nav" : "full",
+          });
+          return { ...built, rendered: renderContextGraph(built) };
+        }
         return canvasRead(handle, group, recursive);
       }),
   );
@@ -357,6 +385,50 @@ export function createServer(deps: ServerDeps): McpServer {
     signal.throwIfAborted();
     return { client: handle.ctx.client, canvasId: handle.id, actor: handle.ctx.actor };
   }, { ...(cursor === undefined ? {} : { since: cursor }), timeoutMs, signal: extra.signal })));
+
+  /**
+   * **Module tools, after the built-ins** (`docs/projects/modules/mcp.md`).
+   *
+   * Each is registered under `<module>_<verb>` with the built-ins' `session`
+   * and `canvas` arguments spliced in front of its own, and its body runs
+   * inside the same `answering` — so a refusal reads the same, the identity
+   * rule is the same, and the source policy is the same, because the handle
+   * it is given came through the same `canvasOf`. A collision — with a
+   * built-in, with another module, or with the two reserved arguments — is
+   * refused when the server is built, not discovered by a model mid-call.
+   */
+  const taken = new Set<string>(BUILT_IN_TOOLS);
+  for (const module of deps.modules ?? []) {
+    for (const tool of module.tools) {
+      const name = moduleToolName(module, tool);
+      if (taken.has(name)) throw new Error(`module ${module.name} declares an MCP tool ${name}, and that name is already taken`);
+      for (const reserved of ["session", "canvas"] as const) {
+        if (reserved in tool.inputSchema) throw new Error(`module tool ${name} redeclares "${reserved}", which every tool gets from the server`);
+      }
+      taken.add(name);
+      const intent = tool.readOnly ? "read" : "edit";
+      server.registerTool(
+        name,
+        {
+          ...(tool.title === undefined ? {} : { title: tool.title }),
+          description: tool.description,
+          ...(tool.readOnly ? { annotations: { readOnlyHint: true } } : {}),
+          inputSchema: { ...canvasArg, ...tool.inputSchema },
+        },
+        async (args: Record<string, unknown>, extra) =>
+          answering(async () => {
+            const { session, canvas, ...own } = args as { session?: string; canvas?: string } & Record<string, unknown>;
+            const host: McpToolHost = {
+              canvas: () => canvasOf(canvas, session, intent, extra.signal),
+              home: () => homeOf(session, intent, extra.signal),
+              session,
+              signal: extra.signal,
+            };
+            return tool.run(own, host);
+          }),
+      );
+    }
+  }
 
   for (const kind of ["canvas", "context"] as const) {
     const uriFor = (id: string) => `isocan://canvas/${encodeURIComponent(id)}${kind === "context" ? "/context" : ""}`;

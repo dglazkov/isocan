@@ -81,7 +81,8 @@ describe("the pool can wait out every motion", () => {
   it("has a length for each, and none for a cut", () => {
     for (const t of DECK_TRANSITIONS) expect(DECK_TRANSITION_MS[t], t).toBeGreaterThanOrEqual(0);
     expect(DECK_TRANSITION_MS.cut).toBe(0);
-    expect(DECK_TRANSITION_MS.push).toBe(220);
+    // The flat ones stay under half a second: quick reads as polished.
+    for (const t of ["push", "fade", "wipe", "zoom", "poof", "drift", "rise"] as const) expect(DECK_TRANSITION_MS[t], t).toBeLessThanOrEqual(480);
   });
 });
 
@@ -122,8 +123,9 @@ describe("the morph", () => {
 
   it("asks the stage first, and fades when the stage is not ready", () => {
     // A presenter's arrow never waits for twins that are still loading.
-    expect(flip).toMatch(/if \(framed === "both" && morphPlayer\?\.\(path, dir, \(\) => navigate\(path\)\)\)/);
-    expect(flip).toMatch(/transition = "fade";/);
+    expect(flip).toMatch(/if \(framed === "both" && morphPlayer\?\.\(path, dir, transition, \(\) => navigate\(path\)\)\)/);
+    // The morph has no whole-slide stand-in; the flat swaps keep theirs.
+    expect(flip).toMatch(/if \(transition === "morph"\) transition = "fade";/);
   });
 
   it("loads its twins under the lone allow-scripts every item frame gets", () => {
@@ -145,5 +147,59 @@ describe("a slide's twin", () => {
     expect(twin.endsWith("</script></body></html>")).toBe(true);
     expect(twin).toContain("isocan:morph:scene");
     expect(morphTwin("<h1>Acme</h1>").startsWith("<h1>Acme</h1><script>")).toBe(true);
+  });
+});
+
+describe("smoothness guards (24 Nov 2026)", () => {
+  const fs = readFileSync(fileURLToPath(new URL("../src/components/FullScreen.tsx", import.meta.url)), "utf8");
+
+  it("every live frame in a transitioning deck is a layer before it moves", () => {
+    // A frame's FIRST transform re-attaches it, drawn blank for a beat.
+    expect(css).toContain("[data-deck-transitions] .fullscreen-stage .html-view { will-change: transform, opacity; }");
+    expect(css).toContain("[data-deck-transitions] .fullscreen-stage .html-view-stack { overflow: clip; }");
+  });
+
+  it("shows only the two pages in the move, never a warm neighbour beneath", () => {
+    expect(css).toContain(".deck-moving > .html-view:not(.deck-out):not(.deck-in) { opacity: 0; transition: none; }");
+  });
+
+  it("animates only compositor properties (and wipe's clip)", () => {
+    const frames = [...css.matchAll(/@keyframes\s+(deck-[\w-]+)\s*\{([\s\S]*?)\}\s*\}/g)];
+    expect(frames.length).toBeGreaterThan(10);
+    for (const [, name, body] of frames) {
+      const props = [...body!.matchAll(/([a-z-]+)\s*:/g)].map((m) => m[1]);
+      for (const prop of props) expect(["transform", "opacity", "clip-path"], `${name} animates ${prop}`).toContain(prop);
+    }
+  });
+
+  it("does not pan the hidden canvas while a slide is moving", () => {
+    // The camera underneath snaps once the flip has settled (or on Esc).
+    expect(fs).toContain("revealItem(pending.id, 0)");
+    expect(fs).toContain("DECK_TRANSITION_MS[transition] + 80");
+  });
+});
+
+describe("an arriving page never starts wholly out of view", () => {
+  // A cross-origin frame entirely off the stage stops rendering, and slid
+  // back in as a white sheet (measured 24 Nov 2026).
+  const body = (name: string) => new RegExp(`@keyframes ${name}\\s*\\{([\\s\\S]*?)\\}\\s*\\}`).exec(css)?.[1] ?? "";
+
+  it("push starts with a sliver of the next page on the stage", () => {
+    for (const name of ["deck-enter-right", "deck-enter-left"]) {
+      expect(body(name), name).toMatch(/translate3d\(-?99\.\d+%/);
+    }
+  });
+
+  it("wipe starts with a sliver revealed, never clipped to nothing", () => {
+    for (const name of ["deck-wipe-from-right", "deck-wipe-from-left"]) {
+      expect(body(name), name).toMatch(/inset\([^)]*99\.\d+%/);
+      expect(body(name), name).not.toMatch(/100%/);
+    }
+  });
+
+  it("cube starts a few degrees short of edge-on", () => {
+    for (const name of ["deck-cube-in-right", "deck-cube-in-left"]) {
+      expect(body(name), name).not.toMatch(/rotateY\(-?90deg\)/);
+    }
   });
 });

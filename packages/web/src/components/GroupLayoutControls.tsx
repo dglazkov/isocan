@@ -16,7 +16,7 @@
 
 import { useEffect, useState } from "react";
 import type { Actor, GroupLayout, Item } from "@isocan/core";
-import { captureGroupExpectations, groupGridAction, groupGridLayout, groupGridTrimmedLabels } from "@isocan/core";
+import { captureGroupExpectations, groupChildren, groupGridAction, groupGridLayout, groupGridTrimmedLabels } from "@isocan/core";
 import { readBlobText } from "../lib/api.ts";
 import { changeCanvasGroup, PendingGroupWriteError, saveGroupBrief } from "../lib/canvasgroups.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
@@ -85,6 +85,34 @@ export function GroupLayoutControls({ canvasId, actor, item }: { canvasId: strin
       {dropping.length > 0 && <p>Removes labels: {dropping.join(", ")}</p>}
       <button type="button" onClick={() => void apply(() => changeCanvasGroup(canvasId, actor, { kind: "layout", itemId: item.id, layout: groupGridLayout(layout) }))}>Save layout</button>
       <button type="button" onClick={() => void apply(() => changeCanvasGroup(canvasId, actor, { kind: "layout", itemId: item.id, layout: groupGridLayout(layout), tidy: true }))}>Tidy contents with layout</button>
+      <button
+        type="button"
+        onClick={() =>
+          void apply(async () => {
+            const kids = canvas ? groupChildren(canvas, item.id) : [];
+            if (kids.length < 2) return;
+            const { inferGroupLayout } = await import("@isocan/core/auto-layout-infer");
+            const inferred = inferGroupLayout(
+              kids.map((k) => ({ id: k.id, x: k.x, y: k.y, width: k.width, height: k.height })),
+            );
+            const next: GroupLayout = { ...layout };
+            if (inferred.layout === "horizontal") {
+              next.rowCount = 1;
+              next.columnCount = kids.length;
+            } else if (inferred.layout === "vertical") {
+              next.rowCount = kids.length;
+              next.columnCount = 1;
+            } else if (inferred.layout === "grid" && inferred.columns) {
+              next.columnCount = inferred.columns;
+              next.rowCount = Math.ceil(kids.length / inferred.columns);
+            }
+            setLayout(next);
+            await changeCanvasGroup(canvasId, actor, { kind: "layout", itemId: item.id, layout: groupGridLayout(next), tidy: true });
+          })
+        }
+      >
+        Auto-layout (infer)
+      </button>
       {hasGrid && <button type="button" onClick={() => void apply(() => changeCanvasGroup(canvasId, actor, groupGridAction(item, null)))}>Clear grid</button>}
     </fieldset>
     <fieldset disabled={busy || queued || changed || brief === null}>

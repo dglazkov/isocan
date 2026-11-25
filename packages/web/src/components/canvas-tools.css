@@ -24,3 +24,25 @@
   box-shadow: var(--shadow-glass);
 }
 .ink-sep { width: 1px; align-self: stretch; margin: 1px 1px; background: var(--glass-border); }
+
+/* Top drag grip on the tool rail — drag to reposition anywhere, double-click to reset. */
+.tool-rail-grip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 14px;
+  width: 100%;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  border-radius: 999px;
+}
+.tool-rail-grip::before {
+  content: "";
+  width: 20px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--ink-soft);
+}
+.tool-rail-grip:hover::before { background: var(--ink-muted); }
+.tool-rail-grip:active { cursor: grabbing; }

@@ -22,6 +22,7 @@ import { makeCtx, type Ctx } from "./ctx.ts";
 import { parseXY, printJson, printTable } from "./output.ts";
 import { parseGroupCell } from "./group-placement.ts";
 import { designScopeNotes } from "./design-scope-notes.ts";
+import { inferExistingGroupLayout, printInferredGroupResult, wrapWithInferredLayout } from "./physics.ts";
 import { withContext } from "./run.ts";
 
 export async function reportCanvasGroup(ctx: Ctx, result: CanvasGroupResult): Promise<void> {
@@ -105,8 +106,12 @@ export function registerCanvasGroups(canvas: Command, context: (cmd: Command) =>
   groups.command("wrap <items...>").description("Group selected roots in place, under their common containing group")
     .requiredOption("--title <title>", "the new group's name")
     .option("--note <text>", "the group's Markdown brief")
+    .option("--infer", "infer vertical, horizontal, or grid layout before wrapping")
     .option("--dry-run", "validate and report membership and boxes without writing")
-    .action(act(async (handle, ctx, [items, opts]) => report(ctx, await handle.wrap(items, opts.title, opts))));
+    .action(act(async (handle, ctx, [items, opts]) => {
+      if (opts.infer) return printInferredGroupResult(ctx, await wrapWithInferredLayout(handle, ctx, items, opts), (res) => report(ctx, res));
+      return report(ctx, await handle.wrap(items, opts.title, opts));
+    }));
 
   groups.command("ls").alias("list").description("List groups with direct and descendant counts")
     .action(act(async (handle, ctx) => { const found = await handle.list(); if (ctx.json) printJson(found); else printTable(rows(found)); }));
@@ -158,11 +163,13 @@ export function registerCanvasGroups(canvas: Command, context: (cmd: Command) =>
     .option("--row-gutter <n>", "reserved row-label gutter")
     .option("--column-gutter <n>", "reserved column-label gutter")
     .option("--tidy", "arrange direct member placement units")
+    .option("--infer", "infer vertical, horizontal, or grid layout from direct members")
     .option("--dry-run", "report layout effects without writing")
     .action(act(async (handle, ctx, [ref, opts]) => {
+      if (opts.infer) return printInferredGroupResult(ctx, await inferExistingGroupLayout(handle, ctx, ref, opts), (res) => report(ctx, res));
       const layout: GroupLayout = {};
       for (const key of ["titleHeight", "briefHeight", "inset", "rowGutter", "columnGutter"] as const) if (opts[key] !== undefined) layout[key] = Number(opts[key]);
-      if (!Object.keys(layout).length && !opts.tidy) throw new Error("choose a layout setting or --tidy");
+      if (!Object.keys(layout).length && !opts.tidy) throw new Error("choose a layout setting, --tidy, or --infer");
       report(ctx, await handle.layout(ref, layout, opts));
     }));
 

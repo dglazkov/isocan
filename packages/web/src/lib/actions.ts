@@ -19,8 +19,7 @@ import { changeCanvasGroup, groupsEnabled, enterCanvasGroup, groupTask, openGrou
 import type { NavigateFunction } from "react-router-dom";
 import type { Actor, AlignEdge } from "@isocan/core";
 import { groupArrangeAction, groupScopeRoots, alignMoves, canvasPath, deckPath, itemPath, modulePagePath, nodeCapabilitiesFor, workbenchItemPath } from "@isocan/core";
-import { sendEchoed } from "../stores/canvasStore.ts";
-import { useCanvasStore } from "../stores/canvasStore.ts";
+import { sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { chatHiddenNow, extensionPanelKey, openPanel } from "./panels.ts";
 import { panelExtensionItems } from "@isocan/core";
@@ -314,6 +313,37 @@ export const ACTIONS: readonly Action[] = [
     available: (ctx) => onCanvas(ctx) && ctx.selection.length > 1,
     writes: true,
     run: (ctx) => runFormat(ctx, "in-place"),
+  },
+  {
+    id: "auto-layout",
+    name: "Auto-layout selection",
+    hint: "infer row, column, or grid from the current arrangement and pack cleanly",
+    group: "Canvas",
+    available: (ctx) => onCanvas(ctx) && ctx.selection.length > 1,
+    writes: true,
+    run: async (ctx) => {
+      if (!ctx.canvasId) return;
+      const canvas = useCanvasStore.getState().canvas;
+      if (!canvas) return;
+      const picked = ctx.selection.map((id) => canvas.items[id]).filter((it): it is Item => it !== undefined);
+      if (picked.length < 2) return;
+      const { inferGroupLayout } = await import("@isocan/core/auto-layout-infer");
+      const inferred = inferGroupLayout(
+        picked.map((it) => ({ id: it.id, x: it.x, y: it.y, width: it.width, height: it.height })),
+      );
+      if (inferred.layout === "freeform") {
+        setNotice("Kept freeform arrangement — items don't form a clear row, column, or grid.");
+        return;
+      }
+      const moves = [...inferred.positions.entries()].map(([itemId, pos]) => ({
+        itemId,
+        x: Math.round(pos.x),
+        y: Math.round(pos.y),
+      }));
+      if (moves.length) await sendEchoed(ctx.canvasId, ctx.actor, { type: "items.move", moves });
+      const label = inferred.layout === "grid" && inferred.columns ? `${inferred.columns}-column grid` : `${inferred.layout} row`;
+      setNotice(`Arranged as ${inferred.layout === "vertical" ? "vertical column" : label}`);
+    },
   },
   {
     id: "format-grid",

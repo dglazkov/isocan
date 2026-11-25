@@ -131,6 +131,8 @@ describe("nothing new goes over the wire", () => {
   /** The fields of the web's presence beat — the one message a tab sends
    *  about its cursor. Phase 2 added none. */
   const PRESENCE_FIELDS = ["type", "sessionId", "actor", "cursor", "selection", "textSelection", "signal", "drag"];
+  /** Protocol schema also carries optional `viewport` (Open Stitch Phase 2A Follow-Me). */
+  const PROTOCOL_PRESENCE_FIELDS = [...PRESENCE_FIELDS, "viewport"];
 
   it("the presence message's schema is the one it was", () => {
     const protocol = read("../../core/src/protocol.ts");
@@ -140,7 +142,7 @@ describe("nothing new goes over the wire", () => {
     const open = protocol.indexOf("  | {", start);
     const body = protocol.slice(open, protocol.indexOf("\n    }", open));
     const fields = [...body.matchAll(/^ {6}(\w+)\??:/gm)].map((m) => m[1]);
-    expect(fields).toEqual(PRESENCE_FIELDS);
+    expect(fields).toEqual(PROTOCOL_PRESENCE_FIELDS);
   });
 
   it("the beat the web builds carries the same fields and no more", () => {

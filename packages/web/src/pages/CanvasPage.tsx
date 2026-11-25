@@ -91,6 +91,9 @@ const ModuleWorkspaceView = lazy(() =>
 import { modules, moduleWorkspace } from "../modules.ts";
 /** Module chrome loads when a module supplies it or a person opens its dialog. */
 const ModuleDialogs = lazy(() => import("../components/ModuleDialogs.tsx").then((m) => ({ default: m.ModuleDialogs })));
+const PromptPill = lazy(() => import("../components/shell/PromptPill.tsx"));
+const AgentDock = lazy(() => import("../components/shell/AgentDock.tsx"));
+const FullScreenChat = lazy(() => import("../components/shell/FullScreenChat.tsx"));
 import { useChromeHidden } from "../lib/hideable.ts";
 import { Viewer } from "../components/LazyViewer.tsx";
 import { usePhone } from "../lib/phone.ts";
@@ -132,10 +135,11 @@ import { AgentTray } from "../components/LazyAgentTray.tsx";
 import { ContextPanel } from "../components/LazyContextPanel.tsx";
 import { PersonasPanel } from "../components/LazyPersonasPanel.tsx";
 import { ExtensionPanel } from "../components/LazyExtensionPanel.tsx";
-import { ReactionBar, restoreReactionBar } from "../components/ReactionBar.tsx";
-import { CommentToasts } from "../components/CommentToasts.tsx";
-import { OfflineBar } from "../components/OfflineBar.tsx";
-import { SprintChip } from "../components/SprintChip.tsx";
+import { ReactionBar } from "../components/LazyReactionBar.tsx";
+import { restoreReactionBar } from "../lib/reactionbar.ts";
+import { CommentToasts } from "../components/LazyCommentToasts.tsx";
+import { OfflineBar } from "../components/LazyOfflineBar.tsx";
+import { SprintChip } from "../components/LazySprintChip.tsx";
 import { unreadThreads, useUnreadStore } from "../stores/unreadStore.ts";
 import { crossesCover, hasTextSelection, isTyping } from "../lib/keys.ts";
 import { recordVisit } from "../lib/recents.ts";
@@ -329,6 +333,10 @@ function CanvasSurface({
   /* Read here rather than inside the panel, because the panel is no longer
      mounted while it is shut — the flag has to be the thing that mounts it. */
   const helpOpen = useUiStore((s) => s.helpOpen);
+  const uiHidden = useUiStore((s) => s.uiHidden);
+  const mainPanelOpen = useUiStore((s) => s.mainPanelOpen);
+  const chatAt = useUiStore((s) => s.chatAt);
+  const chatFullScreen = useUiStore((s) => s.chatFullScreen);
   const setHistoryOpen = useUiStore((s) => s.setHistoryOpen);
   const moduleDialogOpen = useUiStore((s) => s.moduleDialog !== null);
   const semanticZoom = useUiStore((s) => s.experiments).includes("semantic.zoom");
@@ -877,11 +885,32 @@ function CanvasSurface({
         // ⌘/Ctrl + arrow walks the selection to the next item that way.
         e.preventDefault();
         jump(e.key as Direction);
-      } else if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && !e.shiftKey && !e.altKey && ui.selectedItemIds.length === 1 && useCanvasStore.getState().canvas?.items[ui.selectedItemIds[0]!]?.groupLayout?.display === "stack") {
-        // ← → on a selected stack flip which card is in front (this viewer's
+      } else if (
+        (e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "[" || e.key === "]") &&
+        !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey &&
+        ui.selectedItemIds.length === 1 &&
+        useCanvasStore.getState().canvas?.items[ui.selectedItemIds[0]!]?.groupLayout?.display === "stack"
+      ) {
+        // ← → and [ ] on a selected stack flip which card is in front (this viewer's
         // view, never stored); ↑ ↓ and ⇧-arrows still move it.
         e.preventDefault();
-        window.dispatchEvent(new CustomEvent("isocan:stack-flip", { detail: { groupId: ui.selectedItemIds[0], step: e.key === "ArrowRight" ? 1 : -1 } }));
+        const step = e.key === "ArrowRight" || e.key === "]" ? 1 : -1;
+        window.dispatchEvent(new CustomEvent("isocan:stack-flip", { detail: { groupId: ui.selectedItemIds[0], step } }));
+      } else if (
+        (e.key === "[" || e.key === "]") &&
+        !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey &&
+        ui.selectedItemIds.length === 1 &&
+        canEditNow()
+      ) {
+        // [ / ] on a selected multi-version item cycles its active version in place.
+        const chosen = useCanvasStore.getState().canvas?.items[ui.selectedItemIds[0]!];
+        if (chosen && chosen.versions.length > 1) {
+          e.preventDefault();
+          const idx = chosen.versions.findIndex((v) => v.id === chosen.currentVersionId);
+          const step = e.key === "]" ? 1 : -1;
+          const next = chosen.versions[((idx < 0 ? 0 : idx) + step + chosen.versions.length) % chosen.versions.length]!;
+          void sendEchoed(canvasId!, actor, { type: "item.setCurrentVersion", itemId: chosen.id, versionId: next.id });
+        }
       } else if (NUDGES[e.key]) {
         // Arrows nudge the selection; with nothing selected they are the
         // browser's again (and scrolling a canvas page does nothing anyway).
@@ -953,7 +982,8 @@ function CanvasSurface({
         // Watching is the outermost mode: Esc hands the camera back first.
         // A mark being placed is the innermost: it is the thing under the
         // pointer right now.
-        if (ui.cursorSignalEditing || ui.cursorSignal) { clearCursorSignal(); }
+        if (ui.chatFullScreen) ui.setChatFullScreen(false);
+        else if (ui.cursorSignalEditing || ui.cursorSignal) { clearCursorSignal(); }
         else if (ui.drag || ui.resize || ui.groupPreview) { ui.setDrag(null); ui.setResize(null); ui.setGroupPreview(null); ui.setGroupDropTarget(null); ui.setGuides([]); }
         else if (ui.stamp) ui.setStamp(null);
         else if (ui.renamingItemId) ui.setRenaming(null);
@@ -1227,7 +1257,7 @@ function CanvasSurface({
     // steps aside for the panel eases to its new place, which is right for the
     // one step of opening and wrong for a width changing every frame.
     <div
-      className={`canvas-page${phone ? " phone-layout" : ""}${panelResizing ? " resizing-panel" : ""}${canEdit ? "" : " read-only"}`}
+      className={`canvas-page${phone ? " phone-layout" : ""}${panelResizing ? " resizing-panel" : ""}${canEdit ? "" : " read-only"}${uiHidden ? " ui-hidden" : ""}`}
       data-ground-tone={groundTone}
       data-ground-sample={groundSample}
       style={groundMid as CSSProperties | undefined}
@@ -1294,7 +1324,22 @@ function CanvasSurface({
       {canEdit && <TrashPanel key={canvasId} canvasId={canvasId} actor={actor} />}
       <RailStrip canvasId={canvasId} actor={actor} />
       <ReactionBar canvasId={canvasId} />
+      {!phone && canEdit && !mainPanelOpen && chatAt !== "bottom" && !chatFullScreen && (
+        <Suspense fallback={null}>
+          <PromptPill canvasId={canvasId!} actor={actor} initialFolded />
+        </Suspense>
+      )}
+      {!phone && (
+        <Suspense fallback={null}>
+          <AgentDock canvasId={canvasId!} actor={actor} />
+        </Suspense>
+      )}
       </>}
+      {!phone && chatFullScreen && (
+        <Suspense fallback={null}>
+          <FullScreenChat canvasId={canvasId!} actor={actor} />
+        </Suspense>
+      )}
       {/* Native collaboration and files remain reachable from the launcher
           while a module owns the canvas chrome. */}
       <DesignComparisonHost canvasId={canvasId} actor={actor} />

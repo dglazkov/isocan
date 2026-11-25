@@ -22,7 +22,7 @@ import { FloatingHandles, useFloatingBox } from "../lib/floatingbox.tsx";
 import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { Presence } from "./Presence.tsx";
-import { CanvasEditor } from "./CanvasEditor.tsx";
+const CanvasEditor = lazy(() => import("./CanvasEditor.tsx").then((m) => ({ default: m.CanvasEditor })));
 /** Opened from a click, so it arrives on the click (#195's budget). */
 const IdentityMenu = lazy(() => import("./IdentityMenu.tsx").then((m) => ({ default: m.IdentityMenu })));
 /**
@@ -105,15 +105,17 @@ export function CanvasTitle({ actor }: { actor: Actor }) {
       {editing && canvas && (
         <div ref={float.ref} className="canvas-popover" style={float.style}>
           <FloatingHandles box={float} />
-          <CanvasEditor
-            title={canvas.title}
-            description={canvas.description}
-            onSave={async (patch) => {
-              await sendEchoed(canvas.id, actor, { type: "project.update", patch });
-              setEditing(false);
-            }}
-            onCancel={() => setEditing(false)}
-          />
+          <Suspense fallback={null}>
+            <CanvasEditor
+              title={canvas.title}
+              description={canvas.description}
+              onSave={async (patch) => {
+                await sendEchoed(canvas.id, actor, { type: "project.update", patch });
+                setEditing(false);
+              }}
+              onCancel={() => setEditing(false)}
+            />
+          </Suspense>
         </div>
       )}
     </div>
@@ -208,7 +210,7 @@ export function ShareButton({ actor }: { actor: Actor }) {
         onClick={() => useUiStore.getState().setShareOpen(!shareOpen)}
       >
         <ShareGlyph />
-        Share
+        <span className="share-label">Share</span>
       </button>
       {shareOpen && canvas && (
         <div ref={float.ref} className="identity-popover share-popover" style={float.style}>

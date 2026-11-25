@@ -1079,6 +1079,11 @@ export function chromeMenu(ctx: {
       shortcutFor: "Customize UI",
       run: () => openUiDevtools("glass"),
     },
+    {
+      label: ui().uiHidden ? "Show UI" : "Hide UI",
+      shortcutFor: "Hide or show the interface",
+      run: () => ui().toggleUiHidden(),
+    },
     /* **The cursor glow left this menu on 13 Sep** (#195 put it here). Its
        own note said it belonged "beside the minimap because it is the same
        kind of choice: what this browser draws, for this person, on every

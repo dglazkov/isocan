@@ -99,8 +99,8 @@ const RELEASE_SCRIPTS_DIR = "scripts";
 export const RELEASE_DROPS = [
   ["docs"],
   ["test"],
-  // Plates's tests (adopted as Keel practice `loop`, 5 Oct 2026): the suite for scripts
-  // that are dropped below, so as inert here as `test/`.
+  // The node --test suite for scripts that are dropped below, so as inert
+  // here as `test/`.
   ["tests"],
   [":(glob)packages/**/test/**"],
   // The web app's build inputs. `dist` is what a daemon serves; `public/` is

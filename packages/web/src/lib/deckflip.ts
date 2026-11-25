@@ -16,7 +16,7 @@
 
 import { flushSync } from "react-dom";
 import type { NavigateFunction } from "react-router-dom";
-import { DEFAULT_DECK_TRANSITION, type DeckTransition } from "@isocan/core";
+import { DEFAULT_DECK_TRANSITION, isDeckTransitionPiece, type DeckTransition } from "@isocan/core";
 import { useUiStore } from "../stores/uiStore.ts";
 
 /**
@@ -83,13 +83,17 @@ const CUT_WITHIN_MS = 300;
  * 3D ones are deliberately longer: a turn you cannot see is not a turn.
  */
 export const DECK_TRANSITION_MS: Readonly<Record<DeckTransition, number>> = {
-  push: 220,
-  fade: 260,
+  push: 300,
+  fade: 280,
+  wipe: 320,
   zoom: 320,
-  morph: 1600,
-  depth: 1100,
-  cube: 750,
-  flip: 700,
+  poof: 460,
+  drift: 440,
+  rise: 460,
+  morph: 1150,
+  depth: 820,
+  cube: 620,
+  flip: 580,
   cut: 0,
 };
 
@@ -141,7 +145,7 @@ let liveFlip: { dir: "next" | "prev"; transition: DeckTransition; at: number } |
  * next slide only once its twins have painted their first frame, so the
  * live slide underneath never changes before something is covering it.
  */
-type MorphPlayer = (path: string, dir: "next" | "prev", go: () => void) => boolean;
+type MorphPlayer = (path: string, dir: "next" | "prev", transition: DeckTransition, go: () => void) => boolean;
 let morphPlayer: MorphPlayer | null = null;
 
 /** Register the stage that plays morphs, or `null` when it leaves. */
@@ -214,12 +218,15 @@ export function flipTo(
     navigate(path);
     return;
   }
-  if (transition === "morph") {
-    if (framed === "both" && morphPlayer?.(path, dir, () => navigate(path))) {
-      busyFor = DECK_TRANSITION_MS.morph;
+  if (isDeckTransitionPiece(transition)) {
+    if (framed === "both" && morphPlayer?.(path, dir, transition, () => navigate(path))) {
+      busyFor = DECK_TRANSITION_MS[transition];
       return;
     }
-    transition = "fade";
+    // `morph` has no flat whole-slide CSS equivalent so it falls back to fade;
+    // `poof`, `drift`, and `rise` fall through to matching subtle CSS motions
+    // for images, text, or screens whose twins are still warming up.
+    if (transition === "morph") transition = "fade";
   }
   busyFor = Math.max(CUT_WITHIN_MS, DECK_TRANSITION_MS[transition]);
   if (framed === "both") {

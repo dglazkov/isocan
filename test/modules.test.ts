@@ -32,11 +32,18 @@ import { describe, expect, it } from "vitest";
  *
  * And the other half of "both surfaces": a module in one list and not the
  * other is the web-only feature AGENTS.md forbids, in a box.
+ *
+ * A third list since 19 Nov 2026 (Open Stitch phase 0.1): a module MAY ship
+ * a `./server` half, and the home mounts it from `packages/server/src/server-modules.ts`
+ * — the only server file allowed to name a module. A `./server` export with
+ * no line there is a route nobody can reach; a line there with no export is
+ * a list entry that cannot resolve. Both-or-neither, like the other two.
  */
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const modulesDir = path.join(repo, "packages/modules");
 const WEB_LIST = "packages/web/src/modules.ts";
 const CLI_LIST = "packages/cli/src/modules.ts";
+const SERVER_LIST = "packages/server/src/server-modules.ts";
 
 function moduleNames(): string[] {
   return readdirSync(modulesDir).filter((d) => existsSync(path.join(modulesDir, d, "package.json")));
@@ -63,12 +70,12 @@ describe("modules", () => {
     const pkg = JSON.parse(readFileSync(path.join(modulesDir, name, "package.json"), "utf8"));
     const spec: string = pkg.name;
 
-    it(`${spec} is named outside its directory only by the two lists`, () => {
+    it(`${spec} is named outside its directory only by the three lists`, () => {
       const elsewhere = walk(path.join(repo, "packages"))
         .filter((f) => !f.startsWith(path.join(modulesDir, name)))
         .filter((f) => readFileSync(f, "utf8").includes(spec))
         .map((f) => path.relative(repo, f))
-        .filter((f) => f !== WEB_LIST && f !== CLI_LIST)
+        .filter((f) => f !== WEB_LIST && f !== CLI_LIST && f !== SERVER_LIST)
         // The manifest of a package that depends on it is a declaration, not an import.
         .filter((f) => !f.endsWith("package.json"));
       expect(elsewhere, `${spec} leaked out of its directory into: ${elsewhere.join(", ")}`).toEqual([]);
@@ -80,12 +87,19 @@ describe("modules", () => {
       expect({ inWeb, inCli }).toEqual(inWeb ? { inWeb: true, inCli: true } : { inWeb: false, inCli: false });
     });
 
+    it(`${spec} has a server half in the server list, or neither`, () => {
+      const exported = Boolean(pkg.exports?.["./server"]);
+      const listed = readFileSync(path.join(repo, SERVER_LIST), "utf8").includes(`${spec}/server`);
+      expect({ exported, listed }).toEqual(exported ? { exported: true, listed: true } : { exported: false, listed: false });
+      if (exported) expect(existsSync(path.join(modulesDir, name, "src/server.ts")), `${spec} exports ./server and ships no src/server.ts`).toBe(true);
+    });
+
     it(`${spec} exports each half as a default, which is what a runtime load reads`, () => {
       // `scripts/module-build.mjs` bundles `src/web.tsx` / `src/cli.ts` and the
       // loaders (`lib/runtimeModules.ts`, `runtime-modules.ts`) take
       // `mod.default`; a named export alone builds fine and loads nothing —
       // which is how the first runtime proof found this.
-      for (const half of ["src/web.tsx", "src/cli.ts", "src/core.ts"]) {
+      for (const half of ["src/web.tsx", "src/cli.ts", "src/core.ts", "src/server.ts"]) {
         const file = path.join(modulesDir, name, half);
         if (!existsSync(file)) continue;
         expect(readFileSync(file, "utf8"), `${spec}/${half} has no default export`).toMatch(/^export default /m);

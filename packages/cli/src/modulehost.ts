@@ -18,10 +18,11 @@ import type { Command } from "commander";
 import type { CanvasSnapshotResponse } from "@isocan/core";
 import type { Canvas, CanvasContents, CoreModule, GroupBox, Item, Operation, Placement } from "@isocan/core";
 import type { CopyEdit } from "@isocan/core/copy-deck";
+import type { McpTool, McpToolHost } from "@isocan/mcp";
 import type { Ctx } from "./ctx.ts";
 import type { FencedRequest, FencedRun } from "./sandbox.ts";
 
-export type { Ctx, FencedRequest, FencedRun };
+export type { Ctx, FencedRequest, FencedRun, McpTool, McpToolHost };
 
 /**
  * **What a module's verbs are handed** (`docs/projects/modules/design.md`).
@@ -161,6 +162,16 @@ export interface CliModule {
   copy?: CopyWriter;
   /** What this module adds to the desk check before a share (proactive-agent phase 8). */
   deskCheck?: ModuleDeskCheck;
+  /**
+   * **The same verbs, for an agent that speaks MCP instead of holding the
+   * CLI** (module API 0.2.12, `docs/projects/modules/mcp.md`). `isocan mcp`
+   * registers each as `<module>_<name>` beside the sixteen built-ins, with
+   * the built-ins' `session` and `canvas` arguments added for it. One per
+   * verb an agent would need; the `ls` kind of verb, whose answer is in the
+   * guide, needs none. A verb here and not in `register`, or the reverse, is
+   * the one-surface feature AGENTS.md forbids.
+   */
+  tools?: readonly McpTool[];
 }
 
 /**

@@ -68,6 +68,7 @@ export { MOTION_MAX_SECONDS, motionWarnings, validateMotionSpec, type MotionWarn
 export { authoredSpec, motionDocumentSpec, motionSpecFrom, motionTargets, type MotionAuthoredMove, type MotionAuthoredSpec, type MotionPivotName } from "./motion-spec.ts";
 export { MOTION_MESSAGES, motionMessage, motionSeek } from "./motion-messages.ts";
 export { addMotionItem, addMotionMovie, MOTION_BESIDE, versionMotionItem, type MotionWriter } from "./motion-items.ts";
+export * from "./m3-motion.ts";
 
 /**
  * **The properties a motion item wears** (design §2). `motion` marks it;

@@ -99,10 +99,28 @@ export interface NewComment {
   at?: number;
   /** Resolved #item-references (item ids); see Comment.items. */
   items?: string[];
+  /** Structured edit receipt posted by an agent reply (Open Stitch Phase 2A). */
+  receipt?: import("./receipts.ts").CommentReceipt;
+  /** Structured patch proposal posted by an agent reply (Open Stitch Phase 2A). */
+  proposal?: import("./receipts.ts").CommentProposal;
   /** Public attachment intent; the home resolves it at one canvas revision. */
   contextRequest?: import("./canvas-group-context.ts").ContextRequest;
   /** Canonical writer output only; public callers cannot supply retained metadata. */
   context?: import("./canvas-group-context.ts").ContextManifest;
+}
+
+/**
+ * Optimistic concurrency precondition checked by the reducer before applying
+ * an item mutation (Open Stitch Phase 2A, op change #1 — extends existing item
+ * ops without adding a new operation type).
+ */
+export interface ItemPrecondition {
+  /** Expected `item.currentVersionId`. */
+  versionId?: string;
+  /** Expected `blobHash` of the item's current version. */
+  contentHash?: string;
+  /** Expected `item.updatedAt` ISO timestamp. */
+  updatedAt?: string;
 }
 
 /**
@@ -304,8 +322,8 @@ export type Operation =
        * wears the mark with no point, and `off` removes both. */
       at?: { x: number; y: number };
     }
-  | { type: "item.move"; itemId: string; x: number; y: number }
-  | { type: "item.resize"; itemId: string; width: number; height: number }
+  | { type: "item.move"; itemId: string; x: number; y: number; expect?: ItemPrecondition }
+  | { type: "item.resize"; itemId: string; width: number; height: number; expect?: ItemPrecondition }
   | {
       type: "item.update";
       /** Saved group brief reservation; omitted lets the home inspect the brief bytes. */
@@ -325,8 +343,9 @@ export type Operation =
       /** Attach, update, or remove (when `null`) named fidelity faces on the
        * current version without minting a new version history entry. */
       faces?: Partial<Record<NamedFaceId, VisualFace | null>>;
+      expect?: ItemPrecondition;
     }
-  | { type: "item.addVersion"; itemId: string; version: NewVersion; briefHeight?: number }
+  | { type: "item.addVersion"; itemId: string; version: NewVersion; briefHeight?: number; expect?: ItemPrecondition }
   | {
       /** Replace content and its metadata as one conditional, undoable act.
        * A distinct type makes older daemons refuse instead of ignoring a
@@ -372,7 +391,7 @@ export type Operation =
       version: ItemVersion;
       patch?: MetaPatch;
     }
-  | { type: "item.delete"; itemId: string } // → trash, all versions travel with it
+  | { type: "item.delete"; itemId: string; expect?: ItemPrecondition } // → trash, all versions travel with it
   | { type: "item.restore"; itemId: string } // ← trash
   // Batch variants exist so a multi-select gesture is ONE op and therefore
   // ONE undo step. They add no new capability over their singular forms.

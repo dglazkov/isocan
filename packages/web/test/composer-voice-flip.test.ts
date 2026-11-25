@@ -49,6 +49,7 @@ const posted = vi.hoisted(() => vi.fn());
 vi.mock("../src/lib/mainthread.ts", () => ({ postToMain: posted }));
 
 const { MainThreadBody } = await import("../src/components/MainThreadPanel.tsx");
+const { PromptPill, PROMPT_FOLD_DELAY_MS } = await import("../src/components/shell/PromptPill.tsx");
 const { useCanvasStore } = await import("../src/stores/canvasStore.ts");
 const { useUiStore } = await import("../src/stores/uiStore.ts");
 const { addModule } = await import("../src/modules.ts");
@@ -183,5 +184,109 @@ describe("composer voice ↔ send flip", () => {
     const sendBtn = host.querySelector<HTMLButtonElement>('button[type="submit"]');
     expect(sendBtn, "without voice, Send stays present when empty").not.toBeNull();
     expect(sendBtn!.disabled).toBe(true);
+  });
+});
+
+describe("PromptPill live voice integration", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("starts live voice in one click from the folded pill, stays unfolded without remounting, and restores on stop", async () => {
+    mounts = 0;
+    await act(async () => {
+      root.render(
+        h(
+          Suspense,
+          { fallback: null },
+          h(PromptPill, { canvasId: "prj_acme", actor, initialFolded: true }),
+        ),
+      );
+    });
+    const voiceSlot = await waitForVoiceControl();
+    const pill = () => host.querySelector<HTMLElement>(".shell-prompt-pill")!;
+
+    expect(pill().dataset.folded).toBe("true");
+    expect(pill().dataset.voiceActive).toBe("false");
+    expect(voiceSlot.hidden).toBe(false);
+    expect(mounts).toBe(1);
+
+    // Click the voice control right on the folded pill.
+    vi.useFakeTimers();
+    const voiceBtn = voiceSlot.querySelector<HTMLButtonElement>('[data-testid="voice-btn"]')!;
+    act(() => voiceBtn.click());
+
+    expect(pill().dataset.folded).toBe("false");
+    expect(pill().dataset.voiceActive).toBe("true");
+    expect(voiceSlot.classList.contains("module-composer-wide")).toBe(true);
+    expect(host.querySelector("textarea")).toBeNull();
+    expect(host.querySelector('button[type="submit"]')).toBeNull();
+    expect(mounts, "unfolding for voice takeover must never remount the control").toBe(1);
+
+    // Advancing past the fold delay must NOT collapse the pill while voice is live.
+    act(() => {
+      vi.advanceTimersByTime(PROMPT_FOLD_DELAY_MS * 2);
+    });
+    expect(pill().dataset.folded).toBe("false");
+    expect(pill().dataset.voiceActive).toBe("true");
+
+    // Ending voice restores the composer and resumes normal idle auto-fold.
+    act(() => voiceBtn.click());
+    expect(pill().dataset.voiceActive).toBe("false");
+    expect(host.querySelector("textarea")).not.toBeNull();
+    expect(mounts, "ending voice does not remount the control").toBe(1);
+
+    act(() => {
+      vi.advanceTimersByTime(PROMPT_FOLD_DELAY_MS);
+    });
+    expect(pill().dataset.folded).toBe("true");
+  });
+
+  it("flips between voice and Send while typing in PromptPill without remounting", async () => {
+    mounts = 0;
+    await act(async () => {
+      root.render(
+        h(
+          Suspense,
+          { fallback: null },
+          h(PromptPill, { canvasId: "prj_acme", actor, initialFolded: false }),
+        ),
+      );
+    });
+    const voiceSlot = await waitForVoiceControl();
+    expect(voiceSlot.hidden).toBe(false);
+    expect(host.querySelector('button[type="submit"]')).toBeNull();
+
+    const field = host.querySelector<HTMLTextAreaElement>(".shell-prompt-input")!;
+    typeInto(field, "Align the cards");
+    expect(voiceSlot.hidden).toBe(true);
+    expect(host.querySelector('button[type="submit"]')).not.toBeNull();
+    expect(mounts).toBe(1);
+
+    typeInto(field, "");
+    expect(voiceSlot.hidden).toBe(false);
+    expect(host.querySelector('button[type="submit"]')).toBeNull();
+    expect(mounts).toBe(1);
+  });
+
+  it("offers a one-click mic button that enables modules.talk when not yet enabled", async () => {
+    act(() => useUiStore.setState({ experiments: [] }));
+    await act(async () => {
+      root.render(
+        h(
+          Suspense,
+          { fallback: null },
+          h(PromptPill, { canvasId: "prj_acme", actor, initialFolded: true }),
+        ),
+      );
+    });
+    const quickMic = host.querySelector<HTMLButtonElement>(".shell-prompt-voice-btn");
+    expect(quickMic, "lightweight mic button is shown before modules.talk is enabled").not.toBeNull();
+
+    await act(async () => {
+      quickMic!.click();
+    });
+    expect(useUiStore.getState().experiments).toContain("modules.talk");
+    expect(host.querySelector<HTMLElement>(".shell-prompt-pill")!.dataset.folded).toBe("false");
   });
 });

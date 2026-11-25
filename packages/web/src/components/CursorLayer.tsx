@@ -20,7 +20,7 @@ import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { worldToScreen } from "../lib/viewport.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
-import { cursorChipLabel, pointerMark, type Actor } from "@isocan/core";
+import { cursorChipLabel, formatAgentPill, handleForActor, pointerMark, type Actor } from "@isocan/core";
 import { useActorMarks } from "../lib/marks.ts";
 import { isAgentActor, useActorKinds } from "../lib/actorkinds.ts";
 import { sessionName, useActorNames } from "../lib/names.ts";
@@ -91,17 +91,20 @@ export function CursorLayer({ actor = null }: { actor?: Actor | null } = {}) {
       for (const session of current) {
         // Wander area: the targeted item's bounds (including a thread's
         // anchored or referenced item), or a synthetic patch around a
-        // freestanding work point.
-        const workingBounds = sessionWorkingBounds(session, canvas);
-        if (!session.cursor && !workingBounds) continue;
+        // freestanding work point. When an explicit action verb is declared
+        // (OS1 ADR 0272/0273), stop inventing simulated wander motion — sit
+        // honestly at the declared cursor or item centre.
+        const rawWorkingBounds = sessionWorkingBounds(session, canvas);
+        const workingBounds = session.action ? undefined : rawWorkingBounds;
+        if (!session.cursor && !rawWorkingBounds) continue;
         live.add(session.sessionId);
 
-        // Anchor working cursors to `workingBounds` center (matching `sessionLocus`)
+        // Anchor working cursors to `rawWorkingBounds` center (matching `sessionLocus`)
         // so a stale `session.cursor` far away can never trigger a snap loop.
-        const home = workingBounds
+        const home = rawWorkingBounds
           ? {
-              x: workingBounds.x + workingBounds.width / 2,
-              y: workingBounds.y + workingBounds.height / 2,
+              x: rawWorkingBounds.x + rawWorkingBounds.width / 2,
+              y: rawWorkingBounds.y + rawWorkingBounds.height / 2,
             }
           : spread.get(session.sessionId) ?? session.cursor!;
         const { rec, moved } = stepCursorAnim(animated.current.get(session.sessionId), {
@@ -165,7 +168,11 @@ export function CursorLayer({ actor = null }: { actor?: Actor | null } = {}) {
         const pos = rec ?? fallback!;
         const screen = worldToScreen(viewport, pos.x, pos.y);
         const color = actorColorIn(colors, session.actor.id);
-        const name = cursorChipLabel(session.signal, sessionName(names, session));
+        const explicitPill =
+          !session.signal && session.action
+            ? formatAgentPill(session.handle ?? handleForActor(session.actor.id), session.action)
+            : null;
+        const name = explicitPill ?? cursorChipLabel(session.signal, sessionName(names, session));
         /**
          * **The mark IS the pointer** (agent pointers, 30 Sep 2026: *"instead
          * of the arrow… a dog emoji for"* an agent).

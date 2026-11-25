@@ -24,6 +24,10 @@
  * same at every zoom.
  */
 
+import { filterVisibleSnapTargets, snapThresholdWorld, spacingSnapV2 } from "@isocan/core/snap-v2";
+
+export { snapThresholdWorld };
+
 export interface Box {
   x: number;
   y: number;
@@ -90,73 +94,12 @@ function axisSnap(moving: number[], others: number[], threshold: number): { delt
   return { delta: settled, lines: [...new Set(lines)] };
 }
 
-/** One axis, read off a box: position, size, and the span on the other axis. */
-interface Axis {
-  pos: (box: Box) => number;
-  size: (box: Box) => number;
-  crossStart: (box: Box) => number;
-  crossSize: (box: Box) => number;
-}
-
-const AXES: Record<"x" | "y", Axis> = {
-  x: { pos: (b) => b.x, size: (b) => b.width, crossStart: (b) => b.y, crossSize: (b) => b.height },
-  y: { pos: (b) => b.y, size: (b) => b.height, crossStart: (b) => b.x, crossSize: (b) => b.width },
-};
-
-/**
- * Centre the moving box between its nearest neighbour on each side, so the two
- * gaps match. Only boxes that share a band with it count — an item on another
- * row is not "beside" anything, whatever its coordinates say.
- */
-function spacingSnap(
-  moving: Box,
-  others: Box[],
-  threshold: number,
-  which: "x" | "y",
-): { delta: number; guide: SpacingGuide } | null {
-  const axis = AXES[which];
-  const start = axis.pos(moving);
-  const end = start + axis.size(moving);
-  const bandStart = axis.crossStart(moving);
-  const bandEnd = bandStart + axis.crossSize(moving);
-
-  const beside = others.filter((other) => {
-    const otherStart = axis.crossStart(other);
-    return otherStart < bandEnd && otherStart + axis.crossSize(other) > bandStart;
-  });
-
-  let before: Box | null = null;
-  let after: Box | null = null;
-  for (const other of beside) {
-    const otherEnd = axis.pos(other) + axis.size(other);
-    if (otherEnd <= start && (before === null || otherEnd > axis.pos(before) + axis.size(before))) {
-      before = other;
-    }
-    if (axis.pos(other) >= end && (after === null || axis.pos(other) < axis.pos(after))) {
-      after = other;
-    }
-  }
-  if (!before || !after) return null;
-
-  const left = axis.pos(before) + axis.size(before);
-  const right = axis.pos(after);
-  // Solve (start + d) - left === right - (end + d).
-  const delta = (left + right - start - end) / 2;
-  if (Math.abs(delta) > threshold) return null;
-  const gap = start + delta - left;
-  if (gap <= 0) return null; // touching or overlapping is not spacing
-
-  return {
-    delta,
-    guide: {
-      axis: which,
-      gaps: [
-        [left, start + delta],
-        [end + delta, right],
-      ],
-      at: axis.crossStart(moving) + axis.crossSize(moving) / 2,
-    },
-  };
+/** Optional zoom and spacing tuning for Snap v2. */
+interface SnapBoxOptions {
+  /** Current viewport zoom; when set, targets < 8 screen px are ignored. */
+  zoom?: number;
+  /** Override vertical label-row allowance for default spacing candidates. */
+  labelRowPx?: number;
 }
 
 /**
@@ -164,13 +107,16 @@ function spacingSnap(
  * bounding box of a multi-item drag) at its current, unsnapped position;
  * `others` is everything it can align to. A threshold of zero snaps nothing.
  */
-export function snapBox(moving: Box, others: Box[], threshold: number): Snap {
+export function snapBox(moving: Box, others: Box[], threshold: number, opts?: SnapBoxOptions): Snap {
   if (threshold <= 0 || others.length === 0) return { dx: 0, dy: 0, guides: [], spacing: [] };
-  const x = axisSnap(edgesX(moving), others.flatMap(edgesX), threshold);
-  const y = axisSnap(edgesY(moving), others.flatMap(edgesY), threshold);
-  // Equal spacing only speaks for an axis that alignment did not claim.
-  const spaceX = x === null ? spacingSnap(moving, others, threshold, "x") : null;
-  const spaceY = y === null ? spacingSnap(moving, others, threshold, "y") : null;
+  const visible = opts?.zoom !== undefined ? filterVisibleSnapTargets(others, opts.zoom) : others;
+  if (visible.length === 0) return { dx: 0, dy: 0, guides: [], spacing: [] };
+  const x = axisSnap(edgesX(moving), visible.flatMap(edgesX), threshold);
+  const y = axisSnap(edgesY(moving), visible.flatMap(edgesY), threshold);
+  // Equal/neighbour/default spacing only speaks for an axis that alignment did not claim.
+  const spaceOpts = opts?.labelRowPx !== undefined ? { labelRowPx: opts.labelRowPx } : undefined;
+  const spaceX = x === null ? spacingSnapV2(moving, visible, threshold, "x", spaceOpts) : null;
+  const spaceY = y === null ? spacingSnapV2(moving, visible, threshold, "y", spaceOpts) : null;
   return {
     dx: x?.delta ?? spaceX?.delta ?? 0,
     dy: y?.delta ?? spaceY?.delta ?? 0,

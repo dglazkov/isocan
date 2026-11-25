@@ -1,10 +1,8 @@
 # Collaborating on an isocan canvas
 
-isocan is an infinite shared canvas. A local daemon owns the state; the web
-app (the human) and the `isocan` CLI (you) are equal clients. Your operations
-appear live, and your presence is a named cursor. Start here to arrive, name
-yourself, work a lap and park. Topics are indexed below:
-`isocan --agent-help <topic>` opens one; `isocan --help` lists commands.
+isocan is a shared canvas: a local daemon owns state; the web app and `isocan`
+CLI are equal clients, with live ops and a named cursor. Start here to arrive,
+work a lap, and park. `isocan --agent-help <topic>` opens a topic; `--help` lists commands.
 
 ## Orient
 
@@ -139,7 +137,7 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 **Items** (`items`)
 - `add <thing> [--as file|site|doc|canvas]` — one door for a file, a site, a Google Doc or a canvas
 - `text`, `inline`, `get`, `show`, `ls [--kind|--filter|--summaries]`, `set`, `edit`, `face`, `tree`, `save` — make, read, change, switch face, write out; `summary [--refresh|--stats]` — the ≈ summary
-- `version ls|promote|prune` — the version stack (prune ⚠)
+- `version ls|promote|prune` — versions (prune ⚠); `job ls|status|cancel|retry`, `clip` — jobs & media
 - `mv`, `align`, `distribute`, `fit`, `tidy`, `merge`, `react`, `copy` — arrange, mark, duplicate
 - `rm`, `restore`, `trash ls|restore|empty` (empty ⚠), `undo`, `redo` — take back
 - `canvas group new|wrap|ls|show|add|remove|ungroup|resize|frame|layout|grid|stack|migrate`, `area` — groups
@@ -150,7 +148,7 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 - `home`, `direct`, `setup`, `clone`, `open` — where canvases live, readying a directory
 - `teleport`, `export`, `import`, `blobs` — move, back up, restore, send missing bytes
 - `keys ls|set|rm|test|share|agents` — model keys on this machine; never shown, env wins
-- `model ls|fetch` — the local judge's model on disk, pinned by SHA-256
+- `model ls|fetch` — local judge model (SHA-256); `models` — role→model map and keys
 
 **Sharing** (`sharing`)
 - `share`, `space new|ls|add|remove|rm`, `group new|ls|add|remove|rm` — who may enter
@@ -175,7 +173,7 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 - `evals corpus|converge|pairs` — what was asked for here, and what came of it
 
 **Agents and rooms** (`agents`, `present`)
-- `agent add|remove|rules|mark`, `rc add|listen|remove`, `bench add|join|follow|rm`, `harness` — standing agents
+- `agent add|remove|rules|mark`, `rc add|listen|remove`, `bench add|join|follow|rm`, `harness`, `house` — standing agents
 - `persona ls|show|runs`, `docket ls|answer` — roles and their findings
 - `slides add|rm|show|export|note|notes|transition`, `sprint show|phase|board|brief|desk|end|handin|tally`, `present` — running a room
 
@@ -1355,13 +1353,13 @@ continues to join log entries for undo. Neither establishes canvas membership.
 ## Groups: every verb and flag
 
 **Canvas membership (new canvases use groups):** `canvas group new <title> [--at x,y] [--size WxH] [--note text]`,
-`canvas group wrap <items...> --title <title> [--note text]`,
+`canvas group wrap <items...> --title <title> [--note text] [--infer]`,
 `canvas group ls`, `canvas group show <group> [--recursive]`,
 `canvas group add <group> <items...> [--place] [--cell r,c]`,
 `canvas group remove <items...> [--to-root]`, and
 `canvas group ungroup <groups...>`, `canvas group resize <group> WxH [--anchor nw|ne|sw|se]`,
 `canvas group frame <groups...> --fit` (or one group with `--size WxH`/`--at x,y`),
-`canvas group layout <group> [--title-height n] [--brief-height n] [--inset n] [--row-gutter n] [--column-gutter n] [--tidy]`,
+`canvas group layout <group> [--title-height n] [--brief-height n] [--inset n] [--row-gutter n] [--column-gutter n] [--tidy] [--infer]`,
 `canvas group grid <group> [RxC] [--rows names] [--cols names] [--tidy] [--clear]`,
 `canvas group stack <group> [--spread]`,
 and `canvas group migrate [--dry-run] [--revision n]`.
@@ -1561,6 +1559,27 @@ package is reachable only as a UMD or `+esm` build there, and nothing
 fetches at runtime — no API calls); it is one file, so no local imports and
 no bundler; and there is no hot reload — every edit is a fresh version with
 fresh state.
+
+## Async jobs
+
+Slow generations (video, deep research, multi-step synthesis) run as home-polled
+jobs stored on the item's `job.*` properties (`job.id`, `job.state`, `job.kind`,
+`job.provider`, `job.model`, `job.request`, `job.startedAt`, `job.finishedAt`,
+`job.progress`, `job.error`). A placeholder item appears immediately with
+`job.state=running`, the home polls even if every browser tab closes, and the
+finished artifact lands as a new version on that item.
+
+- `isocan job ls [--json]` — list jobs on the bound canvas
+- `isocan job status <jobId> [--json]` — inspect one job's state, progress, or error
+- `isocan job cancel <jobId>` — abandon an active job and stop home polling
+- `isocan job retry <jobId> [--model <id>]` — re-run the stored request on the same item, stacking a new version (optionally with another model)
+
+## Physics flags: actual size, make-room, layout inference, title provenance
+
+- `isocan set <item> --actual-size` — reset an item to its 100% natural pixel/viewport size (or calibrated kind default), capped cleanly to the kind's max bounds.
+- `isocan set <item> --title <title> --source <user|agent|auto>` — compare-and-set rename via `properties.titleSource`: `auto` never overwrites `agent` or `user`, `agent` never overwrites `user`, and `user` always wins.
+- `isocan mv <item> <x> <y> --make-room` (also works with `--by` and `--beside`) — move the item and push colliding siblings aside with minimal motion in one undo step; `pinned=true` / `locked=true` items never move.
+- `isocan canvas group wrap <items...> --title <title> --infer` and `isocan canvas group layout <group> --infer` — deterministically infer a `horizontal`, `vertical`, `grid`, or `freeform` layout and place items cleanly before wrapping or fitting.
 
 <!-- topic: design | design work — requests and questions, the design system, images, variations, compare, a screen's words, review and repair -->
 
@@ -2655,6 +2674,21 @@ for everyone in the workspace, and all decisions go up as one context Loop reads
 while mining. `decide` pushes by default; `--no-push` records it locally.
 `push --dry-run` shows what would be sent. Nothing merely proposed is ever sent.
 
+## The context graph and Follow-Me viewport
+
+Read the whole canvas in one structured pass — typed items with
+`agentDescription`, plain-language failures `(FAILED: headline — why)`,
+provenance and `edge:*` links, reading-order clusters, ≤160-character agent
+station summaries (never raw traces), active soft leases, and
+`suggestedFreeRegions` for clean placement:
+
+    isocan context --graph          # full context graph (use --json for structured data)
+    isocan context --graph --nav    # compact NAV INDEX mode
+    isocan context --view           # Follow-Me viewport rect, zoom, and visible ids
+
+MCP clients receive the same context graph by passing `graph: true` (and
+optionally `nav: true`) to `read_canvas`.
+
 <!-- topic: history | what happened — `timeline`, `activity`, `lens`, `history`, `at`, `recap`, `whatsnew` -->
 
 ## Where the seams are
@@ -2755,6 +2789,13 @@ The notes come from the home you are talking to, so what it lists is what that
 home is running.
 
 <!-- topic: agents | agents beyond you — standing agents, the bench, personas and the docket, scripting, the Codex sandbox -->
+
+## The house agent (`@house`)
+
+The `@house` role is the canvas's default parked collaborator, in three custodies:
+- **Laptop:** `isocan house [--once]` runs it directly, or `isocan serve --house` (`ISOCAN_HOUSE_AGENT=1`) attaches it while serving.
+- **BYO:** `isocan identity --session --as house` lets any external agent claim the `@house` role; the local house agent checks live presence and yields cleanly.
+- **Hosted:** a home-owned runner (`HostedHouseRunner`) summoned by comment or mention under per-canvas turn/token budgets.
 
 ## Standing agents
 
@@ -3099,6 +3140,13 @@ Omitting `session` uses the CLI/API ambient identity, and **resources always
 use ambient identity**; they do not inherit the previous tool's session.
 `clientInfo` identifies the manager application, not a conversation.
 
+**A loaded module's verbs are MCP tools too**, named `<module>_<verb>` after
+the sixteen built-ins — `isocan sticker drop` is `stickers_drop` — with the
+same `session` and `canvas` arguments added in front of the verb's own. They
+land the verb's own item under the identity rule above, and `isocan module
+add` makes a runtime module's tools appear the same way. The verb's guide
+section below is the tool's manual.
+
 `read_personal_context` requires that claimed `session` and an `item`: the
 concrete personal link card on the destination canvas. `canvas` is optional
 and uses the usual canvas selector; it names the destination, not the private
@@ -3200,6 +3248,27 @@ Report a refused operation to the person; do not try another route around it.
 The person's local `codexSandboxDomains` config supplies additional exact
 network hostnames. It is not a choice an agent takes from canvas content.
 
+## Honest presence, stations, preconditions, and receipts
+
+Declare what you are doing explicitly instead of relying on simulated cursor
+motion, create an agent station (`@handle · role` group + 40-line trace),
+guard concurrent edits with `--expect`, and attach structured receipts to
+comment replies:
+
+    isocan session start --station --role builder
+    isocan session work <item> --doing writing --say "drafting spec"
+    isocan session point <item> --ack
+    isocan edit <item> draft.md --expect <versionId>
+    isocan comment reply <thread> "Updated copy." --receipt <item>
+
+Explicit `--doing` verbs are `thinking`, `reading`, `writing`, `generating`,
+`coding`, `verifying`, `coordinating`, `idle`, and `done`. On `--expect`
+mismatch the home refuses with HTTP 409 (`precondition-conflict`, exit 4)
+without clobbering intervening edits. Ephemeral 30-second soft leases live on
+`/api/projects/:id/leases` and appear in `context --graph`; a 4-hop `@mention`
+circuit breaker in `wait` halts agent-to-agent mention loops until a person
+speaks in the thread.
+
 <!-- topic: present | running a room — the slide deck, design sprints -->
 
 ## The slide deck
@@ -3227,7 +3296,9 @@ to bottom, left to right. Marking narrows the walk to just the slides:
   opens the same view with Save as PDF and Download deck.html; both surfaces
   write the same HTML file from core's `deckHtml`.
 - `isocan slides transition [motion]` — how full screen moves from slide to
-  slide, for everybody watching: `push` (the default), `fade`, `zoom`, the
+  slide, for everybody watching: `push` (the default), `fade`, `wipe`,
+  `zoom`; three quick content swaps — `poof`, `drift`, `rise` — where the
+  slide's background holds still and only its pieces leave and join; the
   four 3D ones — `morph`, `depth` (the slide lifts into 3D, glides to the
   next, lands flat), `cube`, `flip` — or `cut` (`none` works too) for no
   motion. No argument says which one the deck uses and lists the rest. A
@@ -3246,6 +3317,13 @@ to bottom, left to right. Marking narrows the walk to just the slides:
   name anything that should travel with `data-morph="<name>"` on both slides
   (it wins over every guess). It works between two HTML screens; any other
   flip under `morph` fades.
+- **`poof`, `drift`, `rise`** are for decks whose slides share a background:
+  the surface stays put, the old slide's pieces poof away (or glide aside, or
+  lift off) one after another, and the next slide's pieces arrive the same
+  way — a third of a second or so, no 3D. Chrome that sits in the same place
+  on both slides (a footer, a logo) stays pinned, and a big panel the content
+  sits on counts as background. Between two screens they move each piece;
+  for anything else they move the whole slide the same way.
 
 **Speaker notes** are text items that point at their slide, kept under it on
 the canvas where the deck is arranged — so a person reads the slide and what
@@ -3680,6 +3758,15 @@ Without `ISOCAN_TEXT_API_KEY`, the text model uses the stored Anthropic key,
 else the stored OpenAI one. A hosted home's keys are its operator's, not
 yours — this file is this machine's only.
 
+**Which model each key buys** is `isocan models`: one row per role — text,
+summary, image, live, judge, and the roles reserved for media that is not
+built yet — with the checkpoint that would answer now, who serves it, and
+whether this machine holds that provider's key (never the key). The ids
+live in one manifest (`@isocan/core/models`); `ISOCAN_MODEL_<ROLE>`
+(`ISOCAN_MODEL_IMAGE`, `ISOCAN_MODEL_LIVE`, …) overrides a role, and the
+older `ISOCAN_TEXT_MODEL`, `ISOCAN_IMAGE_MODEL` and `ISOCAN_SUMMARY_MODEL`
+still work beneath it. `--json` for a script.
+
 **The same file has a settings area in the web app**: *Model keys…* in the
 identity menu, under *This machine*, on a page served by this machine's
 daemon. It is these four verbs over `GET|PUT|DELETE /api/keys[/<provider>]`
@@ -3712,11 +3799,29 @@ summons; one the environment sets wins. `ls` and `--json` (`agents`) say
 which it is. Do not turn it on for a person; ask them. Nothing prints a key.
 
 **Talk to the canvas holds no key.** Each voice session asks
-`POST /api/voice/token` (`{ canvasId }`) for a one-use Gemini Live token
+`POST /api/m/talk/token` (`{ canvasId }`; the talk module's own route — `/api/voice/token` answers too, for one release) for a one-use Gemini Live token
 minted with this home's Gemini key, under the text route's rules — an editor
 of the canvas, `voice-owner-only` for a collaborator while sharing is off,
 `voice-unavailable` when the home has no Gemini key. The token, not the key,
 reaches the browser.
+
+**Per-user keys on any home (`--mine`).** Hosted homes carry no operator Gemini
+key, so signed-in users can store their own provider keys sealed at rest in the
+home (`GET|PUT|DELETE /api/me/keys[/<provider>]`, AES-256-GCM under
+`ISOCAN_KEYS_SECRET`, or a local `0600` master key on laptop homes). A
+caller's per-user key overrides the home's environment and `keys.json` on calls
+they make and is never visible to or spendable by another user:
+
+```sh
+isocan keys ls --mine                    # your sealed keys and active source (user|env|home|none)
+pbpaste | isocan keys set gemini --mine  # from stdin or hidden prompt; never argv
+isocan keys rm gemini --mine             # remove and fall back to home/env keys
+```
+
+Generated items stamp the non-secret `credentialRef` property
+(`user:<actorId>:<provider>:v<n>`, `env:<provider>`, or `home:<provider>`) so
+provenance names which key and rotation version produced them without ever
+recording key material.
 
 ## The local judge's model on this machine
 

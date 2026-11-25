@@ -46,6 +46,7 @@ const ChatTidy = lazy(() => import("./ChatTidy.tsx"));
 
 const DesignComment = lazy(() => import("./DesignComment.tsx").then((module) => ({ default: module.DesignComment })));
 const DesignComparisonComment = lazy(() => import("./DesignComparisonComment.tsx").then((module) => ({ default: module.DesignComparisonComment })));
+const HouseCommentMetaView = lazy(() => import("./shell/PlanView.tsx").then((module) => ({ default: module.HouseCommentMetaView })));
 import type { Actor, CanvasContents, Comment, CommentThread, Item } from "@isocan/core";
 import { benchJoinAsk, isGroupItem, isSystemActor, laneFor, mainThread, parseSlashCommand, workedFor, shortcut } from "@isocan/core";
 import { postToMain } from "../lib/mainthread.ts";
@@ -728,7 +729,8 @@ function Panel({
                   cards especially, which are the tallest thing here. */}
               <CommentFold comment={comment}>
                 <div className="body">
-                  {comment.designDecision ? <Suspense fallback={<p>Reading design decision…</p>}><DesignComparisonComment comment={comment} canvasId={canvasId} actor={actor} threadId={thread!.id} /></Suspense> : comment.design ? <Suspense fallback={<p>Reading design record…</p>}><DesignComment comment={comment} /></Suspense> : <><CommandChip body={comment.body} /><Markdown rehypePlugins={chips}>{withoutCommand(comment.body)}</Markdown></>}
+                  {comment.designDecision ? <Suspense fallback={<p>Reading design decision…</p>}><DesignComparisonComment comment={comment} canvasId={canvasId} actor={actor} threadId={thread!.id} /></Suspense> : comment.design ? <Suspense fallback={<p>Reading design record…</p>}><DesignComment comment={comment} /></Suspense> : <><CommandChip body={comment.body} /><Markdown rehypePlugins={chips}>{withoutCommand(comment.body.replace(/\n*<!--\s*isocan:house-meta:[\s\S]*?-->\s*$/, ""))}</Markdown></>}
+                  {comment.body.includes("<!-- isocan:house-meta:") && <Suspense fallback={null}><HouseCommentMetaView body={comment.body} /></Suspense>}
                 </div>
                 {!onOpenItem && canvas && thread && <LaneChips canvas={canvas} thread={thread} comment={comment} />}
                 {comment.context && <ContextManifestView manifest={comment.context} comment={{ threadId: thread.id, commentId: comment.id }} />}

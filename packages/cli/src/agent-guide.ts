@@ -120,7 +120,7 @@ export function guideTopics(modules: readonly ModuleGuide[] = []): GuideTopic[] 
   for (const m of modules) {
     const text = m.guide.trim();
     const heading = /^##\s+(.+)$/m.exec(text)?.[1]?.trim() ?? m.name;
-    topics.push({ slug: moduleSlug(m.name), summary: `${heading} — a module`, text });
+    topics.push({ slug: moduleSlug(m.name), summary: heading, text });
   }
   return topics;
 }
@@ -144,8 +144,7 @@ export function topicIndex(topics: readonly GuideTopic[]): string {
   return [
     "## Topics",
     "",
-    "`isocan --agent-help <topic>` prints one in full; `--agent-help <verb>` prints",
-    "the topic that teaches that verb; `--agent-help all` prints everything.",
+    "`isocan --agent-help <topic|verb|all>` prints one topic, a verb's topic, or all.",
     "",
     ...topics.map((t) => `- \`${t.slug}\` — ${t.summary}`),
   ].join("\n");

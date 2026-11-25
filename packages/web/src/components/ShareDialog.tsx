@@ -612,6 +612,7 @@ export function ShareDialog({
       {record && (
         <p className="share-owner">
           Made by {made ? "you" : ownerName}
+          {!owned && canEdit && ownerNote ? ` — ${ownerNote}.` : ""}
         </p>
       )}
 

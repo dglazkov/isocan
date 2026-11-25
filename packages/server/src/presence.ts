@@ -16,14 +16,17 @@
 
 import type {
   Actor,
+  AgentActionVerb,
   CanvasContents,
   Capability,
   CursorSignal,
   Operation,
+  PaintAckResult,
   PresenceActivity,
   PresenceSession,
+  PresenceViewport,
 } from "@isocan/core";
-import { cursorSignal, groupChangeItemIds, narrowed, newId, presenceDrag, textAttention } from "@isocan/core";
+import { cursorSignal, groupChangeItemIds, isAgentActionVerb, narrowed, newId, normalizeHandle, presenceDrag, textAttention } from "@isocan/core";
 
 /**
  * The ephemeral plane. Presence lives in daemon memory and WS fan-out only —
@@ -71,6 +74,9 @@ export class PresenceHub {
   private rooms = new Map<string, Map<string, SessionState>>();
   private listeners: Array<(canvasId: string) => void> = [];
   private sweeper: ReturnType<typeof setInterval>;
+  /** Ephemeral highest sequence number painted by a web client per canvas (NOT an op). */
+  private paintedSeqs = new Map<string, number>();
+  private paintWaiters = new Map<string, Set<() => void>>();
 
   constructor(private readonly ttlMs = SESSION_TTL_MS) {
     this.sweeper = setInterval(() => this.sweep(), SWEEP_INTERVAL_MS);
@@ -79,6 +85,74 @@ export class PresenceHub {
 
   close(): void {
     clearInterval(this.sweeper);
+    for (const waiters of this.paintWaiters.values()) {
+      for (const wake of waiters) wake();
+    }
+    this.paintWaiters.clear();
+  }
+
+  /** Record an ephemeral paint acknowledgement from a connected client (monotone). */
+  recordPaintAck(canvasId: string, seq: number): number {
+    if (!Number.isInteger(seq) || seq < 0) return this.lastPaintedSeq(canvasId);
+    const prev = this.paintedSeqs.get(canvasId) ?? 0;
+    const next = Math.max(prev, seq);
+    if (next !== prev || !this.paintedSeqs.has(canvasId)) {
+      this.paintedSeqs.set(canvasId, next);
+      const waiters = this.paintWaiters.get(canvasId);
+      if (waiters) {
+        for (const wake of [...waiters]) wake();
+      }
+    }
+    return next;
+  }
+
+  /** Highest sequence number reported painted by a client on `canvasId` (0 if none yet). */
+  lastPaintedSeq(canvasId: string): number {
+    return this.paintedSeqs.get(canvasId) ?? 0;
+  }
+
+  /**
+   * Wait up to `timeoutMs` for a client paint ack reaching `seq`.
+   * Resolves as `"rendered"` once `lastPaintedSeq(canvasId) >= seq`, or
+   * `"applied"` if the deadline elapses first (e.g. no browser tab open).
+   */
+  waitForPaint(canvasId: string, seq: number, timeoutMs = 1000): Promise<PaintAckResult> {
+    const start = Date.now();
+    const current = this.lastPaintedSeq(canvasId);
+    if (current >= seq) {
+      return Promise.resolve({ seq, status: "rendered", paintedSeq: current, waitedMs: 0 });
+    }
+    const budget = Math.max(0, Math.min(timeoutMs, 10_000));
+    if (budget === 0) {
+      return Promise.resolve({ seq, status: "applied", paintedSeq: current, waitedMs: 0 });
+    }
+    return new Promise<PaintAckResult>((resolve) => {
+      let waiters = this.paintWaiters.get(canvasId);
+      if (!waiters) {
+        waiters = new Set();
+        this.paintWaiters.set(canvasId, waiters);
+      }
+      let settled = false;
+      const finish = (status: "rendered" | "applied") => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        waiters?.delete(check);
+        if (waiters && waiters.size === 0) this.paintWaiters.delete(canvasId);
+        resolve({
+          seq,
+          status,
+          paintedSeq: this.lastPaintedSeq(canvasId),
+          waitedMs: Date.now() - start,
+        });
+      };
+      const check = () => {
+        if (this.lastPaintedSeq(canvasId) >= seq) finish("rendered");
+      };
+      const timer = setTimeout(() => finish("applied"), budget);
+      timer.unref?.();
+      waiters.add(check);
+    });
   }
 
   onChange(listener: (canvasId: string) => void): void {
@@ -102,7 +176,7 @@ export class PresenceHub {
     canvasId: string,
     actor: Actor,
     kind: PresenceSession["kind"],
-    options: { label?: string; sessionId?: string; harness?: string; capability?: Capability } = {},
+    options: { label?: string; handle?: string; sessionId?: string; harness?: string; capability?: Capability } = {},
   ): PresenceSession {
     const session = blankSession(actor, kind, options);
     this.room(canvasId).set(session.sessionId, session);
@@ -128,6 +202,10 @@ export class PresenceHub {
       status?: string | null;
       statusSource?: "explicit" | "lifecycle" | "inferred";
       activity?: PresenceActivity | null;
+      handle?: string | null;
+      action?: AgentActionVerb | null;
+      viewport?: PresenceViewport | null;
+      workSummary?: string | null;
       onThread?: string | null;
     } = {},
   ): boolean {
@@ -360,8 +438,9 @@ function stripped(session: SessionState): PresenceSession {
 function blankSession(
   actor: Actor,
   kind: PresenceSession["kind"],
-  options: { label?: string; sessionId?: string; harness?: string; capability?: Capability },
+  options: { label?: string; handle?: string; sessionId?: string; harness?: string; capability?: Capability },
 ): SessionState {
+  const handle = options.handle ? normalizeHandle(options.handle) : null;
   return {
     origin: null,
     sessionId: options.sessionId ?? newId("ses"),
@@ -369,6 +448,7 @@ function blankSession(
     kind,
     harness: options.harness ?? null,
     label: options.label ?? null,
+    ...(handle ? { handle } : {}),
     // The rung, from the connection's admission and never from a beat: a
     // client asserting its own rung would be a client deciding what it may
     // do. Carried only when it is not edit, like everywhere else.
@@ -385,6 +465,33 @@ function blankSession(
   };
 }
 
+function sanitizeViewport(raw: PresenceViewport | null | undefined): PresenceViewport | null {
+  if (!raw || typeof raw !== "object") return null;
+  if (
+    !Number.isFinite(raw.x) ||
+    !Number.isFinite(raw.y) ||
+    !Number.isFinite(raw.width) ||
+    !Number.isFinite(raw.height) ||
+    !Number.isFinite(raw.zoom) ||
+    raw.width <= 0 ||
+    raw.height <= 0 ||
+    raw.zoom <= 0
+  ) {
+    return null;
+  }
+  const visibleIds = Array.isArray(raw.visibleIds)
+    ? raw.visibleIds.filter((id): id is string => typeof id === "string" && id.length > 0).slice(0, 40)
+    : undefined;
+  return {
+    x: raw.x,
+    y: raw.y,
+    width: raw.width,
+    height: raw.height,
+    zoom: raw.zoom,
+    ...(visibleIds ? { visibleIds } : {}),
+  };
+}
+
 function patchSession(
   session: SessionState,
   patch: {
@@ -397,6 +504,10 @@ function patchSession(
     status?: string | null;
     statusSource?: "explicit" | "lifecycle" | "inferred";
     activity?: PresenceActivity | null;
+    handle?: string | null;
+    action?: AgentActionVerb | null;
+    viewport?: PresenceViewport | null;
+    workSummary?: string | null;
     onThread?: string | null;
   },
 ): void {
@@ -407,6 +518,25 @@ function patchSession(
   if (patch.selection !== undefined) session.selection = patch.selection;
   if (patch.textSelection !== undefined) session.textSelection = textAttention(patch.textSelection);
   if (patch.signal !== undefined) session.signal = cursorSignal(patch.signal);
+  if (patch.handle !== undefined) {
+    const clean = patch.handle ? normalizeHandle(patch.handle) : null;
+    if (clean) session.handle = clean;
+    else delete session.handle;
+  }
+  if (patch.action !== undefined) {
+    if (patch.action !== null && isAgentActionVerb(patch.action)) session.action = patch.action;
+    else delete session.action;
+  }
+  if (patch.viewport !== undefined) {
+    const vp = sanitizeViewport(patch.viewport);
+    if (vp) session.viewport = vp;
+    else delete session.viewport;
+  }
+  if (patch.workSummary !== undefined) {
+    const clean = typeof patch.workSummary === "string" ? patch.workSummary.trim().slice(0, 200) : "";
+    if (clean) session.workSummary = clean;
+    else delete session.workSummary;
+  }
   // Absent, not null, when there is none: every web face rides every roster,
   // and a field on all of them for the one moment one of them is dragging is
   // bytes for nothing.
