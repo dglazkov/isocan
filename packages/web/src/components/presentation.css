@@ -311,20 +311,28 @@ html[data-morph="playing"] .fullscreen-stage { opacity: 0; }
    and would show through wherever the two at work are see-through. */
 .morph-stage[data-playing] .morph-frame:not([data-role]) { opacity: 0; }
 
+/* Keep the full-screen bar's spacer pushing the right cluster to the edge and
+   stop the right cluster (deck controls or Viewer's slide counter) from
+   crushing its own contents when the left title is long. */
+.fs-bar > .spacer { flex: 1 1 0; min-width: 0; }
+.fs-bar > .fs-cluster:last-child:not(:first-child) { flex: none; }
+
 /* The deck turning itself (FocusHeader): the play button, then how many
-   seconds a slide stays. Narrow on purpose — three digits and a unit. */
-.fullscreen-autoadvance { display: inline-flex; align-items: center; gap: 6px; }
+   seconds a slide stays, joined as one control. Narrow on purpose — three
+   digits and a unit. */
+.fullscreen-autoadvance { display: inline-flex; align-items: stretch; gap: 0; flex: none; }
+.fullscreen-autoadvance > .fullscreen-notes-toggle { border-top-right-radius: 0; border-bottom-right-radius: 0; }
 /* The box is the label, so the number and its unit sit inside one border. */
 .fullscreen-autoadvance-field {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: 1px;
-  /* The same height as the buttons beside it (12px, line-height 1, 6px). */
   font-size: 12px;
   line-height: 1;
-  padding: 6px 8px 6px 6px;
+  padding: 0 7px 0 5px;
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-left: 0;
+  border-radius: 0 7px 7px 0;
   background: var(--chip);
   cursor: text;
 }

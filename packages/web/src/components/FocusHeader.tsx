@@ -45,6 +45,29 @@ import { useTransitionsOn } from "../lib/deckflip.ts";
 /** Loaded the first time the Transition menu opens — nobody else pays for it. */
 const TransitionPreview = lazy(() => import("./TransitionPreview.tsx"));
 
+/** Width tier of the focus header, measured on the bar itself so split panes
+ *  and sidecars adapt the same way a narrow browser window does. */
+export type HeaderDensity = "wide" | "medium" | "compact" | "tight";
+
+export function headerDensityFor(width: number): HeaderDensity {
+  if (width >= 1360) return "wide";
+  if (width >= 1020) return "medium";
+  if (width >= 760) return "compact";
+  return "tight";
+}
+
+/** True when a version filename is just a slugified copy of the item's title
+ *  (e.g. `03-what-a-person-clicks.html` beside `03 · What a person clicks`).
+ *  Showing both in the header wastes a quarter of the bar on the same words. */
+export function isFilenameRedundant(title: string, filename: string): boolean {
+  const stem = filename.replace(/\.[^.]+$/, "");
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  const a = norm(title);
+  const b = norm(stem);
+  if (!a || !b) return false;
+  return a === b || a.startsWith(b) || b.startsWith(a);
+}
+
 export interface FocusHeaderProps {
   canvasId: string;
   item: Item | null;
@@ -109,6 +132,53 @@ export function FocusHeader({
   const [previewed, setPreviewed] = useState<DeckTransition | null>(null);
   const transitionListRef = useRef<HTMLDivElement>(null);
   const transitionWrapRef = useRef<HTMLSpanElement>(null);
+  const [deckMenuOpen, setDeckMenuOpen] = useState(false);
+  const deckMenuWrapRef = useRef<HTMLSpanElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
+  const [density, setDensity] = useState<HeaderDensity>(() =>
+    headerDensityFor(typeof window !== "undefined" ? window.innerWidth : 1440),
+  );
+
+  useEffect(() => {
+    const el = barRef.current;
+    if (!el) return;
+    const measure = () => {
+      const w = el.clientWidth;
+      if (w > 0) setDensity(headerDensityFor(w));
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const compactDeck = density === "compact" || density === "tight";
+
+  useEffect(() => {
+    if (!compactDeck) setDeckMenuOpen(false);
+  }, [compactDeck]);
+
+  useEffect(() => {
+    if (!deckMenuOpen) return;
+    function onPointerDown(e: PointerEvent) {
+      if (deckMenuWrapRef.current && !deckMenuWrapRef.current.contains(e.target as Node)) {
+        setDeckMenuOpen(false);
+      }
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        setDeckMenuOpen(false);
+      }
+    }
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown, true);
+    };
+  }, [deckMenuOpen]);
 
   useEffect(() => {
     setRenaming(false);
@@ -184,14 +254,28 @@ export function FocusHeader({
   }
 
   const barClass = `${mode === "view" ? "fs-bar" : "wb-bar"} focus-header`;
+  const showFilename =
+    mode === "view" &&
+    density === "wide" &&
+    Boolean(currentVersion?.filename) &&
+    !(item && currentVersion?.filename && isFilenameRedundant(item.title, currentVersion.filename));
+  const hasTransitionControl = mode === "view" && Boolean(onToggleNotes) && canEdit && transitionsOn;
+  const hasDeckControls = mode === "view" && Boolean(autoAdvance || onToggleNotes || hasTransitionControl);
+  const deckControlActive = Boolean(autoAdvance?.on || presenterNotes);
 
   return (
-    <div className={barClass}>
-      <div className="floats fs-cluster">
-        <button className="fullscreen-back" onClick={onBack} title="Back to the canvas (Esc)">
-          ← Canvas
+    <div className={barClass} ref={barRef} data-density={density}>
+      <div className="floats fs-cluster focus-header-left">
+        <button
+          className="fullscreen-back"
+          onClick={onBack}
+          aria-label="Back to the canvas"
+          title="Back to the canvas (Esc)"
+        >
+          ←<span className="focus-back-label"> Canvas</span>
         </button>
         <CanvasTitle actor={actor} />
+        {item && <span className="focus-crumb-sep" aria-hidden="true">/</span>}
         {item && (
           <span className="fullscreen-title">
             <KindIcon className="kind-icon" kind={iconKindFor(item)} />
@@ -219,7 +303,7 @@ export function FocusHeader({
               <button
                 type="button"
                 className="focus-title-btn"
-                title="Click to rename item"
+                title={`${item.title} — click to rename`}
                 onClick={() => {
                   setTitleDraft(item.title);
                   setRenaming(true);
@@ -228,9 +312,11 @@ export function FocusHeader({
                 <b>{item.title}</b>
               </button>
             ) : (
-              <b>{item.title}</b>
+              <b title={item.title}>{item.title}</b>
             )}
-            {mode === "view" && currentVersion?.filename && <i>{currentVersion.filename}</i>}
+            {showFilename && currentVersion?.filename && (
+              <i title={currentVersion.filename}>{currentVersion.filename}</i>
+            )}
             {item.versions.length > 0 && (
               <span className="focus-version-wrap" ref={versionWrapRef}>
                 <button
@@ -314,134 +400,233 @@ export function FocusHeader({
 
       <span className="spacer" />
 
-      <div className="floats fs-cluster">
+      <div className="floats fs-cluster focus-header-right">
         {/* The deck turning itself, every so many seconds, looping from the
             last slide to the first. This tab's alone — a viewer's playback,
-            like the notes beside it, not something everybody watching gets. */}
-        {mode === "view" && autoAdvance && (
-          <span className="fullscreen-autoadvance" role="group" aria-label="Auto-advance">
-            <button
-              type="button"
-              className={`fullscreen-notes-toggle${autoAdvance.on ? " on" : ""}`}
-              onClick={autoAdvance.onToggle}
-              aria-pressed={autoAdvance.on}
-              title={
-                autoAdvance.on
-                  ? "Stop turning the slides by themselves (A)"
-                  : `Turn to the next slide every ${autoAdvance.seconds} s, looping from the last to the first (A)`
-              }
-            >
-              {autoAdvance.on ? "❚❚ Auto" : "▶ Auto"}
-            </button>
-            {/* One field, the unit inside its border: a bare "s" after the box
-                read as belonging to the button beside it. */}
-            <label className="fullscreen-autoadvance-field">
-              <input
-                className="fullscreen-autoadvance-seconds"
-                type="number"
-                min={2}
-                max={600}
-                step={1}
-                aria-label="Seconds per slide"
-                title="Seconds per slide"
-                defaultValue={autoAdvance.seconds}
-                key={autoAdvance.seconds}
-                onBlur={(e) => {
-                  // An emptied field keeps the pace it had, not a surprise one.
-                  const typed = e.currentTarget.value.trim();
-                  if (typed) autoAdvance.onSeconds(Number(typed));
-                  else e.currentTarget.value = String(autoAdvance.seconds);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") e.currentTarget.blur();
-                }}
-              />
-              <span className="fullscreen-autoadvance-unit" aria-hidden="true">s</span>
-            </label>
-          </span>
-        )}
-        {mode === "view" && onToggleNotes && (
-          <button
-            type="button"
-            className={`fullscreen-notes-toggle${presenterNotes ? " on" : ""}`}
-            onClick={onToggleNotes}
-            title={
-              presenterNotes
-                ? "Hide the speaker notes (N)"
-                : "Show the speaker notes under the slide (N)"
-            }
-            aria-pressed={presenterNotes}
-          >
-            Notes
-          </button>
-        )}
-        {/* How the deck moves between slides — the canvas's choice, so it is
-            offered only to somebody who may write, and picking one here is
-            the same `project.update` the drawer's "Slide transition" sends.
-            Here because this is where a presenter is when they want it. Its
-            own dropdown rather than the shared context menu: that menu
-            belongs to the canvas and sits under full screen by design
-            (`--z-fullscreen`), like the version pill's beside it. */}
-        {mode === "view" && onToggleNotes && canEdit && transitionsOn && (
-          <span className="focus-version-wrap" ref={transitionWrapRef}>
-            <button
-              type="button"
-              className="fullscreen-notes-toggle fullscreen-transition"
-              title="How the deck moves from slide to slide, for everybody watching"
-              aria-haspopup="menu"
-              aria-expanded={transitionsOpen}
-              onClick={() => setTransitionsOpen((open) => !open)}
-            >
-              Transition: {deckTransitionLabel(deckTransition)}
-            </button>
-            {transitionsOpen && (
-              /* A preview beside the list (TransitionPreview): whichever row
-                 the pointer or the keyboard is on plays in miniature, with its
-                 one-line description, so nobody has to pick a name blind. */
-              <div className="focus-version-menu focus-transition-menu with-preview">
-                <Suspense fallback={<div className="tp-panel" />}>
-                  <TransitionPreview transition={previewed ?? deckTransition} />
-                </Suspense>
-                <div
-                  className="focus-transition-list"
-                  role="menu"
-                  aria-label="Slide transition"
-                  ref={transitionListRef}
-                  onKeyDown={(e) => {
-                    const rows = [...(transitionListRef.current?.querySelectorAll<HTMLButtonElement>("[role=menuitemradio]") ?? [])];
-                    const at = rows.indexOf(document.activeElement as HTMLButtonElement);
-                    const go = (n: number) => rows[(n + rows.length) % rows.length]?.focus();
-                    if (e.key === "ArrowDown") go(at + 1);
-                    else if (e.key === "ArrowUp") go(at - 1);
-                    else if (e.key === "Home") go(0);
-                    else if (e.key === "End") go(rows.length - 1);
-                    else if (e.key === "Escape") {
-                      setTransitionsOpen(false);
-                      transitionWrapRef.current?.querySelector<HTMLButtonElement>(".fullscreen-transition")?.focus();
-                    } else return;
-                    e.preventDefault();
-                  }}
+            like the notes beside it, not something everybody watching gets.
+            On narrow viewports these presentation controls fold into a single
+            menu so the slide title and core actions keep their room. */}
+        {hasDeckControls && !compactDeck && (
+          <>
+            {autoAdvance && (
+              <span className="fullscreen-autoadvance" role="group" aria-label="Auto-advance">
+                <button
+                  type="button"
+                  className={`fullscreen-notes-toggle${autoAdvance.on ? " on" : ""}`}
+                  onClick={autoAdvance.onToggle}
+                  aria-pressed={autoAdvance.on}
+                  title={
+                    autoAdvance.on
+                      ? "Stop turning the slides by themselves (A)"
+                      : `Turn to the next slide every ${autoAdvance.seconds} s, looping from the last to the first (A)`
+                  }
                 >
-                  {DECK_TRANSITIONS.map((transition) => (
-                    <button
-                      key={transition}
-                      type="button"
-                      role="menuitemradio"
-                      aria-checked={transition === deckTransition}
-                      aria-description={deckTransitionHint(transition)}
-                      className={`focus-version-row${transition === deckTransition ? " current" : ""}`}
-                      onMouseEnter={() => setPreviewed(transition)}
-                      onFocus={() => setPreviewed(transition)}
-                      onClick={() => {
-                        setTransitionsOpen(false);
-                        void sendEchoed(canvasId, actor, { type: "project.update", patch: deckTransitionPatch(transition) });
+                  {autoAdvance.on ? "❚❚ Auto" : "▶ Auto"}
+                </button>
+                {/* One field, the unit inside its border: a bare "s" after the box
+                    read as belonging to the button beside it. */}
+                <label className="fullscreen-autoadvance-field">
+                  <input
+                    className="fullscreen-autoadvance-seconds"
+                    type="number"
+                    min={2}
+                    max={600}
+                    step={1}
+                    aria-label="Seconds per slide"
+                    title="Seconds per slide"
+                    defaultValue={autoAdvance.seconds}
+                    key={autoAdvance.seconds}
+                    onBlur={(e) => {
+                      // An emptied field keeps the pace it had, not a surprise one.
+                      const typed = e.currentTarget.value.trim();
+                      if (typed) autoAdvance.onSeconds(Number(typed));
+                      else e.currentTarget.value = String(autoAdvance.seconds);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") e.currentTarget.blur();
+                    }}
+                  />
+                  <span className="fullscreen-autoadvance-unit" aria-hidden="true">s</span>
+                </label>
+              </span>
+            )}
+            {onToggleNotes && (
+              <button
+                type="button"
+                className={`fullscreen-notes-toggle${presenterNotes ? " on" : ""}`}
+                onClick={onToggleNotes}
+                title={
+                  presenterNotes
+                    ? "Hide the speaker notes (N)"
+                    : "Show the speaker notes under the slide (N)"
+                }
+                aria-pressed={presenterNotes}
+              >
+                Notes
+              </button>
+            )}
+            {/* How the deck moves between slides — the canvas's choice, so it is
+                offered only to somebody who may write, and picking one here is
+                the same `project.update` the drawer's "Slide transition" sends.
+                Here because this is where a presenter is when they want it. Its
+                own dropdown rather than the shared context menu: that menu
+                belongs to the canvas and sits under full screen by design
+                (`--z-fullscreen`), like the version pill's beside it. */}
+            {mode === "view" && onToggleNotes && canEdit && transitionsOn && (
+              <span className="focus-version-wrap" ref={transitionWrapRef}>
+                <button
+                  type="button"
+                  className="fullscreen-notes-toggle fullscreen-transition"
+                  title={`Slide transition: ${deckTransitionLabel(deckTransition)} — how the deck moves from slide to slide, for everybody watching`}
+                  aria-haspopup="menu"
+                  aria-expanded={transitionsOpen}
+                  onClick={() => setTransitionsOpen((open) => !open)}
+                >
+                  <span className="focus-transition-prefix">Transition: </span>
+                  {deckTransitionLabel(deckTransition)}
+                  <span className="focus-caret" aria-hidden="true">▾</span>
+                </button>
+                {transitionsOpen && (
+                  /* A preview beside the list (TransitionPreview): whichever row
+                     the pointer or the keyboard is on plays in miniature, with its
+                     one-line description, so nobody has to pick a name blind. */
+                  <div className="focus-version-menu focus-transition-menu with-preview">
+                    <Suspense fallback={<div className="tp-panel" />}>
+                      <TransitionPreview transition={previewed ?? deckTransition} />
+                    </Suspense>
+                    <div
+                      className="focus-transition-list"
+                      role="menu"
+                      aria-label="Slide transition"
+                      ref={transitionListRef}
+                      onKeyDown={(e) => {
+                        const rows = [...(transitionListRef.current?.querySelectorAll<HTMLButtonElement>("[role=menuitemradio]") ?? [])];
+                        const at = rows.indexOf(document.activeElement as HTMLButtonElement);
+                        const go = (n: number) => rows[(n + rows.length) % rows.length]?.focus();
+                        if (e.key === "ArrowDown") go(at + 1);
+                        else if (e.key === "ArrowUp") go(at - 1);
+                        else if (e.key === "Home") go(0);
+                        else if (e.key === "End") go(rows.length - 1);
+                        else if (e.key === "Escape") {
+                          setTransitionsOpen(false);
+                          transitionWrapRef.current?.querySelector<HTMLButtonElement>(".fullscreen-transition")?.focus();
+                        } else return;
+                        e.preventDefault();
                       }}
                     >
-                      <span>{deckTransitionLabel(transition)}</span>
-                      {isDeckTransition3d(transition) && <small>3D</small>}
+                      {DECK_TRANSITIONS.map((transition) => (
+                        <button
+                          key={transition}
+                          type="button"
+                          role="menuitemradio"
+                          aria-checked={transition === deckTransition}
+                          aria-description={deckTransitionHint(transition)}
+                          className={`focus-version-row${transition === deckTransition ? " current" : ""}`}
+                          onMouseEnter={() => setPreviewed(transition)}
+                          onFocus={() => setPreviewed(transition)}
+                          onClick={() => {
+                            setTransitionsOpen(false);
+                            void sendEchoed(canvasId, actor, { type: "project.update", patch: deckTransitionPatch(transition) });
+                          }}
+                        >
+                          <span>{deckTransitionLabel(transition)}</span>
+                          {isDeckTransition3d(transition) && <small>3D</small>}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </span>
+            )}
+          </>
+        )}
+        {hasDeckControls && compactDeck && (
+          <span className="focus-version-wrap" ref={deckMenuWrapRef}>
+            <button
+              type="button"
+              className={`fullscreen-notes-toggle focus-deck-more${deckControlActive ? " on" : ""}`}
+              aria-haspopup="menu"
+              aria-expanded={deckMenuOpen}
+              aria-label="Presentation controls"
+              title="Auto-advance, speaker notes, and slide transitions"
+              onClick={() => setDeckMenuOpen((open) => !open)}
+            >
+              ⋯
+            </button>
+            {deckMenuOpen && (
+              <div className="focus-version-menu focus-deck-menu" role="menu" aria-label="Presentation controls">
+                {autoAdvance && (
+                  <div className="focus-deck-menu-row">
+                    <button
+                      type="button"
+                      role="menuitemcheckbox"
+                      aria-checked={autoAdvance.on}
+                      className={`focus-version-row focus-deck-menu-grow${autoAdvance.on ? " current" : ""}`}
+                      onClick={autoAdvance.onToggle}
+                    >
+                      <span>{autoAdvance.on ? "❚❚ Auto-advance" : "▶ Auto-advance"}</span>
+                      <small>A</small>
                     </button>
-                  ))}
-                </div>
+                    <label className="fullscreen-autoadvance-field">
+                      <input
+                        className="fullscreen-autoadvance-seconds"
+                        type="number"
+                        min={2}
+                        max={600}
+                        step={1}
+                        aria-label="Seconds per slide"
+                        title="Seconds per slide"
+                        defaultValue={autoAdvance.seconds}
+                        key={autoAdvance.seconds}
+                        onBlur={(e) => {
+                          const typed = e.currentTarget.value.trim();
+                          if (typed) autoAdvance.onSeconds(Number(typed));
+                          else e.currentTarget.value = String(autoAdvance.seconds);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") e.currentTarget.blur();
+                        }}
+                      />
+                      <span className="fullscreen-autoadvance-unit" aria-hidden="true">s</span>
+                    </label>
+                  </div>
+                )}
+                {onToggleNotes && (
+                  <button
+                    type="button"
+                    role="menuitemcheckbox"
+                    aria-checked={Boolean(presenterNotes)}
+                    className={`focus-version-row${presenterNotes ? " current" : ""}`}
+                    onClick={onToggleNotes}
+                  >
+                    <span>Speaker notes</span>
+                    <small>N</small>
+                  </button>
+                )}
+                {mode === "view" && onToggleNotes && canEdit && transitionsOn && (
+                  <>
+                    <div className="focus-deck-menu-heading">Transition</div>
+                    <div className="focus-deck-menu-transitions">
+                      {DECK_TRANSITIONS.map((transition) => (
+                        <button
+                          key={transition}
+                          type="button"
+                          role="menuitemradio"
+                          aria-checked={transition === deckTransition}
+                          aria-description={deckTransitionHint(transition)}
+                          className={`focus-version-row${transition === deckTransition ? " current" : ""}`}
+                          onClick={() => {
+                            setDeckMenuOpen(false);
+                            void sendEchoed(canvasId, actor, { type: "project.update", patch: deckTransitionPatch(transition) });
+                          }}
+                        >
+                          <span>{deckTransitionLabel(transition)}</span>
+                          {isDeckTransition3d(transition) && <small>3D</small>}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </span>
