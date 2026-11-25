@@ -100,6 +100,12 @@ interface SummaryRouteScope {
     } | null>;
     /** This machine's person, for `madeFor` when the stored key paid. */
     keyOwner: () => Promise<string | null>;
+    /** Caller's personal BYOK text key, when configured (overrides home/env keys). */
+    userTextKey?: (req: FastifyRequest) => Promise<{
+        key: string;
+        provider: "anthropic" | "openai";
+        callerId: string;
+    } | null>;
     options: SummaryOptions;
 }
 /** `GET` and `POST /api/projects/:id/summaries`, on `app`. */
