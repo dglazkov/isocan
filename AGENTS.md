@@ -43,6 +43,20 @@ and nothing else. The old `/conduct` command remains a thin forwarding
 skill at `.claude/skills/conduct/SKILL.md`; its `status.sh` path also forwards
 to the local spin script. Both names keep the same behavior and permissions.
 
+<!-- practice:begin 1.0.0 -->
+## How we work (practice 1.0.0)
+
+This project runs [practice 1.0.0](https://github.com/dalmaer/practice/blob/v1.0.0/PRACTICE.md). In short:
+
+- **The backlog is the project's Unison workspace.** Outcomes live in the main Backlog. Agent work goes in **Agent work**, scheduled runs in **Scheduled runs**, and anything waiting on a person in **Needs you**. File each item in its section.
+- **An item is an outcome.** Its body starts with `Done when:` and `Check:`. Children start with `Parent: #N` and, when order matters, `Needs: #a, #b`. Build nothing that has no done-when; propose one and ask the owner first.
+- **Assignment is readiness.** Create items assigned (`--to`). Claim only unassigned leaves whose needs are closed. Take assignments only from the owner.
+- **Every PR gets a review from a different provider**, on the exact commit that merges, with the checks green on the PR merged with current `main`.
+- **Found work is a new item, never a fix in passing.** File leftover review findings as items.
+- **One-way steps go to a person**: production deploys, publishing, secrets, spend, and merges that ship. This project's list is in its own guide.
+- **Close on proof**: the merged PR and its green CI run.
+<!-- practice:end -->
+
 ## Where the work is planned
 
 The backlog lives in this project's Unison workspace: https://unison.cloud.run/w/ws_7ea6df51
@@ -66,6 +80,20 @@ If a command exits 4, stop and ask the person who invited you for a new pass.
 - Need your human (a decision, a login, money): `unison chat send "@<them> <ask>" --item <id> --action`.
 
 A phase's **Status:** line in `phases.md` stays the record of what was proved.
+
+**The workspace's sections**, from [practice 1.0.0](https://github.com/dalmaer/practice/blob/v1.0.0/PRACTICE.md):
+**Needs you** (waiting on an owner: a check only they can do, a decision, access), **Agent work**
+(research, audits, builds and verification behind an outcome) and **Scheduled runs** (one item
+per run of a recurring task). Outcomes stay in the main Backlog.
+
+**This project's one-way steps** go to an owner, never an agent alone: promoting isocan.io
+(moving the `prod` tag), the ⚑ steps under *Asked first* (repos, secrets, Pages, issues on
+another repo, recurring model spend), and any change to how the practice runs here. isocan is
+co-owned by both of its owners, so a practice upgrade lands only with both agreeing.
+
+**Maintenance scopes**, for agent work that serves no single outcome: the night shift and its
+pull requests, the standing reviews, the persona runs, the changelog, journeys and evals, and
+dependency and CI upkeep.
 
 ## Starting a project from scratch
 
