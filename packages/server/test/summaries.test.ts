@@ -80,7 +80,7 @@ const USAGE = { input_tokens: 120, output_tokens: 18 };
 const claudeSays = (value: unknown) =>
   new Response(JSON.stringify({ id: "msg_acme", type: "message", role: "assistant", model: SUMMARY_MODEL, stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(value) }], usage: USAGE }), { status: 200 });
 
-async function rig(opts: { storedKey?: boolean; answer?: () => Promise<Response>; legacy?: boolean; summaries?: SummaryOptions } = {}): Promise<Rig> {
+async function rig(opts: { storedKey?: boolean; noKey?: boolean; answer?: () => Promise<Response>; legacy?: boolean; summaries?: SummaryOptions } = {}): Promise<Rig> {
   const home = await fsp.mkdtemp(path.join(os.tmpdir(), "isocan-summaries-"));
   const calls: Call[] = [];
   const clock = { now: Date.now() };
@@ -95,7 +95,7 @@ async function rig(opts: { storedKey?: boolean; answer?: () => Promise<Response>
   const daemon = await startDaemon({
     port: 0, home, auth: null, contentPort: "off", birthHome: null,
     // The badge's minute runs on the test's clock too, so a test can step past it.
-    text: opts.storedKey ? { fetch: fake, now: () => clock.now } : { key: () => KEY, fetch: fake, now: () => clock.now },
+    text: opts.noKey ? { key: () => undefined, keysHome: null, fetch: fake, now: () => clock.now } : opts.storedKey ? { fetch: fake, now: () => clock.now } : { key: () => KEY, fetch: fake, now: () => clock.now },
     summaries: { now: () => clock.now, ...opts.summaries },
   });
   const address = daemon.app.server.address();
@@ -647,5 +647,34 @@ describe("freshness and cost (phase 3)", () => {
     const refused = await fetch(`${r.base}${summaryStatsRoute(CANVAS)}`, { headers: visitor.headers });
     expect(refused.status).toBe(403);
     expect(await refused.json()).toMatchObject({ code: "view-only" });
+  });
+
+  it("reports canMake: false when a home has no text model, and uses a caller's personal BYOK key when set", async () => {
+    const r = await rig({ noKey: true });
+    await note(r, "itm_long", LONG);
+    const key = await textSummaryKey(await itemOf(r, "itm_long"));
+
+    const before = await fetch(`${r.base}${summariesRoute(CANVAS)}?keys=${key}`, { headers: r.owner.headers });
+    expect(before.status).toBe(200);
+    expect(await before.json()).toEqual({ summaries: {}, canMake: false });
+
+    const unavailable = await make(r, r.owner, "itm_long");
+    expect(unavailable.status).toBe(503);
+
+    const saved = await fetch(`${r.base}/api/me/keys/anthropic`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...r.owner.headers },
+      body: JSON.stringify({ key: KEY }),
+    });
+    expect(saved.status, await saved.clone().text()).toBe(200);
+
+    const after = await fetch(`${r.base}${summariesRoute(CANVAS)}?keys=${key}`, { headers: r.owner.headers });
+    expect(after.status).toBe(200);
+    expect(await after.json()).toEqual({ summaries: {} });
+
+    const made = await make(r, r.owner, "itm_long");
+    expect(made.status, await made.clone().text()).toBe(200);
+    expect(await made.json()).toMatchObject({ key, summary: SUMMARY, madeFor: priya.id });
+    expect(r.calls).toHaveLength(1);
   });
 });

@@ -243,7 +243,12 @@ export function registerModelRoutes(app: FastifyInstance, scope: ModelRouteScope
    * before it offers itself: with a model that takes none, the row says so
    * and stays off. It names no key and spends nothing, so any badge may ask.
    */
-  app.get(TEXT_PICTURES_ROUTE, async () => {
+  app.get(TEXT_PICTURES_ROUTE, async (req) => {
+    const userKey = await userTextKeyFor(await resolveCallerId(req, engine, claimsOf));
+    if (userKey) {
+      if (userKey.provider !== "anthropic") return { pictures: false, why: "Your text model key takes no pictures, so this stays off." } satisfies TextPictures;
+      return { pictures: true } satisfies TextPictures;
+    }
     if (!textModel.available()) return { pictures: false, why: "This home has no text model, so nothing is summarised here." } satisfies TextPictures;
     if (!textModel.takesImages()) return { pictures: false, why: "This home's text model takes no pictures, so this stays off." } satisfies TextPictures;
     return { pictures: true } satisfies TextPictures;
@@ -257,6 +262,11 @@ export function registerModelRoutes(app: FastifyInstance, scope: ModelRouteScope
     engine, store, desk, homes, refusals, admit, viewOnly, textModel,
     notTheOwners: (req) => notTheOwners(req, textKeysHome),
     keyOwner: async () => (textKeysHome ? (await personFor(textKeysHome))?.id ?? null : null),
+    userTextKey: async (req) => {
+      const callerId = await resolveCallerId(req, engine, claimsOf);
+      const found = await userTextKeyFor(callerId);
+      return found && callerId ? { ...found, callerId } : null;
+    },
     options: options.summaries ?? {},
   });
   /**

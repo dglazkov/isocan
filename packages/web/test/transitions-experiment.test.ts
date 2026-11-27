@@ -59,7 +59,9 @@ describe("Presentation Transitions, off", () => {
   it("offers no choice and mounts no morph twins", () => {
     expect(read("src/components/FocusHeader.tsx")).toMatch(/canEdit && transitionsOn && \(/);
     expect(read("src/components/Toolbar.tsx")).toMatch(/\.\.\.\(transitionsOn\(\) \? \{\s*\n\s*deckTransition:/);
-    expect(read("src/components/MorphStage.tsx")).toMatch(/=== "morph"\) && transitionsOn;/);
+    // The twins mount for any piece transition (morph, poof, drift, rise) —
+    // and only with the experiment on.
+    expect(read("src/components/MorphStage.tsx")).toContain("isDeckTransitionPiece(deckTransitionOf(s.record ?? {}))) && transitionsOn;");
   });
 
   it("is listed in Settings under the name Dion gave it", () => {

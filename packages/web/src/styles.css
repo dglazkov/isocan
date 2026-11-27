@@ -709,7 +709,8 @@ img { height: auto; }
 .identity-popover {
   position: absolute; top: calc(100% + 8px); right: 0; z-index: var(--z-popover);
   width: 260px; padding: 12px;
-  background: var(--glass);
+  /* Layer the glass sheen over solid --card so dense menus (Share, Profile) stay crisp over bright canvas items. */
+  background: var(--glass), var(--card);
   -webkit-backdrop-filter: var(--glass-filter);
   backdrop-filter: var(--glass-filter);
   border: 1px solid var(--glass-border); border-radius: 10px;
@@ -1621,8 +1622,9 @@ img { height: auto; }
    as put down rather than let go (the settle is `.item`'s own transition) —
    and reduced motion swaps it instantly. */
 .item.lifted { box-shadow: var(--shadow-lift); transition-duration: 120ms; z-index: 2; }
+.item.make-room-shifted { transition: left 140ms cubic-bezier(0.2, 0, 0, 1), top 140ms cubic-bezier(0.2, 0, 0, 1); }
 @media (prefers-reduced-motion: reduce) {
-  .item, .item.lifted { transition: none; }
+  .item, .item.lifted, .item.make-room-shifted { transition: none; }
 }
 /* The read-only canvas (roles phase 1): nothing here is a handle, so nothing
    here wears a grab cursor. The daemon refuses the write; this stops the
@@ -3770,6 +3772,9 @@ button.mt-card:hover { border-color: var(--accent); }
 .module-overlays-left { left: calc(var(--edge) + 56px); }
 .module-overlays-right { right: calc(var(--edge) + 60px); }
 .module-overlay { pointer-events: auto; position: relative; display: flex; flex-direction: column; }
+/* Hide empty overlay shells when a module's overlay component returns null —
+   without this, <FloatingHandles /> alone renders a hollow glass pill beside the rail. */
+.module-overlay:not(:has(> :not(.float-handle))) { display: none; }
 
 .tool-rail {
   position: absolute; right: var(--edge); top: var(--edge); bottom: var(--edge);

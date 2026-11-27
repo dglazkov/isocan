@@ -133,7 +133,39 @@ export default function GroupStack({ item, canvasId, actor, lifted }: { item: It
     <div ref={ref} className="group-stack">
       <div className="stack-band" style={{ height: s.title }}>
         <span className="stack-title">{item.title}</span>
-        <small className="group-member-count">{members.length} {members.length === 1 ? "item" : "items"}</small>
+        <small className="group-member-count">
+          {all.length > 1 ? `${(((front % all.length) + all.length) % all.length) + 1}/${all.length}` : `${members.length} ${members.length === 1 ? "item" : "items"}`}
+        </small>
+        {all.length > 1 && (
+          <>
+            <button
+              type="button"
+              className="group-stack-toggle"
+              title="Previous card (← or [)"
+              aria-label="Previous card in stack"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                window.dispatchEvent(new CustomEvent(STACK_FLIP, { detail: { groupId: item.id, step: -1 } }));
+              }}
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              className="group-stack-toggle"
+              title="Next card (→ or ])"
+              aria-label="Next card in stack"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                window.dispatchEvent(new CustomEvent(STACK_FLIP, { detail: { groupId: item.id, step: 1 } }));
+              }}
+            >
+              ›
+            </button>
+          </>
+        )}
         {canEdit && <button type="button" className="group-stack-toggle" onPointerDown={(e) => e.stopPropagation()} onClick={() => stackGroup(canvasId, actor, item, false)}>Spread</button>}
       </div>
       <div

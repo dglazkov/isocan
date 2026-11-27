@@ -9,7 +9,7 @@ note: "Phase 113 PART-DONE: corrected local gates and independent source review 
 **Where we are: validation-efficiency phase 113 is PART-DONE.** Next is the
 separate draft PR's complete hosted gate and parent review. [Local proof and
 review evidence](evidence.md) are retained. This project is the
-isocan slice of Plates's 22 October validation-efficiency spec. It does not
+isocan slice of a 22 October validation-efficiency spec. It does not
 reorder the unrelated practice project's work. Delivery is an isolated draft
 PR; no merge, deployment, schedule or validation-policy change is authorized.
 
@@ -45,8 +45,8 @@ controls, then focused workflow/convention tests. The conductor independently
 runs `npm run test:deep`, `npm run typecheck`, and `node --test tests/loop.test.mjs`
 on the integrated candidate; PR CI preserves the complete four-shard `test:ci`
 union and checks. Run roadmap and lint, plus release graders/metrics as applicable.
-The upstream phase's `npm run check` is a Plates source command, not an isocan
-script; it cannot substitute for isocan's configured gate or its pre-push deep lane.
+An upstream `npm run check` is not an isocan script; it cannot substitute for
+isocan's configured gate or its pre-push deep lane.
 No heavy gate starts before coordination with the parent on this shared Mac.
 
 **Trajectory:**
@@ -57,7 +57,7 @@ No heavy gate starts before coordination with the parent on this shared Mac.
   unchanged lifecycle includes the web build.
 
 **Deliberately open:** Cold/warm p95/p99 and comparable hosted speed savings
-remain unknown. Complete gate evidence/reuse belongs to Plates phase 114.
+remain unknown. Complete gate evidence/reuse belongs to a later phase (114).
 Broader adoption waits on parent review of the exact-head evidence.
 
 - **2026-10-23** — Open: hosted exact-head proof and parent review remain before

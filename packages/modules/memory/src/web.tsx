@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { useEffect, useState, type ComponentType } from "react";
+import { useEffect, useRef, useState, type ComponentType } from "react";
 import type { InspectorFacts, RendererFacts, WebModule } from "@isocan/core";
 import { parsePointer, type MemoryPointer } from "@isocan/core/pointer";
 import {
@@ -80,24 +80,27 @@ function PointerCard(facts: RendererFacts) {
   const [pointer, setPointer] = useState<MemoryPointer | null>(null);
   const [state, setState] = useState<HydrateState>({ kind: "loading" });
   const [forgetting, setForgetting] = useState(false);
+  // The hydrate runs again when the pointer or its place changes — the facts
+  // object itself is new on every render. The reader is read at the moment of
+  // use (a ref) rather than being a reason to run again, as before.
+  const { blobHash, canvasId, url } = facts;
+  const itemId = facts.item?.id;
+  const readText = useRef(facts.readText);
+  readText.current = facts.readText;
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const raw = facts.readText
-          ? await facts.readText()
-          : await fetch(facts.url).then((r) => r.text());
+        const read = readText.current;
+        const raw = read ? await read() : await fetch(url).then((r) => r.text());
         const parsed = parsePointer(raw);
         if (!cancelled) setPointer(parsed);
-        if (!facts.canvasId || !facts.item?.id) {
+        if (!canvasId || !itemId) {
           if (!cancelled) setState({ kind: "locked", ...(parsed?.ownerId ? { ownerId: parsed.ownerId } : {}) });
           return;
         }
-        const res = await requestPointerHydrate({
-          canvasId: facts.canvasId,
-          itemId: facts.item.id,
-        });
+        const res = await requestPointerHydrate({ canvasId, itemId });
         if (cancelled) return;
         if (res.status === 403) {
           const lockedBody = res.body as { ownerId?: string } | null;
@@ -126,7 +129,7 @@ function PointerCard(facts: RendererFacts) {
     return () => {
       cancelled = true;
     };
-  }, [facts.blobHash, facts.canvasId, facts.item?.id, facts.url]);
+  }, [blobHash, canvasId, itemId, url]);
 
   async function onForget() {
     if (forgetting || !facts.canvasId || !facts.item?.id) return;

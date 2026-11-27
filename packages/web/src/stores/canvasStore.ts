@@ -370,13 +370,14 @@ function render(): void {
 /** Write the replica down. Immediate when there is work in the queue: a
  * queued op is the only copy of a person's gesture in the world. */
 function persist(immediate = false): void {
-  const { canvasId, confirmed, lastSeq, queue, refused } = useCanvasStore.getState();
+  const { canvasId, confirmed, lastSeq, queue, refused, capability } = useCanvasStore.getState();
   if (!canvasId || !confirmed) return;
   const record: StoredReplica = {
     canvasId,
     project: confirmed.project,
     canvas: confirmed.canvas,
     lastSeq,
+    capability,
     migrationRefusals: refused.filter((write) => write.code === "migration-boundary" && write.op),
     queue: queue.map(({ opId, actor, op, at, seq, group, accepted, originGroupMode, stagedBlob }) => ({
       opId,
@@ -1076,6 +1077,7 @@ async function restoreThenOpen(canvasId: string): Promise<void> {
       lastSeq: stored.lastSeq,
       record: view?.project ?? confirmed.project,
       canvas: view?.canvas ?? confirmed.canvas,
+      ...(stored.capability ? { capability: stored.capability } : {}),
     });
     syncCanvas(canvasId, view?.canvas ?? confirmed.canvas, presenceActor?.id);
   }

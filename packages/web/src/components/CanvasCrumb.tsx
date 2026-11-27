@@ -210,7 +210,7 @@ export function ShareButton({ actor }: { actor: Actor }) {
         onClick={() => useUiStore.getState().setShareOpen(!shareOpen)}
       >
         <ShareGlyph />
-        Share
+        <span className="share-label">Share</span>
       </button>
       {shareOpen && canvas && (
         <div ref={float.ref} className="identity-popover share-popover" style={float.style}>

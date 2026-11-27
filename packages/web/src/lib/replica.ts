@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import type { Actor, CanvasContents, Operation, Canvas } from "@isocan/core";
+import type { Actor, Capability, CanvasContents, Operation, Canvas } from "@isocan/core";
 
 /**
  * **The browser's replica, made durable** (phase 10).
@@ -63,6 +63,9 @@ export interface StoredReplica {
   queue: StoredWrite[];
   /** Cutover-refused work remains reviewable across visits until explicitly dismissed. */
   migrationRefusals?: import("./writequeue.ts").RefusedWrite[];
+  /** Last confirmed admission capability for this canvas, so a view-only presentation
+   *  opens straight into Viewer on revisit instead of flashing FullScreen then remounting. */
+  capability?: Capability;
   /** ISO, for a human reading the database in devtools. */
   savedAt: string;
 }

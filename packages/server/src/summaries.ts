@@ -278,6 +278,8 @@ interface SummaryRouteScope {
   notTheOwners: (req: FastifyRequest) => Promise<{ owner: string | null } | null>;
   /** This machine's person, for `madeFor` when the stored key paid. */
   keyOwner: () => Promise<string | null>;
+  /** Caller's personal BYOK text key, when configured (overrides home/env keys). */
+  userTextKey?: (req: FastifyRequest) => Promise<{ key: string; provider: "anthropic" | "openai"; callerId: string } | null>;
   options: SummaryOptions;
 }
 
@@ -305,7 +307,7 @@ interface Plan {
 
 /** `GET` and `POST /api/projects/:id/summaries`, on `app`. */
 export function registerSummaryRoutes(app: FastifyInstance, scope: SummaryRouteScope): void {
-  const { engine, store, homes, refusals, admit, viewOnly, textModel, notTheOwners, keyOwner, options } = scope;
+  const { engine, store, homes, refusals, admit, viewOnly, textModel, notTheOwners, keyOwner, userTextKey, options } = scope;
   const now = options.now ?? Date.now;
   const maxEntries = options.maxEntries ?? MAX_ENTRIES;
   /** Each source's current key, from the canvas as it is now: what eviction keeps. */
@@ -482,7 +484,11 @@ export function registerSummaryRoutes(app: FastifyInstance, scope: SummaryRouteS
     }
     for (const [kind, count] of hits) await ledger.record(id, { what: "hit", kind, count });
     if (stale) await ledger.record(id, { what: "stale", count: stale });
-    return { summaries } satisfies SummaryRead;
+    const userKey = await userTextKey?.(req) ?? null;
+    const source = userKey ? "user" : textModel.keySource();
+    const refused = source === "file" && req.badge ? await notTheOwners(req) : null;
+    const canMake = Boolean(source && !refused);
+    return { summaries, ...(canMake ? {} : { canMake: false }) } satisfies SummaryRead;
   });
 
   /**
@@ -550,8 +556,11 @@ export function registerSummaryRoutes(app: FastifyInstance, scope: SummaryRouteS
       return reply.status(made.status).send(made.body);
     }
     const making = (async (): Promise<Made> => {
+      const userKey = await userTextKey?.(req) ?? null;
+      const source = userKey ? "user" : textModel.keySource();
+      const canSeeImages = userKey ? userKey.provider === "anthropic" : textModel.takesImages();
       // A model that takes no pictures is never sent any, nor asked to look: said before a picture is read.
-      if (plan.looks && textModel.keySource() && !textModel.takesImages()) {
+      if (plan.looks && source && !canSeeImages) {
         return { status: 422, body: { error: "this home's text model takes no pictures — its summaries go by words and titles only", code: SUMMARY_NO_PICTURES } };
       }
       const collected = await plan.collect();
@@ -564,7 +573,6 @@ export function registerSummaryRoutes(app: FastifyInstance, scope: SummaryRouteS
         await cache.put(id, entry);
         return { status: 200, body: entry };
       }
-      const source = textModel.keySource();
       const refused = source === "file" ? await notTheOwners(req) : null;
       if (refused) return { status: 403, body: { error: ownerOnlySentence(refused.owner), code: TEXT_OWNER_ONLY } };
       if (!source) return { status: 503, body: { error: "this home has no text model — summaries can't be made here", code: TEXT_UNAVAILABLE } };
@@ -582,7 +590,12 @@ export function registerSummaryRoutes(app: FastifyInstance, scope: SummaryRouteS
       }
       if (!textModel.take(req.badge!.badgeId)) return { status: 429, body: { error: "this badge has asked for enough words this minute — wait a moment", code: TEXT_RATE_LIMITED } };
       ledger.spend(id, images.length > 0);
-      const written = await textModel.write({ prompt: collected.prompt, schema: SUMMARY_SCHEMA }, images.length ? { ...ask, images } : ask);
+      const writeAsk = {
+        ...ask,
+        ...(images.length ? { images } : {}),
+        ...(userKey ? { overrideKey: { key: userKey.key, provider: userKey.provider } } : {}),
+      };
+      const written = await textModel.write({ prompt: collected.prompt, schema: SUMMARY_SCHEMA }, writeAsk);
       const called = (kept: boolean, model: string) => ledger.record(id, { what: "call", kind: plan.kind, model, kept, ...(images.length ? { vision: true } : {}), ...(written.usage ? { tokens: written.usage } : {}) });
       if (written.status !== 200) {
         await called(false, written.model ?? "unknown");
@@ -593,7 +606,7 @@ export function registerSummaryRoutes(app: FastifyInstance, scope: SummaryRouteS
       const reasons = checkSummary(summary);
       await called(reasons.length === 0, model);
       if (reasons.length > 0) return { status: 502, body: { error: `the summary broke the answer rule (${reasons.join(", ")}) and was not kept`, code: SUMMARY_BAD_ANSWER } };
-      const entry: SummaryEntry = { ...base, summary: summary as string, words: wordCount(summary as string), model, madeFor: source === "file" ? await keyOwner() : "home", ...(plan.looks ? { pictures: images.length } : {}) };
+      const entry: SummaryEntry = { ...base, summary: summary as string, words: wordCount(summary as string), model, madeFor: source === "file" ? await keyOwner() : userKey ? userKey.callerId : "home", ...(plan.looks ? { pictures: images.length } : {}) };
       await cache.put(id, entry);
       return { status: 200, body: entry };
     })();

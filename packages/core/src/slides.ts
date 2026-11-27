@@ -165,19 +165,32 @@ export function deckStep(canvas: CanvasContents, currentId: string, delta: 1 | -
  * `push` is the default and the one stored as an absence, so every canvas
  * made before this existed keeps flipping exactly as it did.
  *
- * Four of these are 3D, and they are the fun ones on purpose: a talk is a
- * show. `morph` is the one that takes the slide APART — its pieces lift off
- * the page, travel to their places on the next slide, and come together flat
- * (`morph.ts`); depth, cube and flip turn the slide whole.
- * They cost time, which is why the web's rapid-flip rule still cuts when
- * somebody hammers → to reach slide 14.
+ * Three of the 2D motions (`poof`, `drift`, `rise`) keep the slide surface
+ * steady and move only its content pieces — ideal when slides share the same
+ * or a similar background (`morph.ts`). Four more are 3D (`morph`, `depth`,
+ * `cube`, `flip`) for when a talk wants a show. They cost time, which is why
+ * the web's rapid-flip rule still cuts when somebody hammers → to reach slide
+ * 14.
  */
 export const DECK_TRANSITION_PROP = "deckTransition";
 
 /** The motions this build can draw, in the order a menu offers them. A
  *  closed list for `CURSORS`' reason: a canvas naming a motion nothing can
  *  draw would flip as a cut and nobody would know why. */
-export const DECK_TRANSITIONS = ["push", "fade", "zoom", "morph", "depth", "cube", "flip", "cut"] as const;
+export const DECK_TRANSITIONS = [
+  "push",
+  "fade",
+  "wipe",
+  "zoom",
+  "poof",
+  "drift",
+  "rise",
+  "morph",
+  "depth",
+  "cube",
+  "flip",
+  "cut",
+] as const;
 
 /** One of the motions this build can draw — not a string, so a surface
  *  cannot offer or store a name the other cannot draw. */
@@ -198,6 +211,12 @@ export function isDeckTransition3d(transition: DeckTransition): boolean {
   return transition === "morph" || transition === "depth" || transition === "cube" || transition === "flip";
 }
 
+/** Does this one animate the slide's individual content pieces (via slide
+ *  twins) rather than moving the whole 2D surface as one rectangle? */
+export function isDeckTransitionPiece(transition: DeckTransition): boolean {
+  return transition === "poof" || transition === "drift" || transition === "rise" || transition === "morph";
+}
+
 /** What a motion is called where somebody picks it. */
 export function deckTransitionLabel(transition: DeckTransition): string {
   switch (transition) {
@@ -205,8 +224,16 @@ export function deckTransitionLabel(transition: DeckTransition): string {
       return "Push";
     case "fade":
       return "Fade";
+    case "wipe":
+      return "Wipe";
     case "zoom":
       return "Zoom";
+    case "poof":
+      return "Poof";
+    case "drift":
+      return "Drift";
+    case "rise":
+      return "Rise";
     case "morph":
       return "Morph";
     case "depth":
@@ -227,8 +254,16 @@ export function deckTransitionHint(transition: DeckTransition): string {
       return "the next slide slides in from the side you went";
     case "fade":
       return "one slide dissolves into the next";
+    case "wipe":
+      return "the next slide reveals cleanly across the current one";
     case "zoom":
-      return "the old slide falls back as the next one rises into place";
+      return "a subtle scale cross-fade into the next slide";
+    case "poof":
+      return "the page stays still while its pieces softly poof away and the next slide's appear";
+    case "drift":
+      return "the page stays still while its pieces glide aside and the next slide's drift in";
+    case "rise":
+      return "the page stays still while its pieces lift away and the next slide's rise into place";
     case "morph":
       return "the slide comes apart into its pieces, which fly to their places on the next slide and settle flat";
     case "depth":

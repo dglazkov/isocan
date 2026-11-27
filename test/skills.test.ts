@@ -149,8 +149,6 @@ describe("agent skills are shared, not copied", () => {
     expect(alias).not.toContain("## 0. Orient");
     expect(await fs.readlink(path.join(conduct, "status.sh"))).toBe("../spin/status.sh");
     expect(await fs.realpath(path.join(conduct, "status.sh"))).toBe(await fs.realpath(path.join(spin, "status.sh")));
-    const config = JSON.parse(await fs.readFile(path.join(repo, ".plates/plates.json"), "utf8"));
-    expect(config.local.conduct).toContain("locally owned");
   });
 
   it("a harness-only skill is named in the house rules, so the exception is never silent", async () => {

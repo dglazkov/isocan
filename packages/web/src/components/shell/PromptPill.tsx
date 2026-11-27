@@ -16,8 +16,11 @@
 
 import "./PromptPill.css";
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -27,12 +30,17 @@ import {
 import type { Actor } from "@isocan/core";
 import { postToMain } from "../../lib/mainthread.ts";
 import { chatHiddenNow, openPanel } from "../../lib/panels.ts";
+import { loadExperiments, modules } from "../../modules.ts";
 import { useCanvasStore } from "../../stores/canvasStore.ts";
 import { useUiStore } from "../../stores/uiStore.ts";
 import {
   usePromptDockPreference,
   type PromptDock,
 } from "./usePanelGeometry.ts";
+
+const ModuleComposerControls = lazy(() =>
+  import("../ModuleComposer.tsx").then((m) => ({ default: m.ModuleComposerControls })),
+);
 
 /** Fold delay after idle or submit before collapsing to the 270×42 pill (OS1 ADR 0214). */
 export const PROMPT_FOLD_DELAY_MS = 3_000;
@@ -91,6 +99,7 @@ export function PromptPill({
   onDockChange,
   placeholder = "Ask the canvas…",
 }: PromptPillProps) {
+  const formId = useId();
   const [dock, setDock] = usePromptDockPreference(initialDock);
   const [folded, setFolded] = useState(initialFolded);
   const [wide, setWide] = useState(false);
@@ -98,11 +107,28 @@ export function PromptPill({
   const [sending, setSending] = useState(false);
   const [focused, setFocused] = useState(false);
   const [dismissedIds, setDismissedIds] = useState<string[]>([]);
+  const [composerHolder, setComposerHolder] = useState<string | null>(null);
+  const [enablingVoice, setEnablingVoice] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const voiceHostRef = useRef<HTMLDivElement>(null);
+  const autoStartVoiceRef = useRef(false);
   const foldTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const selectedIds = useUiStore((s) => s.selectedItemIds);
   const canvasItems = useCanvasStore((s) => s.canvas?.items);
+  // Subscribe to module & experiment changes so `composerOffered` updates live.
+  useUiStore((s) => s.modulesGeneration);
+  useUiStore((s) => s.experiments);
+  const composerOffered = modules()
+    .filter((m) => (m.composer ?? []).length > 0)
+    .map((m) => m.core.name);
+  const voiceActive = composerHolder !== null;
+
+  useEffect(() => {
+    if (composerHolder !== null && !composerOffered.includes(composerHolder)) {
+      setComposerHolder(null);
+    }
+  }, [composerHolder, composerOffered]);
 
   const chips = useMemo<PromptSelectionChip[]>(() => {
     const base =
@@ -139,9 +165,9 @@ export function PromptPill({
 
   useEffect(() => () => clearFoldTimer(), [clearFoldTimer]);
 
-  // Fold 3 seconds after becoming idle (expanded, unfocused, and empty draft).
+  // Fold 3 seconds after becoming idle (expanded, unfocused, empty draft, and no live voice).
   useEffect(() => {
-    if (folded) {
+    if (folded || voiceActive || enablingVoice) {
       clearFoldTimer();
       return;
     }
@@ -150,7 +176,51 @@ export function PromptPill({
       return;
     }
     clearFoldTimer();
-  }, [folded, focused, body, sending, scheduleFold, clearFoldTimer]);
+  }, [folded, voiceActive, enablingVoice, focused, body, sending, scheduleFold, clearFoldTimer]);
+
+  const takeComposer = useCallback(
+    (moduleName: string, active: boolean) => {
+      setComposerHolder(active ? moduleName : null);
+      if (active) {
+        clearFoldTimer();
+        setFolded(false);
+      }
+    },
+    [clearFoldTimer],
+  );
+
+  const enableAndStartVoice = useCallback(() => {
+    clearFoldTimer();
+    setFolded(false);
+    setEnablingVoice(true);
+    autoStartVoiceRef.current = true;
+    useUiStore.getState().setExperiment("modules.talk", true);
+    void loadExperiments().finally(() => {
+      setEnablingVoice(false);
+    });
+  }, [clearFoldTimer]);
+
+  // Once the user clicked the lightweight mic to enable `modules.talk`, trigger
+  // the real ComposerMic button as soon as its lazy chunk mounts so one click
+  // enters Gemini Live directly.
+  useEffect(() => {
+    if (!autoStartVoiceRef.current || composerOffered.length === 0) return;
+    const host = voiceHostRef.current;
+    if (!host) return;
+    const trigger = () => {
+      const mic = host.querySelector<HTMLButtonElement>(".talk-composer-mic");
+      if (!mic) return false;
+      autoStartVoiceRef.current = false;
+      mic.click();
+      return true;
+    };
+    if (trigger()) return;
+    const observer = new MutationObserver(() => {
+      if (trigger()) observer.disconnect();
+    });
+    observer.observe(host, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [composerOffered.length]);
 
   const expand = useCallback(() => {
     clearFoldTimer();
@@ -207,124 +277,166 @@ export function PromptPill({
     }
   }
 
+  const isFolded = folded && !voiceActive;
+  const typing = !isFolded && !voiceActive && body.trim() !== "";
+
   return (
     <div className="shell-prompt-wrap" data-dock={dock}>
       <section
         className="shell-prompt-pill"
         aria-label="Prompt composer"
-        data-folded={folded ? "true" : "false"}
-        data-size={folded ? "pill" : effectiveSize}
+        data-folded={isFolded ? "true" : "false"}
+        data-size={isFolded ? "pill" : effectiveSize}
         data-dock={dock}
+        data-voice-active={voiceActive ? "true" : "false"}
       >
-        {folded ? (
-          <button
-            type="button"
-            className="shell-prompt-folded-btn"
-            aria-label="Expand prompt composer"
-            onClick={expand}
-            onFocus={expand}
-          >
-            <span>{placeholder}</span>
-            {chips.length > 0 && (
-              <span className="shell-prompt-folded-count">{chips.length} selected</span>
-            )}
-          </button>
-        ) : (
-          <>
-            {chips.length > 0 && (
-              <div className="shell-prompt-chips" aria-label="Selected items">
-                {chips.map((chip) => (
-                  <span key={chip.id} className="shell-prompt-chip" data-chip-id={chip.id}>
-                    <span className="shell-prompt-chip-label">{chip.title}</span>
-                    <button
-                      type="button"
-                      className="shell-prompt-chip-remove"
-                      aria-label={`Remove ${chip.title} from prompt`}
-                      onClick={() => setDismissedIds((prev) => [...prev, chip.id])}
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
+        {!isFolded && chips.length > 0 && (
+          <div className="shell-prompt-chips" aria-label="Selected items">
+            {chips.map((chip) => (
+              <span key={chip.id} className="shell-prompt-chip" data-chip-id={chip.id}>
+                <span className="shell-prompt-chip-label">{chip.title}</span>
+                <button
+                  type="button"
+                  className="shell-prompt-chip-remove"
+                  aria-label={`Remove ${chip.title} from prompt`}
+                  onClick={() => setDismissedIds((prev) => [...prev, chip.id])}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
 
-            <form className="shell-prompt-form" onSubmit={handleFormSubmit}>
-              <textarea
-                ref={inputRef}
-                className="shell-prompt-input"
-                aria-label="Prompt message"
-                placeholder={placeholder}
-                rows={effectiveSize === "wide" ? 2 : 1}
-                value={body}
-                disabled={sending}
-                onFocus={() => {
-                  clearFoldTimer();
-                  setFocused(true);
-                }}
-                onBlur={() => setFocused(false)}
-                onChange={(e) => setBody(e.target.value)}
-                onKeyDown={handleKeyDown}
-              />
+        {!isFolded && !voiceActive && (
+          <form id={formId} className="shell-prompt-form" onSubmit={handleFormSubmit}>
+            <textarea
+              ref={inputRef}
+              className="shell-prompt-input"
+              aria-label="Prompt message"
+              placeholder={placeholder}
+              rows={effectiveSize === "wide" ? 2 : 1}
+              value={body}
+              disabled={sending}
+              onFocus={() => {
+                clearFoldTimer();
+                setFocused(true);
+              }}
+              onBlur={() => setFocused(false)}
+              onChange={(e) => setBody(e.target.value)}
+              onKeyDown={handleKeyDown}
+            />
+          </form>
+        )}
 
-              <div className="shell-prompt-row">
-                <div className="shell-prompt-controls" role="group" aria-label="Prompt dock position">
-                  {DOCK_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      className="shell-prompt-dock-btn"
-                      title={opt.title}
-                      aria-pressed={dock === opt.value}
-                      onClick={() => handleDock(opt.value)}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
+        <div className="shell-prompt-row">
+          {isFolded && (
+            <button
+              type="button"
+              className="shell-prompt-folded-btn"
+              aria-label="Expand prompt composer"
+              onClick={expand}
+              onFocus={expand}
+            >
+              <span>{placeholder}</span>
+              {chips.length > 0 && (
+                <span className="shell-prompt-folded-count">{chips.length} selected</span>
+              )}
+            </button>
+          )}
+
+          {!isFolded && !voiceActive && (
+            <div className="shell-prompt-controls" role="group" aria-label="Prompt dock position">
+              {DOCK_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  className="shell-prompt-dock-btn"
+                  title={opt.title}
+                  aria-pressed={dock === opt.value}
+                  onClick={() => handleDock(opt.value)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+              <button
+                type="button"
+                className="shell-prompt-size-btn"
+                title={effectiveSize === "wide" ? "Use compact 480px width" : "Expand to 640px width"}
+                aria-label={effectiveSize === "wide" ? "Compact width" : "Wide width"}
+                onClick={() => setWide((prev) => !prev)}
+              >
+                {effectiveSize === "wide" ? "480px" : "640px"}
+              </button>
+              {!chatHiddenNow() && (
+                <>
                   <button
                     type="button"
                     className="shell-prompt-size-btn"
-                    title={effectiveSize === "wide" ? "Use compact 480px width" : "Expand to 640px width"}
-                    aria-label={effectiveSize === "wide" ? "Compact width" : "Wide width"}
-                    onClick={() => setWide((prev) => !prev)}
+                    title="Open Chat panel"
+                    aria-label="Open Chat panel"
+                    onClick={() => openPanel(canvasId, "main")}
                   >
-                    {effectiveSize === "wide" ? "480px" : "640px"}
+                    Chat
                   </button>
-                  {!chatHiddenNow() && (
-                    <>
-                      <button
-                        type="button"
-                        className="shell-prompt-size-btn"
-                        title="Open Chat panel"
-                        aria-label="Open Chat panel"
-                        onClick={() => openPanel(canvasId, "main")}
-                      >
-                        Chat
-                      </button>
-                      <button
-                        type="button"
-                        className="shell-prompt-size-btn"
-                        title="Full-screen chat"
-                        aria-label="Full-screen chat"
-                        onClick={() => useUiStore.getState().setChatFullScreen(true)}
-                      >
-                        ⤢
-                      </button>
-                    </>
-                  )}
-                </div>
+                  <button
+                    type="button"
+                    className="shell-prompt-size-btn"
+                    title="Full-screen chat"
+                    aria-label="Full-screen chat"
+                    onClick={() => useUiStore.getState().setChatFullScreen(true)}
+                  >
+                    ⤢
+                  </button>
+                </>
+              )}
+            </div>
+          )}
 
-                <button
-                  type="submit"
-                  className="shell-prompt-send"
-                  disabled={!body.trim() || sending}
-                >
-                  {sending ? "Sending…" : "Send"}
-                </button>
-              </div>
-            </form>
-          </>
-        )}
+          {/* One stable render site so folding, unfolding, or entering Gemini Live
+              never unmounts ModuleComposerControls and drops the session. */}
+          <div className="shell-prompt-actions" ref={voiceHostRef}>
+            {composerOffered.length > 0 ? (
+              <Suspense fallback={null}>
+                <ModuleComposerControls
+                  canvasId={canvasId}
+                  actor={actor}
+                  takenOverBy={composerHolder}
+                  onTakeOver={takeComposer}
+                  hidden={!voiceActive && typing}
+                />
+              </Suspense>
+            ) : (
+              <button
+                type="button"
+                className="shell-prompt-voice-btn"
+                title="Talk to the canvas (Gemini Live)"
+                aria-label="Talk to the canvas"
+                hidden={typing}
+                disabled={enablingVoice}
+                onClick={enableAndStartVoice}
+              >
+                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                  <path
+                    fill="currentColor"
+                    d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2Z"
+                  />
+                </svg>
+              </button>
+            )}
+
+            {!isFolded && !voiceActive && (composerOffered.length === 0 || typing) && (
+              <button
+                type="submit"
+                form={formId}
+                className="shell-prompt-send"
+                disabled={!body.trim() || sending}
+              >
+                {sending ? "Sending…" : "Send"}
+              </button>
+            )}
+          </div>
+        </div>
       </section>
     </div>
   );

@@ -166,6 +166,8 @@ export interface SummaryEntry {
 /** `GET` answers the entries it holds, by the key that was asked about. */
 export interface SummaryRead {
   summaries: Record<string, SummaryEntry>;
+  /** False when this home cannot make summaries for this caller (no text model key and no personal key, or owner-only spend), so a client reads cached summaries without issuing failing makes. */
+  canMake?: boolean;
 }
 
 /** `POST`'s answer while the source is still settling: ask again after `retryAfterMs`. */

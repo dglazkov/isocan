@@ -56,7 +56,7 @@
 .shell-prompt-pill[data-folded="true"] {
   width: 270px;
   height: 42px;
-  padding: 0 12px;
+  padding: 0 6px 0 12px;
   border-radius: 999px;
   flex-direction: row;
   align-items: center;
@@ -64,12 +64,24 @@
   cursor: pointer;
 }
 
+.shell-prompt-pill[data-folded="true"] .shell-prompt-row {
+  width: 100%;
+  height: 100%;
+}
+
+.shell-prompt-pill[data-voice-active="true"] .shell-prompt-actions {
+  flex: 1 1 100%;
+  width: 100%;
+  min-width: 0;
+}
+
 .shell-prompt-folded-btn {
   display: flex;
+  flex: 1;
+  min-width: 0;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  width: 100%;
   height: 100%;
   border: none;
   background: transparent;
@@ -186,6 +198,45 @@
 .shell-prompt-size-btn:hover {
   background: var(--glass-chip);
   color: var(--ink);
+}
+
+.shell-prompt-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.shell-prompt-voice-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  cursor: pointer;
+  flex: none;
+}
+
+.shell-prompt-voice-btn:hover {
+  background: var(--chip-hover);
+}
+
+.shell-prompt-voice-btn:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.shell-prompt-voice-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.shell-prompt-voice-btn[hidden] {
+  display: none;
 }
 
 .shell-prompt-send {

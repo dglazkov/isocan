@@ -93,7 +93,7 @@ retry admission, or attest the complete gate. A pinned `.nvmrc` is not an
 observed runtime. An eligibility proposal is not evidence that actual
 execution matched it. No retry is automatic, and this phase does not change
 existing mandatory checks or grant reuse authority. The reviewed complete
-evidence producer and reuse policy remain Plates phase 114; additional
+evidence producer and reuse policy remain a later phase (114); additional
 hosted execution machinery needs an explicit scope decision.
 
 ## Verification and rollback

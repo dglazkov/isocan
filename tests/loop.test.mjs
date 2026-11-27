@@ -1,7 +1,7 @@
 // Loop's findings are files, and docs/LOOP.md is a view of them: the same
 // arrangement as the roadmap, and the same guard, or the view is the first
-// thing to fall behind. Managed by plates (practice `loop`). This file is how the
-// project's gate runs `render --check`: keep it in what `npm test` runs.
+// thing to fall behind. This file is how the project's gate runs
+// `render --check`: keep it in what `npm test` runs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
@@ -15,7 +15,6 @@ test('docs/LOOP.md is current, and no finding is broken', () => {
 });
 
 test('docs/LOOP.md says it is generated, and where to edit instead', () => {
-  if (settings(ROOT).planningSource !== 'files') return; // archival page, inactive under milestones
   const page = join(ROOT, 'docs', 'LOOP.md');
   if (!existsSync(page)) return; // nothing pulled yet
   assert.ok(readFileSync(page, 'utf8').startsWith(LOOP_DOC_HEADER));
