@@ -1,123 +1,18 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "Four lanes, so the queue never holds more than one PR per lane.",
+  "description": "The shared preset's four lanes, plus two recorded overrides (also in AGENTS.md, 'Dependencies are Renovate's'). timezone: the preset's 'before 6am' windows run in the owner's day (America/Denver), as this repository's lanes did before it moved to the preset. The @isocan/** rule: the workspace packages are this repository's own source, not dependencies, so no lane may update them. Automerge stays as the preset has it: a merge to main deploys dev.isocan.io only through the green ref after CI, and isocan.io moves only on the prod tag, so a merge is not a production deploy.",
   "extends": [
-    "config:recommended"
-  ],
-  "ignorePresets": [
-    "group:monorepos",
-    "group:recommended",
-    "workarounds:groupings"
+    "github>dalmaer/renovate-config"
   ],
   "timezone": "America/Denver",
-  "schedule": [
-    "before 6am"
-  ],
-  "dependencyDashboard": true,
-  "git-submodules": {
-    "enabled": true
-  },
-  "rangeStrategy": "bump",
-  "minimumReleaseAge": "3 days",
-  "internalChecksFilter": "strict",
-  "labels": [
-    "dependencies"
-  ],
-  "prConcurrentLimit": 4,
-  "ignorePaths": [
-    "**/node_modules/**",
-    "**/fixtures/**"
-  ],
-  "lockFileMaintenance": {
-    "enabled": true,
-    "schedule": [
-      "before 6am on monday"
-    ],
-    "automerge": true,
-    "automergeType": "pr"
-  },
-  "vulnerabilityAlerts": {
-    "enabled": true,
-    "groupName": "patch and minor updates",
-    "groupSlug": "patch-minor",
-    "automerge": true,
-    "automergeType": "pr"
-  },
   "packageRules": [
     {
-      "description": "The project's own workspace packages (package.json workspaces and name) are source, not dependencies. First, so no lane below turns them back on.",
+      "description": "The project's own workspace packages (package.json workspaces and name) are source, not dependencies, so no lane turns them on. After the preset's rules, so it wins.",
       "matchPackageNames": [
         "@isocan/**",
         "isocan"
       ],
       "enabled": false
-    },
-    {
-      "description": "Daily lane: every patch and minor update, npm and Actions alike, in ONE pull request that merges itself when the checks are green.",
-      "matchUpdateTypes": [
-        "patch",
-        "minor",
-        "digest",
-        "pin"
-      ],
-      "groupName": "patch and minor updates",
-      "groupSlug": "patch-minor",
-      "automerge": true,
-      "automergeType": "pr"
-    },
-    {
-      "description": "Weekly lane: majors change behaviour, so they wait for a person, together, once a week.",
-      "matchUpdateTypes": [
-        "major"
-      ],
-      "groupName": "major updates",
-      "groupSlug": "weekly",
-      "schedule": [
-        "before 6am on monday"
-      ],
-      "automerge": false
-    },
-    {
-      "description": "Vendored git submodules (skills, references) join the weekly lane: someone else's code arriving whole, so a person reads it. A project with no submodules has nothing here.",
-      "matchManagers": [
-        "git-submodules"
-      ],
-      "groupName": "major updates",
-      "groupSlug": "weekly",
-      "schedule": [
-        "before 6am on monday"
-      ],
-      "automerge": false
-    },
-    {
-      "description": "A package's engines floor is a promise about which Node versions it supports, so it rises by a person's decision, never by Renovate: a newer Node already satisfies a >= floor, and \"replace\" leaves a satisfied range alone. The Node lane sets no range strategy, so this holds beside it.",
-      "matchManagers": [
-        "npm"
-      ],
-      "matchDepTypes": [
-        "engines"
-      ],
-      "rangeStrategy": "replace",
-      "automerge": false
-    },
-    {
-      "description": "Node moves on its own, weekly, read by a person: .nvmrc, a Dockerfile's FROM node: image and @types/node in ONE pull request, since a project that holds them to one major fails a split one. Last, so it wins over the lanes above.",
-      "matchDepNames": [
-        "node",
-        "@types/node"
-      ],
-      "matchManagers": [
-        "nvm",
-        "npm",
-        "dockerfile"
-      ],
-      "groupName": "Node",
-      "groupSlug": "node",
-      "schedule": [
-        "before 6am on monday"
-      ],
-      "automerge": false,
-      "separateMajorMinor": false
     }
   ]
 }
