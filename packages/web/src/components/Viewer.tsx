@@ -23,7 +23,7 @@ import { KindIcon } from "./KindIcon.tsx";
 import { MorphStage } from "./MorphStage.tsx";
 import { iconKindFor } from "../lib/kinds.ts";
 import { isTyping } from "../lib/keys.ts";
-import { FLIP_NEXT, FLIP_PREV, REST_AFTER_MS, flipTo, framingOf } from "../lib/deckflip.ts";
+import { FLIP_NEXT, FLIP_PREV, REST_AFTER_MS, flipTo, framingOf, useTransitionsOn } from "../lib/deckflip.ts";
 
 import { usePhone } from "../lib/phone.ts";
 import { useTouchNavigation } from "../lib/touchnavigation.ts";
@@ -59,6 +59,7 @@ const PhonePresenting = lazy(() => import("./PhonePresenting.tsx").then((m) => (
 export function Viewer({ canvasId, itemId }: { canvasId: string; itemId: string | null }) {
   const navigate = useNavigate();
   const phone = usePhone();
+  const transitionsOn = useTransitionsOn();
   const gestures = useTouchNavigation((direction) => {
     const canvas = useCanvasStore.getState().canvas;
     if (!canvas || !itemId) return;
@@ -185,7 +186,11 @@ export function Viewer({ canvasId, itemId }: { canvasId: string; itemId: string 
   const at = item ? slides.findIndex((s) => s.id === item.id) : -1;
 
   return (
-    <div data-presented-item={itemId ?? undefined} className={`fullscreen${phone ? " touch-presenting" : ""}${resting ? " resting" : ""}`}>
+    <div
+      data-presented-item={itemId ?? undefined}
+      data-deck-transitions={transitionsOn ? "" : undefined}
+      className={`fullscreen${phone ? " touch-presenting" : ""}${resting ? " resting" : ""}`}
+    >
       {phone ? <Suspense><PhonePresenting canvasId={canvasId} itemId={itemId} title={item?.title ?? "Presentation"} onExit={() => navigate("/")} /></Suspense> : <>
       <div className="fs-bar">
         <div className="floats fs-cluster">

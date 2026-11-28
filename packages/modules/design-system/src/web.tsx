@@ -26,11 +26,13 @@ import {
 export function DesignSystemCard(facts: RendererFacts) {
   const [spec, setSpec] = useState<DesignSystemSpec | null>(null);
   const [failed, setFailed] = useState(false);
+  // The effect answers to the blob and its reader, not to the facts object,
+  // which is new on every render.
+  const { blobHash, readText } = facts;
 
   useEffect(() => {
     let alive = true;
-    facts
-      .readText()
+    readText()
       .then((text) => {
         if (!alive) return;
         const parsed = parseDesignSystemSpec(text);
@@ -43,7 +45,7 @@ export function DesignSystemCard(facts: RendererFacts) {
     return () => {
       alive = false;
     };
-  }, [facts.blobHash, facts.readText]);
+  }, [blobHash, readText]);
 
   if (failed) {
     return (

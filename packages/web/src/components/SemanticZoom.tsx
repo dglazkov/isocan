@@ -303,6 +303,7 @@ function watch(canvasId: string): () => void {
       const answer = await request<SummaryRead>("GET", `${summariesRoute(canvasId)}?${query}`).catch(() => null);
       if (!live) return;
       if (!answer) continue;
+      if (answer.canMake === false) mayAsk = false;
       for (const one of batch) {
         const entry = answer.summaries[one.key];
         if (entry) byKey.set(one.key, entry);
