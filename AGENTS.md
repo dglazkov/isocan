@@ -43,19 +43,33 @@ and nothing else. The old `/conduct` command remains a thin forwarding
 skill at `.claude/skills/conduct/SKILL.md`; its `status.sh` path also forwards
 to the local spin script. Both names keep the same behavior and permissions.
 
-<!-- practice:begin 1.0.0 -->
-## How we work (practice 1.0.0)
+<!-- practice:begin 1.2.0 -->
+## How we work (practice 1.2.0)
 
-This project runs [practice 1.0.0](https://github.com/dalmaer/practice/blob/v1.0.0/PRACTICE.md). In short:
+This project runs [practice 1.2.0 core](https://github.com/dalmaer/practice/blob/v1.2.0/core/PRACTICE.md), with the tool modules listed in `.practice.json`.
 
-- **The backlog is the project's Unison workspace.** Outcomes live in the main Backlog. Agent work goes in **Agent work**, scheduled runs in **Scheduled runs**, and anything waiting on a person in **Needs you**. File each item in its section.
-- **An item is an outcome.** Its body starts with `Done when:` and `Check:`. Children start with `Parent: #N` and, when order matters, `Needs: #a, #b`. Build nothing that has no done-when; propose one and ask the owner first.
-- **Assignment is readiness.** Create items assigned (`--to`). Claim only unassigned leaves whose needs are closed. Take assignments only from the owner.
-- **Every PR gets a review from a different provider**, on the exact commit that merges, with the checks green on the PR merged with current `main`.
-- **Found work is a new item, never a fix in passing.** File leftover review findings as items.
-- **One-way steps go to a person**: production deploys, publishing, secrets, spend, and merges that ship. This project's list is in its own guide.
-- **Close on proof**: the merged PR and its green CI run.
+- **Plan before building.** Every item needs a checkable done-when and check accepted by the owner; propose missing ones and wait, so we do not build the wrong result.
+- **Work ready leaves.** Keep parents with the owner, resolve dependencies first, and take assignments only from the owner or on their recorded approval, so agents cannot expand each other's remit.
+- **Review the commit that will merge.** Every PR needs another provider's review (or the documented Coordinator fallback) and green checks on the PR merged with current `main`; old reviews do not cover new fixes.
+- **Found work gets an item.** File leftover review findings too, so scope and unfinished work stay visible.
+- **One-way steps go to a person:** production deploys, publishing, secrets, spend and merges that ship; the project's guide lists its own, because these effects cannot reliably be undone.
+- **Close on proof.** Link the merged PR and green CI for code changes, or the agreed evidence for other outcomes; check the parent's own criteria too, because completed tasks do not prove the outcome.
+- **Bound retries and keep evidence current.** Start with one attempt and two repair rounds, then reassess; changed code, criteria or environments make affected evidence stale, so repeated attempts cannot masquerade as progress.
 <!-- practice:end -->
+
+<!-- practice:unison:begin -->
+## Working in Unison (practice 1.2.0)
+
+Follow the [Unison module](https://github.com/dalmaer/practice/blob/v1.2.0/modules/unison/PRACTICE.md); the project's guide names its workspace and owner.
+
+- **Use that workspace for plans, claims and decisions**, with evidence linked from PRs and CI, so duplicate plans cannot drift. Read `unison --agent-help` for the current protocol. Join only with an owner-issued pass, never `--account`; keep `.unison.json` ignored and stop for renewed access if revoked, so agent work never impersonates the owner or exposes a credential.
+- **File items where they belong:** outcomes in Backlog, supporting work in Agent work, runs in Scheduled runs and human requests in Needs you, so busywork cannot hide outcomes or decisions. Create items assigned (`--to`); sections alone do not prevent pickup.
+- **Write `Done when:` and `Check:` first**, preceded on children by `Parent: #N` and optional `Needs: #a, #b`; supporting work names `Outcome: #N` or `Maintenance: <scope>`, so acceptance and dependencies survive the flat list. Missing criteria need an owner-accepted plan before building.
+- **Keep parents assigned to the owner with child checklists.** Claim only unassigned leaves whose needs are closed; stop blocked work while retaining assignment, so it cannot be picked up again ahead of its dependencies.
+- **Close on evidence:** merged PR and green CI for code, agreed evidence otherwise; check the parent's own check after its last child, so task completion does not stand in for the outcome. Person-only checks are owner-assigned children.
+- **Send decisions as item-linked action requests and record the answer**, so a chat acknowledgement is not treated as acceptance. File found work and leftover review findings as assigned items, so neither scope nor follow-up disappears.
+- **Keep all five standard weekly schedules enabled for active projects.** Paused projects retain their definitions without running them; reconcile on reactivation, so maintenance neither vanishes nor spends against a parked project.
+<!-- practice:unison:end -->
 
 ## Where the work is planned
 
@@ -65,26 +79,12 @@ The backlog lives in this project's Unison workspace: https://unison.cloud.run/w
 
 **First time on this machine:** install the CLI with `npm install -g @digitalex99/unison`,
 then run `unison --agent-help`. It is the whole protocol, so read it before acting.
-Agents join only with a pass from the person who invited you (`unison join <workspace-url> --pass <pass>`);
-never use `--account`. `.unison.json` holds your token and is git-ignored: never commit it.
-If a command exits 4, stop and ask the person who invited you for a new pass.
-
-**The loop:**
-- `unison backlog claim` takes the top open item (or `backlog start <id>` for a given one;
-  it renews your 12-hour lease).
-- `unison backlog comment <id> "<status>"` while you work.
-- `unison backlog pr <id> <url>` links each PR.
-- `unison backlog close <id> --note "<what landed>"` once it's on main.
-- New work you find: `unison backlog add "<title>" --body "<why, and done when>"`.
-  Don't fix it in passing.
-- Need your human (a decision, a login, money): `unison chat send "@<them> <ask>" --item <id> --action`.
+Agents join only with a pass from the person who invited you; if a command exits 4, stop and
+ask them for a new pass.
 
 A phase's **Status:** line in `phases.md` stays the record of what was proved.
 
-**The workspace's sections**, from [practice 1.0.0](https://github.com/dalmaer/practice/blob/v1.0.0/PRACTICE.md):
-**Needs you** (waiting on an owner: a check only they can do, a decision, access), **Agent work**
-(research, audits, builds and verification behind an outcome) and **Scheduled runs** (one item
-per run of a recurring task). Outcomes stay in the main Backlog.
+How plans, claims and sections work is the Unison block above and its [module](https://github.com/dalmaer/practice/blob/v1.2.0/modules/unison/PRACTICE.md), on top of [practice 1.2.0 core](https://github.com/dalmaer/practice/blob/v1.2.0/core/PRACTICE.md); this section keeps only what is isocan's.
 
 **This project's one-way steps** go to an owner, never an agent alone: promoting isocan.io
 (moving the `prod` tag), the ⚑ steps under *Asked first* (repos, secrets, Pages, issues on
@@ -94,6 +94,12 @@ co-owned by both of its owners, so a practice upgrade lands only with both agree
 **Maintenance scopes**, for agent work that serves no single outcome: the night shift and its
 pull requests, the standing reviews, the persona runs, the changelog, journeys and evals, and
 dependency and CI upkeep.
+
+**Renovate stays isocan's own.** `renovate.json` defines its four lanes itself (see *The night
+shift's pull requests*) rather than extending the shared preset `github>dalmaer/renovate-config`,
+so `.practice.json` does not select `renovate`. Practice 1.2.0 asks a project with dependencies or
+GitHub Actions to select it or to record an exception its owners accept; this paragraph is that
+exception, once both owners agree.
 
 ## Starting a project from scratch
 
