@@ -250,46 +250,45 @@ describe("every Node comes from .nvmrc", () => {
 /**
  * **Renovate's lanes, held to what AGENTS.md says they are.**
  *
- * Three details that each look like tidying and each break something: the
- * fixtures' `package.json`s are inputs to the design-lint tests, so bumping
- * them changes what the tests test; `.nvmrc` and the Dockerfile must move in
- * ONE pull request or the major check above fails it; and `config:recommended`
- * carries presets that quietly peel packages out into their own PRs
- * (react, vitest, commander were the first three), which is how one lane
- * becomes nine.
+ * The lanes themselves live in the shared preset `github>dalmaer/renovate-config`
+ * (practice 1.2.0's Renovate module): it ignores the fixtures, whose
+ * `package.json`s are inputs to the design-lint tests; it moves `.nvmrc` and
+ * the Dockerfile in ONE pull request, or the major check above fails it; and it
+ * turns off the `config:recommended` presets that peel packages out into their
+ * own PRs. That preset is another repository's file, so what this repository
+ * can hold is that `renovate.json` extends it and adds only the overrides
+ * AGENTS.md records, none of which undoes a lane.
  */
 describe("renovate.json keeps its lanes", () => {
   const root = fileURLToPath(new URL("..", import.meta.url));
   const config = JSON.parse(readFileSync(`${root}/renovate.json`, "utf8"));
+  const rules: { automerge?: boolean; matchUpdateTypes?: string[]; matchPackageNames?: string[]; enabled?: boolean }[] =
+    config.packageRules ?? [];
 
-  it("leaves the test fixtures alone", () => {
-    // renovate.json ignores every fixtures directory,
-    // which covers test/fixtures/.
-    expect(config.ignorePaths.some((p: string) => p === "test/fixtures/**" || p === "**/fixtures/**")).toBe(true);
+  it("extends the shared preset", () => {
+    expect(config.extends).toContain("github>dalmaer/renovate-config");
   });
 
-  it("moves .nvmrc and the image's Node together", () => {
-    const node = config.packageRules.find((r: { groupSlug?: string }) => r.groupSlug === "node");
-    expect(node?.matchManagers).toEqual(expect.arrayContaining(["nvm", "dockerfile"]));
-    expect(node?.separateMajorMinor).toBe(false);
-    expect(node?.automerge).toBe(false);
+  it("overrides only what AGENTS.md records a reason for", () => {
+    // Each key beyond the preset is a lane override the Renovate module asks to
+    // be justified in the file's description and in AGENTS.md.
+    expect(Object.keys(config).sort()).toEqual(["$schema", "description", "extends", "packageRules", "timezone"]);
+    const agents = readFileSync(`${root}/AGENTS.md`, "utf8");
+    expect(agents).toContain("timezone: America/Denver");
+    expect(agents).toMatch(/turns off the `@isocan\/\*` workspaces/);
+    expect(config.description).toMatch(/timezone/);
+    expect(config.description).toMatch(/@isocan/);
   });
 
-  it("turns off the presets that split a lane", () => {
-    expect(config.ignorePresets).toEqual(
-      expect.arrayContaining(["group:monorepos", "group:recommended", "workarounds:groupings"]),
-    );
+  it("keeps the workspace packages out of every lane", () => {
+    const own = rules.find((r) => r.matchPackageNames?.includes("@isocan/**"));
+    expect(own?.enabled).toBe(false);
+    expect(own?.matchPackageNames).toContain("isocan");
   });
 
-  it("merges by itself only what is not a major", () => {
-    const auto = config.packageRules.filter((r: { automerge?: boolean }) => r.automerge);
-    for (const rule of auto) expect(rule.matchUpdateTypes ?? []).not.toContain("major");
-  });
-
-  it("routes vulnerability alerts into the daily patch-minor lane so transitive lockfile advisories do not wait for Monday", () => {
-    expect(config.vulnerabilityAlerts?.enabled).toBe(true);
-    expect(config.vulnerabilityAlerts?.groupSlug).toBe("patch-minor");
-    expect(config.vulnerabilityAlerts?.automerge).toBe(true);
+  it("merges by itself nothing the preset leaves for a person", () => {
+    for (const rule of rules.filter((r) => r.automerge)) expect(rule.matchUpdateTypes ?? []).not.toContain("major");
+    expect(config.ignorePresets, "re-adding presets here would split the preset's lanes").toBeUndefined();
   });
 });
 
