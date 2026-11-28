@@ -1,0 +1,66 @@
+{
+  "practice": "1.2.0",
+  "note": "Intended configuration, not live state. Unison runs due schedules at 00:00 server time; UTC is assumed, not verified, and remoteId is null for all five because the workspace could not be read on 28 Nov 2026 (the agent pass had expired). Reconcile against unison schedule list before creating any: reuse an existing schedule for the same purpose, with its id and weekday.",
+  "schedules": [
+    {
+      "id": "dependency-health",
+      "remoteId": null,
+      "title": "Routine: Dependency and health review",
+      "cadence": {
+        "frequency": "weekly",
+        "day": "monday",
+        "time": "00:00",
+        "timezone": "UTC"
+      },
+      "body": "Done when: The bounded review is recorded with evidence and a disposition for each material finding, or an explicit no-action result.\nCheck: npm ci, npm test, npm run typecheck and npm run lint on current main, npm outdated, and the Renovate Dependency Dashboard issue, recorded with the commit read\nMaintenance: dependency and CI upkeep\nBudget: One agent session of at most 60 minutes and no new paid service or recurring model spend. Stop and report limitations when it is spent.\nWhy: Unnoticed dependency and health regressions accumulate until ordinary work breaks.\nWork: Inspect dependency freshness, supported versions and project health using the project checks. Identify actionable risk with evidence, not an automatic upgrade list.\nMaterial finding: A reproducible failure, a measured regression against the project baseline, a planning invariant violation, or a concrete maintenance risk with evidence. Record uncertainty rather than inventing a threshold.\nDeduplication: Search existing open and closed work first. Update an existing finding with new evidence, or create an assigned item linked to this run. Found work does not expand this run.\nResult: Record revision, environment, checks, evidence links, findings, limitations and next action. Keep the run in Scheduled runs. Recheck remediation or changed conditions on the next run.\nQuiet: If nothing actionable changed, record that on the run and send no new alert. Route decisions as item-linked action requests in Needs you.\nAuthority: Stay within the accepted maintenance scope. New spend, production deploys, publishing, secrets and merges that ship remain owner steps."
+    },
+    {
+      "id": "performance",
+      "remoteId": null,
+      "title": "Routine: Performance review",
+      "cadence": {
+        "frequency": "weekly",
+        "day": "tuesday",
+        "time": "00:00",
+        "timezone": "UTC"
+      },
+      "body": "Done when: The bounded review is recorded with evidence and a disposition for each material finding, or an explicit no-action result.\nCheck: node scripts/measure.mjs and npx vitest run packages/core/test/bench.test.ts on current main, compared with the latest performance page in docs/reviews/\nMaintenance: the standing reviews (the performance persona, .agents/personas/)\nBudget: One agent session of at most 60 minutes and no new paid service or recurring model spend. Stop and report limitations when it is spent.\nWhy: Unmeasured optimization spends effort without proving a user benefit.\nWork: Measure a representative path against its recorded baseline in the same environment. Record revision, workload, timings and variance. Propose work only for a measured material regression or opportunity.\nMaterial finding: A reproducible failure, a measured regression against the project baseline, a planning invariant violation, or a concrete maintenance risk with evidence. Record uncertainty rather than inventing a threshold.\nDeduplication: Search existing open and closed work first. Update an existing finding with new evidence, or create an assigned item linked to this run. Found work does not expand this run.\nResult: Record revision, environment, checks, evidence links, findings, limitations and next action. Keep the run in Scheduled runs. Recheck remediation or changed conditions on the next run.\nQuiet: If nothing actionable changed, record that on the run and send no new alert. Route decisions as item-linked action requests in Needs you.\nAuthority: Stay within the accepted maintenance scope. New spend, production deploys, publishing, secrets and merges that ship remain owner steps."
+    },
+    {
+      "id": "test-build-time",
+      "remoteId": null,
+      "title": "Routine: Test and build time review",
+      "cadence": {
+        "frequency": "weekly",
+        "day": "wednesday",
+        "time": "00:00",
+        "timezone": "UTC"
+      },
+      "body": "Done when: The bounded review is recorded with evidence and a disposition for each material finding, or an explicit no-action result.\nCheck: npm run timings and npm run build on current main, compared with the last recorded run, plus the last week of pr.yml and main CI durations and failures\nMaintenance: dependency and CI upkeep\nBudget: One agent session of at most 60 minutes and no new paid service or recurring model spend. Stop and report limitations when it is spent.\nWhy: Slow or unreliable checks encourage people and agents to skip the gate.\nWork: Measure the test suite and build against their baselines. Inspect failures, flaky tests and slow steps. Record commands, environment and timings, with specific remediation candidates.\nMaterial finding: A reproducible failure, a measured regression against the project baseline, a planning invariant violation, or a concrete maintenance risk with evidence. Record uncertainty rather than inventing a threshold.\nDeduplication: Search existing open and closed work first. Update an existing finding with new evidence, or create an assigned item linked to this run. Found work does not expand this run.\nResult: Record revision, environment, checks, evidence links, findings, limitations and next action. Keep the run in Scheduled runs. Recheck remediation or changed conditions on the next run.\nQuiet: If nothing actionable changed, record that on the run and send no new alert. Route decisions as item-linked action requests in Needs you.\nAuthority: Stay within the accepted maintenance scope. New spend, production deploys, publishing, secrets and merges that ship remain owner steps."
+    },
+    {
+      "id": "backlog-tidy",
+      "remoteId": null,
+      "title": "Routine: Backlog tidy",
+      "cadence": {
+        "frequency": "weekly",
+        "day": "sunday",
+        "time": "00:00",
+        "timezone": "UTC"
+      },
+      "body": "Done when: The bounded review is recorded with evidence and a disposition for each material finding, or an explicit no-action result.\nCheck: unison backlog list across Backlog, Agent work, Scheduled runs and Needs you, and .claude/skills/spin/status.sh for each open project\nMaintenance: the backlog in workspace ws_7ea6df51, against docs/projects/*/phases.md Status lines\nBudget: One agent session of at most 60 minutes and no new paid service or recurring model spend. Stop and report limitations when it is spent.\nWhy: A flat backlog cannot enforce hierarchy, readiness or proof, so those conventions need inspection.\nWork: Inspect all sections for missing Done when and Check fields, closed parents with open children, inconsistent child checklists, claimed work with open Needs, stale claims, missing proof and misplaced runs. Propose corrections and request owner decisions where needed. Do not invent proof, steal claims or close an unverified outcome.\nMaterial finding: A reproducible failure, a measured regression against the project baseline, a planning invariant violation, or a concrete maintenance risk with evidence. Record uncertainty rather than inventing a threshold.\nDeduplication: Search existing open and closed work first. Update an existing finding with new evidence, or create an assigned item linked to this run. Found work does not expand this run.\nResult: Record revision, environment, checks, evidence links, findings, limitations and next action. Keep the run in Scheduled runs. Recheck remediation or changed conditions on the next run.\nQuiet: If nothing actionable changed, record that on the run and send no new alert. Route decisions as item-linked action requests in Needs you.\nAuthority: Stay within the accepted maintenance scope. New spend, production deploys, publishing, secrets and merges that ship remain owner steps."
+    },
+    {
+      "id": "dead-code-removal",
+      "remoteId": null,
+      "title": "Routine: Dead-code removal review",
+      "cadence": {
+        "frequency": "weekly",
+        "day": "friday",
+        "time": "00:00",
+        "timezone": "UTC"
+      },
+      "body": "Done when: The bounded review is recorded with evidence and a disposition for each material finding, or an explicit no-action result.\nCheck: npm test, npm run typecheck and npm run lint after any removal, with references searched for each candidate including dynamic entry points (CLI verbs, skills, workflows, scripts/)\nMaintenance: the standing reviews (the reviewer persona, .agents/personas/)\nBudget: One agent session of at most 60 minutes and no new paid service or recurring model spend. Stop and report limitations when it is spent.\nWhy: Abandoned paths increase maintenance cost, but deleting apparently unused dynamic code can break working behavior.\nWork: Identify unused code and dependencies with references and relevant checks, including dynamic entry points. Link existing removal work or propose a bounded Build item with a done-when and regression checks. Only perform removal already covered by an owner-approved maintenance scope, then record its PR and check results.\nMaterial finding: A reproducible failure, a measured regression against the project baseline, a planning invariant violation, or a concrete maintenance risk with evidence. Record uncertainty rather than inventing a threshold.\nDeduplication: Search existing open and closed work first. Update an existing finding with new evidence, or create an assigned item linked to this run. Found work does not expand this run.\nResult: Record revision, environment, checks, evidence links, findings, limitations and next action. Keep the run in Scheduled runs. Recheck remediation or changed conditions on the next run.\nQuiet: If nothing actionable changed, record that on the run and send no new alert. Route decisions as item-linked action requests in Needs you.\nAuthority: Stay within the accepted maintenance scope. New spend, production deploys, publishing, secrets and merges that ship remain owner steps."
+    }
+  ]
+}
